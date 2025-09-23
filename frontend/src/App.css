@@ -1,0 +1,71 @@
+body {
+  margin: 0;
+  font-family: "Arial", sans-serif;
+  background-color: #121212;
+  color: #ffffff;
+}
+
+.app-container {
+  text-align: center;
+  padding: 20px;
+}
+
+.app-title {
+  font-size: 2.5rem;
+  color: #00d1b2;
+  margin-bottom: 20px;
+}
+
+.connect-button,
+.action-button {
+  background-color: #00d1b2;
+  color: #121212;
+  border: none;
+  padding: 10px 20px;
+  font-size: 1rem;
+  border-radius: 5px;
+  cursor: pointer;
+  margin: 10px 0;
+}
+
+.connect-button:hover,
+.action-button:hover {
+  background-color: #00b89c;
+}
+
+.input-field {
+  width: 80%;
+  max-width: 300px;
+  padding: 10px;
+  margin: 10px 0;
+  border: 1px solid #00d1b2;
+  border-radius: 5px;
+  background-color: #1e1e1e;
+  color: #ffffff;
+}
+
+.balance-section,
+.deposit-section,
+.withdrawal-section,
+.withdraw-by-category-section,
+.approver-section,
+.categories-section {
+  margin: 20px 0;
+}
+
+.balance-text {
+  font-size: 1.2rem;
+  margin-top: 10px;
+}
+
+.categories-list {
+  list-style: none;
+  padding: 0;
+}
+
+.category-item {
+  background-color: #1e1e1e;
+  padding: 10px;
+  margin: 5px 0;
+  border-radius: 5px;
+}
