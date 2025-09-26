@@ -5,16 +5,22 @@ async function main() {
 
   console.log("Upgrading contract with account:", deployer.address);
 
-  const proxyAddress = "0x5fbdb2315678afecb367f032d93f642f64180aa3"; // Replace with your proxy address
+  const proxyAddress = "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0"; // Current Savings proxy address
   const Savings = await ethers.getContractFactory("Savings");
 
   console.log("Upgrading Savings contract...");
   const upgraded = await upgrades.upgradeProxy(proxyAddress, Savings);
 
-  console.log(
-    "Savings contract upgraded. New implementation address:",
-    await upgrades.erc1967.getImplementationAddress(upgraded.address)
-  );
+  const upgradedAddress = await upgraded.getAddress();
+  console.log("Savings contract upgraded successfully!");
+  console.log("Proxy address:", upgradedAddress);
+
+  try {
+    const implementationAddress = await upgrades.erc1967.getImplementationAddress(upgradedAddress);
+    console.log("New implementation address:", implementationAddress);
+  } catch (error) {
+    console.log("Could not fetch implementation address, but upgrade succeeded");
+  }
 }
 
 main().catch((error) => {

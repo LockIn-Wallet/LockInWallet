@@ -21,12 +21,30 @@ contract Savings is Initializable, UUPSUpgradeable, OwnableUpgradeable {
         bool pending;
     }
 
+    struct CategoryUpdateProposal {
+        string category;
+        uint256 newLimit;
+        uint256 executeAfter;    // Timestamp when proposal can be executed
+        bool executed;
+        bool isIncrease;         // Track if increase or decrease
+        bool exists;            // Track if proposal exists
+    }
+
     struct UserData {
         mapping(address => uint256) tokenBalances; // Token address => balance
         mapping(address => bool) approvalAddresses;
         bool approvedForFullWithdrawal;
         mapping(string => WithdrawalType) withdrawalTypes;
         mapping(string => PendingCategoryChange) pendingChanges;
+        string[] categoryNames; // Track all category names for enumeration
+
+        // Two-phase system fields
+        bool hasCommittedSetup;          // Track if user committed initial setup
+        uint256 totalLockedValue;        // Total value across all categories
+        uint256 lastIncreaseTimestamp;   // Track increase period start
+        uint256 increasesInPeriod;       // Amount increased in current 7-day period
+        uint256 commitTimestamp;         // When setup was committed
+        mapping(bytes32 => CategoryUpdateProposal) proposals; // Pending proposals
     }
 
     mapping(address => UserData) private users;
@@ -59,6 +77,13 @@ contract Savings is Initializable, UUPSUpgradeable, OwnableUpgradeable {
     );
     event CategoryChangeApproved(address indexed user, string category);
     event DepositedTo(address indexed from, address indexed to, uint256 amount);
+
+    // Two-phase system events
+    event SetupCommitted(address indexed user, uint256 timestamp);
+    event CategoryIncreaseProposed(address indexed user, string category, uint256 newLimit, uint256 executeAfter, bytes32 proposalId);
+    event CategoryIncreaseExecuted(address indexed user, string category, uint256 newLimit, bytes32 proposalId);
+    event CategoryDecreased(address indexed user, string category, uint256 newLimit);
+    event CategoryDeleted(address indexed user, string category);
 
     // Add this modifier to prevent reentrancy
     modifier nonReentrant() {
@@ -139,6 +164,9 @@ contract Savings is Initializable, UUPSUpgradeable, OwnableUpgradeable {
 
         WithdrawalType storage w = users[msg.sender].withdrawalTypes[category];
         require(!w.exists, "Category already exists");
+
+        // Add category name to the list for enumeration
+        users[msg.sender].categoryNames.push(category);
 
         w.limit = limit;
         w.period = period;
@@ -302,6 +330,255 @@ contract Savings is Initializable, UUPSUpgradeable, OwnableUpgradeable {
         address _approval
     ) external view returns (bool) {
         return users[user].approvalAddresses[_approval];
+    }
+
+    // ========== TWO-PHASE SYSTEM FUNCTIONS ==========
+
+    function commitInitialSetup() external {
+        UserData storage user = users[msg.sender];
+        require(!user.hasCommittedSetup, "Setup already committed");
+
+        // Calculate total locked value across all categories
+        uint256 totalValue = 0;
+        for (uint256 i = 0; i < user.categoryNames.length; i++) {
+            WithdrawalType storage category = user.withdrawalTypes[user.categoryNames[i]];
+            totalValue += category.limit;
+        }
+
+        user.hasCommittedSetup = true;
+        user.totalLockedValue = totalValue;
+        user.commitTimestamp = block.timestamp;
+        user.lastIncreaseTimestamp = block.timestamp;
+        user.increasesInPeriod = 0;
+
+        emit SetupCommitted(msg.sender, block.timestamp);
+    }
+
+    function isSetupCommitted() external view returns (bool) {
+        return users[msg.sender].hasCommittedSetup;
+    }
+
+    function getSetupInfo() external view returns (
+        bool committed,
+        uint256 totalLockedValue,
+        uint256 commitTimestamp,
+        uint256 increasesInPeriod,
+        uint256 lastIncreaseTimestamp
+    ) {
+        UserData storage user = users[msg.sender];
+        return (
+            user.hasCommittedSetup,
+            user.totalLockedValue,
+            user.commitTimestamp,
+            user.increasesInPeriod,
+            user.lastIncreaseTimestamp
+        );
+    }
+
+    function proposeCategoryIncrease(
+        string calldata category,
+        uint256 newLimit,
+        uint256 timelockHours
+    ) external returns (bytes32 proposalId) {
+        UserData storage user = users[msg.sender];
+        require(user.hasCommittedSetup, "Setup not committed");
+        require(timelockHours >= 24 && timelockHours <= 72, "Timelock must be 24-72 hours");
+
+        WithdrawalType storage existingCategory = user.withdrawalTypes[category];
+        require(existingCategory.exists, "Category does not exist");
+        require(newLimit > existingCategory.limit, "New limit must be higher");
+
+        // Check 7-day increase limits
+        _checkIncreaseLimit(user, newLimit - existingCategory.limit);
+
+        // Generate proposal ID
+        proposalId = keccak256(abi.encodePacked(msg.sender, category, newLimit, block.timestamp));
+
+        CategoryUpdateProposal storage proposal = user.proposals[proposalId];
+        require(!proposal.exists, "Proposal already exists");
+
+        proposal.category = category;
+        proposal.newLimit = newLimit;
+        proposal.executeAfter = block.timestamp + (timelockHours * 1 hours);
+        proposal.executed = false;
+        proposal.isIncrease = true;
+        proposal.exists = true;
+
+        emit CategoryIncreaseProposed(msg.sender, category, newLimit, proposal.executeAfter, proposalId);
+        return proposalId;
+    }
+
+    function executeCategoryIncrease(bytes32 proposalId) external {
+        UserData storage user = users[msg.sender];
+        CategoryUpdateProposal storage proposal = user.proposals[proposalId];
+
+        require(proposal.exists, "Proposal does not exist");
+        require(!proposal.executed, "Proposal already executed");
+        require(block.timestamp >= proposal.executeAfter, "Timelock not expired");
+        require(proposal.isIncrease, "Not an increase proposal");
+
+        WithdrawalType storage category = user.withdrawalTypes[proposal.category];
+        require(category.exists, "Category no longer exists");
+
+        uint256 increaseAmount = proposal.newLimit - category.limit;
+
+        // Re-check 7-day limits at execution time
+        _checkIncreaseLimit(user, increaseAmount);
+
+        // Update category limit
+        category.limit = proposal.newLimit;
+
+        // Update tracking
+        user.totalLockedValue += increaseAmount;
+        _updateIncreaseTracking(user, increaseAmount);
+
+        // Mark proposal as executed
+        proposal.executed = true;
+
+        emit CategoryIncreaseExecuted(msg.sender, proposal.category, proposal.newLimit, proposalId);
+    }
+
+    function _checkIncreaseLimit(UserData storage user, uint256 increaseAmount) internal view {
+        // Reset period if 7 days have passed
+        if (block.timestamp >= user.lastIncreaseTimestamp + 7 days) {
+            // Period has reset, any increase is allowed up to 20%
+            uint256 maxIncrease = user.totalLockedValue * 20 / 100; // 20% of total locked value
+            require(increaseAmount <= maxIncrease, "Increase exceeds 20% of locked value");
+        } else {
+            // Within 7-day period, check cumulative increases
+            uint256 maxIncrease = user.totalLockedValue * 20 / 100;
+            require(user.increasesInPeriod + increaseAmount <= maxIncrease, "Exceeds 7-day increase limit");
+        }
+    }
+
+    function _updateIncreaseTracking(UserData storage user, uint256 increaseAmount) internal {
+        // Reset tracking if 7 days have passed
+        if (block.timestamp >= user.lastIncreaseTimestamp + 7 days) {
+            user.lastIncreaseTimestamp = block.timestamp;
+            user.increasesInPeriod = increaseAmount;
+        } else {
+            user.increasesInPeriod += increaseAmount;
+        }
+    }
+
+    function getProposal(bytes32 proposalId) external view returns (
+        string memory category,
+        uint256 newLimit,
+        uint256 executeAfter,
+        bool executed,
+        bool isIncrease,
+        bool exists
+    ) {
+        CategoryUpdateProposal storage proposal = users[msg.sender].proposals[proposalId];
+        return (
+            proposal.category,
+            proposal.newLimit,
+            proposal.executeAfter,
+            proposal.executed,
+            proposal.isIncrease,
+            proposal.exists
+        );
+    }
+
+    function decreaseCategoryLimit(
+        string calldata category,
+        uint256 newLimit
+    ) external {
+        UserData storage user = users[msg.sender];
+        require(user.hasCommittedSetup, "Setup not committed");
+
+        WithdrawalType storage categoryData = user.withdrawalTypes[category];
+        require(categoryData.exists, "Category does not exist");
+        require(newLimit < categoryData.limit, "New limit must be lower");
+        require(newLimit > 0, "Limit must be greater than zero");
+
+        uint256 decreaseAmount = categoryData.limit - newLimit;
+
+        // Update category limit (immediate)
+        categoryData.limit = newLimit;
+
+        // Update total locked value
+        user.totalLockedValue -= decreaseAmount;
+
+        emit CategoryDecreased(msg.sender, category, newLimit);
+    }
+
+    function deleteCategory(string calldata category) external {
+        UserData storage user = users[msg.sender];
+        require(user.hasCommittedSetup, "Setup not committed");
+
+        WithdrawalType storage categoryData = user.withdrawalTypes[category];
+        require(categoryData.exists, "Category does not exist");
+
+        // Store the limit before deletion for total value update
+        uint256 categoryLimit = categoryData.limit;
+
+        // Mark category as deleted
+        categoryData.exists = false;
+        categoryData.limit = 0;
+        categoryData.period = 0;
+        categoryData.lastReset = 0;
+        categoryData.spentInPeriod = 0;
+
+        // Remove from category names array
+        _removeCategoryFromArray(user, category);
+
+        // Update total locked value
+        user.totalLockedValue -= categoryLimit;
+
+        emit CategoryDeleted(msg.sender, category);
+    }
+
+    function _removeCategoryFromArray(UserData storage user, string memory categoryToRemove) internal {
+        uint256 length = user.categoryNames.length;
+        for (uint256 i = 0; i < length; i++) {
+            if (keccak256(bytes(user.categoryNames[i])) == keccak256(bytes(categoryToRemove))) {
+                // Move the last element to this position and pop
+                user.categoryNames[i] = user.categoryNames[length - 1];
+                user.categoryNames.pop();
+                break;
+            }
+        }
+    }
+
+    // Override setWithdrawalCategory to respect committed setup
+    function setWithdrawalCategoryV2(
+        string calldata category,
+        uint256 limit,
+        uint256 period
+    ) external {
+        UserData storage user = users[msg.sender];
+
+        if (user.hasCommittedSetup) {
+            revert("Use proposeCategoryIncrease for increases or decreaseCategoryLimit for decreases after setup is committed");
+        }
+
+        // Call original logic for setup phase
+        require(bytes(category).length > 0, "Category cannot be empty");
+        require(limit > 0 && period > 0, "Limit and period must be positive");
+
+        WithdrawalType storage w = user.withdrawalTypes[category];
+        require(!w.exists, "Category already exists");
+
+        // Add category name to the list for enumeration
+        user.categoryNames.push(category);
+
+        w.limit = limit;
+        w.period = period;
+        w.lastReset = block.timestamp;
+        w.spentInPeriod = 0;
+        w.exists = true;
+
+        emit CategorySet(msg.sender, category, limit, period);
+    }
+
+    // Utility functions
+    function getUserCategories(address user) external view returns (string[] memory) {
+        return users[user].categoryNames;
+    }
+
+    function getCategoryCount(address user) external view returns (uint256) {
+        return users[user].categoryNames.length;
     }
 
     fallback() external payable {

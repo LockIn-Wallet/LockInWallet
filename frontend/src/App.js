@@ -21,6 +21,10 @@ function App() {
   const [depositAmount, setDepositAmount] = useState(""); // New state for deposit amount
   const [tokenAddress, setTokenAddress] = useState(""); // New state for token address
 
+  // Two-phase system state
+  const [isSetupCommitted, setIsSetupCommitted] = useState(false);
+  const [setupInfo, setSetupInfo] = useState(null);
+
   const connectWallet = async () => {
     if (window.ethereum) {
       const web3Provider = new ethers.BrowserProvider(window.ethereum);
@@ -40,6 +44,21 @@ function App() {
         const userAddress = await web3Signer.getAddress();
         const userBalance = await savings.getTokenBalance(userAddress, USDT_ADDRESS);
         setBalance(ethers.formatUnits(userBalance, 6)); // USDT uses 6 decimals
+
+        // Check setup status
+        const setupCommitted = await savings.isSetupCommitted();
+        setIsSetupCommitted(setupCommitted);
+
+        if (setupCommitted) {
+          const info = await savings.getSetupInfo();
+          setSetupInfo({
+            committed: info.committed,
+            totalLockedValue: ethers.formatUnits(info.totalLockedValue, 6),
+            commitTimestamp: new Date(Number(info.commitTimestamp) * 1000).toLocaleDateString(),
+            increasesInPeriod: ethers.formatUnits(info.increasesInPeriod, 6),
+            lastIncreaseTimestamp: new Date(Number(info.lastIncreaseTimestamp) * 1000).toLocaleDateString()
+          });
+        }
       } catch (error) {
         console.error("Error fetching balance:", error);
         setBalance("0");
@@ -91,7 +110,11 @@ function App() {
   const setWithdrawalCategory = async () => {
     if (savingsContract) {
       try {
-        const category = categoryName || "default"; // Use the categoryName input or default
+        if (!categoryName || categoryName.trim() === "") {
+          alert("Please enter a category name");
+          return;
+        }
+        const category = categoryName.trim();
         const limit = ethers.parseUnits(withdrawalLimit, 6); // USDT uses 6 decimals
         const periodInDays = parseInt(withdrawalPeriod, 10);
         const periodInSeconds = periodInDays * 24 * 60 * 60; // Convert days to seconds
@@ -128,9 +151,58 @@ function App() {
 
   const withdrawByCategory = async () => {
     if (savingsContract) {
-      const tx = await savingsContract.withdrawByCategory(categoryName);
-      await tx.wait();
-      alert(`Withdrawal from category "${categoryName}" successful!`);
+      try {
+        if (!categoryName || categoryName.trim() === "") {
+          alert("Please enter a category name");
+          return;
+        }
+
+        const withdrawAmount = prompt("Enter withdrawal amount (USDT):");
+        if (!withdrawAmount || isNaN(withdrawAmount) || parseFloat(withdrawAmount) <= 0) {
+          alert("Please enter a valid withdrawal amount");
+          return;
+        }
+
+        const amount = ethers.parseUnits(withdrawAmount, 6); // USDT uses 6 decimals
+        const tx = await savingsContract.withdraw(categoryName.trim(), amount, USDT_ADDRESS);
+        await tx.wait();
+        alert(`Withdrawal of ${withdrawAmount} USDT from category "${categoryName}" successful!`);
+
+        // Refresh balance and categories
+        await getBalance();
+        await fetchCategories();
+      } catch (error) {
+        console.error("Withdrawal error:", error);
+        alert("Failed to withdraw. Please check the category name and try again.");
+      }
+    }
+  };
+
+  const commitSetup = async () => {
+    if (savingsContract) {
+      try {
+        const tx = await savingsContract.commitInitialSetup();
+        await tx.wait();
+        alert("Setup committed successfully! You are now in locked mode.");
+
+        // Refresh setup status
+        const setupCommitted = await savingsContract.isSetupCommitted();
+        setIsSetupCommitted(setupCommitted);
+
+        if (setupCommitted) {
+          const info = await savingsContract.getSetupInfo();
+          setSetupInfo({
+            committed: info.committed,
+            totalLockedValue: ethers.formatUnits(info.totalLockedValue, 6),
+            commitTimestamp: new Date(Number(info.commitTimestamp) * 1000).toLocaleDateString(),
+            increasesInPeriod: ethers.formatUnits(info.increasesInPeriod, 6),
+            lastIncreaseTimestamp: new Date(Number(info.lastIncreaseTimestamp) * 1000).toLocaleDateString()
+          });
+        }
+      } catch (error) {
+        console.error("Error committing setup:", error);
+        alert("Failed to commit setup. Please try again.");
+      }
     }
   };
 
@@ -140,11 +212,11 @@ function App() {
         const userAddress = await signer.getAddress();
         const fetchedCategories = [];
 
-        // For now, we'll check some common category names
-        // In a real app, you'd want to track category names or have a function to list them
-        const commonCategories = ["default", "food", "entertainment", "shopping", "bills"];
+        // Get all user's category names from the smart contract
+        const userCategoryNames = await savingsContract.getUserCategories(userAddress);
+        console.log("User categories from contract:", userCategoryNames);
 
-        for (const categoryName of commonCategories) {
+        for (const categoryName of userCategoryNames) {
           try {
             const category = await savingsContract.getWithdrawalCategory(userAddress, categoryName);
 
@@ -162,12 +234,12 @@ function App() {
               });
             }
           } catch (error) {
-            // Category doesn't exist or error accessing it, skip
-            console.log(`Category "${categoryName}" not found or error:`, error.message);
+            console.log(`Error fetching category "${categoryName}":`, error.message);
           }
         }
 
         setCategories(fetchedCategories);
+        console.log("Fetched categories:", fetchedCategories);
       } catch (error) {
         console.error("Error fetching categories:", error);
       }
@@ -201,6 +273,32 @@ function App() {
             <button onClick={deposit}>Deposit</button>
           </div>
           <p>Your USDT Balance: {balance} USDT</p>
+
+          {/* Two-Phase System Status */}
+          <div style={{ marginBottom: "20px", padding: "15px", border: "2px solid #ddd", borderRadius: "5px", backgroundColor: isSetupCommitted ? "#f0f8ff" : "#fff8dc" }}>
+            <h3>Setup Status: {isSetupCommitted ? "🔒 Locked Mode" : "⚙️ Setup Mode"}</h3>
+            {!isSetupCommitted ? (
+              <div>
+                <p>You are in setup mode. You can freely add/modify categories.</p>
+                <p><strong>⚠️ Once you commit, increases will require 24-72h timelock!</strong></p>
+                <button onClick={commitSetup} style={{ backgroundColor: "#ff6b6b", color: "white", padding: "10px 20px", border: "none", borderRadius: "5px", cursor: "pointer" }}>
+                  Commit Setup & Enter Locked Mode
+                </button>
+              </div>
+            ) : (
+              <div>
+                <p>✅ Setup committed on {setupInfo?.commitTimestamp}</p>
+                <p>📊 Total Locked Value: {setupInfo?.totalLockedValue} USDT</p>
+                <p>📈 Increases This Period: {setupInfo?.increasesInPeriod} USDT</p>
+                <p><strong>Security Rules:</strong></p>
+                <ul style={{ fontSize: "0.9em", color: "#666" }}>
+                  <li>Increases: 24-72h timelock required</li>
+                  <li>Decreases: Immediate</li>
+                  <li>Max increase: 20% of locked value per 7 days</li>
+                </ul>
+              </div>
+            )}
+          </div>
 
           <h3>Set Withdrawal Category</h3>
           <input
