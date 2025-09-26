@@ -1,9 +1,10 @@
 import React, { useState } from "react";
 import { ethers } from "ethers";
 import SavingsABI from "./SavingsABI.json";
+import MockUSDT_ABI from "./MockUSDT_ABI.json";
 
-const SAVINGS_CONTRACT_ADDRESS = "0x9fe46736679d2d9a65f0992f2272de9f3c7fa6e0";
-const USDT_ADDRESS = "0xcf7ed3acca5a467e9e704c703e8d87f634fb0fc9"; // Replace with actual USDT address
+const SAVINGS_CONTRACT_ADDRESS = "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0";
+const USDT_ADDRESS = "0x5FbDB2315678afecb367f032d93F642f64180aa3"; // Replace with actual USDT address
 // const USDT_ADDRESS = "0x1234567890abcdef1234567890abcdef12345678"; // Replace with actual USDT address
 const ETH_ADDRESS = "0x0000000000000000000000000000000000000000"; // ETH address (native token)
 
@@ -33,15 +34,31 @@ function App() {
       setProvider(web3Provider);
       setSigner(web3Signer);
       setSavingsContract(savings);
+
+      // Automatically fetch USDT balance after connecting
+      try {
+        const userAddress = await web3Signer.getAddress();
+        const userBalance = await savings.getTokenBalance(userAddress, USDT_ADDRESS);
+        setBalance(ethers.formatUnits(userBalance, 6)); // USDT uses 6 decimals
+      } catch (error) {
+        console.error("Error fetching balance:", error);
+        setBalance("0");
+      }
     } else {
       alert("Please install MetaMask!");
     }
   };
 
   const getBalance = async () => {
-    if (savingsContract) {
-      const userBalance = await savingsContract.getMyBalance();
-      setBalance(ethers.formatUnits(userBalance, 6)); // USDT uses 6 decimals
+    if (savingsContract && signer) {
+      try {
+        const userAddress = await signer.getAddress();
+        const userBalance = await savingsContract.getTokenBalance(userAddress, USDT_ADDRESS);
+        setBalance(ethers.formatUnits(userBalance, 6)); // USDT uses 6 decimals
+      } catch (error) {
+        console.error("Error fetching balance:", error);
+        setBalance("0");
+      }
     }
   };
 
@@ -52,7 +69,7 @@ function App() {
 
         // Approve the Savings contract to spend USDT
         if (tokenAddress !== ETH_ADDRESS) {
-          const usdt = new ethers.Contract(tokenAddress, SavingsABI, signer);
+          const usdt = new ethers.Contract(tokenAddress, MockUSDT_ABI, signer);
           const approvalTx = await usdt.approve(SAVINGS_CONTRACT_ADDRESS, amount);
           await approvalTx.wait();
           console.log("Approval successful");
@@ -73,18 +90,31 @@ function App() {
 
   const setWithdrawalCategory = async () => {
     if (savingsContract) {
-      const category = "default";
-      const limit = ethers.parseUnits(withdrawalLimit, 6); // USDT uses 6 decimals
-      const periodInDays = parseInt(withdrawalPeriod, 10);
-      const periodInSeconds = periodInDays * 24 * 60 * 60; // Convert days to seconds
+      try {
+        const category = categoryName || "default"; // Use the categoryName input or default
+        const limit = ethers.parseUnits(withdrawalLimit, 6); // USDT uses 6 decimals
+        const periodInDays = parseInt(withdrawalPeriod, 10);
+        const periodInSeconds = periodInDays * 24 * 60 * 60; // Convert days to seconds
 
-      const tx = await savingsContract.setWithdrawalCategory(
-        category,
-        limit,
-        periodInSeconds
-      );
-      await tx.wait();
-      alert("Withdrawal category set successfully!");
+        const tx = await savingsContract.setWithdrawalCategory(
+          category,
+          limit,
+          periodInSeconds
+        );
+        await tx.wait();
+        alert("Withdrawal category set successfully!");
+
+        // Automatically refresh the categories list
+        await fetchCategories();
+
+        // Clear the form
+        setCategoryName("");
+        setWithdrawalLimit("");
+        setWithdrawalPeriod("");
+      } catch (error) {
+        console.error("Error setting withdrawal category:", error);
+        alert("Failed to set withdrawal category. Please try again.");
+      }
     }
   };
 
@@ -105,20 +135,42 @@ function App() {
   };
 
   const fetchCategories = async () => {
-    if (savingsContract) {
-      const categoryCount = await savingsContract.getCategoryCount();
-      const fetchedCategories = [];
+    if (savingsContract && signer) {
+      try {
+        const userAddress = await signer.getAddress();
+        const fetchedCategories = [];
 
-      for (let i = 0; i < categoryCount; i++) {
-        const category = await savingsContract.getCategoryByIndex(i);
-        const name = category.name;
-        const limit = ethers.formatUnits(category.limit, 6); // USDT uses 6 decimals
-        const remaining = ethers.formatUnits(category.remaining, 6); // Remaining amount
+        // For now, we'll check some common category names
+        // In a real app, you'd want to track category names or have a function to list them
+        const commonCategories = ["default", "food", "entertainment", "shopping", "bills"];
 
-        fetchedCategories.push({ name, limit, remaining });
+        for (const categoryName of commonCategories) {
+          try {
+            const category = await savingsContract.getWithdrawalCategory(userAddress, categoryName);
+
+            // If the category exists (has a limit > 0), add it to the list
+            if (category.limit > 0) {
+              const limit = ethers.formatUnits(category.limit, 6); // USDT uses 6 decimals
+              const remaining = ethers.formatUnits(category.limit - category.spentInPeriod, 6);
+
+              fetchedCategories.push({
+                name: categoryName,
+                limit,
+                remaining: remaining,
+                spentInPeriod: ethers.formatUnits(category.spentInPeriod, 6),
+                period: category.period.toString()
+              });
+            }
+          } catch (error) {
+            // Category doesn't exist or error accessing it, skip
+            console.log(`Category "${categoryName}" not found or error:`, error.message);
+          }
+        }
+
+        setCategories(fetchedCategories);
+      } catch (error) {
+        console.error("Error fetching categories:", error);
       }
-
-      setCategories(fetchedCategories);
     }
   };
 
@@ -148,7 +200,7 @@ function App() {
             />
             <button onClick={deposit}>Deposit</button>
           </div>
-          <p>Your Balance: {balance} USDT</p>
+          <p>Your USDT Balance: {balance} USDT</p>
 
           <h3>Set Withdrawal Category</h3>
           <input
@@ -193,17 +245,24 @@ function App() {
             <button onClick={addApprover}>Add Approver</button>
           </div>
 
-          <button onClick={fetchCategories}>Show Categories</button>
+          <button onClick={fetchCategories}>Refresh Categories</button>
           <div>
-            <h3>Categories</h3>
-            <ul>
-              {categories.map((category, index) => (
-                <li key={index}>
-                  <strong>{category.name}</strong>: Limit {category.limit} USDT,
-                  Remaining {category.remaining} USDT
-                </li>
-              ))}
-            </ul>
+            <h3>Categories ({categories.length})</h3>
+            {categories.length === 0 ? (
+              <p>No categories found. Create a category above to get started.</p>
+            ) : (
+              <ul>
+                {categories.map((category, index) => (
+                  <li key={index} style={{ marginBottom: "10px", padding: "10px", border: "1px solid #ccc", borderRadius: "5px" }}>
+                    <strong>{category.name}</strong><br/>
+                    Limit: {category.limit} USDT<br/>
+                    Remaining: {category.remaining} USDT<br/>
+                    Spent: {category.spentInPeriod} USDT<br/>
+                    Period: {Math.floor(category.period / 86400)} days
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
         </div>
       )}
