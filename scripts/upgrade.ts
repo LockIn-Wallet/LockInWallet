@@ -5,7 +5,7 @@ async function main() {
 
   console.log("Upgrading contract with account:", deployer.address);
 
-  const proxyAddress = "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0"; // Current Savings proxy address
+  const proxyAddress = "0x9E545E3C0baAB3E08CdfD552C960A1050f373042"; // Current Savings proxy address
   const Savings = await ethers.getContractFactory("Savings");
 
   console.log("Upgrading Savings contract...");

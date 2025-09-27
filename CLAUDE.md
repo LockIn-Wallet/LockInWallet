@@ -43,17 +43,34 @@ npx hardhat test
 # Start local blockchain
 npx hardhat node
 
-# Deploy upgradeable contract to localhost
-npx hardhat run scripts/deploy-upgradable.ts --network localhost
+# AUTOMATED WORKFLOW (RECOMMENDED):
 
-# Deploy mock USDT
-node scripts/deployMockUSDT.js
+# 1. Development Cycle
+npx hardhat compile                                      # Auto-updates frontend ABIs
+npx hardhat run scripts/deploy-upgrade.js --network localhost  # Smart deploy + validation
+cd frontend && npm start                                # Everything ready!
 
-# Update contract ABI for frontend
-node scripts/updateABI.js
+# MANUAL OPTIONS (if needed):
 
-# Upgrade contract (after deployment)
+# Option 1: Smart Deploy/Upgrade
+# - Automatically detects if proxy exists
+# - Uses upgrade if proxy found, deploy if not
+# - Includes validation and ABI updates
+npx hardhat run scripts/deploy-upgrade.js --network localhost
+
+# Option 2: Fresh deployment (DATA LOSS WARNING!)
+# - Always deploys new proxy (loses all user data)
+# - Only use for initial setup or when data loss is acceptable
+# - Includes validation and ABI updates
+npx hardhat run scripts/deploy-all.js --network localhost
+
+# Option 3: Manual upgrade (if you know proxy address)
+# - Updates existing proxy implementation
+# - Preserves all user data
 npx hardhat run scripts/upgrade.ts --network localhost
+
+# Option 4: Validation only
+npx hardhat run scripts/validate-deployment.js --network localhost
 ```
 
 ### Frontend Development
@@ -93,12 +110,49 @@ npm test
 
 ## Deployment Process
 
+### Initial Setup (First Time)
 1. Start local Hardhat node: `npx hardhat node`
-2. Deploy upgradeable Savings contract: `npx hardhat run scripts/deploy-upgradable.ts --network localhost`
-3. Deploy MockUSDT (optional): `node scripts/deployMockUSDT.js`
-4. Update frontend ABI: `node scripts/updateABI.js`
-5. Update contract addresses in `frontend/src/App.js`
-6. Start frontend: `cd frontend && npm start`
+2. Deploy contracts: `node scripts/deploy-upgrade.js`
+3. Start frontend: `cd frontend && npm start`
+
+### Contract Updates (After Initial Setup)
+1. Make changes to `contracts/Lock.sol`
+2. Compile: `npx hardhat compile`
+3. Upgrade: `node scripts/deploy-upgrade.js` (preserves user data)
+4. Frontend automatically updated
+
+## Understanding the Upgrade System
+
+### UUPS Proxy Pattern
+This project uses OpenZeppelin's **UUPS (Universal Upgradeable Proxy Standard)** pattern:
+
+- **Proxy Contract**: Permanent address that users interact with
+- **Implementation Contract**: Contains the actual logic, can be updated
+- **Storage**: Always stored in the proxy, preserved across upgrades
+
+### Why Addresses Were Changing (Fixed)
+**Previous Issue**: Using `deploy-all.js` always created new proxy contracts
+**Solution**: `deploy-upgrade.js` detects existing proxies and preserves them
+
+### Upgrade Safety
+✅ **Safe Operations**:
+- Adding new functions
+- Adding new state variables (at end of struct)
+- Modifying function logic
+- Adding events
+
+⚠️ **Dangerous Operations**:
+- Reordering state variables
+- Changing variable types
+- Removing state variables
+- Changing inheritance order
+
+### Data Preservation
+When using proper upgrade scripts:
+- ✅ User balances preserved
+- ✅ Spending limits preserved
+- ✅ Proxy addresses preserved
+- ✅ User proxy contracts preserved
 
 ## Configuration Files
 

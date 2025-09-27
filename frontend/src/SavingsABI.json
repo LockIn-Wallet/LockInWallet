@@ -132,6 +132,105 @@
         "type": "address"
       },
       {
+        "indexed": true,
+        "internalType": "bytes32",
+        "name": "requestId",
+        "type": "bytes32"
+      }
+    ],
+    "name": "BypassCancelled",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "user",
+        "type": "address"
+      },
+      {
+        "indexed": true,
+        "internalType": "bytes32",
+        "name": "requestId",
+        "type": "bytes32"
+      },
+      {
+        "indexed": false,
+        "internalType": "string",
+        "name": "skipPeriod",
+        "type": "string"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "amount",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "address",
+        "name": "token",
+        "type": "address"
+      }
+    ],
+    "name": "BypassExecuted",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "user",
+        "type": "address"
+      },
+      {
+        "indexed": true,
+        "internalType": "bytes32",
+        "name": "requestId",
+        "type": "bytes32"
+      },
+      {
+        "indexed": false,
+        "internalType": "string",
+        "name": "skipPeriod",
+        "type": "string"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "amount",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "address",
+        "name": "token",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "executeAfter",
+        "type": "uint256"
+      }
+    ],
+    "name": "BypassRequested",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "user",
+        "type": "address"
+      },
+      {
         "indexed": false,
         "internalType": "string",
         "name": "category",
@@ -525,17 +624,22 @@
   {
     "inputs": [
       {
-        "internalType": "address",
-        "name": "user",
-        "type": "address"
+        "internalType": "string",
+        "name": "periodName",
+        "type": "string"
       },
       {
-        "internalType": "string",
-        "name": "category",
-        "type": "string"
+        "internalType": "uint256",
+        "name": "limit",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "durationInSeconds",
+        "type": "uint256"
       }
     ],
-    "name": "approveCategoryChange",
+    "name": "addTimePeriodLimit",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
@@ -554,39 +658,21 @@
     "type": "function"
   },
   {
+    "inputs": [
+      {
+        "internalType": "bytes32",
+        "name": "requestId",
+        "type": "bytes32"
+      }
+    ],
+    "name": "cancelBypassRequest",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
     "inputs": [],
     "name": "commitInitialSetup",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "string",
-        "name": "category",
-        "type": "string"
-      },
-      {
-        "internalType": "uint256",
-        "name": "newLimit",
-        "type": "uint256"
-      }
-    ],
-    "name": "decreaseCategoryLimit",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "string",
-        "name": "category",
-        "type": "string"
-      }
-    ],
-    "name": "deleteCategory",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
@@ -659,14 +745,27 @@
     "type": "function"
   },
   {
+    "inputs": [],
+    "name": "developmentMode",
+    "outputs": [
+      {
+        "internalType": "bool",
+        "name": "",
+        "type": "bool"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
     "inputs": [
       {
         "internalType": "bytes32",
-        "name": "proposalId",
+        "name": "requestId",
         "type": "bytes32"
       }
     ],
-    "name": "executeCategoryIncrease",
+    "name": "executeBypassWithdrawal",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
@@ -679,12 +778,75 @@
         "type": "address"
       }
     ],
-    "name": "getCategoryCount",
+    "name": "getActivePeriodCount",
     "outputs": [
       {
         "internalType": "uint256",
         "name": "",
         "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "user",
+        "type": "address"
+      }
+    ],
+    "name": "getActivePeriodNames",
+    "outputs": [
+      {
+        "internalType": "string[]",
+        "name": "",
+        "type": "string[]"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "bytes32",
+        "name": "requestId",
+        "type": "bytes32"
+      }
+    ],
+    "name": "getBypassRequest",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "amount",
+        "type": "uint256"
+      },
+      {
+        "internalType": "string",
+        "name": "skipPeriod",
+        "type": "string"
+      },
+      {
+        "internalType": "address",
+        "name": "token",
+        "type": "address"
+      },
+      {
+        "internalType": "uint256",
+        "name": "executeAfter",
+        "type": "uint256"
+      },
+      {
+        "internalType": "bool",
+        "name": "executed",
+        "type": "bool"
+      },
+      {
+        "internalType": "bool",
+        "name": "exists",
+        "type": "bool"
       }
     ],
     "stateMutability": "view",
@@ -698,40 +860,6 @@
         "internalType": "uint256",
         "name": "",
         "type": "uint256"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "address",
-        "name": "user",
-        "type": "address"
-      },
-      {
-        "internalType": "string",
-        "name": "category",
-        "type": "string"
-      }
-    ],
-    "name": "getPendingCategoryChange",
-    "outputs": [
-      {
-        "internalType": "uint256",
-        "name": "newLimit",
-        "type": "uint256"
-      },
-      {
-        "internalType": "uint256",
-        "name": "newPeriod",
-        "type": "uint256"
-      },
-      {
-        "internalType": "bool",
-        "name": "pending",
-        "type": "bool"
       }
     ],
     "stateMutability": "view",
@@ -822,17 +950,47 @@
         "type": "address"
       },
       {
-        "internalType": "address",
-        "name": "token",
-        "type": "address"
+        "internalType": "string",
+        "name": "periodName",
+        "type": "string"
       }
     ],
-    "name": "getTokenBalance",
+    "name": "getTimePeriodLimit",
     "outputs": [
       {
         "internalType": "uint256",
-        "name": "",
+        "name": "limit",
         "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "spent",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "remaining",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "duration",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "lastReset",
+        "type": "uint256"
+      },
+      {
+        "internalType": "bool",
+        "name": "active",
+        "type": "bool"
+      },
+      {
+        "internalType": "bool",
+        "name": "exists",
+        "type": "bool"
       }
     ],
     "stateMutability": "view",
@@ -844,14 +1002,19 @@
         "internalType": "address",
         "name": "user",
         "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "token",
+        "type": "address"
       }
     ],
-    "name": "getUserCategories",
+    "name": "getTokenBalance",
     "outputs": [
       {
-        "internalType": "string[]",
+        "internalType": "uint256",
         "name": "",
-        "type": "string[]"
+        "type": "uint256"
       }
     ],
     "stateMutability": "view",
@@ -901,39 +1064,39 @@
         "internalType": "address",
         "name": "user",
         "type": "address"
-      },
-      {
-        "internalType": "string",
-        "name": "category",
-        "type": "string"
       }
     ],
-    "name": "getWithdrawalCategory",
+    "name": "getUserSpendingLimits",
     "outputs": [
       {
-        "internalType": "uint256",
-        "name": "limit",
-        "type": "uint256"
+        "internalType": "string[]",
+        "name": "names",
+        "type": "string[]"
       },
       {
-        "internalType": "uint256",
-        "name": "period",
-        "type": "uint256"
+        "internalType": "uint256[]",
+        "name": "limits",
+        "type": "uint256[]"
       },
       {
-        "internalType": "uint256",
-        "name": "lastReset",
-        "type": "uint256"
+        "internalType": "uint256[]",
+        "name": "spent",
+        "type": "uint256[]"
       },
       {
-        "internalType": "uint256",
-        "name": "spentInPeriod",
-        "type": "uint256"
+        "internalType": "uint256[]",
+        "name": "remaining",
+        "type": "uint256[]"
       },
       {
-        "internalType": "bool",
-        "name": "exists",
-        "type": "bool"
+        "internalType": "uint256[]",
+        "name": "durations",
+        "type": "uint256[]"
+      },
+      {
+        "internalType": "bool[]",
+        "name": "active",
+        "type": "bool[]"
       }
     ],
     "stateMutability": "view",
@@ -1016,35 +1179,6 @@
     "type": "function"
   },
   {
-    "inputs": [
-      {
-        "internalType": "string",
-        "name": "category",
-        "type": "string"
-      },
-      {
-        "internalType": "uint256",
-        "name": "newLimit",
-        "type": "uint256"
-      },
-      {
-        "internalType": "uint256",
-        "name": "timelockHours",
-        "type": "uint256"
-      }
-    ],
-    "name": "proposeCategoryIncrease",
-    "outputs": [
-      {
-        "internalType": "bytes32",
-        "name": "proposalId",
-        "type": "bytes32"
-      }
-    ],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
     "inputs": [],
     "name": "proxiableUUID",
     "outputs": [
@@ -1059,7 +1193,7 @@
   },
   {
     "inputs": [],
-    "name": "renounceOwnership",
+    "name": "recalculateTotalLockedValue",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
@@ -1068,22 +1202,48 @@
     "inputs": [
       {
         "internalType": "string",
-        "name": "category",
+        "name": "periodName",
+        "type": "string"
+      }
+    ],
+    "name": "removeTimePeriodLimit",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "renounceOwnership",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "amount",
+        "type": "uint256"
+      },
+      {
+        "internalType": "string",
+        "name": "skipPeriod",
         "type": "string"
       },
       {
-        "internalType": "uint256",
-        "name": "newLimit",
-        "type": "uint256"
-      },
-      {
-        "internalType": "uint256",
-        "name": "newPeriod",
-        "type": "uint256"
+        "internalType": "address",
+        "name": "token",
+        "type": "address"
       }
     ],
-    "name": "requestCategoryChange",
-    "outputs": [],
+    "name": "requestLimitBypass",
+    "outputs": [
+      {
+        "internalType": "bytes32",
+        "name": "requestId",
+        "type": "bytes32"
+      }
+    ],
     "stateMutability": "nonpayable",
     "type": "function"
   },
@@ -1116,45 +1276,22 @@
   {
     "inputs": [
       {
-        "internalType": "string",
-        "name": "category",
-        "type": "string"
-      },
-      {
         "internalType": "uint256",
-        "name": "limit",
+        "name": "dailyLimit",
         "type": "uint256"
       },
       {
         "internalType": "uint256",
-        "name": "period",
-        "type": "uint256"
-      }
-    ],
-    "name": "setWithdrawalCategory",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "string",
-        "name": "category",
-        "type": "string"
-      },
-      {
-        "internalType": "uint256",
-        "name": "limit",
+        "name": "weeklyLimit",
         "type": "uint256"
       },
       {
         "internalType": "uint256",
-        "name": "period",
+        "name": "monthlyLimit",
         "type": "uint256"
       }
     ],
-    "name": "setWithdrawalCategoryV2",
+    "name": "setCommonPeriodLimits",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
@@ -1192,11 +1329,6 @@
   },
   {
     "inputs": [
-      {
-        "internalType": "string",
-        "name": "category",
-        "type": "string"
-      },
       {
         "internalType": "uint256",
         "name": "amount",

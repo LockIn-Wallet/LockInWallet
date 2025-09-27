@@ -110,7 +110,22 @@ async function main() {
   console.log("   - Users can generate their deposit addresses via the UI");
   console.log("   - Each user gets a unique proxy contract for direct exchange deposits");
 
-  console.log("\n🚀 Ready to use! Start your frontend with: cd frontend && npm start");
+  // Validate deployment integrity
+  console.log("\n🔍 Running deployment validation...");
+  try {
+    const { validateDeployment } = require("./validate-deployment.js");
+    const isValid = await validateDeployment();
+
+    if (isValid) {
+      console.log("\n🚀 Ready to use! Start your frontend with: cd frontend && npm start");
+    } else {
+      console.log("\n⚠️  Deployment validation failed. Please check the issues above.");
+      process.exit(1);
+    }
+  } catch (error) {
+    console.log(`\n⚠️  Could not run validation: ${error.message}`);
+    console.log("🚀 Proceeding anyway. Start your frontend with: cd frontend && npm start");
+  }
 }
 
 main().catch((error) => {

@@ -10,6 +10,8 @@
     "deploy-all": "npx hardhat run scripts/deploy-all.js --network localhost",
     "deploy-usdt": "npx hardhat run scripts/deployMockUSDT.js --network localhost",
     "deploy-savings": "npx hardhat run scripts/deploy-upgradable.ts --network localhost",
+    "deploy:dev": "DEV_MODE=true npx hardhat run scripts/deploy-upgrade.js --network localhost",
+    "deploy:prod": "npx hardhat run scripts/deploy-upgrade.js --network localhost",
     "update-frontend": "node scripts/update-frontend-addresses.js",
     "transfer-usdt": "npx hardhat run scripts/transferUSDT.js --network localhost --"
   },

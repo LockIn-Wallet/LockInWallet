@@ -7,19 +7,19 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "./UserProxy.sol";
 
 contract Savings is Initializable, UUPSUpgradeable, OwnableUpgradeable {
-    struct WithdrawalType {
-        uint256 limit; // Token-specific limit
-        uint256 period;
-        uint256 lastReset;
-        uint256 spentInPeriod; // Token-specific spent amount
-        bool exists;
+    struct TimePeriodLimit {
+        uint256 limit;          // Spending limit for this period
+        uint256 spent;          // Amount spent in current period
+        uint256 lastReset;      // When this period was last reset
+        uint256 duration;       // Period duration in seconds
+        string name;            // "Daily", "Weekly", "Salary Cycle", etc.
+        bool active;            // Whether this limit is active
     }
 
-    struct PendingCategoryChange {
-        string category;
-        uint256 newLimit; // Token-specific limit
-        uint256 newPeriod;
-        bool pending;
+    struct UserSpendingLimits {
+        TimePeriodLimit[] periods;  // Array of time-based limits
+        mapping(string => uint256) periodIndexes; // name => array index for quick lookup
+        uint256 periodCount; // Track number of active periods
     }
 
     struct CategoryUpdateProposal {
@@ -31,25 +31,36 @@ contract Savings is Initializable, UUPSUpgradeable, OwnableUpgradeable {
         bool exists;            // Track if proposal exists
     }
 
+    struct BypassRequest {
+        uint256 amount;           // Amount to withdraw
+        string skipPeriod;        // Which limit to bypass ("Daily", "Weekly")
+        address token;            // Token to withdraw
+        uint256 executeAfter;     // When request can be executed (24h later)
+        bool executed;            // Whether already processed
+        bool exists;              // Track if request exists
+    }
+
     struct UserData {
         mapping(address => uint256) tokenBalances; // Token address => balance
         mapping(address => bool) approvalAddresses;
         bool approvedForFullWithdrawal;
-        mapping(string => WithdrawalType) withdrawalTypes;
-        mapping(string => PendingCategoryChange) pendingChanges;
-        string[] categoryNames; // Track all category names for enumeration
+        UserSpendingLimits spendingLimits; // New time-based spending limits
 
-        // Two-phase system fields
+        // Two-phase system fields (for overall setup, not individual limits)
         bool hasCommittedSetup;          // Track if user committed initial setup
-        uint256 totalLockedValue;        // Total value across all categories
+        uint256 totalLockedValue;        // Total value across all periods
         uint256 lastIncreaseTimestamp;   // Track increase period start
         uint256 increasesInPeriod;       // Amount increased in current 7-day period
         uint256 commitTimestamp;         // When setup was committed
-        mapping(bytes32 => CategoryUpdateProposal) proposals; // Pending proposals
+        mapping(bytes32 => CategoryUpdateProposal) proposals; // Pending proposals for system changes
+        mapping(bytes32 => BypassRequest) bypassRequests; // Pending bypass requests
     }
 
     mapping(address => UserData) private users;
     mapping(address => address) private userProxies; // user => proxy address
+
+    // Development mode for testing - set to false for production
+    bool public developmentMode;
 
     event Deposited(
         address indexed user,
@@ -87,6 +98,11 @@ contract Savings is Initializable, UUPSUpgradeable, OwnableUpgradeable {
     event CategoryIncreaseExecuted(address indexed user, string category, uint256 newLimit, bytes32 proposalId);
     event CategoryDecreased(address indexed user, string category, uint256 newLimit);
     event CategoryDeleted(address indexed user, string category);
+
+    // Bypass system events
+    event BypassRequested(address indexed user, bytes32 indexed requestId, string skipPeriod, uint256 amount, address token, uint256 executeAfter);
+    event BypassExecuted(address indexed user, bytes32 indexed requestId, string skipPeriod, uint256 amount, address token);
+    event BypassCancelled(address indexed user, bytes32 indexed requestId);
 
     // Add this modifier to prevent reentrancy
     modifier nonReentrant() {
@@ -176,91 +192,280 @@ contract Savings is Initializable, UUPSUpgradeable, OwnableUpgradeable {
         emit ApprovalAddressAdded(msg.sender, _approval);
     }
 
-    function setWithdrawalCategory(
-        string calldata category,
+    function addTimePeriodLimit(
+        string calldata periodName,
         uint256 limit,
-        uint256 period
+        uint256 durationInSeconds
     ) external {
-        require(bytes(category).length > 0, "Category cannot be empty");
-        require(limit > 0 && period > 0, "Limit and period must be positive");
-
-        WithdrawalType storage w = users[msg.sender].withdrawalTypes[category];
-        require(!w.exists, "Category already exists");
-
-        // Add category name to the list for enumeration
-        users[msg.sender].categoryNames.push(category);
-
-        w.limit = limit;
-        w.period = period;
-        w.lastReset = block.timestamp;
-        w.spentInPeriod = 0;
-        w.exists = true;
-
-        emit CategorySet(msg.sender, category, limit, period);
+        _addTimePeriodLimitInternal(periodName, limit, durationInSeconds);
     }
 
-    function requestCategoryChange(
-        string calldata category,
-        uint256 newLimit,
-        uint256 newPeriod
-    ) external {
-        require(
-            newLimit > 0 && newPeriod > 0,
-            "Limit and period must be positive"
-        );
-        require(
-            users[msg.sender].withdrawalTypes[category].exists,
-            "Category doesn't exist"
-        );
+    function _addTimePeriodLimitInternal(
+        string memory periodName,
+        uint256 limit,
+        uint256 durationInSeconds
+    ) internal {
+        require(bytes(periodName).length > 0, "Period name cannot be empty");
+        require(limit > 0, "Limit must be positive");
+        require(durationInSeconds > 0, "Duration must be positive");
+        require(durationInSeconds >= 3600, "Minimum duration is 1 hour"); // Prevent abuse
 
-        users[msg.sender].pendingChanges[category] = PendingCategoryChange({
-            category: category,
-            newLimit: newLimit,
-            newPeriod: newPeriod,
-            pending: true
+        UserSpendingLimits storage userLimits = users[msg.sender].spendingLimits;
+
+        // Check if period already exists
+        if (userLimits.periodIndexes[periodName] > 0 ||
+            (userLimits.periods.length > 0 &&
+             keccak256(bytes(userLimits.periods[0].name)) == keccak256(bytes(periodName)))) {
+            // Update existing period
+            uint256 index = userLimits.periodIndexes[periodName];
+            if (index == 0 && userLimits.periods.length > 0 &&
+                keccak256(bytes(userLimits.periods[0].name)) == keccak256(bytes(periodName))) {
+                index = 0;
+            }
+
+            TimePeriodLimit storage existing = userLimits.periods[index];
+            existing.limit = limit;
+            existing.duration = durationInSeconds;
+            existing.active = true;
+        } else {
+            // Add new period
+            userLimits.periods.push(TimePeriodLimit({
+                limit: limit,
+                spent: 0,
+                lastReset: block.timestamp,
+                duration: durationInSeconds,
+                name: periodName,
+                active: true
+            }));
+
+            // Update index mapping (0-based, but we store 1-based to distinguish from default)
+            userLimits.periodIndexes[periodName] = userLimits.periods.length - 1;
+            if (userLimits.periods.length == 1) {
+                // First element special case
+                userLimits.periodIndexes[periodName] = 0;
+            }
+            userLimits.periodCount++;
+        }
+
+        emit CategorySet(msg.sender, periodName, limit, durationInSeconds);
+    }
+
+    function setCommonPeriodLimits(
+        uint256 dailyLimit,
+        uint256 weeklyLimit,
+        uint256 monthlyLimit
+    ) external {
+        require(dailyLimit > 0 || weeklyLimit > 0 || monthlyLimit > 0, "At least one limit must be set");
+
+        // Validate logical limit ordering
+        if (dailyLimit > 0 && weeklyLimit > 0) {
+            require(dailyLimit * 7 <= weeklyLimit, "Daily limit too high for weekly limit");
+        }
+        if (weeklyLimit > 0 && monthlyLimit > 0) {
+            require(weeklyLimit * 4 <= monthlyLimit, "Weekly limit too high for monthly limit");
+        }
+        if (dailyLimit > 0 && monthlyLimit > 0) {
+            require(dailyLimit * 30 <= monthlyLimit, "Daily limit too high for monthly limit");
+        }
+
+        // Add or update common periods - use internal function calls
+        if (dailyLimit > 0) {
+            _addTimePeriodLimitInternal("Daily", dailyLimit, 86400); // 1 day
+        }
+        if (weeklyLimit > 0) {
+            _addTimePeriodLimitInternal("Weekly", weeklyLimit, 604800); // 7 days
+        }
+        if (monthlyLimit > 0) {
+            _addTimePeriodLimitInternal("Monthly", monthlyLimit, 2592000); // 30 days
+        }
+    }
+
+    function removeTimePeriodLimit(string calldata periodName) external {
+        require(bytes(periodName).length > 0, "Period name cannot be empty");
+
+        UserSpendingLimits storage userLimits = users[msg.sender].spendingLimits;
+        require(userLimits.periods.length > 0, "No periods to remove");
+
+        // Find and deactivate the period
+        for (uint256 i = 0; i < userLimits.periods.length; i++) {
+            if (keccak256(bytes(userLimits.periods[i].name)) == keccak256(bytes(periodName))) {
+                userLimits.periods[i].active = false;
+                userLimits.periodCount--;
+                return;
+            }
+        }
+
+        revert("Period not found");
+    }
+
+    // ========== BYPASS SYSTEM FUNCTIONS ==========
+
+    function requestLimitBypass(
+        uint256 amount,
+        string calldata skipPeriod,
+        address token
+    ) external returns (bytes32 requestId) {
+        require(amount > 0, "Amount must be positive");
+        require(bytes(skipPeriod).length > 0, "Skip period cannot be empty");
+        require(token != address(0) || token == address(0), "Invalid token address");
+
+        UserData storage user = users[msg.sender];
+        require(amount <= user.tokenBalances[token], "Insufficient balance");
+
+        // Verify the period to skip exists and is active
+        UserSpendingLimits storage userLimits = user.spendingLimits;
+        bool foundPeriod = false;
+        for (uint256 i = 0; i < userLimits.periods.length; i++) {
+            if (keccak256(bytes(userLimits.periods[i].name)) == keccak256(bytes(skipPeriod)) &&
+                userLimits.periods[i].active) {
+                foundPeriod = true;
+                break;
+            }
+        }
+        require(foundPeriod, "Period not found or inactive");
+
+        // Generate unique request ID
+        requestId = keccak256(abi.encodePacked(msg.sender, skipPeriod, amount, token, block.timestamp));
+
+        // Check if request already exists
+        require(!user.bypassRequests[requestId].exists, "Request already exists");
+
+        // Create bypass request with 24-hour delay
+        user.bypassRequests[requestId] = BypassRequest({
+            amount: amount,
+            skipPeriod: skipPeriod,
+            token: token,
+            executeAfter: block.timestamp + 24 hours,
+            executed: false,
+            exists: true
         });
 
-        emit CategoryChangeRequested(msg.sender, category, newLimit, newPeriod);
+        emit BypassRequested(msg.sender, requestId, skipPeriod, amount, token, block.timestamp + 24 hours);
+        return requestId;
     }
 
-    function approveCategoryChange(
-        address user,
-        string calldata category
-    ) external {
-        UserData storage u = users[user];
-        require(u.approvalAddresses[msg.sender], "Not authorized approver");
+    function executeBypassWithdrawal(bytes32 requestId) external nonReentrant {
+        UserData storage user = users[msg.sender];
+        BypassRequest storage request = user.bypassRequests[requestId];
 
-        PendingCategoryChange storage pending = u.pendingChanges[category];
-        require(pending.pending, "No change requested");
+        require(request.exists, "Request does not exist");
+        require(!request.executed, "Request already executed");
+        require(block.timestamp >= request.executeAfter, "Request still in timelock");
+        require(request.amount <= user.tokenBalances[request.token], "Insufficient balance");
 
-        WithdrawalType storage w = u.withdrawalTypes[category];
-        w.limit = pending.newLimit;
-        w.period = pending.newPeriod;
-        // keep existing spent/lastReset
-        pending.pending = false;
+        // Check limits excluding the bypassed period
+        _checkLimitsWithBypass(user.spendingLimits, request.amount, request.skipPeriod);
 
-        emit CategoryChangeApproved(user, category);
+        // Mark request as executed
+        request.executed = true;
+
+        // Update balances and spending for non-bypassed periods
+        user.tokenBalances[request.token] -= request.amount;
+        _updateSpendingWithBypass(user.spendingLimits, request.amount, request.skipPeriod);
+
+        // Transfer funds
+        if (request.token == address(0)) {
+            // ETH withdrawal
+            payable(msg.sender).transfer(request.amount);
+        } else {
+            // ERC20 withdrawal
+            IERC20(request.token).transfer(msg.sender, request.amount);
+        }
+
+        emit BypassExecuted(msg.sender, requestId, request.skipPeriod, request.amount, request.token);
+        emit Withdrawal(msg.sender, string(abi.encodePacked("Bypass-", request.skipPeriod)), request.amount, request.token);
     }
+
+    function cancelBypassRequest(bytes32 requestId) external {
+        UserData storage user = users[msg.sender];
+        BypassRequest storage request = user.bypassRequests[requestId];
+
+        require(request.exists, "Request does not exist");
+        require(!request.executed, "Request already executed");
+
+        // Delete the request
+        delete user.bypassRequests[requestId];
+
+        emit BypassCancelled(msg.sender, requestId);
+    }
+
+    function _checkLimitsWithBypass(
+        UserSpendingLimits storage userLimits,
+        uint256 amount,
+        string memory skipPeriod
+    ) internal {
+        // Check and update each active time period except the skipped one
+        for (uint256 i = 0; i < userLimits.periods.length; i++) {
+            TimePeriodLimit storage period = userLimits.periods[i];
+
+            if (!period.active) continue;
+
+            // Skip the bypassed period
+            if (keccak256(bytes(period.name)) == keccak256(bytes(skipPeriod))) continue;
+
+            // Reset period if duration has passed
+            if (block.timestamp >= period.lastReset + period.duration) {
+                period.lastReset = block.timestamp;
+                period.spent = 0;
+            }
+
+            // Check if this withdrawal would exceed the period limit
+            require(
+                period.spent + amount <= period.limit,
+                string(abi.encodePacked("Exceeds ", period.name, " limit"))
+            );
+        }
+    }
+
+    function _updateSpendingWithBypass(
+        UserSpendingLimits storage userLimits,
+        uint256 amount,
+        string memory skipPeriod
+    ) internal {
+        // Update spending for all active periods except the skipped one
+        for (uint256 i = 0; i < userLimits.periods.length; i++) {
+            TimePeriodLimit storage period = userLimits.periods[i];
+
+            if (!period.active) continue;
+
+            // Skip the bypassed period
+            if (keccak256(bytes(period.name)) == keccak256(bytes(skipPeriod))) continue;
+
+            period.spent += amount;
+        }
+    }
+
+    function getBypassRequest(bytes32 requestId) external view returns (
+        uint256 amount,
+        string memory skipPeriod,
+        address token,
+        uint256 executeAfter,
+        bool executed,
+        bool exists
+    ) {
+        BypassRequest storage request = users[msg.sender].bypassRequests[requestId];
+        return (
+            request.amount,
+            request.skipPeriod,
+            request.token,
+            request.executeAfter,
+            request.executed,
+            request.exists
+        );
+    }
+
 
     function withdraw(
-        string calldata category,
         uint256 amount,
         address token
     ) external nonReentrant {
         UserData storage user = users[msg.sender];
-        WithdrawalType storage w = user.withdrawalTypes[category];
-
-        require(w.exists, "Category not found");
+        require(amount > 0, "Amount must be positive");
         require(amount <= user.tokenBalances[token], "Insufficient balance");
 
-        if (block.timestamp >= w.lastReset + w.period) {
-            w.lastReset = block.timestamp;
-            w.spentInPeriod = 0;
-        }
+        // Check against all active time period limits
+        _checkAllTimePeriodLimits(user.spendingLimits, amount);
 
-        require(w.spentInPeriod + amount <= w.limit, "Exceeds category limit");
-
-        w.spentInPeriod += amount;
         user.tokenBalances[token] -= amount;
 
         if (token == address(0)) {
@@ -271,7 +476,39 @@ contract Savings is Initializable, UUPSUpgradeable, OwnableUpgradeable {
             IERC20(token).transfer(msg.sender, amount);
         }
 
-        emit Withdrawal(msg.sender, category, amount, token);
+        emit Withdrawal(msg.sender, "Time-Based", amount, token);
+    }
+
+    function _checkAllTimePeriodLimits(
+        UserSpendingLimits storage userLimits,
+        uint256 amount
+    ) internal {
+        // Check and update each active time period
+        for (uint256 i = 0; i < userLimits.periods.length; i++) {
+            TimePeriodLimit storage period = userLimits.periods[i];
+
+            if (!period.active) continue;
+
+            // Reset period if duration has passed
+            if (block.timestamp >= period.lastReset + period.duration) {
+                period.lastReset = block.timestamp;
+                period.spent = 0;
+            }
+
+            // Check if this withdrawal would exceed the period limit
+            require(
+                period.spent + amount <= period.limit,
+                string(abi.encodePacked("Exceeds ", period.name, " limit"))
+            );
+        }
+
+        // If all checks pass, deduct from all active periods
+        for (uint256 i = 0; i < userLimits.periods.length; i++) {
+            TimePeriodLimit storage period = userLimits.periods[i];
+            if (period.active) {
+                period.spent += amount;
+            }
+        }
     }
 
     function approveFullWithdrawal(address userAddress) external {
@@ -313,17 +550,71 @@ contract Savings is Initializable, UUPSUpgradeable, OwnableUpgradeable {
         return users[user].tokenBalances[token];
     }
 
-    function getWithdrawalCategory(
+    function getUserSpendingLimits(address user)
+        external
+        view
+        returns (
+            string[] memory names,
+            uint256[] memory limits,
+            uint256[] memory spent,
+            uint256[] memory remaining,
+            uint256[] memory durations,
+            bool[] memory active
+        )
+    {
+        require(
+            msg.sender == user || users[user].approvalAddresses[msg.sender],
+            "Not authorized"
+        );
+
+        UserSpendingLimits storage userLimits = users[user].spendingLimits;
+        uint256 length = userLimits.periods.length;
+
+        names = new string[](length);
+        limits = new uint256[](length);
+        spent = new uint256[](length);
+        remaining = new uint256[](length);
+        durations = new uint256[](length);
+        active = new bool[](length);
+
+        for (uint256 i = 0; i < length; i++) {
+            TimePeriodLimit storage period = userLimits.periods[i];
+            names[i] = period.name;
+            limits[i] = period.limit;
+            durations[i] = period.duration;
+            active[i] = period.active;
+
+            // Calculate current spent (reset if period expired)
+            if (block.timestamp >= period.lastReset + period.duration) {
+                spent[i] = 0; // Would be reset
+            } else {
+                spent[i] = period.spent;
+            }
+
+            // Calculate remaining
+            if (period.limit > spent[i]) {
+                remaining[i] = period.limit - spent[i];
+            } else {
+                remaining[i] = 0;
+            }
+        }
+
+        return (names, limits, spent, remaining, durations, active);
+    }
+
+    function getTimePeriodLimit(
         address user,
-        string calldata category
+        string calldata periodName
     )
         external
         view
         returns (
             uint256 limit,
-            uint256 period,
+            uint256 spent,
+            uint256 remaining,
+            uint256 duration,
             uint256 lastReset,
-            uint256 spentInPeriod,
+            bool active,
             bool exists
         )
     {
@@ -331,21 +622,40 @@ contract Savings is Initializable, UUPSUpgradeable, OwnableUpgradeable {
             msg.sender == user || users[user].approvalAddresses[msg.sender],
             "Not authorized"
         );
-        WithdrawalType storage w = users[user].withdrawalTypes[category];
-        return (w.limit, w.period, w.lastReset, w.spentInPeriod, w.exists);
+
+        UserSpendingLimits storage userLimits = users[user].spendingLimits;
+
+        // Find the period
+        for (uint256 i = 0; i < userLimits.periods.length; i++) {
+            TimePeriodLimit storage period = userLimits.periods[i];
+            if (keccak256(bytes(period.name)) == keccak256(bytes(periodName))) {
+                limit = period.limit;
+                duration = period.duration;
+                lastReset = period.lastReset;
+                active = period.active;
+                exists = true;
+
+                // Calculate current spent (reset if period expired)
+                if (block.timestamp >= period.lastReset + period.duration) {
+                    spent = 0; // Would be reset
+                } else {
+                    spent = period.spent;
+                }
+
+                // Calculate remaining
+                if (limit > spent) {
+                    remaining = limit - spent;
+                } else {
+                    remaining = 0;
+                }
+
+                return (limit, spent, remaining, duration, lastReset, active, exists);
+            }
+        }
+
+        return (0, 0, 0, 0, 0, false, false);
     }
 
-    function getPendingCategoryChange(
-        address user,
-        string calldata category
-    )
-        external
-        view
-        returns (uint256 newLimit, uint256 newPeriod, bool pending)
-    {
-        PendingCategoryChange storage p = users[user].pendingChanges[category];
-        return (p.newLimit, p.newPeriod, p.pending);
-    }
 
     function isApprovalAddress(
         address user,
@@ -360,11 +670,14 @@ contract Savings is Initializable, UUPSUpgradeable, OwnableUpgradeable {
         UserData storage user = users[msg.sender];
         require(!user.hasCommittedSetup, "Setup already committed");
 
-        // Calculate total locked value across all categories
+        // Calculate maximum spending limit across all time periods
+        // (Use the highest limit since periods are overlapping, not additive)
         uint256 totalValue = 0;
-        for (uint256 i = 0; i < user.categoryNames.length; i++) {
-            WithdrawalType storage category = user.withdrawalTypes[user.categoryNames[i]];
-            totalValue += category.limit;
+        UserSpendingLimits storage userLimits = user.spendingLimits;
+        for (uint256 i = 0; i < userLimits.periods.length; i++) {
+            if (userLimits.periods[i].active && userLimits.periods[i].limit > totalValue) {
+                totalValue = userLimits.periods[i].limit;
+            }
         }
 
         user.hasCommittedSetup = true;
@@ -397,68 +710,23 @@ contract Savings is Initializable, UUPSUpgradeable, OwnableUpgradeable {
         );
     }
 
-    function proposeCategoryIncrease(
-        string calldata category,
-        uint256 newLimit,
-        uint256 timelockHours
-    ) external returns (bytes32 proposalId) {
+    function recalculateTotalLockedValue() external {
         UserData storage user = users[msg.sender];
-        require(user.hasCommittedSetup, "Setup not committed");
-        require(timelockHours >= 24 && timelockHours <= 72, "Timelock must be 24-72 hours");
+        require(user.hasCommittedSetup, "Setup not committed yet");
 
-        WithdrawalType storage existingCategory = user.withdrawalTypes[category];
-        require(existingCategory.exists, "Category does not exist");
-        require(newLimit > existingCategory.limit, "New limit must be higher");
+        // Recalculate using the new logic (maximum limit instead of sum)
+        uint256 maxValue = 0;
+        UserSpendingLimits storage userLimits = user.spendingLimits;
+        for (uint256 i = 0; i < userLimits.periods.length; i++) {
+            if (userLimits.periods[i].active && userLimits.periods[i].limit > maxValue) {
+                maxValue = userLimits.periods[i].limit;
+            }
+        }
 
-        // Check 7-day increase limits
-        _checkIncreaseLimit(user, newLimit - existingCategory.limit);
-
-        // Generate proposal ID
-        proposalId = keccak256(abi.encodePacked(msg.sender, category, newLimit, block.timestamp));
-
-        CategoryUpdateProposal storage proposal = user.proposals[proposalId];
-        require(!proposal.exists, "Proposal already exists");
-
-        proposal.category = category;
-        proposal.newLimit = newLimit;
-        proposal.executeAfter = block.timestamp + (timelockHours * 1 hours);
-        proposal.executed = false;
-        proposal.isIncrease = true;
-        proposal.exists = true;
-
-        emit CategoryIncreaseProposed(msg.sender, category, newLimit, proposal.executeAfter, proposalId);
-        return proposalId;
+        user.totalLockedValue = maxValue;
+        emit SetupCommitted(msg.sender, block.timestamp); // Reuse event for update notification
     }
 
-    function executeCategoryIncrease(bytes32 proposalId) external {
-        UserData storage user = users[msg.sender];
-        CategoryUpdateProposal storage proposal = user.proposals[proposalId];
-
-        require(proposal.exists, "Proposal does not exist");
-        require(!proposal.executed, "Proposal already executed");
-        require(block.timestamp >= proposal.executeAfter, "Timelock not expired");
-        require(proposal.isIncrease, "Not an increase proposal");
-
-        WithdrawalType storage category = user.withdrawalTypes[proposal.category];
-        require(category.exists, "Category no longer exists");
-
-        uint256 increaseAmount = proposal.newLimit - category.limit;
-
-        // Re-check 7-day limits at execution time
-        _checkIncreaseLimit(user, increaseAmount);
-
-        // Update category limit
-        category.limit = proposal.newLimit;
-
-        // Update tracking
-        user.totalLockedValue += increaseAmount;
-        _updateIncreaseTracking(user, increaseAmount);
-
-        // Mark proposal as executed
-        proposal.executed = true;
-
-        emit CategoryIncreaseExecuted(msg.sender, proposal.category, proposal.newLimit, proposalId);
-    }
 
     function _checkIncreaseLimit(UserData storage user, uint256 increaseAmount) internal view {
         // Reset period if 7 days have passed
@@ -502,105 +770,35 @@ contract Savings is Initializable, UUPSUpgradeable, OwnableUpgradeable {
         );
     }
 
-    function decreaseCategoryLimit(
-        string calldata category,
-        uint256 newLimit
-    ) external {
-        UserData storage user = users[msg.sender];
-        require(user.hasCommittedSetup, "Setup not committed");
 
-        WithdrawalType storage categoryData = user.withdrawalTypes[category];
-        require(categoryData.exists, "Category does not exist");
-        require(newLimit < categoryData.limit, "New limit must be lower");
-        require(newLimit > 0, "Limit must be greater than zero");
-
-        uint256 decreaseAmount = categoryData.limit - newLimit;
-
-        // Update category limit (immediate)
-        categoryData.limit = newLimit;
-
-        // Update total locked value
-        user.totalLockedValue -= decreaseAmount;
-
-        emit CategoryDecreased(msg.sender, category, newLimit);
-    }
-
-    function deleteCategory(string calldata category) external {
-        UserData storage user = users[msg.sender];
-        require(user.hasCommittedSetup, "Setup not committed");
-
-        WithdrawalType storage categoryData = user.withdrawalTypes[category];
-        require(categoryData.exists, "Category does not exist");
-
-        // Store the limit before deletion for total value update
-        uint256 categoryLimit = categoryData.limit;
-
-        // Mark category as deleted
-        categoryData.exists = false;
-        categoryData.limit = 0;
-        categoryData.period = 0;
-        categoryData.lastReset = 0;
-        categoryData.spentInPeriod = 0;
-
-        // Remove from category names array
-        _removeCategoryFromArray(user, category);
-
-        // Update total locked value
-        user.totalLockedValue -= categoryLimit;
-
-        emit CategoryDeleted(msg.sender, category);
-    }
-
-    function _removeCategoryFromArray(UserData storage user, string memory categoryToRemove) internal {
-        uint256 length = user.categoryNames.length;
-        for (uint256 i = 0; i < length; i++) {
-            if (keccak256(bytes(user.categoryNames[i])) == keccak256(bytes(categoryToRemove))) {
-                // Move the last element to this position and pop
-                user.categoryNames[i] = user.categoryNames[length - 1];
-                user.categoryNames.pop();
-                break;
-            }
-        }
-    }
-
-    // Override setWithdrawalCategory to respect committed setup
-    function setWithdrawalCategoryV2(
-        string calldata category,
-        uint256 limit,
-        uint256 period
-    ) external {
-        UserData storage user = users[msg.sender];
-
-        if (user.hasCommittedSetup) {
-            revert("Use proposeCategoryIncrease for increases or decreaseCategoryLimit for decreases after setup is committed");
-        }
-
-        // Call original logic for setup phase
-        require(bytes(category).length > 0, "Category cannot be empty");
-        require(limit > 0 && period > 0, "Limit and period must be positive");
-
-        WithdrawalType storage w = user.withdrawalTypes[category];
-        require(!w.exists, "Category already exists");
-
-        // Add category name to the list for enumeration
-        user.categoryNames.push(category);
-
-        w.limit = limit;
-        w.period = period;
-        w.lastReset = block.timestamp;
-        w.spentInPeriod = 0;
-        w.exists = true;
-
-        emit CategorySet(msg.sender, category, limit, period);
-    }
 
     // Utility functions
-    function getUserCategories(address user) external view returns (string[] memory) {
-        return users[user].categoryNames;
+    function getActivePeriodNames(address user) external view returns (string[] memory) {
+        UserSpendingLimits storage userLimits = users[user].spendingLimits;
+
+        // Count active periods
+        uint256 activeCount = 0;
+        for (uint256 i = 0; i < userLimits.periods.length; i++) {
+            if (userLimits.periods[i].active) {
+                activeCount++;
+            }
+        }
+
+        // Create array of active period names
+        string[] memory activeNames = new string[](activeCount);
+        uint256 index = 0;
+        for (uint256 i = 0; i < userLimits.periods.length; i++) {
+            if (userLimits.periods[i].active) {
+                activeNames[index] = userLimits.periods[i].name;
+                index++;
+            }
+        }
+
+        return activeNames;
     }
 
-    function getCategoryCount(address user) external view returns (uint256) {
-        return users[user].categoryNames.length;
+    function getActivePeriodCount(address user) external view returns (uint256) {
+        return users[user].spendingLimits.periodCount;
     }
 
     // ========== USER PROXY FUNCTIONS ==========
