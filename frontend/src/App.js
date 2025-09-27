@@ -3,13 +3,13 @@ import { ethers } from "ethers";
 import SavingsABI from "./SavingsABI.json";
 import MockUSDT_ABI from "./MockUSDT_ABI.json";
 
-const SAVINGS_CONTRACT_ADDRESS = "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0";
+const SAVINGS_CONTRACT_ADDRESS = "0xA51c1fc2f0D1a1b8494Ed1FE312d7C3a78Ed91C0";
 const ETH_ADDRESS = "0x0000000000000000000000000000000000000000"; // ETH address (native token)
 
 // Stablecoin configuration for localhost development
 const STABLECOINS = {
   USDT: {
-    address: "0x5FbDB2315678afecb367f032d93F642f64180aa3",
+    address: "0x610178dA211FEF7D417bC0e6FeD39F05609AD788",
     symbol: "USDT",
     name: "Tether USD",
     decimals: 6,
@@ -32,7 +32,7 @@ const STABLECOINS = {
 };
 
 // For backward compatibility
-const USDT_ADDRESS = STABLECOINS.USDT.address;
+const USDT_ADDRESS = "0x610178dA211FEF7D417bC0e6FeD39F05609AD788"; // Updated: 0x610178dA211FEF7D417bC0e6FeD39F05609AD788
 
 function App() {
   const [provider, setProvider] = useState(null);
@@ -47,6 +47,11 @@ function App() {
   const [depositAmount, setDepositAmount] = useState(""); // New state for deposit amount
   const [selectedToken, setSelectedToken] = useState("USDT"); // Default to USDT
   const [userAddress, setUserAddress] = useState(""); // Store user address
+
+  // Proxy deployment state
+  const [proxyAddress, setProxyAddress] = useState("");
+  const [isProxyDeployed, setIsProxyDeployed] = useState(false);
+  const [isDeploying, setIsDeploying] = useState(false);
 
   // Two-phase system state
   const [isSetupCommitted, setIsSetupCommitted] = useState(false);
@@ -85,6 +90,76 @@ function App() {
     }
   };
 
+  const checkProxyStatus = async (contract = savingsContract, userAddr = null) => {
+    if (contract && signer) {
+      try {
+        const userAddress = userAddr || await signer.getAddress();
+
+        // Check if proxy is already deployed
+        const proxyDeployed = await contract.isProxyDeployed(userAddress);
+        setIsProxyDeployed(proxyDeployed);
+
+        // Get the calculated deposit address (whether deployed or not)
+        const depositAddress = await contract.getUserDepositAddress(userAddress);
+        setProxyAddress(depositAddress);
+
+        console.log(`Proxy status for ${userAddress}:`);
+        console.log(`- Deployed: ${proxyDeployed}`);
+        console.log(`- Deposit Address: ${depositAddress}`);
+
+      } catch (error) {
+        console.error("Error checking proxy status:", error);
+        setIsProxyDeployed(false);
+        setProxyAddress("");
+      }
+    }
+  };
+
+  const deployProxy = async () => {
+    if (!savingsContract || !signer) {
+      alert("Please connect your wallet first");
+      return;
+    }
+
+    if (isProxyDeployed) {
+      alert("Proxy already deployed!");
+      return;
+    }
+
+    try {
+      setIsDeploying(true);
+      console.log("Deploying user proxy...");
+
+      // Call the deployUserProxy function
+      const tx = await savingsContract.deployUserProxy();
+      console.log("Transaction sent:", tx.hash);
+
+      // Wait for transaction confirmation
+      const receipt = await tx.wait();
+      console.log("Transaction confirmed:", receipt);
+
+      // Refresh proxy status
+      await checkProxyStatus();
+
+      alert("🎉 Deposit address generated successfully! You can now receive direct deposits from exchanges.");
+
+    } catch (error) {
+      console.error("Error deploying proxy:", error);
+
+      // Handle specific error cases
+      if (error.message.includes("Proxy already deployed")) {
+        alert("Proxy already deployed for this address");
+        await checkProxyStatus(); // Refresh status
+      } else if (error.message.includes("user rejected")) {
+        alert("Transaction cancelled by user");
+      } else {
+        alert(`Failed to deploy proxy: ${error.message}`);
+      }
+    } finally {
+      setIsDeploying(false);
+    }
+  };
+
   const connectWallet = async () => {
     if (window.ethereum) {
       const web3Provider = new ethers.BrowserProvider(window.ethereum);
@@ -103,10 +178,11 @@ function App() {
       const address = await web3Signer.getAddress();
       setUserAddress(address);
 
-      // Automatically fetch balances for all recommended tokens after connecting
+      // Automatically fetch balances and proxy status after connecting
       try {
         const userAddress = await web3Signer.getAddress();
         await fetchAllBalances(savings, userAddress);
+        await checkProxyStatus(savings, userAddress);
 
         // Check setup status
         const setupCommitted = await savings.isSetupCommitted();
@@ -401,39 +477,128 @@ function App() {
             <h3 style={{ color: "white" }}>🏦 Direct Deposit from Exchange</h3>
             <p style={{ fontSize: "0.9em", color: "#cbd5e0", marginBottom: "15px" }}>Get your personal deposit address to receive funds directly from exchanges</p>
 
-            <div style={{ display: "flex", gap: "10px", alignItems: "center", marginBottom: "15px" }}>
-              <strong style={{ color: "white" }}>Your Deposit Address:</strong>
-              <code style={{
-                backgroundColor: "#4a5568",
-                color: "#e2e8f0",
-                padding: "8px",
+            {/* Conditional rendering based on proxy status */}
+            {!isProxyDeployed && !isDeploying && (
+              <div style={{
+                padding: "15px",
+                backgroundColor: "#1a202c",
                 borderRadius: "4px",
-                fontSize: "0.9em",
-                wordBreak: "break-all",
-                flex: 1
+                border: "1px solid #4a5568",
+                textAlign: "center"
               }}>
-                {userAddress || "Connect wallet to see address"}
-              </code>
-              <button
-                onClick={() => {
-                  if (userAddress) {
-                    navigator.clipboard.writeText(userAddress);
-                    alert("Address copied to clipboard!");
-                  }
-                }}
-                style={{
-                  padding: "6px 12px",
-                  borderRadius: "4px",
-                  border: "none",
-                  backgroundColor: "#718096",
-                  color: "white",
-                  cursor: "pointer",
-                  fontSize: "0.8em"
-                }}
-              >
-                📋 Copy
-              </button>
-            </div>
+                <div style={{ marginBottom: "15px" }}>
+                  <div style={{ fontSize: "2em", marginBottom: "10px" }}>🔒</div>
+                  <h4 style={{ color: "#e2e8f0", margin: "0 0 8px 0" }}>Deposit Address Not Generated</h4>
+                  <p style={{ color: "#a0aec0", fontSize: "0.9em", margin: "0" }}>
+                    Generate your unique deposit address to receive funds directly from exchanges
+                  </p>
+                </div>
+
+                <button
+                  onClick={deployProxy}
+                  style={{
+                    padding: "12px 24px",
+                    borderRadius: "6px",
+                    border: "none",
+                    backgroundColor: "#3182ce",
+                    color: "white",
+                    cursor: "pointer",
+                    fontSize: "1em",
+                    fontWeight: "bold"
+                  }}
+                >
+                  🎯 Generate Deposit Address
+                </button>
+
+                <div style={{ marginTop: "15px", fontSize: "0.8em", color: "#718096" }}>
+                  <p style={{ margin: "5px 0" }}>✨ One-time setup • Gas fee required</p>
+                  <p style={{ margin: "5px 0" }}>🎯 Direct exchange withdrawals • No manual deposits needed</p>
+                </div>
+              </div>
+            )}
+
+            {/* Deploying state */}
+            {isDeploying && (
+              <div style={{
+                padding: "15px",
+                backgroundColor: "#1a202c",
+                borderRadius: "4px",
+                border: "1px solid #4a5568",
+                textAlign: "center"
+              }}>
+                <div style={{ marginBottom: "15px" }}>
+                  <div style={{ fontSize: "2em", marginBottom: "10px" }}>⏳</div>
+                  <h4 style={{ color: "#e2e8f0", margin: "0 0 8px 0" }}>Generating Deposit Address...</h4>
+                  <p style={{ color: "#a0aec0", fontSize: "0.9em", margin: "0" }}>
+                    Please confirm the transaction in MetaMask and wait for deployment
+                  </p>
+                </div>
+
+                <div style={{
+                  padding: "12px 24px",
+                  borderRadius: "6px",
+                  backgroundColor: "#4a5568",
+                  color: "#a0aec0",
+                  fontSize: "1em"
+                }}>
+                  🔄 Deploying Contract...
+                </div>
+              </div>
+            )}
+
+            {/* Generated state */}
+            {isProxyDeployed && proxyAddress && (
+              <div style={{
+                padding: "15px",
+                backgroundColor: "#1a202c",
+                borderRadius: "4px",
+                border: "1px solid #48bb78"
+              }}>
+                <div style={{ marginBottom: "15px", textAlign: "center" }}>
+                  <div style={{ fontSize: "2em", marginBottom: "10px" }}>✅</div>
+                  <h4 style={{ color: "#9ae6b4", margin: "0 0 8px 0" }}>Deposit Address Generated</h4>
+                  <p style={{ color: "#e2e8f0", fontSize: "0.9em", margin: "0" }}>
+                    Use this address to receive funds directly from exchanges
+                  </p>
+                </div>
+
+                <div style={{ display: "flex", gap: "10px", alignItems: "center", marginBottom: "15px" }}>
+                  <strong style={{ color: "white", minWidth: "120px" }}>Your Deposit Address:</strong>
+                  <code style={{
+                    backgroundColor: "#4a5568",
+                    color: "#9ae6b4",
+                    padding: "8px",
+                    borderRadius: "4px",
+                    fontSize: "0.9em",
+                    wordBreak: "break-all",
+                    flex: 1
+                  }}>
+                    {proxyAddress}
+                  </code>
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(proxyAddress);
+                      alert("Deposit address copied to clipboard!");
+                    }}
+                    style={{
+                      padding: "6px 12px",
+                      borderRadius: "4px",
+                      border: "none",
+                      backgroundColor: "#48bb78",
+                      color: "white",
+                      cursor: "pointer",
+                      fontSize: "0.8em"
+                    }}
+                  >
+                    📋 Copy
+                  </button>
+                </div>
+
+                <div style={{ fontSize: "0.8em", color: "#9ae6b4", textAlign: "center" }}>
+                  ✅ Ready for direct deposits from exchanges!
+                </div>
+              </div>
+            )}
           </div>
           {/* Multi-token balance display */}
           <div style={{ marginBottom: "20px", padding: "15px", border: "1px solid #333", borderRadius: "5px", backgroundColor: "#2d3748", color: "white" }}>

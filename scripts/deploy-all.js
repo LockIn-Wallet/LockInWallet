@@ -43,10 +43,16 @@ async function main() {
       `const SAVINGS_CONTRACT_ADDRESS = "${savingsAddress}"`
     );
 
-    // Update USDT_ADDRESS
+    // Update USDT_ADDRESS in STABLECOINS configuration
     frontendContent = frontendContent.replace(
-      /const USDT_ADDRESS = "[^"]*"/,
-      `const USDT_ADDRESS = "${usdtAddress}"`
+      /(USDT: {[^}]*address: ")[^"]*(",)/,
+      `$1${usdtAddress}$2`
+    );
+
+    // Also update the legacy USDT_ADDRESS for backwards compatibility
+    frontendContent = frontendContent.replace(
+      /const USDT_ADDRESS = STABLECOINS\.USDT\.address;/,
+      `const USDT_ADDRESS = "${usdtAddress}"; // Updated: ${usdtAddress}`
     );
 
     fs.writeFileSync(frontendPath, frontendContent);
@@ -69,7 +75,13 @@ async function main() {
     const usdtArtifact = require("../artifacts/contracts/MockUSDT.sol/MockUSDT.json");
     const frontendUSDTABIPath = path.join(__dirname, "../frontend/src/MockUSDT_ABI.json");
     fs.writeFileSync(frontendUSDTABIPath, JSON.stringify(usdtArtifact.abi, null, 2));
-    console.log("✅ MockUSDT ABI updated\n");
+    console.log("✅ MockUSDT ABI updated");
+
+    // Copy UserProxy ABI
+    const userProxyArtifact = require("../artifacts/contracts/UserProxy.sol/UserProxy.json");
+    const frontendUserProxyABIPath = path.join(__dirname, "../frontend/src/UserProxyABI.json");
+    fs.writeFileSync(frontendUserProxyABIPath, JSON.stringify(userProxyArtifact.abi, null, 2));
+    console.log("✅ UserProxy ABI updated\n");
   } catch (error) {
     console.log("⚠️  Warning: Could not update ABIs automatically");
     console.log(`   Error: ${error.message}\n`);
@@ -93,6 +105,10 @@ async function main() {
   console.log("\n2. If frontend addresses weren't updated automatically:");
   console.log(`   SAVINGS_CONTRACT_ADDRESS = "${savingsAddress}"`);
   console.log(`   USDT_ADDRESS = "${usdtAddress}"`);
+
+  console.log("\n3. UserProxy deployment:");
+  console.log("   - Users can generate their deposit addresses via the UI");
+  console.log("   - Each user gets a unique proxy contract for direct exchange deposits");
 
   console.log("\n🚀 Ready to use! Start your frontend with: cd frontend && npm start");
 }

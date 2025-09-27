@@ -4,6 +4,7 @@ import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "./UserProxy.sol";
 
 contract Savings is Initializable, UUPSUpgradeable, OwnableUpgradeable {
     struct WithdrawalType {
@@ -48,12 +49,14 @@ contract Savings is Initializable, UUPSUpgradeable, OwnableUpgradeable {
     }
 
     mapping(address => UserData) private users;
+    mapping(address => address) private userProxies; // user => proxy address
 
     event Deposited(
         address indexed user,
         address indexed token,
         uint256 amount
     );
+    event ProxyDeployed(address indexed user, address indexed proxy);
     event Withdrawal(
         address indexed user,
         string category,
@@ -112,6 +115,7 @@ contract Savings is Initializable, UUPSUpgradeable, OwnableUpgradeable {
 
     // --- Core Features ---
 
+    // Original deposit function (backwards compatibility)
     function deposit(address token, uint256 amount) external payable {
         require(amount > 0, "Deposit must be greater than zero");
         if (token == address(0)) {
@@ -131,6 +135,24 @@ contract Savings is Initializable, UUPSUpgradeable, OwnableUpgradeable {
 
         users[to].tokenBalances[address(0)] += msg.value;
         emit DepositedTo(msg.sender, to, msg.value);
+    }
+
+    // Enhanced deposit function that works with proxy forwarding
+    function deposit(address token, uint256 amount, address beneficiary) external payable {
+        require(amount > 0, "Deposit must be greater than zero");
+
+        address recipient = beneficiary != address(0) ? beneficiary : msg.sender;
+
+        if (token == address(0)) {
+            // ETH deposit
+            require(msg.value == amount, "Incorrect ETH amount");
+        } else {
+            // ERC20 deposit
+            IERC20(token).transferFrom(msg.sender, address(this), amount);
+        }
+
+        users[recipient].tokenBalances[token] += amount;
+        emit Deposited(recipient, token, amount);
     }
 
     function addApprovalAddress(address _approval) external {
@@ -579,6 +601,46 @@ contract Savings is Initializable, UUPSUpgradeable, OwnableUpgradeable {
 
     function getCategoryCount(address user) external view returns (uint256) {
         return users[user].categoryNames.length;
+    }
+
+    // ========== USER PROXY FUNCTIONS ==========
+
+    function getUserDepositAddress(address user) external view returns (address) {
+        // Calculate deterministic address using CREATE2
+        bytes32 salt = keccak256(abi.encodePacked(user));
+        bytes32 bytecodeHash = keccak256(abi.encodePacked(
+            type(UserProxy).creationCode,
+            abi.encode(address(this), user)
+        ));
+
+        return address(uint160(uint256(keccak256(abi.encodePacked(
+            bytes1(0xff),
+            address(this),
+            salt,
+            bytecodeHash
+        )))));
+    }
+
+    function deployUserProxy() external returns (address proxy) {
+        require(userProxies[msg.sender] == address(0), "Proxy already deployed");
+
+        bytes32 salt = keccak256(abi.encodePacked(msg.sender));
+
+        // Deploy using CREATE2 for deterministic address
+        proxy = address(new UserProxy{salt: salt}(address(this), msg.sender));
+
+        userProxies[msg.sender] = proxy;
+        emit ProxyDeployed(msg.sender, proxy);
+
+        return proxy;
+    }
+
+    function isProxyDeployed(address user) external view returns (bool) {
+        return userProxies[user] != address(0);
+    }
+
+    function getUserProxy(address user) external view returns (address) {
+        return userProxies[user];
     }
 
     fallback() external payable {
