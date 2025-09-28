@@ -2,48 +2,50 @@ const { ethers, upgrades } = require("hardhat");
 const fs = require("fs");
 const path = require("path");
 
-// Configuration - store the current proxy address
-const PROXY_ADDRESS = "0x0000000000000000000000000000000000000000"; // Set to zero for initial deployment
-
-// Check for development mode flag
+// Configuration - detect current proxy address from frontend
 const isDevelopmentMode = process.env.DEV_MODE === 'true';
 
 async function main() {
-  console.log(`🔄 Starting modular savings wallet deployment${isDevelopmentMode ? ' (DEVELOPMENT MODE)' : ''}...\n`);
+  console.log(`🔄 Starting comprehensive upgrade process${isDevelopmentMode ? ' (DEVELOPMENT MODE)' : ''}...\n`);
 
   // Get deployer account
   const [deployer] = await ethers.getSigners();
-  console.log(`Deploying with account: ${deployer.address}`);
+  console.log(`Upgrading with account: ${deployer.address}`);
   console.log(`Account balance: ${ethers.formatEther(await deployer.provider.getBalance(deployer.address))} ETH\n`);
 
   let savingsAddress;
   let isUpgrade = false;
+  let usdtAddress;
   const moduleAddresses = {};
 
   try {
-    // Check if proxy already exists
-    if (PROXY_ADDRESS && PROXY_ADDRESS !== "0x0000000000000000000000000000000000000000") {
-      try {
-        // Try to interact with the existing proxy to see if it exists
-        const existingContract = await ethers.getContractAt("SavingsCore", PROXY_ADDRESS);
-        const owner = await existingContract.owner();
-        console.log(`📋 Found existing proxy at: ${PROXY_ADDRESS}`);
-        console.log(`   Current owner: ${owner}`);
+    // Read current frontend configuration to get existing addresses
+    console.log("📋 Reading current frontend configuration...");
+    const frontendPath = path.join(__dirname, "../frontend/src/App.js");
+    let frontendContent = fs.readFileSync(frontendPath, "utf8");
 
-        // Perform upgrade
-        console.log("⬆️  Upgrading existing proxy...");
+    const currentSavingsMatch = frontendContent.match(/savingsContract: "([^"]+)"/);
+    const currentUsdtMatch = frontendContent.match(/(USDT: {[^}]*address: ")[^"]*(",)/);
+
+    if (currentSavingsMatch) {
+      const currentAddress = currentSavingsMatch[1];
+      console.log(`   Current SavingsCore: ${currentAddress}`);
+
+      try {
+        // Try to upgrade existing proxy
+        console.log("⬆️  Attempting to upgrade existing SavingsCore proxy...");
         const SavingsCore = await ethers.getContractFactory("SavingsCore");
-        const upgraded = await upgrades.upgradeProxy(PROXY_ADDRESS, SavingsCore);
+        const upgraded = await upgrades.upgradeProxy(currentAddress, SavingsCore);
         await upgraded.waitForDeployment();
         savingsAddress = await upgraded.getAddress();
         isUpgrade = true;
 
-        console.log(`✅ Core contract upgraded successfully!`);
+        console.log(`✅ SavingsCore upgraded successfully!`);
         console.log(`   Proxy address (unchanged): ${savingsAddress}`);
 
-      } catch (error) {
-        console.log(`⚠️  Proxy at ${PROXY_ADDRESS} not found or not accessible`);
-        console.log("   Proceeding with fresh deployment...\n");
+      } catch (upgradeError) {
+        console.log(`⚠️  Upgrade failed: ${upgradeError.message}`);
+        console.log("   Proceeding with fresh deployment...");
         isUpgrade = false;
       }
     }
@@ -62,8 +64,8 @@ async function main() {
     // Get core contract instance
     const savingsCore = await ethers.getContractAt("SavingsCore", savingsAddress);
 
-    // Deploy modules
-    console.log("\n🧩 Deploying modules...");
+    // Deploy or redeploy all modules (modules are always redeployed for latest code)
+    console.log("\n🧩 Deploying/upgrading modules...");
 
     // 1. Deploy Time Period Limits Module
     console.log("   📊 Deploying TimePeriodLimitsModule...");
@@ -97,7 +99,7 @@ async function main() {
     moduleAddresses.approvalSystem = await approvalSystemModule.getAddress();
     console.log(`   ✅ ApprovalSystemModule deployed to: ${moduleAddresses.approvalSystem}`);
 
-    // Register modules with core contract
+    // Register/update modules with core contract
     console.log("\n🔗 Registering modules with core contract...");
 
     // Register TimePeriodLimitsModule
@@ -134,21 +136,7 @@ async function main() {
 
     console.log("   ✅ All modules registered successfully");
 
-    // Set up module interactions
-    console.log("\n🔧 Modular system configured...");
-    console.log("   ✅ Essential functions available directly in SavingsCore");
-    console.log("   ✅ Frontend compatibility maintained for core functions");
-
-    // Set development mode if requested
-    if (isDevelopmentMode) {
-      console.log("\n🚧 Setting development mode...");
-      tx = await savingsCore.setDevelopmentMode(true);
-      await tx.wait();
-      console.log("   ✅ Development mode enabled");
-    }
-
-    // Deploy MockUSDT only if it's a fresh deployment or if needed
-    let usdtAddress;
+    // Handle MockUSDT deployment/reuse
     if (!isUpgrade) {
       console.log("\n📄 Deploying MockUSDT...");
       const MockUSDT = await ethers.getContractFactory("MockUSDT");
@@ -161,34 +149,37 @@ async function main() {
       console.log(`   Deployer USDT balance: ${ethers.formatUnits(usdtBalance, 6)} USDT`);
     } else {
       // For upgrades, try to get the existing USDT address from frontend config
-      try {
-        const frontendPath = path.join(__dirname, "../frontend/src/App.js");
-        const frontendContent = fs.readFileSync(frontendPath, "utf8");
-        const usdtMatch = frontendContent.match(/address: "([^"]+)",\s*symbol: "USDT"/);
-        if (usdtMatch) {
-          usdtAddress = usdtMatch[1];
-          console.log(`\n📄 Using existing MockUSDT: ${usdtAddress}`);
-        } else {
-          console.log("\n⚠️  Could not find existing USDT address in frontend config");
-        }
-      } catch (error) {
-        console.log("\n⚠️  Could not read frontend config for USDT address");
+      if (currentUsdtMatch) {
+        usdtAddress = currentUsdtMatch[0].match(/"([^"]+)"/)[1];
+        console.log(`\n📄 Using existing MockUSDT: ${usdtAddress}`);
+      } else {
+        console.log("\n⚠️  Could not find existing USDT address, deploying new one...");
+        const MockUSDT = await ethers.getContractFactory("MockUSDT");
+        const mockUSDT = await MockUSDT.deploy();
+        await mockUSDT.waitForDeployment();
+        usdtAddress = await mockUSDT.getAddress();
+        console.log(`✅ New MockUSDT deployed to: ${usdtAddress}`);
       }
+    }
+
+    // Set development mode if requested
+    if (isDevelopmentMode) {
+      console.log("\n🚧 Setting development mode...");
+      tx = await savingsCore.setDevelopmentMode(true);
+      await tx.wait();
+      console.log("   ✅ Development mode enabled");
     }
 
     // Update frontend addresses
     console.log("\n🔄 Updating frontend addresses...");
-    const frontendPath = path.join(__dirname, "../frontend/src/App.js");
-
     try {
-      let frontendContent = fs.readFileSync(frontendPath, "utf8");
       let addressChanged = false;
 
-      // Update Savings contract address (keeping the same pattern)
-      const currentSavingsMatch = frontendContent.match(/savingsContract: "([^"]+)"/);
-      if (!currentSavingsMatch || currentSavingsMatch[1] !== savingsAddress) {
+      // Update Savings contract address
+      const newSavingsPattern = new RegExp(`savingsContract: "[^"]*"`);
+      if (!frontendContent.match(`savingsContract: "${savingsAddress}"`)) {
         frontendContent = frontendContent.replace(
-          /savingsContract: "[^"]*"/,
+          newSavingsPattern,
           `savingsContract: "${savingsAddress}"`
         );
         addressChanged = true;
@@ -197,12 +188,12 @@ async function main() {
         console.log(`   Savings address unchanged: ${savingsAddress}`);
       }
 
-      // Update USDT address only if we have a new one
+      // Update USDT address
       if (usdtAddress) {
-        const currentUsdtMatch = frontendContent.match(/(USDT: {[^}]*address: ")[^"]*(",)/);
-        if (!currentUsdtMatch || !currentUsdtMatch[0].includes(usdtAddress)) {
+        const currentUsdtPattern = /(USDT: {[^}]*address: ")[^"]*(",)/;
+        if (!frontendContent.includes(`address: "${usdtAddress}"`)) {
           frontendContent = frontendContent.replace(
-            /(USDT: {[^}]*address: ")[^"]*(",)/,
+            currentUsdtPattern,
             `$1${usdtAddress}$2`
           );
           addressChanged = true;
@@ -224,8 +215,8 @@ async function main() {
       console.log(`   Error: ${error.message}`);
     }
 
-    // Create module addresses config file for frontend
-    console.log("\n📋 Creating module addresses config...");
+    // Create/update module addresses config file for frontend
+    console.log("\n📋 Updating module addresses config...");
     try {
       const moduleConfig = {
         core: savingsAddress,
@@ -239,19 +230,20 @@ async function main() {
           usdt: usdtAddress || null
         },
         network: "localhost",
-        deployedAt: new Date().toISOString()
+        deployedAt: new Date().toISOString(),
+        isUpgrade: isUpgrade
       };
 
       const moduleConfigPath = path.join(__dirname, "../frontend/src/moduleAddresses.json");
       fs.writeFileSync(moduleConfigPath, JSON.stringify(moduleConfig, null, 2));
-      console.log("✅ Module addresses config created");
+      console.log("✅ Module addresses config updated");
 
     } catch (error) {
-      console.log("⚠️  Warning: Could not create module config file");
+      console.log("⚠️  Warning: Could not update module config file");
       console.log(`   Error: ${error.message}`);
     }
 
-    // Update ABI files
+    // Update ABI files (CRITICAL for frontend compatibility)
     console.log("\n📋 Updating contract ABIs...");
     try {
       // Copy SavingsCore ABI
@@ -300,8 +292,23 @@ async function main() {
       console.log(`   Error: ${error.message}`);
     }
 
+    // Validate the upgrade
+    console.log("\n🔍 Running upgrade validation...");
+    try {
+      const { validateDeployment } = require("./validate-deployment.js");
+      const isValid = await validateDeployment();
+
+      if (isValid) {
+        console.log("✅ Upgrade validation passed!");
+      } else {
+        console.log("⚠️  Upgrade validation found issues");
+      }
+    } catch (error) {
+      console.log(`⚠️  Could not run validation: ${error.message}`);
+    }
+
     // Summary
-    console.log(`\n🎉 ${isUpgrade ? 'Upgrade' : 'Deployment'} Summary:`);
+    console.log(`\n🎉 ${isUpgrade ? 'Upgrade' : 'Fresh Deployment'} Summary:`);
     console.log("=" .repeat(60));
     console.log(`Operation Type:        ${isUpgrade ? 'UPGRADE (Data Preserved)' : 'FRESH DEPLOYMENT'}`);
     console.log(`SavingsCore Address:   ${savingsAddress}`);
@@ -318,16 +325,18 @@ async function main() {
     console.log("=" .repeat(60));
 
     if (isUpgrade) {
-      console.log("\n✅ Modular upgrade completed successfully!");
-      console.log("   - Core contract address unchanged (proxy pattern working correctly)");
-      console.log("   - All user data preserved");
-      console.log("   - New modular functionality available");
-      console.log("   - Modules can be upgraded independently in the future");
+      console.log("\n✅ Comprehensive upgrade completed successfully!");
+      console.log("   - SavingsCore contract upgraded with optimized architecture");
+      console.log("   - All user data preserved through proxy pattern");
+      console.log("   - All modules redeployed with latest code");
+      console.log("   - Frontend ABIs and addresses automatically updated");
+      console.log("   - Withdrawal address functionality now available");
     } else {
-      console.log("\n✅ Modular deployment completed successfully!");
-      console.log("   - Core contract deployed with modular architecture");
+      console.log("\n✅ Fresh deployment completed successfully!");
+      console.log("   - Optimized SavingsCore contract deployed");
       console.log("   - All modules deployed and registered");
-      console.log("   - System ready for use");
+      console.log("   - Frontend ABIs and addresses automatically updated");
+      console.log("   - System ready for use with withdrawal address functionality");
     }
 
     console.log("\n📝 Next steps:");
@@ -337,37 +346,12 @@ async function main() {
       console.log("   Symbol: USDT");
       console.log("   Decimals: 6");
     }
-    console.log(`${!isUpgrade && usdtAddress ? '2' : '1'}. Start your frontend: cd frontend && npm start`);
-    console.log(`${!isUpgrade && usdtAddress ? '3' : '2'}. Frontend will automatically use the new modular addresses`);
-
-    // Validate deployment integrity
-    console.log("\n🔍 Running deployment validation...");
-    try {
-      // Verify all modules are registered
-      const timePeriodLimitsRegistered = await savingsCore.getModule(ethers.keccak256(ethers.toUtf8Bytes("TIME_PERIOD_LIMITS")));
-      const proposalSystemRegistered = await savingsCore.getModule(ethers.keccak256(ethers.toUtf8Bytes("PROPOSAL_SYSTEM")));
-      const bypassSystemRegistered = await savingsCore.getModule(ethers.keccak256(ethers.toUtf8Bytes("BYPASS_SYSTEM")));
-      const approvalSystemRegistered = await savingsCore.getModule(ethers.keccak256(ethers.toUtf8Bytes("APPROVAL_SYSTEM")));
-
-      console.log("   Validating module registrations...");
-      console.log(`   ✅ TimePeriodLimits: ${timePeriodLimitsRegistered === moduleAddresses.timePeriodLimits ? 'REGISTERED' : 'FAILED'}`);
-      console.log(`   ✅ ProposalSystem: ${proposalSystemRegistered === moduleAddresses.proposalSystem ? 'REGISTERED' : 'FAILED'}`);
-      console.log(`   ✅ BypassSystem: ${bypassSystemRegistered === moduleAddresses.bypassSystem ? 'REGISTERED' : 'FAILED'}`);
-      console.log(`   ✅ ApprovalSystem: ${approvalSystemRegistered === moduleAddresses.approvalSystem ? 'REGISTERED' : 'FAILED'}`);
-
-      // Verify core contract can be called
-      const owner = await savingsCore.owner();
-      console.log(`   ✅ Core contract owner: ${owner}`);
-
-      console.log("✅ Modular deployment validation passed!");
-
-    } catch (error) {
-      console.log(`\n⚠️  Could not run validation: ${error.message}`);
-      console.log("Proceeding anyway...");
-    }
+    console.log(`${!isUpgrade && usdtAddress ? '2' : '1'}. Frontend is automatically configured with new addresses`);
+    console.log(`${!isUpgrade && usdtAddress ? '3' : '2'}. Start/restart your frontend: cd frontend && npm start`);
+    console.log(`${!isUpgrade && usdtAddress ? '4' : '3'}. Test withdrawal address functionality in the frontend`);
 
   } catch (error) {
-    console.error("Deployment failed:", error);
+    console.error("Comprehensive upgrade failed:", error);
     throw error;
   }
 }

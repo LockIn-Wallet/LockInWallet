@@ -176,78 +176,9 @@ contract SavingsCore is Initializable, UUPSUpgradeable, OwnableUpgradeable, ISav
         return userTokenBalances[msg.sender][address(0)];
     }
 
-    // ========== DELEGATION TO MODULES ==========
+    // ========== ESSENTIAL CORE FUNCTIONS ==========
 
-    // Time Period Limits Module Functions
-    function addTimePeriodLimit(
-        string calldata periodName,
-        uint256 limit,
-        uint256 durationInSeconds
-    ) external {
-        ITimePeriodLimitsModule limitsModule = ITimePeriodLimitsModule(modules[ModuleIds.TIME_PERIOD_LIMITS]);
-        require(address(limitsModule) != address(0), "Limits module not found");
-
-        // Check if setup is committed via proposal module
-        IProposalSystemModule proposalModule = IProposalSystemModule(modules[ModuleIds.PROPOSAL_SYSTEM]);
-        if (address(proposalModule) != address(0) && proposalModule.isSetupCommitted(msg.sender)) {
-            require(limitsModule.findPeriodLimit(msg.sender, periodName) == 0, "Use proposeLimitChange");
-        }
-
-        limitsModule.addTimePeriodLimit(msg.sender, periodName, limit, durationInSeconds);
-    }
-
-    function setCommonPeriodLimits(
-        uint256 dailyLimit,
-        uint256 weeklyLimit,
-        uint256 monthlyLimit
-    ) external {
-        require(dailyLimit > 0 || weeklyLimit > 0 || monthlyLimit > 0, "At least one limit must be set");
-
-        ITimePeriodLimitsModule limitsModule = ITimePeriodLimitsModule(modules[ModuleIds.TIME_PERIOD_LIMITS]);
-        require(address(limitsModule) != address(0), "Limits module not found");
-
-        // Check if setup is committed
-        IProposalSystemModule proposalModule = IProposalSystemModule(modules[ModuleIds.PROPOSAL_SYSTEM]);
-        if (address(proposalModule) != address(0)) {
-            require(!proposalModule.isSetupCommitted(msg.sender), "Use individual proposeLimitChange");
-        }
-
-        // Validate logical limit ordering
-        if (dailyLimit > 0 && weeklyLimit > 0) {
-            require(dailyLimit * 7 <= weeklyLimit, "Daily limit too high for weekly limit");
-        }
-        if (weeklyLimit > 0 && monthlyLimit > 0) {
-            require(weeklyLimit * 4 <= monthlyLimit, "Weekly limit too high for monthly limit");
-        }
-        if (dailyLimit > 0 && monthlyLimit > 0) {
-            require(dailyLimit * 30 <= monthlyLimit, "Daily limit too high for monthly limit");
-        }
-
-        // Add or update common periods
-        if (dailyLimit > 0) {
-            limitsModule.addTimePeriodLimit(msg.sender, "Daily", dailyLimit, 86400); // 1 day
-        }
-        if (weeklyLimit > 0) {
-            limitsModule.addTimePeriodLimit(msg.sender, "Weekly", weeklyLimit, 604800); // 7 days
-        }
-        if (monthlyLimit > 0) {
-            limitsModule.addTimePeriodLimit(msg.sender, "Monthly", monthlyLimit, 2592000); // 30 days
-        }
-    }
-
-    function removeTimePeriodLimit(string calldata periodName) external {
-        ITimePeriodLimitsModule limitsModule = ITimePeriodLimitsModule(modules[ModuleIds.TIME_PERIOD_LIMITS]);
-        require(address(limitsModule) != address(0), "Limits module not found");
-
-        // Check if setup is committed
-        IProposalSystemModule proposalModule = IProposalSystemModule(modules[ModuleIds.PROPOSAL_SYSTEM]);
-        if (address(proposalModule) != address(0)) {
-            require(!proposalModule.isSetupCommitted(msg.sender), "Use proposeLimitRemoval");
-        }
-
-        limitsModule.removeTimePeriodLimit(msg.sender, periodName);
-    }
-
+    // Core withdraw function with time period limits check
     function withdraw(uint256 amount, address token) external nonReentrant {
         require(amount > 0 && amount <= userTokenBalances[msg.sender][token], "Invalid amount");
 
@@ -270,91 +201,42 @@ contract SavingsCore is Initializable, UUPSUpgradeable, OwnableUpgradeable, ISav
         emit Withdrawal(msg.sender, "Time-Based", amount, token);
     }
 
-    // Proposal System Module Functions
-    function proposeLimitChange(string calldata periodName, uint256 newLimit) external returns (bytes32 proposalId) {
-        IProposalSystemModule proposalModule = IProposalSystemModule(modules[ModuleIds.PROPOSAL_SYSTEM]);
-        require(address(proposalModule) != address(0), "Proposal module not found");
-        return proposalModule.proposeLimitChange(msg.sender, periodName, newLimit);
-    }
+    // Core withdrawTo function with approval check
+    function withdrawTo(uint256 amount, address token, address destination) external nonReentrant {
+        require(amount > 0 && amount <= userTokenBalances[msg.sender][token], "Invalid amount");
+        require(destination != address(0), "Invalid destination address");
 
-    function proposeLimitRemoval(string calldata periodName) external returns (bytes32 proposalId) {
-        IProposalSystemModule proposalModule = IProposalSystemModule(modules[ModuleIds.PROPOSAL_SYSTEM]);
-        require(address(proposalModule) != address(0), "Proposal module not found");
-        return proposalModule.proposeLimitRemoval(msg.sender, periodName);
-    }
-
-    function executeLimitProposal(bytes32 proposalId) external {
-        IProposalSystemModule proposalModule = IProposalSystemModule(modules[ModuleIds.PROPOSAL_SYSTEM]);
-        require(address(proposalModule) != address(0), "Proposal module not found");
-        proposalModule.executeLimitProposal(msg.sender, proposalId);
-    }
-
-    function cancelLimitProposal(bytes32 proposalId) external {
-        IProposalSystemModule proposalModule = IProposalSystemModule(modules[ModuleIds.PROPOSAL_SYSTEM]);
-        require(address(proposalModule) != address(0), "Proposal module not found");
-        proposalModule.cancelLimitProposal(msg.sender, proposalId);
-    }
-
-    function commitInitialSetup() external {
-        IProposalSystemModule proposalModule = IProposalSystemModule(modules[ModuleIds.PROPOSAL_SYSTEM]);
-        require(address(proposalModule) != address(0), "Proposal module not found");
-        proposalModule.commitInitialSetup(msg.sender);
-    }
-
-    function recalculateTotalLockedValue() external {
-        IProposalSystemModule proposalModule = IProposalSystemModule(modules[ModuleIds.PROPOSAL_SYSTEM]);
-        require(address(proposalModule) != address(0), "Proposal module not found");
-        proposalModule.recalculateTotalLockedValue(msg.sender);
-    }
-
-    // Bypass System Module Functions
-    function requestLimitBypass(
-        uint256 amount,
-        string calldata skipPeriod,
-        address token
-    ) external returns (bytes32 requestId) {
-        IBypassSystemModule bypassModule = IBypassSystemModule(modules[ModuleIds.BYPASS_SYSTEM]);
-        require(address(bypassModule) != address(0), "Bypass module not found");
-        return bypassModule.requestLimitBypass(msg.sender, amount, skipPeriod, token);
-    }
-
-    function executeBypassWithdrawal(bytes32 requestId) external {
-        IBypassSystemModule bypassModule = IBypassSystemModule(modules[ModuleIds.BYPASS_SYSTEM]);
-        require(address(bypassModule) != address(0), "Bypass module not found");
-        bypassModule.executeBypassWithdrawal(msg.sender, requestId);
-    }
-
-    function cancelBypassRequest(bytes32 requestId) external {
-        IBypassSystemModule bypassModule = IBypassSystemModule(modules[ModuleIds.BYPASS_SYSTEM]);
-        require(address(bypassModule) != address(0), "Bypass module not found");
-        bypassModule.cancelBypassRequest(msg.sender, requestId);
-    }
-
-    // Approval System Module Functions
-    function addApprovalAddress(address _approval) external {
+        // Get approval module to validate withdrawal destination
         IApprovalSystemModule approvalModule = IApprovalSystemModule(modules[ModuleIds.APPROVAL_SYSTEM]);
         require(address(approvalModule) != address(0), "Approval module not found");
-        approvalModule.addApprovalAddress(msg.sender, _approval);
+
+        // Validate destination is either user themselves or an approved withdrawal address
+        require(
+            destination == msg.sender ||
+            approvalModule.isValidWithdrawalDestination(msg.sender, destination),
+            "Destination not approved"
+        );
+
+        // Check against all active time period limits
+        ITimePeriodLimitsModule limitsModule = ITimePeriodLimitsModule(modules[ModuleIds.TIME_PERIOD_LIMITS]);
+        if (address(limitsModule) != address(0)) {
+            limitsModule.checkAllTimePeriodLimits(msg.sender, amount);
+        }
+
+        userTokenBalances[msg.sender][token] -= amount;
+
+        if (token == address(0)) {
+            // ETH withdrawal
+            payable(destination).transfer(amount);
+        } else {
+            // ERC20 withdrawal
+            IERC20(token).transfer(destination, amount);
+        }
+
+        emit Withdrawal(msg.sender, "To-Address", amount, token);
     }
 
-    function revokeApprovalAddress(address _approval) external {
-        IApprovalSystemModule approvalModule = IApprovalSystemModule(modules[ModuleIds.APPROVAL_SYSTEM]);
-        require(address(approvalModule) != address(0), "Approval module not found");
-        approvalModule.revokeApprovalAddress(msg.sender, _approval);
-    }
-
-    function setApprovalAddress(address _approval) external {
-        IApprovalSystemModule approvalModule = IApprovalSystemModule(modules[ModuleIds.APPROVAL_SYSTEM]);
-        require(address(approvalModule) != address(0), "Approval module not found");
-        approvalModule.addApprovalAddress(msg.sender, _approval);
-    }
-
-    function approveFullWithdrawal(address userAddress) external {
-        IApprovalSystemModule approvalModule = IApprovalSystemModule(modules[ModuleIds.APPROVAL_SYSTEM]);
-        require(address(approvalModule) != address(0), "Approval module not found");
-        approvalModule.approveFullWithdrawal(userAddress, msg.sender);
-    }
-
+    // Core withdrawAll function with approval check
     function withdrawAll() external nonReentrant {
         IApprovalSystemModule approvalModule = IApprovalSystemModule(modules[ModuleIds.APPROVAL_SYSTEM]);
         require(address(approvalModule) != address(0), "Approval module not found");
@@ -371,8 +253,44 @@ contract SavingsCore is Initializable, UUPSUpgradeable, OwnableUpgradeable, ISav
         emit Withdrawal(msg.sender, "ALL", amount, address(0));
     }
 
-    // ========== VIEW FUNCTIONS (DELEGATED) ==========
+    // ========== ESSENTIAL DELEGATED FUNCTIONS ==========
 
+    // Essential withdrawal address functions (needed for frontend)
+    function getUserWithdrawalAddresses() external view returns (
+        string[] memory titles,
+        address[] memory destinations,
+        uint256[] memory timestamps
+    ) {
+        IApprovalSystemModule approvalModule = IApprovalSystemModule(modules[ModuleIds.APPROVAL_SYSTEM]);
+        if (address(approvalModule) == address(0)) {
+            return (new string[](0), new address[](0), new uint256[](0));
+        }
+        return approvalModule.getUserWithdrawalAddresses(msg.sender);
+    }
+
+    function getUserPendingWithdrawalRequests() external view returns (
+        bytes32[] memory requestIds,
+        string[] memory titles,
+        address[] memory destinations,
+        uint256[] memory executeAfters
+    ) {
+        IApprovalSystemModule approvalModule = IApprovalSystemModule(modules[ModuleIds.APPROVAL_SYSTEM]);
+        if (address(approvalModule) == address(0)) {
+            return (new bytes32[](0), new string[](0), new address[](0), new uint256[](0));
+        }
+        return approvalModule.getUserPendingWithdrawalRequests(msg.sender);
+    }
+
+    function requestWithdrawalAddress(
+        string calldata title,
+        address destination
+    ) external returns (bytes32 requestId) {
+        IApprovalSystemModule approvalModule = IApprovalSystemModule(modules[ModuleIds.APPROVAL_SYSTEM]);
+        require(address(approvalModule) != address(0), "Approval module not found");
+        return approvalModule.requestWithdrawalAddress(msg.sender, title, destination);
+    }
+
+    // Essential view functions
     function getUserSpendingLimits(address user)
         external
         view
@@ -387,7 +305,6 @@ contract SavingsCore is Initializable, UUPSUpgradeable, OwnableUpgradeable, ISav
     {
         ITimePeriodLimitsModule limitsModule = ITimePeriodLimitsModule(modules[ModuleIds.TIME_PERIOD_LIMITS]);
         if (address(limitsModule) == address(0)) {
-            // Return empty arrays if module not found
             return (new string[](0), new uint256[](0), new uint256[](0), new uint256[](0), new uint256[](0), new bool[](0));
         }
 
@@ -400,44 +317,6 @@ contract SavingsCore is Initializable, UUPSUpgradeable, OwnableUpgradeable, ISav
         );
 
         return limitsModule.getUserSpendingLimits(user);
-    }
-
-    function getTimePeriodLimit(
-        address user,
-        string calldata periodName
-    )
-        external
-        view
-        returns (
-            uint256 limit,
-            uint256 spent,
-            uint256 remaining,
-            uint256 duration,
-            uint256 lastReset,
-            bool active,
-            bool exists
-        )
-    {
-        ITimePeriodLimitsModule limitsModule = ITimePeriodLimitsModule(modules[ModuleIds.TIME_PERIOD_LIMITS]);
-        if (address(limitsModule) == address(0)) {
-            return (0, 0, 0, 0, 0, false, false);
-        }
-
-        // Check authorization
-        IApprovalSystemModule approvalModule = IApprovalSystemModule(modules[ModuleIds.APPROVAL_SYSTEM]);
-        require(
-            msg.sender == user ||
-            (address(approvalModule) != address(0) && approvalModule.isApprovalAddress(user, msg.sender)),
-            "Not authorized"
-        );
-
-        return limitsModule.getTimePeriodLimit(user, periodName);
-    }
-
-    function isApprovalAddress(address user, address _approval) external view returns (bool) {
-        IApprovalSystemModule approvalModule = IApprovalSystemModule(modules[ModuleIds.APPROVAL_SYSTEM]);
-        if (address(approvalModule) == address(0)) return false;
-        return approvalModule.isApprovalAddress(user, _approval);
     }
 
     function isSetupCommitted() external view returns (bool) {
@@ -460,34 +339,10 @@ contract SavingsCore is Initializable, UUPSUpgradeable, OwnableUpgradeable, ISav
         return proposalModule.getSetupInfo(msg.sender);
     }
 
-    function getProposal(bytes32 proposalId) external view returns (
-        string memory category,
-        uint256 newLimit,
-        uint256 executeAfter,
-        bool executed,
-        bool isIncrease,
-        bool exists
-    ) {
-        IProposalSystemModule proposalModule = IProposalSystemModule(modules[ModuleIds.PROPOSAL_SYSTEM]);
-        if (address(proposalModule) == address(0)) {
-            return ("", 0, 0, false, false, false);
-        }
-        return proposalModule.getProposal(msg.sender, proposalId);
-    }
-
-    function getBypassRequest(bytes32 requestId) external view returns (
-        uint256 amount,
-        string memory skipPeriod,
-        address token,
-        uint256 executeAfter,
-        bool executed,
-        bool exists
-    ) {
-        IBypassSystemModule bypassModule = IBypassSystemModule(modules[ModuleIds.BYPASS_SYSTEM]);
-        if (address(bypassModule) == address(0)) {
-            return (0, "", address(0), 0, false, false);
-        }
-        return bypassModule.getBypassRequest(msg.sender, requestId);
+    function isApprovalAddress(address user, address _approval) external view returns (bool) {
+        IApprovalSystemModule approvalModule = IApprovalSystemModule(modules[ModuleIds.APPROVAL_SYSTEM]);
+        if (address(approvalModule) == address(0)) return false;
+        return approvalModule.isApprovalAddress(user, _approval);
     }
 
     function getActivePeriodNames(address user) external view returns (string[] memory) {
@@ -505,6 +360,7 @@ contract SavingsCore is Initializable, UUPSUpgradeable, OwnableUpgradeable, ISav
         }
         return limitsModule.getActivePeriodCount(user);
     }
+
 
     // ========== USER PROXY FUNCTIONS ==========
 
@@ -550,11 +406,6 @@ contract SavingsCore is Initializable, UUPSUpgradeable, OwnableUpgradeable, ISav
 
     event ProxyDeployed(address indexed user, address indexed proxy);
 
-    // ========== FALLBACK ==========
-
-    fallback() external payable {
-        revert("Unsupported");
-    }
 
     // Allow contract to receive ETH for withdrawals
     receive() external payable {

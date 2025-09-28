@@ -230,10 +230,6 @@
     "type": "event"
   },
   {
-    "stateMutability": "payable",
-    "type": "fallback"
-  },
-  {
     "inputs": [],
     "name": "UPGRADE_INTERFACE_VERSION",
     "outputs": [
@@ -244,88 +240,6 @@
       }
     ],
     "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "address",
-        "name": "_approval",
-        "type": "address"
-      }
-    ],
-    "name": "addApprovalAddress",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "string",
-        "name": "periodName",
-        "type": "string"
-      },
-      {
-        "internalType": "uint256",
-        "name": "limit",
-        "type": "uint256"
-      },
-      {
-        "internalType": "uint256",
-        "name": "durationInSeconds",
-        "type": "uint256"
-      }
-    ],
-    "name": "addTimePeriodLimit",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "address",
-        "name": "userAddress",
-        "type": "address"
-      }
-    ],
-    "name": "approveFullWithdrawal",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "bytes32",
-        "name": "requestId",
-        "type": "bytes32"
-      }
-    ],
-    "name": "cancelBypassRequest",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "bytes32",
-        "name": "proposalId",
-        "type": "bytes32"
-      }
-    ],
-    "name": "cancelLimitProposal",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "commitInitialSetup",
-    "outputs": [],
-    "stateMutability": "nonpayable",
     "type": "function"
   },
   {
@@ -411,32 +325,6 @@
   {
     "inputs": [
       {
-        "internalType": "bytes32",
-        "name": "requestId",
-        "type": "bytes32"
-      }
-    ],
-    "name": "executeBypassWithdrawal",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "bytes32",
-        "name": "proposalId",
-        "type": "bytes32"
-      }
-    ],
-    "name": "executeLimitProposal",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
         "internalType": "address",
         "name": "user",
         "type": "address"
@@ -467,50 +355,6 @@
         "internalType": "string[]",
         "name": "",
         "type": "string[]"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "bytes32",
-        "name": "requestId",
-        "type": "bytes32"
-      }
-    ],
-    "name": "getBypassRequest",
-    "outputs": [
-      {
-        "internalType": "uint256",
-        "name": "amount",
-        "type": "uint256"
-      },
-      {
-        "internalType": "string",
-        "name": "skipPeriod",
-        "type": "string"
-      },
-      {
-        "internalType": "address",
-        "name": "token",
-        "type": "address"
-      },
-      {
-        "internalType": "uint256",
-        "name": "executeAfter",
-        "type": "uint256"
-      },
-      {
-        "internalType": "bool",
-        "name": "executed",
-        "type": "bool"
-      },
-      {
-        "internalType": "bool",
-        "name": "exists",
-        "type": "bool"
       }
     ],
     "stateMutability": "view",
@@ -562,50 +406,6 @@
     "type": "function"
   },
   {
-    "inputs": [
-      {
-        "internalType": "bytes32",
-        "name": "proposalId",
-        "type": "bytes32"
-      }
-    ],
-    "name": "getProposal",
-    "outputs": [
-      {
-        "internalType": "string",
-        "name": "category",
-        "type": "string"
-      },
-      {
-        "internalType": "uint256",
-        "name": "newLimit",
-        "type": "uint256"
-      },
-      {
-        "internalType": "uint256",
-        "name": "executeAfter",
-        "type": "uint256"
-      },
-      {
-        "internalType": "bool",
-        "name": "executed",
-        "type": "bool"
-      },
-      {
-        "internalType": "bool",
-        "name": "isIncrease",
-        "type": "bool"
-      },
-      {
-        "internalType": "bool",
-        "name": "exists",
-        "type": "bool"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
     "inputs": [],
     "name": "getSetupInfo",
     "outputs": [
@@ -633,60 +433,6 @@
         "internalType": "uint256",
         "name": "lastIncreaseTimestamp",
         "type": "uint256"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "address",
-        "name": "user",
-        "type": "address"
-      },
-      {
-        "internalType": "string",
-        "name": "periodName",
-        "type": "string"
-      }
-    ],
-    "name": "getTimePeriodLimit",
-    "outputs": [
-      {
-        "internalType": "uint256",
-        "name": "limit",
-        "type": "uint256"
-      },
-      {
-        "internalType": "uint256",
-        "name": "spent",
-        "type": "uint256"
-      },
-      {
-        "internalType": "uint256",
-        "name": "remaining",
-        "type": "uint256"
-      },
-      {
-        "internalType": "uint256",
-        "name": "duration",
-        "type": "uint256"
-      },
-      {
-        "internalType": "uint256",
-        "name": "lastReset",
-        "type": "uint256"
-      },
-      {
-        "internalType": "bool",
-        "name": "active",
-        "type": "bool"
-      },
-      {
-        "internalType": "bool",
-        "name": "exists",
-        "type": "bool"
       }
     ],
     "stateMutability": "view",
@@ -730,6 +476,34 @@
         "internalType": "address",
         "name": "",
         "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "getUserPendingWithdrawalRequests",
+    "outputs": [
+      {
+        "internalType": "bytes32[]",
+        "name": "requestIds",
+        "type": "bytes32[]"
+      },
+      {
+        "internalType": "string[]",
+        "name": "titles",
+        "type": "string[]"
+      },
+      {
+        "internalType": "address[]",
+        "name": "destinations",
+        "type": "address[]"
+      },
+      {
+        "internalType": "uint256[]",
+        "name": "executeAfters",
+        "type": "uint256[]"
       }
     ],
     "stateMutability": "view",
@@ -793,6 +567,29 @@
         "internalType": "bool[]",
         "name": "active",
         "type": "bool[]"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "getUserWithdrawalAddresses",
+    "outputs": [
+      {
+        "internalType": "string[]",
+        "name": "titles",
+        "type": "string[]"
+      },
+      {
+        "internalType": "address[]",
+        "name": "destinations",
+        "type": "address[]"
+      },
+      {
+        "internalType": "uint256[]",
+        "name": "timestamps",
+        "type": "uint256[]"
       }
     ],
     "stateMutability": "view",
@@ -894,49 +691,6 @@
     "type": "function"
   },
   {
-    "inputs": [
-      {
-        "internalType": "string",
-        "name": "periodName",
-        "type": "string"
-      },
-      {
-        "internalType": "uint256",
-        "name": "newLimit",
-        "type": "uint256"
-      }
-    ],
-    "name": "proposeLimitChange",
-    "outputs": [
-      {
-        "internalType": "bytes32",
-        "name": "proposalId",
-        "type": "bytes32"
-      }
-    ],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "string",
-        "name": "periodName",
-        "type": "string"
-      }
-    ],
-    "name": "proposeLimitRemoval",
-    "outputs": [
-      {
-        "internalType": "bytes32",
-        "name": "proposalId",
-        "type": "bytes32"
-      }
-    ],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
     "inputs": [],
     "name": "proxiableUUID",
     "outputs": [
@@ -947,13 +701,6 @@
       }
     ],
     "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "recalculateTotalLockedValue",
-    "outputs": [],
-    "stateMutability": "nonpayable",
     "type": "function"
   },
   {
@@ -975,19 +722,6 @@
     "type": "function"
   },
   {
-    "inputs": [
-      {
-        "internalType": "string",
-        "name": "periodName",
-        "type": "string"
-      }
-    ],
-    "name": "removeTimePeriodLimit",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
     "inputs": [],
     "name": "renounceOwnership",
     "outputs": [],
@@ -997,22 +731,17 @@
   {
     "inputs": [
       {
-        "internalType": "uint256",
-        "name": "amount",
-        "type": "uint256"
-      },
-      {
         "internalType": "string",
-        "name": "skipPeriod",
+        "name": "title",
         "type": "string"
       },
       {
         "internalType": "address",
-        "name": "token",
+        "name": "destination",
         "type": "address"
       }
     ],
-    "name": "requestLimitBypass",
+    "name": "requestWithdrawalAddress",
     "outputs": [
       {
         "internalType": "bytes32",
@@ -1020,55 +749,6 @@
         "type": "bytes32"
       }
     ],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "address",
-        "name": "_approval",
-        "type": "address"
-      }
-    ],
-    "name": "revokeApprovalAddress",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "address",
-        "name": "_approval",
-        "type": "address"
-      }
-    ],
-    "name": "setApprovalAddress",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "uint256",
-        "name": "dailyLimit",
-        "type": "uint256"
-      },
-      {
-        "internalType": "uint256",
-        "name": "weeklyLimit",
-        "type": "uint256"
-      },
-      {
-        "internalType": "uint256",
-        "name": "monthlyLimit",
-        "type": "uint256"
-      }
-    ],
-    "name": "setCommonPeriodLimits",
-    "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
   },
@@ -1214,6 +894,29 @@
       }
     ],
     "name": "withdrawAll",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "amount",
+        "type": "uint256"
+      },
+      {
+        "internalType": "address",
+        "name": "token",
+        "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "destination",
+        "type": "address"
+      }
+    ],
+    "name": "withdrawTo",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"

@@ -11,6 +11,27 @@ contract ApprovalSystemModule is IApprovalSystemModule {
     mapping(address => mapping(address => bool)) private userApprovalAddresses;
     mapping(address => bool) private userFullWithdrawalApprovals;
 
+    // Storage for withdrawal addresses and requests
+    struct WithdrawalAddress {
+        string title;
+        address destination;
+        uint256 addedTimestamp;
+        bool active;
+    }
+
+    struct WithdrawalRequest {
+        string title;
+        address destination;
+        uint256 requestTimestamp;
+        uint256 executeAfter;
+        bool exists;
+        bool executed;
+    }
+
+    mapping(address => WithdrawalAddress[]) private userWithdrawalAddresses;
+    mapping(address => mapping(bytes32 => WithdrawalRequest)) private userWithdrawalRequests;
+    mapping(address => bytes32[]) private userPendingRequestIds;
+
     modifier onlyAuthorized() {
         require(
             msg.sender == address(savingsCore) ||
@@ -167,6 +188,236 @@ contract ApprovalSystemModule is IApprovalSystemModule {
             emit ApprovalAddressAdded(user, newApprover);
         } else if (!approved && wasApproved) {
             emit ApprovalAddressRevoked(user, newApprover);
+        }
+    }
+
+    // ========== WITHDRAWAL ADDRESS MANAGEMENT ==========
+
+    function requestWithdrawalAddress(
+        address user,
+        string calldata title,
+        address destination
+    ) external onlyAuthorized returns (bytes32 requestId) {
+        require(destination != address(0), "Invalid destination address");
+        require(destination != user, "Cannot set own address as destination");
+        require(bytes(title).length > 0 && bytes(title).length <= 50, "Invalid title length");
+
+        // Check for duplicate destinations
+        WithdrawalAddress[] storage addresses = userWithdrawalAddresses[user];
+        for (uint256 i = 0; i < addresses.length; i++) {
+            require(addresses[i].destination != destination || !addresses[i].active, "Address already exists");
+        }
+
+        // Generate unique request ID
+        requestId = keccak256(abi.encodePacked(user, title, destination, block.timestamp, block.number));
+
+        // Create withdrawal request with 24 hour timelock
+        userWithdrawalRequests[user][requestId] = WithdrawalRequest({
+            title: title,
+            destination: destination,
+            requestTimestamp: block.timestamp,
+            executeAfter: block.timestamp + 24 hours,
+            exists: true,
+            executed: false
+        });
+
+        // Track pending request
+        userPendingRequestIds[user].push(requestId);
+
+        emit WithdrawalAddressRequested(user, requestId, title, destination, block.timestamp + 24 hours);
+        return requestId;
+    }
+
+    function executeWithdrawalAddressRequest(
+        address user,
+        bytes32 requestId
+    ) external onlyAuthorized {
+        WithdrawalRequest storage request = userWithdrawalRequests[user][requestId];
+        require(request.exists, "Request does not exist");
+        require(!request.executed, "Request already executed");
+        require(block.timestamp >= request.executeAfter, "Request still in timelock");
+
+        // Add to user's withdrawal addresses
+        userWithdrawalAddresses[user].push(WithdrawalAddress({
+            title: request.title,
+            destination: request.destination,
+            addedTimestamp: block.timestamp,
+            active: true
+        }));
+
+        // Mark request as executed
+        request.executed = true;
+
+        // Remove from pending requests
+        _removePendingRequest(user, requestId);
+
+        emit WithdrawalAddressAdded(user, request.destination, request.title);
+    }
+
+    function cancelWithdrawalAddressRequest(
+        address user,
+        bytes32 requestId
+    ) external onlyAuthorized {
+        WithdrawalRequest storage request = userWithdrawalRequests[user][requestId];
+        require(request.exists, "Request does not exist");
+        require(!request.executed, "Request already executed");
+
+        // Mark as executed to prevent future execution
+        request.executed = true;
+
+        // Remove from pending requests
+        _removePendingRequest(user, requestId);
+
+        emit WithdrawalAddressRequestCancelled(user, requestId);
+    }
+
+    function removeWithdrawalAddress(
+        address user,
+        address destination
+    ) external onlyAuthorized {
+        WithdrawalAddress[] storage addresses = userWithdrawalAddresses[user];
+
+        for (uint256 i = 0; i < addresses.length; i++) {
+            if (addresses[i].destination == destination && addresses[i].active) {
+                addresses[i].active = false;
+                emit WithdrawalAddressRemoved(user, destination);
+                return;
+            }
+        }
+
+        revert("Withdrawal address not found");
+    }
+
+    // ========== WITHDRAWAL ADDRESS VIEW FUNCTIONS ==========
+
+    function getUserWithdrawalAddresses(address user)
+        external
+        view
+        returns (
+            string[] memory titles,
+            address[] memory destinations,
+            uint256[] memory timestamps
+        )
+    {
+        WithdrawalAddress[] storage addresses = userWithdrawalAddresses[user];
+
+        // Count active addresses
+        uint256 activeCount = 0;
+        for (uint256 i = 0; i < addresses.length; i++) {
+            if (addresses[i].active) {
+                activeCount++;
+            }
+        }
+
+        // Create arrays for active addresses
+        titles = new string[](activeCount);
+        destinations = new address[](activeCount);
+        timestamps = new uint256[](activeCount);
+
+        uint256 index = 0;
+        for (uint256 i = 0; i < addresses.length; i++) {
+            if (addresses[i].active) {
+                titles[index] = addresses[i].title;
+                destinations[index] = addresses[i].destination;
+                timestamps[index] = addresses[i].addedTimestamp;
+                index++;
+            }
+        }
+    }
+
+    function getWithdrawalRequest(address user, bytes32 requestId)
+        external
+        view
+        returns (
+            string memory title,
+            address destination,
+            uint256 requestTimestamp,
+            uint256 executeAfter,
+            bool exists,
+            bool executed
+        )
+    {
+        WithdrawalRequest storage request = userWithdrawalRequests[user][requestId];
+        return (
+            request.title,
+            request.destination,
+            request.requestTimestamp,
+            request.executeAfter,
+            request.exists,
+            request.executed
+        );
+    }
+
+    function getUserPendingWithdrawalRequests(address user)
+        external
+        view
+        returns (
+            bytes32[] memory requestIds,
+            string[] memory titles,
+            address[] memory destinations,
+            uint256[] memory executeAfters
+        )
+    {
+        bytes32[] storage pendingIds = userPendingRequestIds[user];
+
+        // Count valid pending requests
+        uint256 validCount = 0;
+        for (uint256 i = 0; i < pendingIds.length; i++) {
+            WithdrawalRequest storage request = userWithdrawalRequests[user][pendingIds[i]];
+            if (request.exists && !request.executed) {
+                validCount++;
+            }
+        }
+
+        // Create arrays for valid pending requests
+        requestIds = new bytes32[](validCount);
+        titles = new string[](validCount);
+        destinations = new address[](validCount);
+        executeAfters = new uint256[](validCount);
+
+        uint256 index = 0;
+        for (uint256 i = 0; i < pendingIds.length; i++) {
+            WithdrawalRequest storage request = userWithdrawalRequests[user][pendingIds[i]];
+            if (request.exists && !request.executed) {
+                requestIds[index] = pendingIds[i];
+                titles[index] = request.title;
+                destinations[index] = request.destination;
+                executeAfters[index] = request.executeAfter;
+                index++;
+            }
+        }
+    }
+
+    function isValidWithdrawalDestination(address user, address destination)
+        external
+        view
+        returns (bool)
+    {
+        if (destination == user) {
+            return true; // User can always withdraw to their own address
+        }
+
+        WithdrawalAddress[] storage addresses = userWithdrawalAddresses[user];
+        for (uint256 i = 0; i < addresses.length; i++) {
+            if (addresses[i].destination == destination && addresses[i].active) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // ========== INTERNAL HELPER FUNCTIONS ==========
+
+    function _removePendingRequest(address user, bytes32 requestId) internal {
+        bytes32[] storage pendingIds = userPendingRequestIds[user];
+
+        for (uint256 i = 0; i < pendingIds.length; i++) {
+            if (pendingIds[i] == requestId) {
+                // Move last element to current position and remove last
+                pendingIds[i] = pendingIds[pendingIds.length - 1];
+                pendingIds.pop();
+                break;
+            }
         }
     }
 

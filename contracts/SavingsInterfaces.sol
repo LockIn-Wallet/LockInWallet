@@ -154,10 +154,28 @@ interface IApprovalSystemModule {
     function isApprovalAddress(address user, address approval) external view returns (bool);
     function isApprovedForFullWithdrawal(address user) external view returns (bool);
 
+    // Withdrawal address management
+    function requestWithdrawalAddress(address user, string calldata title, address destination) external returns (bytes32 requestId);
+    function executeWithdrawalAddressRequest(address user, bytes32 requestId) external;
+    function cancelWithdrawalAddressRequest(address user, bytes32 requestId) external;
+    function removeWithdrawalAddress(address user, address destination) external;
+
+    // Withdrawal address view functions
+    function getUserWithdrawalAddresses(address user) external view returns (string[] memory titles, address[] memory destinations, uint256[] memory timestamps);
+    function getWithdrawalRequest(address user, bytes32 requestId) external view returns (string memory title, address destination, uint256 requestTimestamp, uint256 executeAfter, bool exists, bool executed);
+    function getUserPendingWithdrawalRequests(address user) external view returns (bytes32[] memory requestIds, string[] memory titles, address[] memory destinations, uint256[] memory executeAfters);
+    function isValidWithdrawalDestination(address user, address destination) external view returns (bool);
+
     // Events
     event ApprovalAddressAdded(address indexed user, address approval);
     event ApprovalAddressRevoked(address indexed user, address approval);
     event FullWithdrawalApproved(address indexed user);
+
+    // Withdrawal address events
+    event WithdrawalAddressRequested(address indexed user, bytes32 indexed requestId, string title, address destination, uint256 executeAfter);
+    event WithdrawalAddressAdded(address indexed user, address destination, string title);
+    event WithdrawalAddressRemoved(address indexed user, address destination);
+    event WithdrawalAddressRequestCancelled(address indexed user, bytes32 indexed requestId);
 }
 
 // ========== MAIN CONTRACT INTERFACE ==========
@@ -167,6 +185,8 @@ interface ISavingsCore {
     function deposit(address token, uint256 amount) external payable;
     function depositTo(address to) external payable;
     function withdraw(address user, uint256 amount, address token) external;
+    function withdraw(uint256 amount, address token) external;
+    function withdrawTo(uint256 amount, address token, address destination) external;
     function withdrawAll(address user) external;
 
     // Balance management

@@ -258,7 +258,7 @@ async function main() {
   console.log("\n📋 Updating contract ABIs...");
   try {
     // Copy Savings ABI
-    const savingsArtifact = require("../artifacts/contracts/Lock.sol/Savings.json");
+    const savingsArtifact = require("../artifacts/contracts/SavingsCore.sol/SavingsCore.json");
     const frontendSavingsABIPath = path.join(__dirname, "../frontend/src/SavingsABI.json");
     fs.writeFileSync(frontendSavingsABIPath, JSON.stringify(savingsArtifact.abi, null, 2));
     console.log("✅ Savings ABI updated");

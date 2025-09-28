@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { ethers } from "ethers";
 import SavingsABI from "./SavingsABI.json";
 import MockUSDT_ABI from "./MockUSDT_ABI.json";
+import ApprovalSystemModuleABI from "./ApprovalSystemModuleABI.json";
 
 const ETH_ADDRESS = "0x0000000000000000000000000000000000000000"; // ETH address (native token)
 
@@ -17,10 +18,10 @@ const NETWORKS = {
     },
     rpcUrls: ["http://127.0.0.1:8545"],
     blockExplorerUrls: [""],
-    savingsContract: "0x4c5859f0F772848b2D91F1D83E2Fe57935348029",
+    savingsContract: "0xF32D39ff9f6Aa7a7A64d7a4F00a54826Ef791a55",
     tokens: {
       USDT: {
-        address: "0xc351628EB244ec633d5f21fBD6621e1a683B1181",
+        address: "0xD42912755319665397FF090fBB63B1a31aE87Cee",
         symbol: "USDT",
         name: "Tether USD",
         decimals: 6,
@@ -215,6 +216,15 @@ function App() {
   const [pendingBypassRequests, setPendingBypassRequests] = useState([]);
   const [showBypassForm, setShowBypassForm] = useState(false);
   const [currentTime, setCurrentTime] = useState(Math.floor(Date.now() / 1000));
+
+  // Withdrawal address management state
+  const [withdrawalAddresses, setWithdrawalAddresses] = useState([]);
+  const [pendingWithdrawalRequests, setPendingWithdrawalRequests] = useState([]);
+  const [showWithdrawalAddressForm, setShowWithdrawalAddressForm] = useState(false);
+  const [newWithdrawalTitle, setNewWithdrawalTitle] = useState("");
+  const [newWithdrawalAddress, setNewWithdrawalAddress] = useState("");
+  const [selectedWithdrawalDestination, setSelectedWithdrawalDestination] = useState("self");
+  const [approvalModule, setApprovalModule] = useState(null);
 
   // Network detection and switching functions
   const detectCurrentNetwork = async () => {
@@ -638,9 +648,19 @@ function App() {
       web3Signer
     );
 
+    // Set up approval module contract
+    const moduleAddresses = await import('./moduleAddresses.json');
+    const approvalModuleAddress = moduleAddresses.modules.approvalSystem;
+    const approval = new ethers.Contract(
+      approvalModuleAddress,
+      ApprovalSystemModuleABI,
+      web3Signer
+    );
+
     setProvider(web3Provider);
     setSigner(web3Signer);
     setSavingsContract(savings);
+    setApprovalModule(approval);
 
     // Store user address
     const address = await web3Signer.getAddress();
@@ -657,6 +677,8 @@ function App() {
       await fetchSpendingLimits(savings, web3Signer);
       await fetchPendingBypassRequests(savings, userAddress);
       await fetchPendingLimitProposals(userAddress);
+      await fetchWithdrawalAddresses(savings, userAddress);
+      await fetchPendingWithdrawalRequests(savings, userAddress);
 
       // Check setup status
       const setupCommitted = await savings.isSetupCommitted();
@@ -1568,6 +1590,237 @@ function App() {
       }
     } else {
       setLimitsLoaded(true);
+    }
+  };
+
+  // ========== WITHDRAWAL ADDRESS MANAGEMENT ==========
+
+  const fetchWithdrawalAddresses = async (
+    contract = savingsContract,
+    userAddr = null
+  ) => {
+    const currentUserAddress = userAddr || userAddress;
+    if (!contract || !currentUserAddress) return;
+
+    try {
+      const addressData = await contract.getUserWithdrawalAddresses();
+      const [titles, destinations, timestamps] = addressData;
+
+      const addresses = [];
+      for (let i = 0; i < titles.length; i++) {
+        addresses.push({
+          title: titles[i],
+          destination: destinations[i],
+          addedTimestamp: Number(timestamps[i]),
+          addedDate: new Date(Number(timestamps[i]) * 1000).toLocaleDateString(),
+        });
+      }
+
+      setWithdrawalAddresses(addresses);
+      console.log(`Loaded ${addresses.length} withdrawal addresses for ${currentUserAddress}`);
+    } catch (error) {
+      console.error("Error fetching withdrawal addresses:", error);
+      setWithdrawalAddresses([]);
+    }
+  };
+
+  const fetchPendingWithdrawalRequests = async (
+    contract = savingsContract,
+    userAddr = null
+  ) => {
+    const currentUserAddress = userAddr || userAddress;
+    if (!contract || !currentUserAddress) return;
+
+    try {
+      const requestData = await contract.getUserPendingWithdrawalRequests();
+      const [requestIds, titles, destinations, executeAfters] = requestData;
+
+      const requests = [];
+      for (let i = 0; i < requestIds.length; i++) {
+        requests.push({
+          requestId: requestIds[i],
+          title: titles[i],
+          destination: destinations[i],
+          executeAfter: Number(executeAfters[i]),
+          submittedDate: new Date().toLocaleDateString(), // Approximate
+        });
+      }
+
+      setPendingWithdrawalRequests(requests);
+      console.log(`Loaded ${requests.length} pending withdrawal requests for ${currentUserAddress}`);
+    } catch (error) {
+      console.error("Error fetching pending withdrawal requests:", error);
+      setPendingWithdrawalRequests([]);
+    }
+  };
+
+  const requestWithdrawalAddress = async () => {
+    if (!savingsContract || !newWithdrawalTitle || !newWithdrawalAddress) {
+      alert("Please fill in all fields");
+      return;
+    }
+
+    try {
+      // Validate address format
+      if (!ethers.isAddress(newWithdrawalAddress)) {
+        alert("Please enter a valid Ethereum address");
+        return;
+      }
+
+      const tx = await savingsContract.requestWithdrawalAddress(
+        newWithdrawalTitle,
+        newWithdrawalAddress
+      );
+      await tx.wait();
+
+      alert(`✅ Withdrawal address request submitted successfully!\nTitle: ${newWithdrawalTitle}\nAddress: ${newWithdrawalAddress}\nExecutable after: 24 hours`);
+
+      // Clear form
+      setNewWithdrawalTitle("");
+      setNewWithdrawalAddress("");
+      setShowWithdrawalAddressForm(false);
+
+      // Refresh data
+      await fetchPendingWithdrawalRequests();
+    } catch (error) {
+      console.error("Error requesting withdrawal address:", error);
+      if (error.message.includes("Address already exists")) {
+        alert("This address is already in your withdrawal addresses");
+      } else if (error.message.includes("Cannot set own address")) {
+        alert("You cannot add your own wallet address as a withdrawal destination");
+      } else {
+        alert(`Failed to request withdrawal address: ${error.message}`);
+      }
+    }
+  };
+
+  const executeWithdrawalRequest = async (requestId) => {
+    if (!savingsContract) return;
+
+    try {
+      const tx = await savingsContract.executeWithdrawalAddressRequest(requestId);
+      await tx.wait();
+      alert("✅ Withdrawal address request executed successfully!");
+
+      // Refresh data
+      await fetchWithdrawalAddresses();
+      await fetchPendingWithdrawalRequests();
+    } catch (error) {
+      console.error("Error executing withdrawal request:", error);
+      if (error.message.includes("Request still in timelock")) {
+        alert("Request is still in 24-hour timelock period");
+      } else {
+        alert(`Failed to execute withdrawal request: ${error.message}`);
+      }
+    }
+  };
+
+  const cancelWithdrawalRequest = async (requestId) => {
+    if (!savingsContract) return;
+
+    try {
+      const tx = await savingsContract.cancelWithdrawalAddressRequest(requestId);
+      await tx.wait();
+      alert("Withdrawal address request cancelled successfully!");
+
+      // Refresh data
+      await fetchPendingWithdrawalRequests();
+    } catch (error) {
+      console.error("Error cancelling withdrawal request:", error);
+      alert(`Failed to cancel withdrawal request: ${error.message}`);
+    }
+  };
+
+  const removeWithdrawalAddress = async (destination) => {
+    if (!savingsContract) return;
+
+    try {
+      const tx = await savingsContract.removeWithdrawalAddress(destination);
+      await tx.wait();
+      alert("Withdrawal address removed successfully!");
+
+      // Refresh data
+      await fetchWithdrawalAddresses();
+    } catch (error) {
+      console.error("Error removing withdrawal address:", error);
+      alert(`Failed to remove withdrawal address: ${error.message}`);
+    }
+  };
+
+  const withdrawToDestination = async () => {
+    if (savingsContract && selectedToken && depositAmount) {
+      // Check if user is on the correct network
+      if (!isCorrectNetwork()) {
+        const currentNetwork = getCurrentNetwork(selectedNetwork);
+        alert(`Please switch to ${currentNetwork.name} to make withdrawals`);
+        return;
+      }
+
+      try {
+        if (
+          !depositAmount ||
+          isNaN(depositAmount) ||
+          parseFloat(depositAmount) <= 0
+        ) {
+          alert("Please enter a valid withdrawal amount");
+          return;
+        }
+
+        const currentNetwork = getCurrentNetwork(selectedNetwork);
+        let tokenAddress;
+        let decimals;
+        let tokenSymbol;
+
+        // Determine token details based on selection
+        if (selectedToken === "ETH") {
+          tokenAddress = ETH_ADDRESS;
+          decimals = 18;
+          tokenSymbol = "ETH";
+        } else if (currentNetwork.tokens[selectedToken]) {
+          const token = currentNetwork.tokens[selectedToken];
+          if (token.address === "0x0000000000000000000000000000000000000000") {
+            alert(`${token.symbol} is not available on ${currentNetwork.name}`);
+            return;
+          }
+          tokenAddress = token.address;
+          decimals = token.decimals;
+          tokenSymbol = token.symbol;
+        } else {
+          alert("Please select a valid token");
+          return;
+        }
+
+        const amount = ethers.parseUnits(depositAmount, decimals);
+
+        let tx;
+        if (selectedWithdrawalDestination === "self") {
+          // Use original withdraw function
+          tx = await savingsContract.withdraw(amount, tokenAddress);
+        } else {
+          // Use withdrawTo function with selected destination
+          tx = await savingsContract.withdrawTo(amount, tokenAddress, selectedWithdrawalDestination);
+        }
+
+        await tx.wait();
+        alert(`Withdrawal of ${depositAmount} ${tokenSymbol} successful!`);
+
+        // Clear form and refresh balances and spending limits
+        setDepositAmount("");
+        await fetchAllBalances();
+        await fetchSpendingLimits();
+      } catch (error) {
+        console.error("Withdrawal error:", error);
+        if (error.message.includes("Exceeds")) {
+          // Extract which limit was exceeded from error message
+          alert(`Withdrawal blocked: ${error.message}`);
+        } else if (error.message.includes("Insufficient balance")) {
+          alert("Insufficient balance for this withdrawal");
+        } else if (error.message.includes("Destination not approved")) {
+          alert("Selected withdrawal destination is not approved");
+        } else {
+          alert("Failed to withdraw. Please try again.");
+        }
+      }
     }
   };
 
@@ -3345,7 +3598,7 @@ function App() {
             </div>
           )}
 
-          {/* Simple Withdrawal Section */}
+          {/* Enhanced Withdrawal Section */}
           <div
             style={{
               marginBottom: "20px",
@@ -3364,40 +3617,322 @@ function App() {
                 marginBottom: "15px",
               }}
             >
-              Withdrawals are automatically checked against all your active
-              spending limits.
+              Withdrawals are automatically checked against all your active spending limits.
+              You can withdraw to your own wallet or to approved withdrawal addresses.
             </p>
 
-            <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
-              <input
-                type="text"
-                placeholder="Amount (USDT)"
-                value={depositAmount}
-                onChange={(e) => setDepositAmount(e.target.value)}
-                style={{
-                  flex: 1,
-                  padding: "8px",
-                  borderRadius: "4px",
-                  border: "1px solid #4a5568",
-                  backgroundColor: "#4a5568",
-                  color: "white",
-                }}
-              />
-              <button
-                onClick={withdrawFunds}
-                style={{
-                  padding: "8px 16px",
-                  borderRadius: "4px",
-                  border: "none",
-                  backgroundColor: "#e53e3e",
-                  color: "white",
-                  cursor: "pointer",
-                  fontWeight: "bold",
-                }}
-              >
-                💸 Withdraw
-              </button>
+            {/* Token and Amount Selection */}
+            <div style={{ marginBottom: "15px" }}>
+              <div style={{ display: "flex", gap: "10px", marginBottom: "10px", flexWrap: "wrap" }}>
+                <select
+                  value={selectedToken}
+                  onChange={(e) => setSelectedToken(e.target.value)}
+                  style={{
+                    padding: "8px",
+                    borderRadius: "4px",
+                    border: "1px solid #4a5568",
+                    backgroundColor: "#4a5568",
+                    color: "white",
+                    flex: "1",
+                    minWidth: "120px",
+                  }}
+                >
+                  <option value="ETH">ETH</option>
+                  {Object.entries(getCurrentNetwork(selectedNetwork).tokens)
+                    .filter(([_, token]) => token.address !== "0x0000000000000000000000000000000000000000")
+                    .map(([key, token]) => (
+                      <option key={key} value={key}>
+                        {token.symbol}
+                      </option>
+                    ))}
+                </select>
+
+                <input
+                  type="text"
+                  placeholder={`Amount (${selectedToken})`}
+                  value={depositAmount}
+                  onChange={(e) => setDepositAmount(e.target.value)}
+                  style={{
+                    flex: "2",
+                    padding: "8px",
+                    borderRadius: "4px",
+                    border: "1px solid #4a5568",
+                    backgroundColor: "#4a5568",
+                    color: "white",
+                    minWidth: "150px",
+                  }}
+                />
+              </div>
             </div>
+
+            {/* Destination Selection as Radio Buttons */}
+            <div style={{ marginBottom: "15px" }}>
+              <label style={{ display: "block", fontSize: "0.9em", color: "#e2e8f0", marginBottom: "8px" }}>
+                Withdraw To:
+              </label>
+
+              {/* My Wallet Option */}
+              <div style={{ marginBottom: "8px" }}>
+                <label style={{ display: "flex", alignItems: "center", cursor: "pointer", padding: "8px", borderRadius: "4px", backgroundColor: selectedWithdrawalDestination === "self" ? "#2d3748" : "transparent", border: "1px solid #4a5568" }}>
+                  <input
+                    type="radio"
+                    name="withdrawalDestination"
+                    value="self"
+                    checked={selectedWithdrawalDestination === "self"}
+                    onChange={(e) => setSelectedWithdrawalDestination(e.target.value)}
+                    style={{ marginRight: "8px" }}
+                  />
+                  <span style={{ color: "white" }}>
+                    🏠 My Wallet ({userAddress ? `${userAddress.slice(0, 6)}...${userAddress.slice(-4)}` : ""})
+                  </span>
+                </label>
+              </div>
+
+              {/* Withdrawal Addresses as Radio Buttons */}
+              {withdrawalAddresses.map((addr, index) => (
+                <div key={index} style={{ marginBottom: "8px" }}>
+                  <div style={{ display: "flex", alignItems: "center", border: "1px solid #4a5568", borderRadius: "4px", backgroundColor: selectedWithdrawalDestination === addr.destination ? "#2d3748" : "transparent" }}>
+                    <label style={{ display: "flex", alignItems: "center", cursor: "pointer", padding: "8px", flex: 1 }}>
+                      <input
+                        type="radio"
+                        name="withdrawalDestination"
+                        value={addr.destination}
+                        checked={selectedWithdrawalDestination === addr.destination}
+                        onChange={(e) => setSelectedWithdrawalDestination(e.target.value)}
+                        style={{ marginRight: "8px" }}
+                      />
+                      <div>
+                        <div style={{ color: "white", fontWeight: "bold" }}>
+                          📍 {addr.title}
+                        </div>
+                        <div style={{ fontSize: "0.8em", color: "#a0aec0", fontFamily: "monospace" }}>
+                          {addr.destination}
+                        </div>
+                        <div style={{ fontSize: "0.7em", color: "#718096" }}>
+                          Added: {addr.addedDate}
+                        </div>
+                      </div>
+                    </label>
+                    <button
+                      onClick={() => removeWithdrawalAddress(addr.destination)}
+                      style={{
+                        marginRight: "8px",
+                        padding: "4px 8px",
+                        borderRadius: "4px",
+                        border: "1px solid #e53e3e",
+                        backgroundColor: "transparent",
+                        color: "#e53e3e",
+                        cursor: "pointer",
+                        fontSize: "0.7em",
+                      }}
+                    >
+                      🗑️ Remove
+                    </button>
+                  </div>
+                </div>
+              ))}
+
+              {/* Add Address Button Below the List */}
+              <div style={{ marginTop: "10px" }}>
+                <button
+                  onClick={() => setShowWithdrawalAddressForm(!showWithdrawalAddressForm)}
+                  style={{
+                    padding: "8px 16px",
+                    borderRadius: "4px",
+                    border: "1px solid #48bb78",
+                    backgroundColor: "transparent",
+                    color: "#48bb78",
+                    cursor: "pointer",
+                    fontSize: "0.9em",
+                    fontWeight: "bold",
+                  }}
+                >
+                  ➕ Add Withdrawal Address
+                </button>
+              </div>
+            </div>
+
+            <button
+              onClick={withdrawToDestination}
+              style={{
+                padding: "12px 24px",
+                borderRadius: "4px",
+                border: "none",
+                backgroundColor: "#e53e3e",
+                color: "white",
+                cursor: "pointer",
+                fontWeight: "bold",
+                width: "100%",
+                fontSize: "1em",
+              }}
+            >
+              💸 Withdraw {selectedToken}
+            </button>
+
+            {/* Add New Withdrawal Address Form */}
+            {showWithdrawalAddressForm && (
+              <div style={{ marginTop: "15px", paddingTop: "15px", borderTop: "1px solid #4a5568" }}>
+                <div
+                  style={{
+                    padding: "15px",
+                    backgroundColor: "#1a202c",
+                    borderRadius: "4px",
+                    border: "1px solid #4a5568",
+                    marginBottom: "15px",
+                  }}
+                >
+                  <h5 style={{ color: "#fbb6ce", margin: "0 0 15px 0" }}>
+                    📍 Add New Withdrawal Address
+                  </h5>
+                  <p style={{ fontSize: "0.8em", color: "#a0aec0", marginBottom: "15px" }}>
+                    Withdrawal addresses require a 24-hour approval period for security.
+                  </p>
+
+                  <div style={{ display: "grid", gap: "10px", marginBottom: "15px" }}>
+                    <div>
+                      <label style={{ display: "block", fontSize: "0.9em", color: "#e2e8f0", marginBottom: "5px" }}>
+                        Address Title
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="e.g., 'Hardware Wallet', 'Exchange Account'"
+                        value={newWithdrawalTitle}
+                        onChange={(e) => setNewWithdrawalTitle(e.target.value)}
+                        style={{
+                          width: "100%",
+                          padding: "8px",
+                          borderRadius: "4px",
+                          border: "1px solid #4a5568",
+                          backgroundColor: "#4a5568",
+                          color: "white",
+                        }}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ display: "block", fontSize: "0.9em", color: "#e2e8f0", marginBottom: "5px" }}>
+                        Ethereum Address
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="0x..."
+                        value={newWithdrawalAddress}
+                        onChange={(e) => setNewWithdrawalAddress(e.target.value)}
+                        style={{
+                          width: "100%",
+                          padding: "8px",
+                          borderRadius: "4px",
+                          border: "1px solid #4a5568",
+                          backgroundColor: "#4a5568",
+                          color: "white",
+                          fontFamily: "monospace",
+                        }}
+                      />
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={requestWithdrawalAddress}
+                    style={{
+                      padding: "10px 20px",
+                      borderRadius: "4px",
+                      border: "none",
+                      backgroundColor: "#ed64a6",
+                      color: "white",
+                      cursor: "pointer",
+                      fontSize: "0.9em",
+                      fontWeight: "bold",
+                      width: "100%",
+                    }}
+                  >
+                    📍 Request Withdrawal Address
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Pending Withdrawal Address Requests */}
+            {pendingWithdrawalRequests.length > 0 && (
+              <div style={{ marginTop: "15px", paddingTop: "15px", borderTop: "1px solid #4a5568" }}>
+                <div>
+                  <h5 style={{ color: "#ed8936", margin: "0 0 10px 0" }}>
+                    ⏳ Pending Requests ({pendingWithdrawalRequests.length})
+                  </h5>
+                  <div style={{ display: "grid", gap: "8px" }}>
+                    {pendingWithdrawalRequests.map((request, index) => {
+                      const countdown = formatCountdown(request.executeAfter, currentTime);
+                      return (
+                        <div
+                          key={index}
+                          style={{
+                            padding: "10px",
+                            backgroundColor: "#1a202c",
+                            borderRadius: "6px",
+                            border: countdown.ready ? "1px solid #48bb78" : "1px solid #ed8936",
+                          }}
+                        >
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+                            <div>
+                              <div style={{ color: "white", fontWeight: "bold" }}>
+                                📍 {request.title}
+                              </div>
+                              <div style={{ fontSize: "0.8em", color: "#a0aec0", fontFamily: "monospace" }}>
+                                {request.destination}
+                              </div>
+                            </div>
+                            <div style={{ display: "flex", gap: "6px" }}>
+                              {countdown.ready && (
+                                <button
+                                  onClick={() => executeWithdrawalRequest(request.requestId)}
+                                  style={{
+                                    padding: "4px 8px",
+                                    borderRadius: "4px",
+                                    border: "none",
+                                    backgroundColor: "#48bb78",
+                                    color: "white",
+                                    cursor: "pointer",
+                                    fontSize: "0.7em",
+                                    fontWeight: "bold",
+                                  }}
+                                >
+                                  ⚡ Execute
+                                </button>
+                              )}
+                              <button
+                                onClick={() => cancelWithdrawalRequest(request.requestId)}
+                                style={{
+                                  padding: "4px 8px",
+                                  borderRadius: "4px",
+                                  border: "1px solid #e53e3e",
+                                  backgroundColor: "transparent",
+                                  color: "#e53e3e",
+                                  cursor: "pointer",
+                                  fontSize: "0.7em",
+                                }}
+                              >
+                                ❌ Cancel
+                              </button>
+                            </div>
+                          </div>
+                          <div
+                            style={{
+                              padding: "6px 10px",
+                              backgroundColor: "#4a5568",
+                              borderRadius: "4px",
+                              textAlign: "center",
+                              color: countdown.color,
+                              fontWeight: "bold",
+                              fontSize: "0.8em",
+                            }}
+                          >
+                            {countdown.text}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Bypass Request Section */}

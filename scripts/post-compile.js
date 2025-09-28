@@ -19,15 +19,15 @@ async function updateABIs() {
 
     let updatedCount = 0;
 
-    // Update Savings ABI
+    // Update SavingsCore ABI
     try {
-      const savingsArtifact = require("../artifacts/contracts/Lock.sol/Savings.json");
+      const savingsArtifact = require("../artifacts/contracts/SavingsCore.sol/SavingsCore.json");
       const frontendSavingsABIPath = path.join(frontendABIDir, "SavingsABI.json");
       fs.writeFileSync(frontendSavingsABIPath, JSON.stringify(savingsArtifact.abi, null, 2));
-      console.log("  ✅ Savings ABI updated");
+      console.log("  ✅ SavingsCore ABI updated");
       updatedCount++;
     } catch (error) {
-      console.log("  ⚠️  Could not update Savings ABI:", error.message);
+      console.log("  ⚠️  Could not update SavingsCore ABI:", error.message);
     }
 
     // Update MockUSDT ABI

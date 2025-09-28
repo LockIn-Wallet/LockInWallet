@@ -59,6 +59,14 @@ async function validateDeployment() {
           "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266", // Default test address
           "0x0000000000000000000000000000000000000000"  // ETH
         )
+      },
+      {
+        name: "getUserWithdrawalAddresses()",
+        call: () => contract.getUserWithdrawalAddresses()
+      },
+      {
+        name: "getUserPendingWithdrawalRequests()",
+        call: () => contract.getUserPendingWithdrawalRequests()
       }
     ];
 
@@ -75,17 +83,22 @@ async function validateDeployment() {
       }
     }
 
-    // Check ABI compatibility
+    // Check ABI compatibility for optimized contract
     console.log("\n📋 Checking ABI compatibility:");
     const expectedFunctions = [
       "isSetupCommitted",
       "getTokenBalance",
-      "addTimePeriodLimit",
-      "setCommonPeriodLimits",
+      "getUserSpendingLimits",
+      "getSetupInfo",
+      "isApprovalAddress",
+      "getActivePeriodNames",
+      "getActivePeriodCount",
       "withdraw",
-      "requestLimitBypass",
-      "executeBypassWithdrawal",
-      "cancelBypassRequest"
+      "withdrawTo",
+      "withdrawAll",
+      "getUserWithdrawalAddresses",
+      "getUserPendingWithdrawalRequests",
+      "requestWithdrawalAddress"
     ];
 
     let foundFunctions = 0;
