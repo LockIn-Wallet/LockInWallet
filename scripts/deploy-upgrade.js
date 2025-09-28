@@ -3,7 +3,7 @@ const fs = require("fs");
 const path = require("path");
 
 // Configuration - store the current proxy address
-const PROXY_ADDRESS = "0x7969c5eD335650692Bc04293B07F5BF2e7A673C0"; // Current proxy address
+const PROXY_ADDRESS = "0xDc64a140Aa3E981100a9becA4E685f962f0cF6C9"; // Current proxy address
 
 // Check for development mode flag
 const isDevelopmentMode = process.env.DEV_MODE === 'true';

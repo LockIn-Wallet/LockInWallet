@@ -178,10 +178,7 @@ contract Savings is Initializable, UUPSUpgradeable, OwnableUpgradeable {
     }
 
     function revokeApprovalAddress(address _approval) external {
-        require(
-            users[msg.sender].approvalAddresses[_approval],
-            "Approval address not found"
-        );
+        require(users[msg.sender].approvalAddresses[_approval], "Not found");
         users[msg.sender].approvalAddresses[_approval] = false;
         emit ApprovalAddressRevoked(msg.sender, _approval);
     }
@@ -197,6 +194,10 @@ contract Savings is Initializable, UUPSUpgradeable, OwnableUpgradeable {
         uint256 limit,
         uint256 durationInSeconds
     ) external {
+        UserData storage user = users[msg.sender];
+        if (user.hasCommittedSetup) {
+            require(_findPeriodLimit(periodName) == 0, "Use proposeLimitChange");
+        }
         _addTimePeriodLimitInternal(periodName, limit, durationInSeconds);
     }
 
@@ -205,10 +206,7 @@ contract Savings is Initializable, UUPSUpgradeable, OwnableUpgradeable {
         uint256 limit,
         uint256 durationInSeconds
     ) internal {
-        require(bytes(periodName).length > 0, "Period name cannot be empty");
-        require(limit > 0, "Limit must be positive");
-        require(durationInSeconds > 0, "Duration must be positive");
-        require(durationInSeconds >= 3600, "Minimum duration is 1 hour"); // Prevent abuse
+        require(bytes(periodName).length > 0 && limit > 0 && durationInSeconds >= 3600, "Invalid input");
 
         UserSpendingLimits storage userLimits = users[msg.sender].spendingLimits;
 
@@ -257,6 +255,11 @@ contract Savings is Initializable, UUPSUpgradeable, OwnableUpgradeable {
     ) external {
         require(dailyLimit > 0 || weeklyLimit > 0 || monthlyLimit > 0, "At least one limit must be set");
 
+        UserData storage user = users[msg.sender];
+
+        // If setup is committed, require using individual proposals for changes
+        require(!user.hasCommittedSetup, "Use individual proposeLimitChange");
+
         // Validate logical limit ordering
         if (dailyLimit > 0 && weeklyLimit > 0) {
             require(dailyLimit * 7 <= weeklyLimit, "Daily limit too high for weekly limit");
@@ -282,11 +285,121 @@ contract Savings is Initializable, UUPSUpgradeable, OwnableUpgradeable {
 
     function removeTimePeriodLimit(string calldata periodName) external {
         require(bytes(periodName).length > 0, "Period name cannot be empty");
+        UserData storage user = users[msg.sender];
+        require(!user.hasCommittedSetup, "Use proposeLimitRemoval");
+        _removePeriodInternal(periodName);
+    }
 
+    // ========== TIMELOCK PROPOSAL SYSTEM ==========
+
+    function proposeLimitChange(
+        string calldata periodName,
+        uint256 newLimit
+    ) external returns (bytes32 proposalId) {
+        require(bytes(periodName).length > 0 && newLimit > 0, "Invalid input");
+
+        UserData storage user = users[msg.sender];
+        require(user.hasCommittedSetup, "Setup must be committed for proposals");
+
+        uint256 currentLimit = _findPeriodLimit(periodName);
+        require(currentLimit > 0, "Period not found or inactive");
+
+        bool isIncrease = newLimit > currentLimit;
+        if (isIncrease) {
+            _checkIncreaseLimit(user, newLimit - currentLimit);
+        }
+
+        proposalId = keccak256(abi.encodePacked(msg.sender, periodName, newLimit, block.timestamp));
+        require(!user.proposals[proposalId].exists, "Proposal already exists");
+
+        user.proposals[proposalId] = CategoryUpdateProposal({
+            category: periodName,
+            newLimit: newLimit,
+            executeAfter: block.timestamp + (developmentMode ? 30 : 24 hours),
+            executed: false,
+            isIncrease: isIncrease,
+            exists: true
+        });
+
+        emit CategoryIncreaseProposed(msg.sender, periodName, newLimit, user.proposals[proposalId].executeAfter, proposalId);
+        return proposalId;
+    }
+
+    function proposeLimitRemoval(string calldata periodName) external returns (bytes32 proposalId) {
+        require(bytes(periodName).length > 0, "Period name cannot be empty");
+        UserData storage user = users[msg.sender];
+        require(user.hasCommittedSetup, "Setup must be committed for proposals");
+        require(_findPeriodLimit(periodName) > 0, "Period not found or inactive");
+
+        proposalId = keccak256(abi.encodePacked(msg.sender, periodName, uint256(0), block.timestamp, "REMOVE"));
+        require(!user.proposals[proposalId].exists, "Proposal already exists");
+
+        user.proposals[proposalId] = CategoryUpdateProposal({
+            category: periodName,
+            newLimit: 0,
+            executeAfter: block.timestamp,
+            executed: false,
+            isIncrease: false,
+            exists: true
+        });
+
+        emit CategoryIncreaseProposed(msg.sender, periodName, 0, block.timestamp, proposalId);
+        return proposalId;
+    }
+
+    function _findPeriodLimit(string memory periodName) internal view returns (uint256) {
         UserSpendingLimits storage userLimits = users[msg.sender].spendingLimits;
-        require(userLimits.periods.length > 0, "No periods to remove");
+        for (uint256 i = 0; i < userLimits.periods.length; i++) {
+            if (keccak256(bytes(userLimits.periods[i].name)) == keccak256(bytes(periodName)) &&
+                userLimits.periods[i].active) {
+                return userLimits.periods[i].limit;
+            }
+        }
+        return 0;
+    }
 
-        // Find and deactivate the period
+    function executeLimitProposal(bytes32 proposalId) external {
+        UserData storage user = users[msg.sender];
+        CategoryUpdateProposal storage proposal = user.proposals[proposalId];
+
+        require(proposal.exists && !proposal.executed, "Invalid proposal");
+        require(block.timestamp >= proposal.executeAfter, "Still in timelock");
+
+        proposal.executed = true;
+
+        if (proposal.newLimit == 0) {
+            _removePeriodInternal(proposal.category);
+            emit CategoryDeleted(msg.sender, proposal.category);
+        } else {
+            if (proposal.isIncrease) {
+                uint256 currentLimit = _findPeriodLimit(proposal.category);
+                _updateIncreaseTracking(user, proposal.newLimit - currentLimit);
+            }
+            _updateTimePeriodLimitInternal(proposal.category, proposal.newLimit);
+            emit CategoryIncreaseExecuted(msg.sender, proposal.category, proposal.newLimit, proposalId);
+        }
+    }
+
+    function cancelLimitProposal(bytes32 proposalId) external {
+        UserData storage user = users[msg.sender];
+        require(user.proposals[proposalId].exists && !user.proposals[proposalId].executed, "Invalid proposal");
+        delete user.proposals[proposalId];
+        emit BypassCancelled(msg.sender, proposalId);
+    }
+
+    function _updateTimePeriodLimitInternal(string memory periodName, uint256 newLimit) internal {
+        UserSpendingLimits storage userLimits = users[msg.sender].spendingLimits;
+        for (uint256 i = 0; i < userLimits.periods.length; i++) {
+            if (keccak256(bytes(userLimits.periods[i].name)) == keccak256(bytes(periodName))) {
+                userLimits.periods[i].limit = newLimit;
+                return;
+            }
+        }
+        revert("Period not found");
+    }
+
+    function _removePeriodInternal(string memory periodName) internal {
+        UserSpendingLimits storage userLimits = users[msg.sender].spendingLimits;
         for (uint256 i = 0; i < userLimits.periods.length; i++) {
             if (keccak256(bytes(userLimits.periods[i].name)) == keccak256(bytes(periodName))) {
                 userLimits.periods[i].active = false;
@@ -294,8 +407,6 @@ contract Savings is Initializable, UUPSUpgradeable, OwnableUpgradeable {
                 return;
             }
         }
-
-        revert("Period not found");
     }
 
     // ========== BYPASS SYSTEM FUNCTIONS ==========
@@ -305,32 +416,18 @@ contract Savings is Initializable, UUPSUpgradeable, OwnableUpgradeable {
         string calldata skipPeriod,
         address token
     ) external returns (bytes32 requestId) {
-        require(amount > 0, "Amount must be positive");
-        require(bytes(skipPeriod).length > 0, "Skip period cannot be empty");
-        require(token != address(0) || token == address(0), "Invalid token address");
+        require(amount > 0 && bytes(skipPeriod).length > 0, "Invalid input");
 
         UserData storage user = users[msg.sender];
         require(amount <= user.tokenBalances[token], "Insufficient balance");
 
-        // Verify the period to skip exists and is active
-        UserSpendingLimits storage userLimits = user.spendingLimits;
-        bool foundPeriod = false;
-        for (uint256 i = 0; i < userLimits.periods.length; i++) {
-            if (keccak256(bytes(userLimits.periods[i].name)) == keccak256(bytes(skipPeriod)) &&
-                userLimits.periods[i].active) {
-                foundPeriod = true;
-                break;
-            }
-        }
-        require(foundPeriod, "Period not found or inactive");
+        // Verify the period exists
+        require(_findPeriodLimit(skipPeriod) > 0, "Period not found");
 
         // Generate unique request ID
         requestId = keccak256(abi.encodePacked(msg.sender, skipPeriod, amount, token, block.timestamp));
+        require(!user.bypassRequests[requestId].exists, "Request exists");
 
-        // Check if request already exists
-        require(!user.bypassRequests[requestId].exists, "Request already exists");
-
-        // Create bypass request with 24-hour delay
         user.bypassRequests[requestId] = BypassRequest({
             amount: amount,
             skipPeriod: skipPeriod,
@@ -348,9 +445,8 @@ contract Savings is Initializable, UUPSUpgradeable, OwnableUpgradeable {
         UserData storage user = users[msg.sender];
         BypassRequest storage request = user.bypassRequests[requestId];
 
-        require(request.exists, "Request does not exist");
-        require(!request.executed, "Request already executed");
-        require(block.timestamp >= request.executeAfter, "Request still in timelock");
+        require(request.exists && !request.executed, "Invalid request");
+        require(block.timestamp >= request.executeAfter, "Still in timelock");
         require(request.amount <= user.tokenBalances[request.token], "Insufficient balance");
 
         // Check limits excluding the bypassed period
@@ -380,8 +476,7 @@ contract Savings is Initializable, UUPSUpgradeable, OwnableUpgradeable {
         UserData storage user = users[msg.sender];
         BypassRequest storage request = user.bypassRequests[requestId];
 
-        require(request.exists, "Request does not exist");
-        require(!request.executed, "Request already executed");
+        require(request.exists && !request.executed, "Invalid request");
 
         // Delete the request
         delete user.bypassRequests[requestId];
@@ -410,10 +505,7 @@ contract Savings is Initializable, UUPSUpgradeable, OwnableUpgradeable {
             }
 
             // Check if this withdrawal would exceed the period limit
-            require(
-                period.spent + amount <= period.limit,
-                string(abi.encodePacked("Exceeds ", period.name, " limit"))
-            );
+            require(period.spent + amount <= period.limit, "Exceeds limit");
         }
     }
 
@@ -460,8 +552,7 @@ contract Savings is Initializable, UUPSUpgradeable, OwnableUpgradeable {
         address token
     ) external nonReentrant {
         UserData storage user = users[msg.sender];
-        require(amount > 0, "Amount must be positive");
-        require(amount <= user.tokenBalances[token], "Insufficient balance");
+        require(amount > 0 && amount <= user.tokenBalances[token], "Invalid amount");
 
         // Check against all active time period limits
         _checkAllTimePeriodLimits(user.spendingLimits, amount);
@@ -496,10 +587,7 @@ contract Savings is Initializable, UUPSUpgradeable, OwnableUpgradeable {
             }
 
             // Check if this withdrawal would exceed the period limit
-            require(
-                period.spent + amount <= period.limit,
-                string(abi.encodePacked("Exceeds ", period.name, " limit"))
-            );
+            require(period.spent + amount <= period.limit, "Exceeds limit");
         }
 
         // If all checks pass, deduct from all active periods
@@ -512,20 +600,14 @@ contract Savings is Initializable, UUPSUpgradeable, OwnableUpgradeable {
     }
 
     function approveFullWithdrawal(address userAddress) external {
-        require(
-            users[userAddress].approvalAddresses[msg.sender],
-            "Not authorized"
-        );
+        require(users[userAddress].approvalAddresses[msg.sender], "Not authorized");
         users[userAddress].approvedForFullWithdrawal = true;
         emit FullWithdrawalApproved(userAddress);
     }
 
     function withdrawAll() external nonReentrant {
         UserData storage user = users[msg.sender];
-        require(
-            user.approvedForFullWithdrawal,
-            "Not approved for full withdrawal"
-        );
+        require(user.approvedForFullWithdrawal, "Not approved");
 
         uint256 amount = user.tokenBalances[address(0)];
         require(amount > 0, "No funds");
@@ -562,10 +644,7 @@ contract Savings is Initializable, UUPSUpgradeable, OwnableUpgradeable {
             bool[] memory active
         )
     {
-        require(
-            msg.sender == user || users[user].approvalAddresses[msg.sender],
-            "Not authorized"
-        );
+        require(msg.sender == user || users[user].approvalAddresses[msg.sender], "Not authorized");
 
         UserSpendingLimits storage userLimits = users[user].spendingLimits;
         uint256 length = userLimits.periods.length;
@@ -618,10 +697,7 @@ contract Savings is Initializable, UUPSUpgradeable, OwnableUpgradeable {
             bool exists
         )
     {
-        require(
-            msg.sender == user || users[user].approvalAddresses[msg.sender],
-            "Not authorized"
-        );
+        require(msg.sender == user || users[user].approvalAddresses[msg.sender], "Not authorized");
 
         UserSpendingLimits storage userLimits = users[user].spendingLimits;
 
@@ -668,7 +744,7 @@ contract Savings is Initializable, UUPSUpgradeable, OwnableUpgradeable {
 
     function commitInitialSetup() external {
         UserData storage user = users[msg.sender];
-        require(!user.hasCommittedSetup, "Setup already committed");
+        require(!user.hasCommittedSetup, "Already committed");
 
         // Calculate maximum spending limit across all time periods
         // (Use the highest limit since periods are overlapping, not additive)
@@ -820,7 +896,7 @@ contract Savings is Initializable, UUPSUpgradeable, OwnableUpgradeable {
     }
 
     function deployUserProxy() external returns (address proxy) {
-        require(userProxies[msg.sender] == address(0), "Proxy already deployed");
+        require(userProxies[msg.sender] == address(0), "Already deployed");
 
         bytes32 salt = keccak256(abi.encodePacked(msg.sender));
 
@@ -842,6 +918,6 @@ contract Savings is Initializable, UUPSUpgradeable, OwnableUpgradeable {
     }
 
     fallback() external payable {
-        revert("Unsupported operation");
+        revert("Unsupported");
     }
 }

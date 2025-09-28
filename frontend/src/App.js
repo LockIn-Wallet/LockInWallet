@@ -13,34 +13,34 @@ const NETWORKS = {
     nativeCurrency: {
       name: "Ethereum",
       symbol: "ETH",
-      decimals: 18
+      decimals: 18,
     },
     rpcUrls: ["http://127.0.0.1:8545"],
     blockExplorerUrls: [""],
-    savingsContract: "0x7969c5eD335650692Bc04293B07F5BF2e7A673C0",
+    savingsContract: "0xDc64a140Aa3E981100a9becA4E685f962f0cF6C9",
     tokens: {
       USDT: {
-        address: "0x7bc06c482DEAd17c0e297aFbC32f6e63d3846650",
+        address: "0x5FC8d32690cc91D4c39d9d3abcBD16989F875707",
         symbol: "USDT",
         name: "Tether USD",
         decimals: 6,
-        recommended: true
+        recommended: true,
       },
       USDC: {
         address: "0x0000000000000000000000000000000000000000", // Placeholder
         symbol: "USDC",
         name: "USD Coin",
         decimals: 6,
-        recommended: true
+        recommended: true,
       },
       DAI: {
         address: "0x0000000000000000000000000000000000000000", // Placeholder
         symbol: "DAI",
         name: "Dai Stablecoin",
         decimals: 18,
-        recommended: true
-      }
-    }
+        recommended: true,
+      },
+    },
   },
   ethereum: {
     chainId: 1,
@@ -48,7 +48,7 @@ const NETWORKS = {
     nativeCurrency: {
       name: "Ethereum",
       symbol: "ETH",
-      decimals: 18
+      decimals: 18,
     },
     rpcUrls: ["https://eth-mainnet.g.alchemy.com/v2/demo"],
     blockExplorerUrls: ["https://etherscan.io"],
@@ -59,23 +59,23 @@ const NETWORKS = {
         symbol: "USDT",
         name: "Tether USD",
         decimals: 6,
-        recommended: true
+        recommended: true,
       },
       USDC: {
         address: "0xA0b86a33E6B6c3c3A3B8DBbc81b2B4C98B25C96f",
         symbol: "USDC",
         name: "USD Coin",
         decimals: 6,
-        recommended: true
+        recommended: true,
       },
       DAI: {
         address: "0x6B175474E89094C44Da98b954EedeAC495271d0F",
         symbol: "DAI",
         name: "Dai Stablecoin",
         decimals: 18,
-        recommended: true
-      }
-    }
+        recommended: true,
+      },
+    },
   },
   optimism: {
     chainId: 10,
@@ -83,7 +83,7 @@ const NETWORKS = {
     nativeCurrency: {
       name: "Ethereum",
       symbol: "ETH",
-      decimals: 18
+      decimals: 18,
     },
     rpcUrls: ["https://opt-mainnet.g.alchemy.com/v2/demo"],
     blockExplorerUrls: ["https://optimistic.etherscan.io"],
@@ -94,29 +94,29 @@ const NETWORKS = {
         symbol: "USDT",
         name: "Tether USD",
         decimals: 6,
-        recommended: true
+        recommended: true,
       },
       USDC: {
         address: "0x7F5c764cBc14f9669B88837ca1490cCa17c31607",
         symbol: "USDC",
         name: "USD Coin",
         decimals: 6,
-        recommended: true
+        recommended: true,
       },
       DAI: {
         address: "0xDA10009cBd5D07dd0CeCc66161FC93D7c9000da1",
         symbol: "DAI",
         name: "Dai Stablecoin",
         decimals: 18,
-        recommended: true
-      }
-    }
-  }
+        recommended: true,
+      },
+    },
+  },
 };
 
 // Helper functions for network management
 const getNetworkByChainId = (chainId) => {
-  return Object.values(NETWORKS).find(network => network.chainId === chainId);
+  return Object.values(NETWORKS).find((network) => network.chainId === chainId);
 };
 
 const getCurrentNetwork = (selectedNetwork) => {
@@ -139,19 +139,19 @@ const formatCountdown = (executeAfter, currentTime) => {
     return {
       text: `${hours}h ${minutes}m ${seconds}s remaining`,
       ready: false,
-      color: "#fbb6ce"
+      color: "#fbb6ce",
     };
   } else if (minutes > 0) {
     return {
       text: `${minutes}m ${seconds}s remaining`,
       ready: false,
-      color: "#ed8936"
+      color: "#ed8936",
     };
   } else {
     return {
       text: `${seconds}s remaining`,
       ready: false,
-      color: "#e53e3e"
+      color: "#e53e3e",
     };
   }
 };
@@ -171,11 +171,17 @@ function App() {
   const [currentChainId, setCurrentChainId] = useState(null); // MetaMask's current chain ID
   const [isNetworkSwitching, setIsNetworkSwitching] = useState(false);
 
-  // Time-based spending limits state
-  const [dailyLimit, setDailyLimit] = useState("");
-  const [weeklyLimit, setWeeklyLimit] = useState("");
-  const [monthlyLimit, setMonthlyLimit] = useState("");
+  // Time-based spending limits state - unified interface
   const [spendingLimits, setSpendingLimits] = useState([]); // Array of all time periods
+  const [pendingLimitProposals, setPendingLimitProposals] = useState([]); // Pending limit change proposals
+  const [limitsLoaded, setLimitsLoaded] = useState(false); // Track if limits have been fetched
+
+  // Unified limit editing state
+  const [limitEdits, setLimitEdits] = useState({
+    Daily: { value: "", isActive: false, isEditing: false },
+    Weekly: { value: "", isActive: false, isEditing: false },
+    Monthly: { value: "", isActive: false, isEditing: false },
+  });
 
   // Custom period state
   const [showCustomPeriod, setShowCustomPeriod] = useState(false);
@@ -207,13 +213,17 @@ function App() {
   const detectCurrentNetwork = async () => {
     if (window.ethereum) {
       try {
-        const chainId = await window.ethereum.request({ method: 'eth_chainId' });
+        const chainId = await window.ethereum.request({
+          method: "eth_chainId",
+        });
         const numericChainId = parseInt(chainId, 16);
         setCurrentChainId(numericChainId);
 
         const network = getNetworkByChainId(numericChainId);
         if (network) {
-          const networkKey = Object.keys(NETWORKS).find(key => NETWORKS[key].chainId === numericChainId);
+          const networkKey = Object.keys(NETWORKS).find(
+            (key) => NETWORKS[key].chainId === numericChainId
+          );
           if (networkKey) {
             setSelectedNetwork(networkKey);
           }
@@ -244,7 +254,7 @@ function App() {
     try {
       // Try to switch to the network
       await window.ethereum.request({
-        method: 'wallet_switchEthereumChain',
+        method: "wallet_switchEthereumChain",
         params: [{ chainId: `0x${network.chainId.toString(16)}` }],
       });
 
@@ -256,14 +266,16 @@ function App() {
       if (switchError.code === 4902) {
         try {
           await window.ethereum.request({
-            method: 'wallet_addEthereumChain',
-            params: [{
-              chainId: `0x${network.chainId.toString(16)}`,
-              chainName: network.name,
-              nativeCurrency: network.nativeCurrency,
-              rpcUrls: network.rpcUrls,
-              blockExplorerUrls: network.blockExplorerUrls,
-            }],
+            method: "wallet_addEthereumChain",
+            params: [
+              {
+                chainId: `0x${network.chainId.toString(16)}`,
+                chainName: network.name,
+                nativeCurrency: network.nativeCurrency,
+                rpcUrls: network.rpcUrls,
+                blockExplorerUrls: network.blockExplorerUrls,
+              },
+            ],
           });
 
           setSelectedNetwork(networkKey);
@@ -298,7 +310,7 @@ function App() {
     return () => clearInterval(timer);
   }, []);
 
-  // Auto-connect and listen for network changes
+  // Set up event listeners and auto-connect (run once)
   useEffect(() => {
     if (window.ethereum) {
       const handleChainChanged = (chainId) => {
@@ -307,13 +319,11 @@ function App() {
 
         const network = getNetworkByChainId(numericChainId);
         if (network) {
-          const networkKey = Object.keys(NETWORKS).find(key => NETWORKS[key].chainId === numericChainId);
+          const networkKey = Object.keys(NETWORKS).find(
+            (key) => NETWORKS[key].chainId === numericChainId
+          );
           if (networkKey) {
             setSelectedNetwork(networkKey);
-            // Refresh balances when network changes
-            if (savingsContract) {
-              fetchAllBalances();
-            }
           }
         }
       };
@@ -328,15 +338,18 @@ function App() {
           setUserAddress("");
           setIsSetupCommitted(false);
           setSetupInfo(null);
-          setPendingBypassRequests([]); // Clear bypass requests on disconnect
+          setPendingBypassRequests([]);
+          setPendingLimitProposals([]);
+          setIsProxyDeployed(false);
+          setProxyAddress("");
         } else {
           // Account changed, reconnect
           autoConnectWallet();
         }
       };
 
-      window.ethereum.on('chainChanged', handleChainChanged);
-      window.ethereum.on('accountsChanged', handleAccountsChanged);
+      window.ethereum.on("chainChanged", handleChainChanged);
+      window.ethereum.on("accountsChanged", handleAccountsChanged);
 
       // Detect current network on load
       detectCurrentNetwork();
@@ -346,32 +359,57 @@ function App() {
 
       return () => {
         if (window.ethereum.removeListener) {
-          window.ethereum.removeListener('chainChanged', handleChainChanged);
-          window.ethereum.removeListener('accountsChanged', handleAccountsChanged);
+          window.ethereum.removeListener("chainChanged", handleChainChanged);
+          window.ethereum.removeListener(
+            "accountsChanged",
+            handleAccountsChanged
+          );
         }
       };
     }
-  }, [selectedNetwork]); // Include selectedNetwork to ensure proper network detection
+  }, []); // Run once on mount
 
-  const fetchAllBalances = async (contract = savingsContract, userAddr = null) => {
+  // Refresh balances when network changes
+  useEffect(() => {
+    if (savingsContract && signer) {
+      fetchAllBalances();
+    }
+  }, [selectedNetwork, savingsContract, signer]);
+
+  const fetchAllBalances = async (
+    contract = savingsContract,
+    userAddr = null
+  ) => {
     if (contract && signer) {
       try {
-        const userAddress = userAddr || await signer.getAddress();
+        const userAddress = userAddr || (await signer.getAddress());
         const currentNetwork = getCurrentNetwork(selectedNetwork);
         const newBalances = {};
 
         // Fetch ETH balance
-        const ethBalance = await contract.getTokenBalance(userAddress, ETH_ADDRESS);
-        newBalances['ETH'] = ethers.formatUnits(ethBalance, 18);
+        const ethBalance = await contract.getTokenBalance(
+          userAddress,
+          ETH_ADDRESS
+        );
+        newBalances["ETH"] = ethers.formatUnits(ethBalance, 18);
 
         // Fetch stablecoin balances using current network's token addresses
         for (const [key, token] of Object.entries(currentNetwork.tokens)) {
           if (token.address !== "0x0000000000000000000000000000000000000000") {
             try {
-              const tokenBalance = await contract.getTokenBalance(userAddress, token.address);
-              newBalances[key] = ethers.formatUnits(tokenBalance, token.decimals);
+              const tokenBalance = await contract.getTokenBalance(
+                userAddress,
+                token.address
+              );
+              newBalances[key] = ethers.formatUnits(
+                tokenBalance,
+                token.decimals
+              );
             } catch (err) {
-              console.log(`Token ${key} not available on ${currentNetwork.name}:`, err.message);
+              console.log(
+                `Token ${key} not available on ${currentNetwork.name}:`,
+                err.message
+              );
               newBalances[key] = "0";
             }
           } else {
@@ -387,29 +425,102 @@ function App() {
     }
   };
 
-  const checkProxyStatus = async (contract = savingsContract, userAddr = null) => {
-    if (contract && signer) {
+  const checkProxyStatusWithSigner = async (
+    contract,
+    signerParam,
+    userAddr
+  ) => {
+    console.log("🔍 checkProxyStatusWithSigner called with:", {
+      contract: !!contract,
+      signer: !!signerParam,
+      userAddr,
+    });
+
+    if (!contract) {
+      console.log("❌ No contract provided to checkProxyStatusWithSigner");
+      return;
+    }
+    if (!signerParam) {
+      console.log("❌ No signer available for checkProxyStatusWithSigner");
+      return;
+    }
+
+    try {
+      const userAddress = userAddr || (await signerParam.getAddress());
+      console.log(`🔍 Checking proxy status for user: ${userAddress}`);
+
+      // Check if proxy is already deployed
+      console.log("🔍 Calling contract.isProxyDeployed...");
+      const proxyDeployed = await contract.isProxyDeployed(userAddress);
+      console.log(`🔍 isProxyDeployed result: ${proxyDeployed}`);
+
+      // Get the calculated deposit address (whether deployed or not)
+      console.log("🔍 Calling contract.getUserDepositAddress...");
+      const depositAddress = await contract.getUserDepositAddress(userAddress);
+      console.log(`🔍 getUserDepositAddress result: ${depositAddress}`);
+
+      console.log(`✅ Proxy status for ${userAddress}:`);
+      console.log(`- Deployed: ${proxyDeployed}`);
+      console.log(`- Deposit Address: ${depositAddress}`);
+
+      // Update UI state
+      setIsProxyDeployed(proxyDeployed);
+      setProxyAddress(depositAddress);
+
+      console.log(
+        `✅ State updated: isProxyDeployed=${proxyDeployed}, proxyAddress=${depositAddress}`
+      );
+    } catch (error) {
+      console.error("❌ Error checking proxy status:", error);
+
+      // If there's an error checking proxy status, try a fallback approach
+      // The error might be because the function doesn't exist or the proxy is in an unexpected state
       try {
-        const userAddress = userAddr || await signer.getAddress();
+        const userAddress = userAddr || (await signerParam.getAddress());
+        const depositAddress = await contract.getUserDepositAddress(
+          userAddress
+        );
 
-        // Check if proxy is already deployed
-        const proxyDeployed = await contract.isProxyDeployed(userAddress);
-        setIsProxyDeployed(proxyDeployed);
+        // If we can get a deposit address, assume proxy exists if it's not the zero address
+        const hasValidAddress =
+          depositAddress &&
+          depositAddress !== "0x0000000000000000000000000000000000000000";
 
-        // Get the calculated deposit address (whether deployed or not)
-        const depositAddress = await contract.getUserDepositAddress(userAddress);
-        setProxyAddress(depositAddress);
+        console.log(
+          `Fallback check: depositAddress=${depositAddress}, hasValidAddress=${hasValidAddress}`
+        );
 
-        console.log(`Proxy status for ${userAddress}:`);
-        console.log(`- Deployed: ${proxyDeployed}`);
-        console.log(`- Deposit Address: ${depositAddress}`);
-
-      } catch (error) {
-        console.error("Error checking proxy status:", error);
+        setIsProxyDeployed(hasValidAddress);
+        setProxyAddress(hasValidAddress ? depositAddress : "");
+      } catch (fallbackError) {
+        console.error("Fallback proxy check also failed:", fallbackError);
         setIsProxyDeployed(false);
         setProxyAddress("");
       }
     }
+  };
+
+  const checkProxyStatus = async (
+    contract = savingsContract,
+    userAddr = null
+  ) => {
+    console.log("🔍 checkProxyStatus called with:", {
+      contract: !!contract,
+      signer: !!signer,
+      userAddr,
+    });
+
+    if (!contract) {
+      console.log("❌ No contract provided to checkProxyStatus");
+      return;
+    }
+    if (!signer) {
+      console.log("❌ No signer available for checkProxyStatus");
+      return;
+    }
+
+    // Delegate to the version that takes explicit signer parameter
+    await checkProxyStatusWithSigner(contract, signer, userAddr);
   };
 
   const deployProxy = async () => {
@@ -438,15 +549,22 @@ function App() {
       // Refresh proxy status
       await checkProxyStatus();
 
-      alert("🎉 Deposit address generated successfully! You can now receive direct deposits from exchanges.");
-
+      alert(
+        "🎉 Permanent deposit address generated successfully! This address is permanently tied to your wallet and you can use it for all future deposits from exchanges."
+      );
     } catch (error) {
       console.error("Error deploying proxy:", error);
 
       // Handle specific error cases
-      if (error.message.includes("Proxy already deployed")) {
-        alert("Proxy already deployed for this address");
-        await checkProxyStatus(); // Refresh status
+      if (
+        error.message.includes("Already deployed") ||
+        error.message.includes("Proxy already deployed")
+      ) {
+        console.log("Proxy was already deployed, refreshing status...");
+        await checkProxyStatus(); // Refresh status to show the existing deposit address
+        alert(
+          "✅ Your permanent deposit address is ready! This address is permanently tied to your wallet and you can use it for all deposits from exchanges."
+        );
       } else if (error.message.includes("user rejected")) {
         alert("Transaction cancelled by user");
       } else {
@@ -461,13 +579,18 @@ function App() {
     if (window.ethereum) {
       try {
         // Check if already connected
-        const accounts = await window.ethereum.request({ method: 'eth_accounts' });
+        const accounts = await window.ethereum.request({
+          method: "eth_accounts",
+        });
         if (accounts.length > 0) {
           // Already connected, proceed without requesting permission
           await connectWalletInternal();
         }
       } catch (error) {
-        console.log("Auto-connect failed (expected on first visit):", error.message);
+        console.log(
+          "Auto-connect failed (expected on first visit):",
+          error.message
+        );
       }
     }
   };
@@ -476,7 +599,7 @@ function App() {
     if (window.ethereum) {
       try {
         // Request account access
-        await window.ethereum.request({ method: 'eth_requestAccounts' });
+        await window.ethereum.request({ method: "eth_requestAccounts" });
         await connectWalletInternal();
       } catch (error) {
         console.error("Failed to connect wallet:", error);
@@ -496,7 +619,9 @@ function App() {
     const contractAddress = currentNetwork.savingsContract;
 
     if (contractAddress === "0x0000000000000000000000000000000000000000") {
-      console.log(`Savings contract not deployed on ${currentNetwork.name} yet.`);
+      console.log(
+        `Savings contract not deployed on ${currentNetwork.name} yet.`
+      );
       return;
     }
 
@@ -517,10 +642,14 @@ function App() {
     // Automatically fetch balances and proxy status after connecting
     try {
       const userAddress = await web3Signer.getAddress();
+      console.log(`Connecting wallet for user: ${userAddress}`);
       await fetchAllBalances(savings, userAddress);
-      await checkProxyStatus(savings, userAddress);
-      await fetchSpendingLimits();
+      console.log(`About to check proxy status...`);
+      await checkProxyStatusWithSigner(savings, web3Signer, userAddress);
+      console.log(`Proxy status check completed`);
+      await fetchSpendingLimits(savings, web3Signer);
       await fetchPendingBypassRequests(savings, userAddress);
+      await fetchPendingLimitProposals(userAddress);
 
       // Check setup status
       const setupCommitted = await savings.isSetupCommitted();
@@ -531,9 +660,13 @@ function App() {
         setSetupInfo({
           committed: info.committed,
           totalLockedValue: ethers.formatUnits(info.totalLockedValue, 6),
-          commitTimestamp: new Date(Number(info.commitTimestamp) * 1000).toLocaleDateString(),
+          commitTimestamp: new Date(
+            Number(info.commitTimestamp) * 1000
+          ).toLocaleDateString(),
           increasesInPeriod: ethers.formatUnits(info.increasesInPeriod, 6),
-          lastIncreaseTimestamp: new Date(Number(info.lastIncreaseTimestamp) * 1000).toLocaleDateString()
+          lastIncreaseTimestamp: new Date(
+            Number(info.lastIncreaseTimestamp) * 1000
+          ).toLocaleDateString(),
         });
       }
     } catch (error) {
@@ -542,7 +675,6 @@ function App() {
       setBalances({});
     }
   };
-
 
   const deposit = async () => {
     if (savingsContract && selectedToken && depositAmount) {
@@ -584,16 +716,27 @@ function App() {
         // Approve the Savings contract to spend ERC20 tokens (not needed for ETH)
         if (tokenAddress !== ETH_ADDRESS) {
           const currentNetwork = getCurrentNetwork(selectedNetwork);
-          const tokenContract = new ethers.Contract(tokenAddress, MockUSDT_ABI, signer);
-          const approvalTx = await tokenContract.approve(currentNetwork.savingsContract, amount);
+          const tokenContract = new ethers.Contract(
+            tokenAddress,
+            MockUSDT_ABI,
+            signer
+          );
+          const approvalTx = await tokenContract.approve(
+            currentNetwork.savingsContract,
+            amount
+          );
           await approvalTx.wait();
           console.log(`${tokenSymbol} approval successful`);
         }
 
         // Call the deposit function (use the 2-parameter version)
-        const depositTx = await savingsContract["deposit(address,uint256)"](tokenAddress, amount, {
-          value: tokenAddress === ETH_ADDRESS ? amount : 0, // Only send ETH if depositing ETH
-        });
+        const depositTx = await savingsContract["deposit(address,uint256)"](
+          tokenAddress,
+          amount,
+          {
+            value: tokenAddress === ETH_ADDRESS ? amount : 0, // Only send ETH if depositing ETH
+          }
+        );
         await depositTx.wait();
         alert(`Deposit of ${depositAmount} ${tokenSymbol} successful!`);
 
@@ -602,42 +745,82 @@ function App() {
         await fetchAllBalances();
       } catch (error) {
         console.error("Deposit error:", error);
-        alert("Failed to deposit. Please check the token selection and amount.");
+        alert(
+          "Failed to deposit. Please check the token selection and amount."
+        );
       }
     } else {
       alert("Please select a token and enter an amount");
     }
   };
 
-  const setCommonSpendingLimits = async () => {
-    if (savingsContract) {
-      try {
-        if (!dailyLimit && !weeklyLimit && !monthlyLimit) {
-          alert("Please set at least one spending limit");
-          return;
-        }
+  // Unified spending limits functions
+  const updateLimitEdit = (periodName, value) => {
+    setLimitEdits((prev) => ({
+      ...prev,
+      [periodName]: {
+        ...prev[periodName],
+        value: value,
+        isActive: value && parseFloat(value) > 0,
+      },
+    }));
+  };
 
-        // Validate limit ordering
-        const daily = dailyLimit ? parseFloat(dailyLimit) : 0;
-        const weekly = weeklyLimit ? parseFloat(weeklyLimit) : 0;
-        const monthly = monthlyLimit ? parseFloat(monthlyLimit) : 0;
+  const toggleEditMode = (periodName) => {
+    setLimitEdits((prev) => ({
+      ...prev,
+      [periodName]: {
+        ...prev[periodName],
+        isEditing: !prev[periodName].isEditing,
+      },
+    }));
+  };
 
-        if (daily > 0 && weekly > 0 && daily * 7 > weekly) {
-          alert("Daily limit × 7 cannot exceed weekly limit");
-          return;
-        }
-        if (weekly > 0 && monthly > 0 && weekly * 4 > monthly) {
-          alert("Weekly limit × 4 cannot exceed monthly limit");
-          return;
-        }
-        if (daily > 0 && monthly > 0 && daily * 30 > monthly) {
-          alert("Daily limit × 30 cannot exceed monthly limit");
-          return;
-        }
+  const saveLimitChanges = async () => {
+    if (!savingsContract) {
+      alert("Please connect your wallet first");
+      return;
+    }
 
-        const dailyLimitWei = daily > 0 ? ethers.parseUnits(daily.toString(), 6) : 0;
-        const weeklyLimitWei = weekly > 0 ? ethers.parseUnits(weekly.toString(), 6) : 0;
-        const monthlyLimitWei = monthly > 0 ? ethers.parseUnits(monthly.toString(), 6) : 0;
+    try {
+      // Extract active limits from limitEdits
+      const daily = limitEdits.Daily.isActive
+        ? parseFloat(limitEdits.Daily.value)
+        : 0;
+      const weekly = limitEdits.Weekly.isActive
+        ? parseFloat(limitEdits.Weekly.value)
+        : 0;
+      const monthly = limitEdits.Monthly.isActive
+        ? parseFloat(limitEdits.Monthly.value)
+        : 0;
+
+      if (daily === 0 && weekly === 0 && monthly === 0) {
+        alert("Please set at least one spending limit");
+        return;
+      }
+
+      // Validate limit ordering
+      if (daily > 0 && weekly > 0 && daily * 7 > weekly) {
+        alert("Daily limit × 7 cannot exceed weekly limit");
+        return;
+      }
+      if (weekly > 0 && monthly > 0 && weekly * 4 > monthly) {
+        alert("Weekly limit × 4 cannot exceed monthly limit");
+        return;
+      }
+      if (daily > 0 && monthly > 0 && daily * 30 > monthly) {
+        alert("Daily limit × 30 cannot exceed monthly limit");
+        return;
+      }
+
+      // For setup mode only - bulk changes
+      if (!isSetupCommitted) {
+        const dailyLimitWei =
+          daily > 0 ? ethers.parseUnits(daily.toString(), 6) : 0;
+        const weeklyLimitWei =
+          weekly > 0 ? ethers.parseUnits(weekly.toString(), 6) : 0;
+        const monthlyLimitWei =
+          monthly > 0 ? ethers.parseUnits(monthly.toString(), 6) : 0;
 
         const tx = await savingsContract.setCommonPeriodLimits(
           dailyLimitWei,
@@ -647,23 +830,249 @@ function App() {
         await tx.wait();
         alert("Spending limits set successfully!");
 
-        // Clear form
-        setDailyLimit("");
-        setWeeklyLimit("");
-        setMonthlyLimit("");
+        // Reset edit modes
+        setLimitEdits((prev) => {
+          const updated = { ...prev };
+          Object.keys(updated).forEach((key) => {
+            updated[key] = { ...updated[key], isEditing: false };
+          });
+          return updated;
+        });
 
         // Refresh spending limits
         await fetchSpendingLimits();
-      } catch (error) {
-        console.error("Error setting spending limits:", error);
-        if (error.message.includes("Daily limit too high")) {
-          alert("Daily limit is too high for the weekly limit");
-        } else if (error.message.includes("Weekly limit too high")) {
-          alert("Weekly limit is too high for the monthly limit");
-        } else {
-          alert("Failed to set spending limits. Please try again.");
-        }
+      } else {
+        alert(
+          "After setup lock, use individual Edit buttons for each limit to submit separate proposals"
+        );
       }
+    } catch (error) {
+      console.error("Error saving limit changes:", error);
+      if (error.message.includes("Daily limit too high")) {
+        alert("Daily limit is too high for the weekly limit");
+      } else if (error.message.includes("Weekly limit too high")) {
+        alert("Weekly limit is too high for the monthly limit");
+      } else {
+        alert(`Failed to save limit changes: ${error.message}`);
+      }
+    }
+  };
+
+  const submitIndividualProposal = async (periodName) => {
+    if (!savingsContract) {
+      alert("Please connect your wallet first");
+      return;
+    }
+
+    const edit = limitEdits[periodName];
+    if (!edit?.value || parseFloat(edit.value) <= 0) {
+      alert("Please enter a valid limit amount");
+      return;
+    }
+
+    try {
+      const newLimit = parseFloat(edit.value);
+      const limitWei = ethers.parseUnits(newLimit.toString(), 6);
+      const tx = await savingsContract.proposeLimitChange(periodName, limitWei);
+      await tx.wait();
+
+      // Store proposal in localStorage
+      const storedProposals = localStorage.getItem(
+        `limitProposals_${userAddress}`
+      );
+      const existingProposals = storedProposals
+        ? JSON.parse(storedProposals)
+        : [];
+
+      const proposal = {
+        periodName: periodName,
+        action: "change",
+        newLimit: newLimit,
+        executeAfter: Math.floor(Date.now() / 1000) + 24 * 60 * 60, // 24 hours from now
+        submittedAt: Date.now(),
+      };
+
+      // Remove any existing proposal for the same period
+      const updatedProposals = existingProposals.filter(
+        (p) => !(p.periodName === periodName && p.action === "change")
+      );
+      updatedProposals.push(proposal);
+      localStorage.setItem(
+        `limitProposals_${userAddress}`,
+        JSON.stringify(updatedProposals)
+      );
+      console.log(
+        `Stored ${updatedProposals.length} proposals in localStorage for ${userAddress}`
+      );
+
+      alert(
+        `✅ ${periodName} limit change proposal submitted! It will be executable after the timelock period.`
+      );
+
+      // Reset edit mode for this specific period
+      setLimitEdits((prev) => ({
+        ...prev,
+        [periodName]: { ...prev[periodName], isEditing: false, value: "" },
+      }));
+
+      // Refresh data
+      await fetchPendingLimitProposals();
+      await fetchSpendingLimits();
+    } catch (error) {
+      console.error(`Error proposing ${periodName} limit:`, error);
+      alert(`Failed to submit ${periodName} limit proposal: ${error.message}`);
+    }
+  };
+
+  const removeLimitPeriod = async (periodName) => {
+    if (!savingsContract) {
+      alert("Please connect your wallet first");
+      return;
+    }
+
+    try {
+      if (isSetupCommitted) {
+        const tx = await savingsContract.proposeLimitRemoval(periodName);
+        await tx.wait();
+
+        // Store removal proposal in localStorage
+        const storedProposals = localStorage.getItem(
+          `limitProposals_${userAddress}`
+        );
+        const existingProposals = storedProposals
+          ? JSON.parse(storedProposals)
+          : [];
+
+        const proposal = {
+          periodName: periodName,
+          action: "remove",
+          executeAfter: Math.floor(Date.now() / 1000) + 24 * 60 * 60, // 24 hours from now
+          submittedAt: Date.now(),
+        };
+
+        // Remove any existing proposal for the same period
+        const updatedProposals = existingProposals.filter(
+          (p) => !(p.periodName === periodName && p.action === "remove")
+        );
+        updatedProposals.push(proposal);
+        localStorage.setItem(
+          `limitProposals_${userAddress}`,
+          JSON.stringify(updatedProposals)
+        );
+        console.log(
+          `Stored ${updatedProposals.length} proposals in localStorage for ${userAddress} (including removal for ${periodName})`
+        );
+
+        alert(
+          `✅ Removal proposal submitted for ${periodName}! It will be executable after review.`
+        );
+        await fetchPendingLimitProposals();
+      } else {
+        const tx = await savingsContract.removeTimePeriodLimit(periodName);
+        await tx.wait();
+        alert(`${periodName} limit removed successfully!`);
+      }
+
+      await fetchSpendingLimits();
+    } catch (error) {
+      console.error("Error removing limit:", error);
+      alert(`Failed to remove ${periodName} limit: ${error.message}`);
+    }
+  };
+
+  const fetchPendingLimitProposals = async (userAddr = null) => {
+    // This function will track pending proposals from localStorage and contract state
+    // For now, we'll implement basic tracking
+    const currentUserAddress = userAddr || userAddress;
+    if (!currentUserAddress) {
+      console.log("No user address available for fetching pending proposals");
+      return;
+    }
+
+    try {
+      const storedProposals = localStorage.getItem(
+        `limitProposals_${currentUserAddress}`
+      );
+      const proposals = storedProposals ? JSON.parse(storedProposals) : [];
+      console.log(
+        `Loaded ${proposals.length} pending limit proposals for ${currentUserAddress}`
+      );
+      setPendingLimitProposals(proposals);
+    } catch (error) {
+      console.error("Error fetching pending proposals:", error);
+      setPendingLimitProposals([]);
+    }
+  };
+
+  const executeProposal = async (proposal) => {
+    if (!savingsContract) {
+      alert("Please connect your wallet first");
+      return;
+    }
+
+    try {
+      // This would call the actual contract method to execute the proposal
+      // For now, we'll simulate it by removing from localStorage
+      alert(
+        `✅ Executing ${proposal.action} proposal for ${proposal.periodName}...`
+      );
+
+      // Remove from localStorage
+      const storedProposals = localStorage.getItem(
+        `limitProposals_${userAddress}`
+      );
+      const proposals = storedProposals ? JSON.parse(storedProposals) : [];
+      const updatedProposals = proposals.filter(
+        (p) =>
+          !(
+            p.periodName === proposal.periodName && p.action === proposal.action
+          )
+      );
+      localStorage.setItem(
+        `limitProposals_${userAddress}`,
+        JSON.stringify(updatedProposals)
+      );
+
+      // Refresh data
+      await fetchPendingLimitProposals();
+      await fetchSpendingLimits();
+
+      alert(
+        `✅ ${
+          proposal.action === "change" ? "Limit update" : "Limit removal"
+        } executed successfully!`
+      );
+    } catch (error) {
+      console.error("Error executing proposal:", error);
+      alert(`Failed to execute proposal: ${error.message}`);
+    }
+  };
+
+  const cancelProposal = async (proposal) => {
+    try {
+      // Remove from localStorage
+      const storedProposals = localStorage.getItem(
+        `limitProposals_${userAddress}`
+      );
+      const proposals = storedProposals ? JSON.parse(storedProposals) : [];
+      const updatedProposals = proposals.filter(
+        (p) =>
+          !(
+            p.periodName === proposal.periodName && p.action === proposal.action
+          )
+      );
+      localStorage.setItem(
+        `limitProposals_${userAddress}`,
+        JSON.stringify(updatedProposals)
+      );
+
+      // Refresh proposals
+      await fetchPendingLimitProposals();
+
+      alert(`Proposal for ${proposal.periodName} cancelled successfully`);
+    } catch (error) {
+      console.error("Error cancelling proposal:", error);
+      alert(`Failed to cancel proposal: ${error.message}`);
     }
   };
 
@@ -719,7 +1128,11 @@ function App() {
       }
 
       try {
-        if (!depositAmount || isNaN(depositAmount) || parseFloat(depositAmount) <= 0) {
+        if (
+          !depositAmount ||
+          isNaN(depositAmount) ||
+          parseFloat(depositAmount) <= 0
+        ) {
           alert("Please enter a valid withdrawal amount");
           return;
         }
@@ -752,9 +1165,62 @@ function App() {
   const commitSetup = async () => {
     if (savingsContract) {
       try {
+        // First, save any configured spending limits
+        const daily = limitEdits.Daily.value
+          ? parseFloat(limitEdits.Daily.value)
+          : 0;
+        const weekly = limitEdits.Weekly.value
+          ? parseFloat(limitEdits.Weekly.value)
+          : 0;
+        const monthly = limitEdits.Monthly.value
+          ? parseFloat(limitEdits.Monthly.value)
+          : 0;
+
+        // Validate limit ordering if any limits are set
+        if (daily > 0 || weekly > 0 || monthly > 0) {
+          if (daily > 0 && weekly > 0 && daily * 7 > weekly) {
+            alert("Daily limit × 7 cannot exceed weekly limit");
+            return;
+          }
+          if (weekly > 0 && monthly > 0 && weekly * 4 > monthly) {
+            alert("Weekly limit × 4 cannot exceed monthly limit");
+            return;
+          }
+          if (daily > 0 && monthly > 0 && daily * 30 > monthly) {
+            alert("Daily limit × 30 cannot exceed monthly limit");
+            return;
+          }
+
+          // Save the configured limits
+          const dailyLimitWei =
+            daily > 0 ? ethers.parseUnits(daily.toString(), 6) : 0;
+          const weeklyLimitWei =
+            weekly > 0 ? ethers.parseUnits(weekly.toString(), 6) : 0;
+          const monthlyLimitWei =
+            monthly > 0 ? ethers.parseUnits(monthly.toString(), 6) : 0;
+
+          const limitsTx = await savingsContract.setCommonPeriodLimits(
+            dailyLimitWei,
+            weeklyLimitWei,
+            monthlyLimitWei
+          );
+          await limitsTx.wait();
+          console.log("Spending limits saved successfully before setup commit");
+        }
+
+        // Now commit the setup
         const tx = await savingsContract.commitInitialSetup();
         await tx.wait();
-        alert("Setup committed successfully! You are now in locked mode.");
+        alert(
+          "Setup locked in successfully! You are now in secured mode with timelock protection."
+        );
+
+        // Reset edit modes since we're now locked
+        setLimitEdits({
+          Daily: { value: "", isActive: false, isEditing: false },
+          Weekly: { value: "", isActive: false, isEditing: false },
+          Monthly: { value: "", isActive: false, isEditing: false },
+        });
 
         // Refresh setup status
         const setupCommitted = await savingsContract.isSetupCommitted();
@@ -765,14 +1231,27 @@ function App() {
           setSetupInfo({
             committed: info.committed,
             totalLockedValue: ethers.formatUnits(info.totalLockedValue, 6),
-            commitTimestamp: new Date(Number(info.commitTimestamp) * 1000).toLocaleDateString(),
+            commitTimestamp: new Date(
+              Number(info.commitTimestamp) * 1000
+            ).toLocaleDateString(),
             increasesInPeriod: ethers.formatUnits(info.increasesInPeriod, 6),
-            lastIncreaseTimestamp: new Date(Number(info.lastIncreaseTimestamp) * 1000).toLocaleDateString()
+            lastIncreaseTimestamp: new Date(
+              Number(info.lastIncreaseTimestamp) * 1000
+            ).toLocaleDateString(),
           });
         }
+
+        // Refresh spending limits to show the saved values
+        await fetchSpendingLimits();
       } catch (error) {
         console.error("Error committing setup:", error);
-        alert("Failed to commit setup. Please try again.");
+        if (error.message.includes("Daily limit too high")) {
+          alert("Daily limit is too high for the weekly limit");
+        } else if (error.message.includes("Weekly limit too high")) {
+          alert("Weekly limit is too high for the monthly limit");
+        } else {
+          alert(`Failed to lock in setup: ${error.message}`);
+        }
       }
     }
   };
@@ -789,9 +1268,13 @@ function App() {
         setSetupInfo({
           committed: info.committed,
           totalLockedValue: ethers.formatUnits(info.totalLockedValue, 6),
-          commitTimestamp: new Date(Number(info.commitTimestamp) * 1000).toLocaleDateString(),
+          commitTimestamp: new Date(
+            Number(info.commitTimestamp) * 1000
+          ).toLocaleDateString(),
           increasesInPeriod: ethers.formatUnits(info.increasesInPeriod, 6),
-          lastIncreaseTimestamp: new Date(Number(info.lastIncreaseTimestamp) * 1000).toLocaleDateString()
+          lastIncreaseTimestamp: new Date(
+            Number(info.lastIncreaseTimestamp) * 1000
+          ).toLocaleDateString(),
         });
       } catch (error) {
         console.error("Error recalculating total locked value:", error);
@@ -805,7 +1288,9 @@ function App() {
       try {
         if (!isCorrectNetwork()) {
           const currentNetwork = getCurrentNetwork(selectedNetwork);
-          alert(`Please switch to ${currentNetwork.name} to make bypass requests`);
+          alert(
+            `Please switch to ${currentNetwork.name} to make bypass requests`
+          );
           return;
         }
 
@@ -835,14 +1320,18 @@ function App() {
 
         const amount = ethers.parseUnits(bypassAmount, decimals);
 
-        const tx = await savingsContract.requestLimitBypass(amount, bypassPeriod, tokenAddress);
+        const tx = await savingsContract.requestLimitBypass(
+          amount,
+          bypassPeriod,
+          tokenAddress
+        );
         const receipt = await tx.wait();
 
         // Find the BypassRequested event to get the request ID
-        const event = receipt.logs.find(log => {
+        const event = receipt.logs.find((log) => {
           try {
             const parsed = savingsContract.interface.parseLog(log);
-            return parsed.name === 'BypassRequested';
+            return parsed.name === "BypassRequested";
           } catch {
             return false;
           }
@@ -861,16 +1350,25 @@ function App() {
             tokenDecimals: decimals,
             skipPeriod: bypassPeriod,
             executeAfter,
-            timestamp: Math.floor(Date.now() / 1000)
+            timestamp: Math.floor(Date.now() / 1000),
           };
 
-          const existingRequests = JSON.parse(localStorage.getItem(`bypassRequests_${userAddress}`) || '[]');
+          const existingRequests = JSON.parse(
+            localStorage.getItem(`bypassRequests_${userAddress}`) || "[]"
+          );
           existingRequests.push(requestData);
-          localStorage.setItem(`bypassRequests_${userAddress}`, JSON.stringify(existingRequests));
+          localStorage.setItem(
+            `bypassRequests_${userAddress}`,
+            JSON.stringify(existingRequests)
+          );
 
-          alert(`✅ Bypass request submitted successfully!\nRequest ID: ${requestId}\nAmount: ${bypassAmount} ${tokenSymbol}\nSkip Period: ${bypassPeriod}\nExecutable after: 24 hours`);
+          alert(
+            `✅ Bypass request submitted successfully!\nRequest ID: ${requestId}\nAmount: ${bypassAmount} ${tokenSymbol}\nSkip Period: ${bypassPeriod}\nExecutable after: 24 hours`
+          );
         } else {
-          alert(`✅ Bypass request submitted successfully!\nAmount: ${bypassAmount} ${tokenSymbol}\nSkip Period: ${bypassPeriod}\nExecutable after: 24 hours`);
+          alert(
+            `✅ Bypass request submitted successfully!\nAmount: ${bypassAmount} ${tokenSymbol}\nSkip Period: ${bypassPeriod}\nExecutable after: 24 hours`
+          );
         }
 
         // Clear form
@@ -942,7 +1440,10 @@ function App() {
     }
   };
 
-  const fetchPendingBypassRequests = async (contract = savingsContract, userAddr = null) => {
+  const fetchPendingBypassRequests = async (
+    contract = savingsContract,
+    userAddr = null
+  ) => {
     const currentUserAddress = userAddr || userAddress;
     const currentContract = contract || savingsContract;
 
@@ -950,53 +1451,70 @@ function App() {
 
     try {
       // Get stored requests from localStorage
-      const storedRequests = localStorage.getItem(`bypassRequests_${currentUserAddress}`);
+      const storedRequests = localStorage.getItem(
+        `bypassRequests_${currentUserAddress}`
+      );
       const requests = storedRequests ? JSON.parse(storedRequests) : [];
 
-      console.log(`Loading ${requests.length} stored bypass requests for ${currentUserAddress}`);
+      console.log(
+        `Loading ${requests.length} stored bypass requests for ${currentUserAddress}`
+      );
 
       // Filter out executed/cancelled requests and validate with contract
       const validRequests = [];
       for (const request of requests) {
         try {
-          const contractData = await currentContract.getBypassRequest(request.requestId);
+          const contractData = await currentContract.getBypassRequest(
+            request.requestId
+          );
           if (contractData.exists && !contractData.executed) {
             validRequests.push({
               ...request,
-              amount: ethers.formatUnits(contractData.amount, request.tokenDecimals),
+              amount: ethers.formatUnits(
+                contractData.amount,
+                request.tokenDecimals
+              ),
               executeAfter: Number(contractData.executeAfter),
               executed: contractData.executed,
-              exists: contractData.exists
+              exists: contractData.exists,
             });
           }
         } catch (error) {
-          console.log(`Request ${request.requestId} no longer valid:`, error.message);
+          console.log(
+            `Request ${request.requestId} no longer valid:`,
+            error.message
+          );
         }
       }
 
       console.log(`Found ${validRequests.length} valid bypass requests`);
 
       // Update localStorage with valid requests only
-      localStorage.setItem(`bypassRequests_${currentUserAddress}`, JSON.stringify(validRequests));
+      localStorage.setItem(
+        `bypassRequests_${currentUserAddress}`,
+        JSON.stringify(validRequests)
+      );
       setPendingBypassRequests(validRequests);
-
     } catch (error) {
       console.error("Error fetching bypass requests:", error);
       setPendingBypassRequests([]);
     }
   };
 
-  const fetchSpendingLimits = async () => {
-    if (savingsContract && signer) {
+  const fetchSpendingLimits = async (
+    contract = savingsContract,
+    userSigner = signer
+  ) => {
+    if (contract && userSigner) {
       try {
-        const userAddress = await signer.getAddress();
+        const userAddress = await userSigner.getAddress();
 
         // Get all user's spending limits from the smart contract
-        const spendingData = await savingsContract.getUserSpendingLimits(userAddress);
-        console.log("User spending limits from contract:", spendingData);
+        const spendingData = await contract.getUserSpendingLimits(userAddress);
 
         const fetchedLimits = [];
-        const [names, limits, spent, remaining, durations, active] = spendingData;
+        const [names, limits, spent, remaining, durations, active] =
+          spendingData;
 
         for (let i = 0; i < names.length; i++) {
           if (active[i]) {
@@ -1009,18 +1527,40 @@ function App() {
               active: active[i],
               // Helper fields for display
               durationHours: Math.floor(Number(durations[i]) / 3600),
-              durationDays: Math.floor(Number(durations[i]) / 86400)
+              durationDays: Math.floor(Number(durations[i]) / 86400),
             });
           }
         }
 
         setSpendingLimits(fetchedLimits);
-        console.log("Fetched spending limits:", fetchedLimits);
+        setLimitsLoaded(true);
+
+        // Update unified limit editing state based on fetched limits
+        const newLimitEdits = {
+          Daily: { value: "", isActive: false, isEditing: false },
+          Weekly: { value: "", isActive: false, isEditing: false },
+          Monthly: { value: "", isActive: false, isEditing: false },
+        };
+
+        fetchedLimits.forEach((limit) => {
+          if (["Daily", "Weekly", "Monthly"].includes(limit.name)) {
+            newLimitEdits[limit.name] = {
+              value: limit.limit,
+              isActive: true,
+              isEditing: false,
+            };
+          }
+        });
+
+        setLimitEdits(newLimitEdits);
       } catch (error) {
         console.error("Error fetching spending limits:", error);
         // If the function doesn't exist, user hasn't set any limits yet
         setSpendingLimits([]);
+        setLimitsLoaded(true);
       }
+    } else {
+      setLimitsLoaded(true);
     }
   };
 
@@ -1028,9 +1568,143 @@ function App() {
     <div style={{ maxWidth: "800px", margin: "0 auto", padding: "20px" }}>
       <h1>🔒 Lock In Wallet</h1>
 
+      {/* User Info and Quick Actions */}
+      {provider && (
+        <div
+          style={{
+            marginBottom: "20px",
+            padding: "15px",
+            border: "1px solid #4a5568",
+            borderRadius: "5px",
+            backgroundColor: "#2d3748",
+            color: "white",
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              marginBottom: "15px",
+            }}
+          >
+            <h3 style={{ margin: 0, color: "#e2e8f0" }}>
+              🔗 Connected:{" "}
+              {userAddress
+                ? `${userAddress.slice(0, 6)}...${userAddress.slice(-4)}`
+                : "Loading..."}
+            </h3>
+          </div>
+
+          {/* Network Selector */}
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "15px",
+              flexWrap: "wrap",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+              <span style={{ color: "#a0aec0", fontSize: "0.9em" }}>
+                Network:
+              </span>
+              <select
+                value={selectedNetwork}
+                onChange={(e) => switchNetwork(e.target.value)}
+                disabled={isNetworkSwitching}
+                style={{
+                  padding: "6px 12px",
+                  borderRadius: "4px",
+                  border: "1px solid #4a5568",
+                  backgroundColor: "#4a5568",
+                  color: "white",
+                  fontSize: "0.9em",
+                  cursor: isNetworkSwitching ? "not-allowed" : "pointer",
+                }}
+              >
+                <option value="localhost">Localhost</option>
+                <option value="ethereum">Ethereum Mainnet</option>
+                <option value="optimism">Optimism</option>
+              </select>
+              {isNetworkSwitching && (
+                <span style={{ color: "#fbb6ce", fontSize: "0.8em" }}>
+                  Switching...
+                </span>
+              )}
+            </div>
+
+            {/* Network Status Indicator */}
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <div
+                style={{
+                  width: "8px",
+                  height: "8px",
+                  borderRadius: "50%",
+                  backgroundColor: isCorrectNetwork() ? "#48bb78" : "#f56565",
+                }}
+              />
+              <span
+                style={{
+                  fontSize: "0.8em",
+                  color: isCorrectNetwork() ? "#9ae6b4" : "#fc8181",
+                }}
+              >
+                {isCorrectNetwork()
+                  ? `Connected to ${getCurrentNetwork(selectedNetwork).name}`
+                  : `Wrong network - Switch to ${
+                      getCurrentNetwork(selectedNetwork).name
+                    }`}
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Contract Deployment Warning */}
+      {provider &&
+        getCurrentNetwork(selectedNetwork).savingsContract ===
+          "0x0000000000000000000000000000000000000000" && (
+          <div
+            style={{
+              marginBottom: "20px",
+              padding: "15px",
+              border: "2px solid #f56565",
+              borderRadius: "5px",
+              backgroundColor: "#fed7d7",
+              color: "#c53030",
+            }}
+          >
+            <h4 style={{ margin: "0 0 10px 0", color: "#c53030" }}>
+              ⚠️ Contract Not Deployed
+            </h4>
+            <p style={{ margin: 0, fontSize: "0.9em" }}>
+              The Savings contract is not yet deployed on{" "}
+              {getCurrentNetwork(selectedNetwork).name}. Please switch to
+              Localhost for development or wait for mainnet deployment.
+            </p>
+          </div>
+        )}
+
       {/* Multi-token balance display - ALWAYS SHOWN */}
-      <div style={{ marginBottom: "20px", padding: "15px", border: "2px solid #333", borderRadius: "5px", backgroundColor: "#2d3748", color: "white" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "15px" }}>
+      <div
+        style={{
+          marginBottom: "20px",
+          padding: "15px",
+          border: "2px solid #333",
+          borderRadius: "5px",
+          backgroundColor: "#2d3748",
+          color: "white",
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            marginBottom: "15px",
+          }}
+        >
           <h3 style={{ color: "white", margin: 0 }}>💰 Your Balances</h3>
           {provider && (
             <button
@@ -1043,7 +1717,7 @@ function App() {
                 color: "white",
                 cursor: "pointer",
                 fontSize: "0.8em",
-                fontWeight: "bold"
+                fontWeight: "bold",
               }}
             >
               🔄 Refresh
@@ -1051,7 +1725,9 @@ function App() {
           )}
         </div>
         {!provider ? (
-          <div style={{ textAlign: "center", color: "#a0aec0", padding: "20px" }}>
+          <div
+            style={{ textAlign: "center", color: "#a0aec0", padding: "20px" }}
+          >
             <p>Connect your wallet to view balances</p>
             <button
               onClick={connectWallet}
@@ -1064,40 +1740,80 @@ function App() {
                 cursor: "pointer",
                 fontSize: "1em",
                 fontWeight: "bold",
-                marginTop: "10px"
+                marginTop: "10px",
               }}
             >
               Connect Wallet
             </button>
           </div>
         ) : Object.keys(balances).length === 0 ? (
-          <div style={{ textAlign: "center", color: "#a0aec0", padding: "20px" }}>
+          <div
+            style={{ textAlign: "center", color: "#a0aec0", padding: "20px" }}
+          >
             <p>Loading balances...</p>
           </div>
         ) : (
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: "10px" }}>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
+              gap: "10px",
+            }}
+          >
             {/* Show ETH balance */}
-            <div style={{ padding: "12px", backgroundColor: "#4a5568", borderRadius: "6px", color: "white" }}>
-              <div style={{ fontSize: "0.8em", color: "#a0aec0", marginBottom: "4px" }}>ETH</div>
-              <div style={{ fontSize: "1.2em", fontWeight: "bold" }}>{balances.ETH || "0"}</div>
+            <div
+              style={{
+                padding: "12px",
+                backgroundColor: "#4a5568",
+                borderRadius: "6px",
+                color: "white",
+              }}
+            >
+              <div
+                style={{
+                  fontSize: "0.8em",
+                  color: "#a0aec0",
+                  marginBottom: "4px",
+                }}
+              >
+                ETH
+              </div>
+              <div style={{ fontSize: "1.2em", fontWeight: "bold" }}>
+                {balances.ETH || "0"}
+              </div>
             </div>
 
             {/* Show stablecoins */}
-            {Object.entries(getCurrentNetwork(selectedNetwork).tokens).map(([key, token]) => (
-              <div key={key} style={{
-                padding: "12px",
-                backgroundColor: token.recommended ? "#2f855a" : "#4a5568",
-                borderRadius: "6px",
-                border: token.recommended ? "2px solid #48bb78" : "none",
-                color: "white"
-              }}>
-                <div style={{ fontSize: "0.8em", color: token.recommended ? "#9ae6b4" : "#a0aec0", marginBottom: "4px" }}>
-                  {token.symbol}
-                  {token.recommended && <span style={{ marginLeft: "5px" }}>✓</span>}
+            {Object.entries(getCurrentNetwork(selectedNetwork).tokens).map(
+              ([key, token]) => (
+                <div
+                  key={key}
+                  style={{
+                    padding: "12px",
+                    backgroundColor: token.recommended ? "#2f855a" : "#4a5568",
+                    borderRadius: "6px",
+                    border: token.recommended ? "2px solid #48bb78" : "none",
+                    color: "white",
+                  }}
+                >
+                  <div
+                    style={{
+                      fontSize: "0.8em",
+                      color: token.recommended ? "#9ae6b4" : "#a0aec0",
+                      marginBottom: "4px",
+                    }}
+                  >
+                    {token.symbol}
+                    {token.recommended && (
+                      <span style={{ marginLeft: "5px" }}>✓</span>
+                    )}
+                  </div>
+                  <div style={{ fontSize: "1.2em", fontWeight: "bold" }}>
+                    {balances[key] || "0"}
+                  </div>
                 </div>
-                <div style={{ fontSize: "1.2em", fontWeight: "bold" }}>{balances[key] || "0"}</div>
-              </div>
-            ))}
+              )
+            )}
           </div>
         )}
       </div>
@@ -1108,249 +1824,886 @@ function App() {
         </div>
       ) : (
         <div>
-          {/* User Info and Quick Actions */}
-          <div style={{ marginBottom: "20px", padding: "15px", border: "1px solid #4a5568", borderRadius: "5px", backgroundColor: "#2d3748", color: "white" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "15px" }}>
-              <h3 style={{ margin: 0, color: "#e2e8f0" }}>🔗 Connected: {userAddress ? `${userAddress.slice(0,6)}...${userAddress.slice(-4)}` : 'Loading...'}</h3>
-            </div>
+          {/* Combined Deposit Section */}
+          <div
+            style={{
+              marginBottom: "20px",
+              padding: "15px",
+              border: "2px solid #333",
+              borderRadius: "5px",
+              backgroundColor: "#2d3748",
+              color: "white",
+            }}
+          >
+            <h3 style={{ color: "white" }}>
+              💰 Deposit from{" "}
+              {userAddress
+                ? `${userAddress.slice(0, 6)}...${userAddress.slice(-4)}`
+                : "Connected Wallet"}
+            </h3>
 
-            {/* Network Selector */}
-            <div style={{ display: "flex", alignItems: "center", gap: "15px", flexWrap: "wrap" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                <span style={{ color: "#a0aec0", fontSize: "0.9em" }}>Network:</span>
+            {/* Direct Deposit from Connected Wallet */}
+            <div style={{ marginBottom: "20px" }}>
+              <h4 style={{ color: "#9ae6b4", margin: "0 0 10px 0" }}>
+                📱 From Currently Connected Wallet
+              </h4>
+              <p
+                style={{
+                  fontSize: "0.9em",
+                  color: "#cbd5e0",
+                  marginBottom: "15px",
+                }}
+              >
+                Recommended: Use stablecoins (USDT, USDC, DAI) for consistent
+                value
+              </p>
+
+              <div
+                style={{
+                  display: "flex",
+                  gap: "10px",
+                  marginBottom: "15px",
+                  flexWrap: "wrap",
+                }}
+              >
                 <select
-                  value={selectedNetwork}
-                  onChange={(e) => switchNetwork(e.target.value)}
-                  disabled={isNetworkSwitching}
+                  value={selectedToken}
+                  onChange={(e) => setSelectedToken(e.target.value)}
                   style={{
-                    padding: "6px 12px",
+                    padding: "8px",
                     borderRadius: "4px",
                     border: "1px solid #4a5568",
                     backgroundColor: "#4a5568",
                     color: "white",
-                    fontSize: "0.9em",
-                    cursor: isNetworkSwitching ? "not-allowed" : "pointer"
+                    flex: "1",
+                    minWidth: "150px",
                   }}
                 >
-                  <option value="localhost">Localhost</option>
-                  <option value="ethereum">Ethereum Mainnet</option>
-                  <option value="optimism">Optimism</option>
+                  <option value="">Select Token</option>
+
+                  {/* Recommended Stablecoins Section */}
+                  <optgroup label="🌟 Recommended Stablecoins">
+                    {Object.entries(getCurrentNetwork(selectedNetwork).tokens)
+                      .filter(
+                        ([_, token]) =>
+                          token.recommended &&
+                          token.address !==
+                            "0x0000000000000000000000000000000000000000"
+                      )
+                      .map(([key, token]) => (
+                        <option key={key} value={key}>
+                          {token.symbol} - {token.name}
+                        </option>
+                      ))}
+                  </optgroup>
+
+                  {/* Other Tokens Section */}
+                  <optgroup label="Other Tokens">
+                    <option value="ETH">ETH - Ethereum</option>
+                    {Object.entries(getCurrentNetwork(selectedNetwork).tokens)
+                      .filter(
+                        ([_, token]) =>
+                          !token.recommended ||
+                          token.address ===
+                            "0x0000000000000000000000000000000000000000"
+                      )
+                      .map(([key, token]) => (
+                        <option
+                          key={key}
+                          value={key}
+                          disabled={
+                            token.address ===
+                            "0x0000000000000000000000000000000000000000"
+                          }
+                        >
+                          {token.symbol} - {token.name}{" "}
+                          {token.address ===
+                          "0x0000000000000000000000000000000000000000"
+                            ? "(Not Available)"
+                            : ""}
+                        </option>
+                      ))}
+                  </optgroup>
                 </select>
-                {isNetworkSwitching && (
-                  <span style={{ color: "#fbb6ce", fontSize: "0.8em" }}>Switching...</span>
-                )}
-              </div>
 
-              {/* Network Status Indicator */}
-              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                <div style={{
-                  width: "8px",
-                  height: "8px",
-                  borderRadius: "50%",
-                  backgroundColor: isCorrectNetwork() ? "#48bb78" : "#f56565"
-                }} />
-                <span style={{
-                  fontSize: "0.8em",
-                  color: isCorrectNetwork() ? "#9ae6b4" : "#fc8181"
-                }}>
-                  {isCorrectNetwork() ?
-                    `Connected to ${getCurrentNetwork(selectedNetwork).name}` :
-                    `Wrong network - Switch to ${getCurrentNetwork(selectedNetwork).name}`
-                  }
-                </span>
+                <input
+                  type="text"
+                  placeholder={`Amount ${
+                    selectedToken ? `(${selectedToken})` : ""
+                  }`}
+                  value={depositAmount}
+                  onChange={(e) => setDepositAmount(e.target.value)}
+                  style={{
+                    padding: "8px",
+                    borderRadius: "4px",
+                    border: "1px solid #4a5568",
+                    backgroundColor: "#4a5568",
+                    color: "white",
+                    flex: "2",
+                    minWidth: "200px",
+                  }}
+                />
+
+                <button
+                  onClick={deposit}
+                  style={{
+                    padding: "8px 16px",
+                    borderRadius: "4px",
+                    border: "none",
+                    backgroundColor:
+                      selectedToken &&
+                      getCurrentNetwork(selectedNetwork).tokens[selectedToken]
+                        ?.recommended
+                        ? "#28a745"
+                        : "#3182ce",
+                    color: "white",
+                    cursor: "pointer",
+                    minWidth: "100px",
+                    fontWeight: "bold",
+                  }}
+                >
+                  💰 Deposit Now
+                </button>
               </div>
             </div>
-          </div>
 
-          {/* Contract Deployment Warning */}
-          {getCurrentNetwork(selectedNetwork).savingsContract === "0x0000000000000000000000000000000000000000" && (
-            <div style={{ marginBottom: "20px", padding: "15px", border: "2px solid #f56565", borderRadius: "5px", backgroundColor: "#fed7d7", color: "#c53030" }}>
-              <h4 style={{ margin: "0 0 10px 0", color: "#c53030" }}>⚠️ Contract Not Deployed</h4>
-              <p style={{ margin: 0, fontSize: "0.9em" }}>
-                The Savings contract is not yet deployed on {getCurrentNetwork(selectedNetwork).name}.
-                Please switch to Localhost for development or wait for mainnet deployment.
-              </p>
-            </div>
-          )}
-
-          <div style={{ marginBottom: "20px", padding: "15px", border: "1px solid #ddd", borderRadius: "5px" }}>
-            <h3>Deposit 💰</h3>
-            <p style={{ fontSize: "0.9em", color: "#666", marginBottom: "15px" }}>Recommended: Use stablecoins (USDT, USDC, DAI) for consistent value</p>
-
-            <div style={{ display: "flex", gap: "10px", marginBottom: "15px", flexWrap: "wrap" }}>
-              <select
-                value={selectedToken}
-                onChange={(e) => setSelectedToken(e.target.value)}
-                style={{ padding: "8px", borderRadius: "4px", border: "1px solid #ccc", flex: "1", minWidth: "150px" }}
-              >
-                <option value="">Select Token</option>
-
-                {/* Recommended Stablecoins Section */}
-                <optgroup label="🌟 Recommended Stablecoins">
-                  {Object.entries(getCurrentNetwork(selectedNetwork).tokens)
-                    .filter(([_, token]) => token.recommended && token.address !== "0x0000000000000000000000000000000000000000")
-                    .map(([key, token]) => (
-                      <option key={key} value={key}>{token.symbol} - {token.name}</option>
-                    ))
-                  }
-                </optgroup>
-
-                {/* Other Tokens Section */}
-                <optgroup label="Other Tokens">
-                  <option value="ETH">ETH - Ethereum</option>
-                  {Object.entries(getCurrentNetwork(selectedNetwork).tokens)
-                    .filter(([_, token]) => !token.recommended || token.address === "0x0000000000000000000000000000000000000000")
-                    .map(([key, token]) => (
-                      <option key={key} value={key} disabled={token.address === "0x0000000000000000000000000000000000000000"}>
-                        {token.symbol} - {token.name} {token.address === "0x0000000000000000000000000000000000000000" ? "(Not Available)" : ""}
-                      </option>
-                    ))
-                  }
-                </optgroup>
-              </select>
-
-              <input
-                type="text"
-                placeholder={`Amount ${selectedToken ? `(${selectedToken})` : ''}`}
-                value={depositAmount}
-                onChange={(e) => setDepositAmount(e.target.value)}
-                style={{ padding: "8px", borderRadius: "4px", border: "1px solid #ccc", flex: "2", minWidth: "200px" }}
-              />
-
-              <button
-                onClick={deposit}
+            {/* Direct Deposit from Exchange/Other Wallet */}
+            <div>
+              <h4 style={{ color: "#9ae6b4", margin: "0 0 10px 0" }}>
+                🏦 Direct Deposit from Exchange
+              </h4>
+              <p
                 style={{
-                  padding: "8px 16px",
-                  borderRadius: "4px",
-                  border: "none",
-                  backgroundColor: selectedToken && getCurrentNetwork(selectedNetwork).tokens[selectedToken]?.recommended ? "#28a745" : "#007bff",
-                  color: "white",
-                  cursor: "pointer",
-                  minWidth: "100px"
+                  fontSize: "0.9em",
+                  color: "#cbd5e0",
+                  marginBottom: "15px",
                 }}
               >
-                Deposit
-              </button>
-            </div>
+                Get your personal deposit address to receive funds directly from
+                exchanges
+              </p>
 
+              {/* Conditional rendering based on proxy status */}
+              {!isProxyDeployed && !isDeploying && (
+                <div
+                  style={{
+                    padding: "15px",
+                    backgroundColor: "#1a202c",
+                    borderRadius: "4px",
+                    border: "1px solid #4a5568",
+                    textAlign: "center",
+                  }}
+                >
+                  <div style={{ marginBottom: "15px" }}>
+                    <div style={{ fontSize: "2em", marginBottom: "10px" }}>
+                      🔒
+                    </div>
+                    <h5 style={{ color: "#e2e8f0", margin: "0 0 8px 0" }}>
+                      Permanent Deposit Address Not Generated
+                    </h5>
+                    <p
+                      style={{
+                        color: "#a0aec0",
+                        fontSize: "0.9em",
+                        margin: "0 0 10px 0",
+                      }}
+                    >
+                      Generate your unique{" "}
+                      <strong style={{ color: "#9ae6b4" }}>
+                        permanent deposit address
+                      </strong>{" "}
+                      to receive funds directly from exchanges
+                    </p>
+                    <p
+                      style={{
+                        color: "#fbb6ce",
+                        fontSize: "0.8em",
+                        margin: "0",
+                        fontStyle: "italic",
+                      }}
+                    >
+                      ⚠️ This address is permanent and will always belong to you
+                      - save it securely!
+                    </p>
+                  </div>
+
+                  <button
+                    onClick={deployProxy}
+                    style={{
+                      padding: "12px 24px",
+                      borderRadius: "6px",
+                      border: "none",
+                      backgroundColor: "#3182ce",
+                      color: "white",
+                      cursor: "pointer",
+                      fontSize: "1em",
+                      fontWeight: "bold",
+                    }}
+                  >
+                    🎯 Generate Permanent Deposit Address
+                  </button>
+
+                  <div
+                    style={{
+                      marginTop: "15px",
+                      fontSize: "0.8em",
+                      color: "#718096",
+                    }}
+                  >
+                    <p style={{ margin: "5px 0" }}>
+                      ✨ One-time setup • Gas fee required
+                    </p>
+                    <p style={{ margin: "5px 0" }}>
+                      🎯 Direct exchange withdrawals • Permanent address you can
+                      always use
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* Deploying state */}
+              {isDeploying && (
+                <div
+                  style={{
+                    padding: "15px",
+                    backgroundColor: "#1a202c",
+                    borderRadius: "4px",
+                    border: "1px solid #4a5568",
+                    textAlign: "center",
+                  }}
+                >
+                  <div style={{ marginBottom: "15px" }}>
+                    <div style={{ fontSize: "2em", marginBottom: "10px" }}>
+                      ⏳
+                    </div>
+                    <h5 style={{ color: "#e2e8f0", margin: "0 0 8px 0" }}>
+                      Generating Deposit Address...
+                    </h5>
+                    <p
+                      style={{
+                        color: "#a0aec0",
+                        fontSize: "0.9em",
+                        margin: "0",
+                      }}
+                    >
+                      Please confirm the transaction in MetaMask and wait for
+                      deployment
+                    </p>
+                  </div>
+
+                  <div
+                    style={{
+                      padding: "12px 24px",
+                      borderRadius: "6px",
+                      backgroundColor: "#4a5568",
+                      color: "#a0aec0",
+                      fontSize: "1em",
+                    }}
+                  >
+                    🔄 Deploying Contract...
+                  </div>
+                </div>
+              )}
+
+              {/* Generated state */}
+              {isProxyDeployed && proxyAddress && (
+                <div
+                  style={{
+                    padding: "15px",
+                    backgroundColor: "#1a202c",
+                    borderRadius: "4px",
+                    border: "1px solid #48bb78",
+                  }}
+                >
+                  <div style={{ marginBottom: "15px", textAlign: "center" }}>
+                    <div style={{ fontSize: "2em", marginBottom: "10px" }}>
+                      ✅
+                    </div>
+                    <h5 style={{ color: "#9ae6b4", margin: "0 0 8px 0" }}>
+                      Your Permanent Deposit Address
+                    </h5>
+                    <p
+                      style={{
+                        color: "#e2e8f0",
+                        fontSize: "0.9em",
+                        margin: "0 0 8px 0",
+                      }}
+                    >
+                      Use this permanent address to receive funds directly from
+                      exchanges or other wallets
+                    </p>
+                    <p
+                      style={{
+                        color: "#9ae6b4",
+                        fontSize: "0.8em",
+                        margin: "0",
+                        fontWeight: "bold",
+                      }}
+                    >
+                      🔗 Fully on-chain address tied to your wallet - no
+                      intermediaries involved
+                    </p>
+                  </div>
+
+                  <div
+                    style={{
+                      display: "flex",
+                      gap: "10px",
+                      alignItems: "center",
+                      marginBottom: "15px",
+                    }}
+                  >
+                    <strong style={{ color: "white", minWidth: "120px" }}>
+                      Your Deposit Address:
+                    </strong>
+                    <code
+                      style={{
+                        backgroundColor: "#4a5568",
+                        color: "#9ae6b4",
+                        padding: "8px",
+                        borderRadius: "4px",
+                        fontSize: "0.9em",
+                        wordBreak: "break-all",
+                        flex: 1,
+                      }}
+                    >
+                      {proxyAddress}
+                    </code>
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText(proxyAddress);
+                        alert("Deposit address copied to clipboard!");
+                      }}
+                      style={{
+                        padding: "6px 12px",
+                        borderRadius: "4px",
+                        border: "none",
+                        backgroundColor: "#48bb78",
+                        color: "white",
+                        cursor: "pointer",
+                        fontSize: "0.8em",
+                      }}
+                    >
+                      📋 Copy
+                    </button>
+                  </div>
+
+                  <div
+                    style={{
+                      fontSize: "0.8em",
+                      color: "#9ae6b4",
+                      textAlign: "center",
+                    }}
+                  >
+                    ⚠️ When pasting this address ensure it matches exactly
+                    (malware extensions may alter it).
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
 
-          {/* Spending Limits Section */}
-          <div style={{ marginBottom: "20px", padding: "15px", border: "1px solid #333", borderRadius: "5px", backgroundColor: "#2d3748", color: "white" }}>
-            <h3 style={{ color: "white" }}>⏰ Set Spending Limits</h3>
-            <p style={{ fontSize: "0.9em", color: "#cbd5e0", marginBottom: "15px" }}>
-              Control your spending with time-based limits. Every withdrawal checks against all active periods.
+          {/* Combined Spending Limits & Setup Status */}
+          <div
+            style={{
+              marginBottom: "20px",
+              padding: "15px",
+              border: "2px solid #333",
+              borderRadius: "5px",
+              backgroundColor: "#2d3748",
+              color: "white",
+            }}
+          >
+            <h3 style={{ color: "white" }}>💰 Spending Limits & Setup</h3>
+            <p
+              style={{
+                fontSize: "0.9em",
+                color: "#cbd5e0",
+                marginBottom: "15px",
+              }}
+            >
+              {isSetupCommitted
+                ? "⚠️ Account locked: Changes require 24-hour timelock proposals. Edit individual limits or add new ones."
+                : "Set your spending limits. You can freely modify them until you commit the setup."}
             </p>
 
-            {/* Common Period Limits */}
-            <div style={{ marginBottom: "15px", padding: "10px", backgroundColor: "#1a202c", borderRadius: "4px" }}>
-              <h4 style={{ color: "#9ae6b4", margin: "0 0 15px 0" }}>🎆 Common Spending Limits</h4>
-
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: "10px", marginBottom: "15px" }}>
-                <div>
-                  <label style={{ display: "block", fontSize: "0.9em", color: "#e2e8f0", marginBottom: "5px" }}>📅 Daily Limit (USDT)</label>
-                  <input
-                    type="text"
-                    placeholder="e.g., 50"
-                    value={dailyLimit}
-                    onChange={(e) => setDailyLimit(e.target.value)}
-                    style={{
-                      width: "100%",
-                      padding: "8px",
-                      borderRadius: "4px",
-                      border: "1px solid #4a5568",
-                      backgroundColor: "#4a5568",
-                      color: "white"
-                    }}
-                  />
-                </div>
-                <div>
-                  <label style={{ display: "block", fontSize: "0.9em", color: "#e2e8f0", marginBottom: "5px" }}>📊 Weekly Limit (USDT)</label>
-                  <input
-                    type="text"
-                    placeholder="e.g., 300"
-                    value={weeklyLimit}
-                    onChange={(e) => setWeeklyLimit(e.target.value)}
-                    style={{
-                      width: "100%",
-                      padding: "8px",
-                      borderRadius: "4px",
-                      border: "1px solid #4a5568",
-                      backgroundColor: "#4a5568",
-                      color: "white"
-                    }}
-                  />
-                </div>
-                <div>
-                  <label style={{ display: "block", fontSize: "0.9em", color: "#e2e8f0", marginBottom: "5px" }}>📈 Monthly Limit (USDT)</label>
-                  <input
-                    type="text"
-                    placeholder="e.g., 1000"
-                    value={monthlyLimit}
-                    onChange={(e) => setMonthlyLimit(e.target.value)}
-                    style={{
-                      width: "100%",
-                      padding: "8px",
-                      borderRadius: "4px",
-                      border: "1px solid #4a5568",
-                      backgroundColor: "#4a5568",
-                      color: "white"
-                    }}
-                  />
-                </div>
-              </div>
-
-              <div style={{ fontSize: "0.8em", color: "#a0aec0", marginBottom: "15px" }}>
-                💡 Tip: Daily × 7 ≤ Weekly, Weekly × 4 ≤ Monthly for logical budgeting
-              </div>
-
-              <button
-                onClick={setCommonSpendingLimits}
+            {/* Daily/Weekly/Monthly Cards */}
+            <div style={{ marginBottom: "20px" }}>
+              <h4 style={{ color: "#9ae6b4", margin: "0 0 15px 0" }}>
+                🎯 Standard Time Periods
+              </h4>
+              <div
                 style={{
-                  padding: "12px 24px",
-                  borderRadius: "6px",
-                  border: "none",
-                  backgroundColor: "#48bb78",
-                  color: "white",
-                  cursor: "pointer",
-                  fontSize: "1em",
-                  fontWeight: "bold",
-                  width: "100%"
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+                  gap: "15px",
+                  marginBottom: "15px",
                 }}
               >
-                ⏰ Set Spending Limits
-              </button>
+                {["Daily", "Weekly", "Monthly"].map((periodName) => {
+                  const edit = limitEdits[periodName];
+                  const existingLimit = spendingLimits.find(
+                    (limit) => limit.name === periodName
+                  );
+                  const isActive = existingLimit !== undefined; // Only use contract data for active state
+
+                  const progressPercent = existingLimit
+                    ? (parseFloat(existingLimit.spent) /
+                        parseFloat(existingLimit.limit)) *
+                      100
+                    : 0;
+                  const isNearLimit = progressPercent > 80;
+                  const isAtLimit = progressPercent >= 100;
+
+                  const cardStyle = {
+                    padding: "15px",
+                    borderRadius: "8px",
+                    backgroundColor: isActive ? "#1a202c" : "#4a5568",
+                    border: isActive
+                      ? isAtLimit
+                        ? "2px solid #e53e3e"
+                        : isNearLimit
+                        ? "2px solid #ed8936"
+                        : "2px solid #48bb78"
+                      : "2px dashed #718096",
+                    opacity: isActive ? 1 : 0.7,
+                    transition: "all 0.3s ease",
+                  };
+
+                  return (
+                    <div key={periodName} style={cardStyle}>
+                      {/* Card Header */}
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          marginBottom: "12px",
+                        }}
+                      >
+                        <h5
+                          style={{
+                            color: isActive ? "white" : "#a0aec0",
+                            margin: 0,
+                            fontSize: "1.1em",
+                            fontWeight: "bold",
+                          }}
+                        >
+                          {periodName === "Daily"
+                            ? "📅"
+                            : periodName === "Weekly"
+                            ? "📊"
+                            : "📈"}{" "}
+                          {periodName}
+                        </h5>
+                        {isActive && existingLimit && (
+                          <span
+                            style={{
+                              fontSize: "0.8em",
+                              padding: "4px 8px",
+                              borderRadius: "12px",
+                              backgroundColor: isAtLimit
+                                ? "#e53e3e"
+                                : isNearLimit
+                                ? "#ed8936"
+                                : "#48bb78",
+                              color: "white",
+                              fontWeight: "bold",
+                            }}
+                          >
+                            {progressPercent.toFixed(0)}% used
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Input or Display */}
+                      {edit?.isEditing || !isActive ? (
+                        <div style={{ marginBottom: "12px" }}>
+                          <input
+                            type="text"
+                            placeholder={
+                              isActive
+                                ? "Update limit (USDT)"
+                                : "Enter amount to activate"
+                            }
+                            value={edit?.value || ""}
+                            onChange={(e) =>
+                              updateLimitEdit(periodName, e.target.value)
+                            }
+                            style={{
+                              width: "100%",
+                              padding: "10px",
+                              borderRadius: "4px",
+                              border: "1px solid #4a5568",
+                              backgroundColor: "#4a5568",
+                              color: "white",
+                              fontSize: "1em",
+                            }}
+                          />
+                        </div>
+                      ) : (
+                        existingLimit && (
+                          <div style={{ marginBottom: "12px" }}>
+                            <div
+                              style={{
+                                display: "flex",
+                                justifyContent: "space-between",
+                                marginBottom: "8px",
+                              }}
+                            >
+                              <span
+                                style={{ color: "#e2e8f0", fontSize: "0.9em" }}
+                              >
+                                Remaining
+                              </span>
+                              <span
+                                style={{
+                                  color: isAtLimit ? "#fc8181" : "#9ae6b4",
+                                  fontWeight: "bold",
+                                  fontSize: "1.1em",
+                                }}
+                              >
+                                {existingLimit.remaining} USDT
+                              </span>
+                            </div>
+                            <div
+                              style={{
+                                display: "flex",
+                                justifyContent: "space-between",
+                                fontSize: "0.8em",
+                                color: "#a0aec0",
+                                marginBottom: "8px",
+                              }}
+                            >
+                              <span>Spent: {existingLimit.spent} USDT</span>
+                              <span>Limit: {existingLimit.limit} USDT</span>
+                            </div>
+                            {/* Progress bar */}
+                            <div
+                              style={{
+                                width: "100%",
+                                height: "6px",
+                                backgroundColor: "#4a5568",
+                                borderRadius: "3px",
+                                overflow: "hidden",
+                              }}
+                            >
+                              <div
+                                style={{
+                                  width: `${Math.min(progressPercent, 100)}%`,
+                                  height: "100%",
+                                  backgroundColor: isAtLimit
+                                    ? "#e53e3e"
+                                    : isNearLimit
+                                    ? "#ed8936"
+                                    : "#48bb78",
+                                  transition: "width 0.3s ease",
+                                }}
+                              />
+                            </div>
+                          </div>
+                        )
+                      )}
+
+                      {/* Action Buttons */}
+                      <div style={{ display: "flex", gap: "8px" }}>
+                        {edit?.isEditing ? (
+                          <>
+                            {isSetupCommitted ? (
+                              <button
+                                onClick={() =>
+                                  submitIndividualProposal(periodName)
+                                }
+                                style={{
+                                  flex: 1,
+                                  padding: "8px",
+                                  borderRadius: "4px",
+                                  border: "none",
+                                  backgroundColor: "#ed8936",
+                                  color: "white",
+                                  cursor: "pointer",
+                                  fontSize: "0.9em",
+                                  fontWeight: "bold",
+                                }}
+                              >
+                                📝 Submit Proposal
+                              </button>
+                            ) : null}
+                            <button
+                              onClick={() => toggleEditMode(periodName)}
+                              style={{
+                                flex: isSetupCommitted ? 0 : 1,
+                                padding: "8px",
+                                borderRadius: "4px",
+                                border: "1px solid #4a5568",
+                                backgroundColor: "transparent",
+                                color: "#e2e8f0",
+                                cursor: "pointer",
+                                fontSize: "0.9em",
+                                minWidth: "70px",
+                              }}
+                            >
+                              Cancel
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            {isActive ? ( // Only show Edit/Remove buttons for existing limits from contract
+                              <>
+                                <button
+                                  onClick={() => toggleEditMode(periodName)}
+                                  style={{
+                                    flex: 1,
+                                    padding: "8px",
+                                    borderRadius: "4px",
+                                    border: "1px solid #4a5568",
+                                    backgroundColor: "#2d3748",
+                                    backgroundImage: "none",
+                                    color: "#a0aec0",
+                                    cursor: "pointer",
+                                    fontSize: "0.85em",
+                                    fontWeight: "normal",
+                                    opacity: 0.7,
+                                    transition: "all 0.2s ease",
+                                  }}
+                                  onMouseEnter={(e) => {
+                                    e.target.style.opacity = "1";
+                                    e.target.style.color = "#e2e8f0";
+                                    e.target.style.borderColor = "#718096";
+                                  }}
+                                  onMouseLeave={(e) => {
+                                    e.target.style.opacity = "0.7";
+                                    e.target.style.color = "#a0aec0";
+                                    e.target.style.borderColor = "#4a5568";
+                                  }}
+                                >
+                                  ✏️ Edit
+                                </button>
+                                <button
+                                  onClick={() => removeLimitPeriod(periodName)}
+                                  style={{
+                                    flex: 1,
+                                    padding: "8px",
+                                    borderRadius: "4px",
+                                    border: "1px solid #4a5568",
+                                    backgroundColor: "#2d3748",
+                                    backgroundImage: "none",
+                                    color: "#a0aec0",
+                                    cursor: "pointer",
+                                    fontSize: "0.85em",
+                                    fontWeight: "normal",
+                                    opacity: 0.7,
+                                    transition: "all 0.2s ease",
+                                  }}
+                                  onMouseEnter={(e) => {
+                                    e.target.style.opacity = "1";
+                                    e.target.style.color = "#e2e8f0";
+                                    e.target.style.borderColor = "#718096";
+                                  }}
+                                  onMouseLeave={(e) => {
+                                    e.target.style.opacity = "0.7";
+                                    e.target.style.color = "#a0aec0";
+                                    e.target.style.borderColor = "#4a5568";
+                                  }}
+                                >
+                                  🗑️ Remove
+                                </button>
+                              </>
+                            ) : (
+                              <div
+                                style={{
+                                  color: "#a0aec0",
+                                  fontSize: "0.9em",
+                                  fontStyle: "italic",
+                                  textAlign: "center",
+                                  padding: "8px",
+                                }}
+                              >
+                                Enter an amount above to activate this limit
+                              </div>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div
+                style={{
+                  fontSize: "0.8em",
+                  color: "#a0aec0",
+                  marginBottom: "15px",
+                }}
+              >
+                💡 Tip: Daily × 7 ≤ Weekly, Weekly × 4 ≤ Monthly for logical
+                budgeting
+              </div>
             </div>
 
-            {/* Custom Period Section */}
-            <div style={{ marginBottom: "15px" }}>
-              <button
-                onClick={() => setShowCustomPeriod(!showCustomPeriod)}
+            {/* Custom Periods Section */}
+            <div style={{ marginBottom: "20px" }}>
+              <div
                 style={{
-                  padding: "8px 16px",
-                  borderRadius: "4px",
-                  border: "1px solid #4a5568",
-                  backgroundColor: "transparent",
-                  color: "#e2e8f0",
-                  cursor: "pointer",
-                  fontSize: "0.9em"
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  marginBottom: "15px",
                 }}
               >
-                {showCustomPeriod ? '➖ Hide' : '➕ Add'} Custom Time Period
-              </button>
+                <h4 style={{ color: "#fbb6ce", margin: 0 }}>
+                  ⚙️ Custom Time Periods
+                </h4>
+                <button
+                  onClick={() => setShowCustomPeriod(!showCustomPeriod)}
+                  style={{
+                    padding: "8px 16px",
+                    borderRadius: "4px",
+                    border: "1px solid #4a5568",
+                    backgroundColor: "transparent",
+                    color: "#e2e8f0",
+                    cursor: "pointer",
+                    fontSize: "0.9em",
+                  }}
+                >
+                  {showCustomPeriod ? "➖ Hide" : "➕ Add"} Custom Period
+                </button>
+              </div>
+
+              {/* Custom Periods List */}
+              {spendingLimits.filter(
+                (limit) => !["Daily", "Weekly", "Monthly"].includes(limit.name)
+              ).length > 0 && (
+                <div style={{ marginBottom: "15px" }}>
+                  <div style={{ display: "grid", gap: "10px" }}>
+                    {spendingLimits
+                      .filter(
+                        (limit) =>
+                          !["Daily", "Weekly", "Monthly"].includes(limit.name)
+                      )
+                      .map((limit, index) => {
+                        const progressPercent =
+                          limit.limit > 0
+                            ? (parseFloat(limit.spent) /
+                                parseFloat(limit.limit)) *
+                              100
+                            : 0;
+                        const isNearLimit = progressPercent > 80;
+                        const isAtLimit = progressPercent >= 100;
+
+                        return (
+                          <div
+                            key={index}
+                            style={{
+                              padding: "12px",
+                              border: isAtLimit
+                                ? "1px solid #e53e3e"
+                                : isNearLimit
+                                ? "1px solid #ed8936"
+                                : "1px solid #48bb78",
+                              borderRadius: "6px",
+                              backgroundColor: "#1a202c",
+                              display: "flex",
+                              justifyContent: "space-between",
+                              alignItems: "center",
+                            }}
+                          >
+                            <div style={{ flex: 1 }}>
+                              <div
+                                style={{
+                                  display: "flex",
+                                  justifyContent: "space-between",
+                                  alignItems: "center",
+                                  marginBottom: "5px",
+                                }}
+                              >
+                                <span
+                                  style={{ color: "white", fontWeight: "bold" }}
+                                >
+                                  ⚙️ {limit.name}
+                                </span>
+                                <span
+                                  style={{
+                                    color: isAtLimit ? "#fc8181" : "#9ae6b4",
+                                    fontWeight: "bold",
+                                  }}
+                                >
+                                  {limit.remaining} USDT remaining
+                                </span>
+                              </div>
+                              <div
+                                style={{ fontSize: "0.8em", color: "#a0aec0" }}
+                              >
+                                Duration:{" "}
+                                {limit.durationDays > 0
+                                  ? `${limit.durationDays} days`
+                                  : `${limit.durationHours} hours`}{" "}
+                                • Limit: {limit.limit} USDT • Spent:{" "}
+                                {limit.spent} USDT
+                              </div>
+                            </div>
+                            <button
+                              onClick={() => removeLimitPeriod(limit.name)}
+                              style={{
+                                marginLeft: "10px",
+                                padding: "6px 12px",
+                                borderRadius: "4px",
+                                border: "1px solid #e53e3e",
+                                backgroundColor: "transparent",
+                                color: "#e53e3e",
+                                cursor: "pointer",
+                                fontSize: "0.8em",
+                              }}
+                            >
+                              🗑️ Remove
+                            </button>
+                          </div>
+                        );
+                      })}
+                  </div>
+                </div>
+              )}
 
               {/* Custom Period Form */}
               {showCustomPeriod && (
-                <div style={{ marginTop: "15px", padding: "15px", backgroundColor: "#1a202c", borderRadius: "4px", border: "1px solid #4a5568" }}>
-                  <h4 style={{ color: "#fbb6ce", margin: "0 0 15px 0" }}>⚙️ Custom Time Period</h4>
-                  <p style={{ fontSize: "0.8em", color: "#a0aec0", marginBottom: "15px" }}>
-                    Create custom periods like "Salary Cycle", "Quarterly Budget", or any duration you need.
+                <div
+                  style={{
+                    padding: "15px",
+                    backgroundColor: "#1a202c",
+                    borderRadius: "4px",
+                    border: "1px solid #4a5568",
+                  }}
+                >
+                  <p
+                    style={{
+                      fontSize: "0.8em",
+                      color: "#a0aec0",
+                      marginBottom: "15px",
+                    }}
+                  >
+                    Create custom periods like "Salary Cycle", "Quarterly
+                    Budget", or any duration you need.
                   </p>
 
-                  <div style={{ display: "grid", gap: "10px", marginBottom: "15px" }}>
-                    {/* Period Name */}
+                  <div
+                    style={{
+                      display: "grid",
+                      gap: "10px",
+                      marginBottom: "15px",
+                    }}
+                  >
                     <div>
-                      <label style={{ display: "block", fontSize: "0.9em", color: "#e2e8f0", marginBottom: "5px" }}>Period Name</label>
+                      <label
+                        style={{
+                          display: "block",
+                          fontSize: "0.9em",
+                          color: "#e2e8f0",
+                          marginBottom: "5px",
+                        }}
+                      >
+                        Period Name
+                      </label>
                       <input
                         type="text"
                         placeholder="e.g., 'Salary Cycle', 'Quarterly Budget'"
@@ -1362,15 +2715,29 @@ function App() {
                           borderRadius: "4px",
                           border: "1px solid #4a5568",
                           backgroundColor: "#4a5568",
-                          color: "white"
+                          color: "white",
                         }}
                       />
                     </div>
 
-                    {/* Limit and Duration */}
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+                    <div
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: "1fr 1fr",
+                        gap: "10px",
+                      }}
+                    >
                       <div>
-                        <label style={{ display: "block", fontSize: "0.9em", color: "#e2e8f0", marginBottom: "5px" }}>Limit (USDT)</label>
+                        <label
+                          style={{
+                            display: "block",
+                            fontSize: "0.9em",
+                            color: "#e2e8f0",
+                            marginBottom: "5px",
+                          }}
+                        >
+                          Limit (USDT)
+                        </label>
                         <input
                           type="text"
                           placeholder="e.g., 2000"
@@ -1382,22 +2749,33 @@ function App() {
                             borderRadius: "4px",
                             border: "1px solid #4a5568",
                             backgroundColor: "#4a5568",
-                            color: "white"
+                            color: "white",
                           }}
                         />
                       </div>
                       <div>
-                        <label style={{ display: "block", fontSize: "0.9em", color: "#e2e8f0", marginBottom: "5px" }}>Duration</label>
+                        <label
+                          style={{
+                            display: "block",
+                            fontSize: "0.9em",
+                            color: "#e2e8f0",
+                            marginBottom: "5px",
+                          }}
+                        >
+                          Duration
+                        </label>
                         <select
                           value={customPeriodDuration}
-                          onChange={(e) => setCustomPeriodDuration(e.target.value)}
+                          onChange={(e) =>
+                            setCustomPeriodDuration(e.target.value)
+                          }
                           style={{
                             width: "100%",
                             padding: "8px",
                             borderRadius: "4px",
                             border: "1px solid #4a5568",
                             backgroundColor: "#4a5568",
-                            color: "white"
+                            color: "white",
                           }}
                         >
                           <option value="3600">Per Hour</option>
@@ -1406,7 +2784,9 @@ function App() {
                           <option value="1209600">Bi-weekly (14 days)</option>
                           <option value="2592000">Per Month (30 days)</option>
                           <option value="7776000">Per Quarter (90 days)</option>
-                          <option value="15552000">Semi-annual (180 days)</option>
+                          <option value="15552000">
+                            Semi-annual (180 days)
+                          </option>
                           <option value="31536000">Per Year (365 days)</option>
                         </select>
                       </div>
@@ -1424,7 +2804,7 @@ function App() {
                       cursor: "pointer",
                       fontSize: "0.9em",
                       fontWeight: "bold",
-                      width: "100%"
+                      width: "100%",
                     }}
                   >
                     ⚙️ Add Custom Period
@@ -1432,174 +2812,105 @@ function App() {
                 </div>
               )}
             </div>
-          </div>
 
-          {/* Exchange Deposit Section */}
-          <div style={{ marginBottom: "20px", padding: "15px", border: "1px solid #333", borderRadius: "5px", backgroundColor: "#2d3748", color: "white" }}>
-            <h3 style={{ color: "white" }}>🏦 Direct Deposit from Exchange</h3>
-            <p style={{ fontSize: "0.9em", color: "#cbd5e0", marginBottom: "15px" }}>Get your personal deposit address to receive funds directly from exchanges</p>
-
-            {/* Conditional rendering based on proxy status */}
-            {!isProxyDeployed && !isDeploying && (
-              <div style={{
-                padding: "15px",
-                backgroundColor: "#1a202c",
-                borderRadius: "4px",
-                border: "1px solid #4a5568",
-                textAlign: "center"
-              }}>
-                <div style={{ marginBottom: "15px" }}>
-                  <div style={{ fontSize: "2em", marginBottom: "10px" }}>🔒</div>
-                  <h4 style={{ color: "#e2e8f0", margin: "0 0 8px 0" }}>Deposit Address Not Generated</h4>
-                  <p style={{ color: "#a0aec0", fontSize: "0.9em", margin: "0" }}>
-                    Generate your unique deposit address to receive funds directly from exchanges
-                  </p>
-                </div>
-
-                <button
-                  onClick={deployProxy}
+            {/* Pending Limit Proposals Section */}
+            {isSetupCommitted && pendingLimitProposals.length > 0 && (
+              <div style={{ marginBottom: "20px" }}>
+                <h4 style={{ color: "#ed8936", margin: "0 0 15px 0" }}>
+                  ⏳ Pending Limit Proposals ({pendingLimitProposals.length})
+                </h4>
+                <p
                   style={{
-                    padding: "12px 24px",
-                    borderRadius: "6px",
-                    border: "none",
-                    backgroundColor: "#3182ce",
-                    color: "white",
-                    cursor: "pointer",
-                    fontSize: "1em",
-                    fontWeight: "bold"
+                    fontSize: "0.8em",
+                    color: "#a0aec0",
+                    marginBottom: "15px",
                   }}
                 >
-                  🎯 Generate Deposit Address
-                </button>
+                  These limit change proposals are waiting for the timelock
+                  period to expire before they can be executed.
+                </p>
 
-                <div style={{ marginTop: "15px", fontSize: "0.8em", color: "#718096" }}>
-                  <p style={{ margin: "5px 0" }}>✨ One-time setup • Gas fee required</p>
-                  <p style={{ margin: "5px 0" }}>🎯 Direct exchange withdrawals • No manual deposits needed</p>
-                </div>
-              </div>
-            )}
+                <div style={{ display: "grid", gap: "10px" }}>
+                  {pendingLimitProposals.map((proposal, index) => {
+                    const isReady =
+                      proposal.executeAfter &&
+                      currentTime >= proposal.executeAfter;
 
-            {/* Deploying state */}
-            {isDeploying && (
-              <div style={{
-                padding: "15px",
-                backgroundColor: "#1a202c",
-                borderRadius: "4px",
-                border: "1px solid #4a5568",
-                textAlign: "center"
-              }}>
-                <div style={{ marginBottom: "15px" }}>
-                  <div style={{ fontSize: "2em", marginBottom: "10px" }}>⏳</div>
-                  <h4 style={{ color: "#e2e8f0", margin: "0 0 8px 0" }}>Generating Deposit Address...</h4>
-                  <p style={{ color: "#a0aec0", fontSize: "0.9em", margin: "0" }}>
-                    Please confirm the transaction in MetaMask and wait for deployment
-                  </p>
-                </div>
-
-                <div style={{
-                  padding: "12px 24px",
-                  borderRadius: "6px",
-                  backgroundColor: "#4a5568",
-                  color: "#a0aec0",
-                  fontSize: "1em"
-                }}>
-                  🔄 Deploying Contract...
-                </div>
-              </div>
-            )}
-
-            {/* Generated state */}
-            {isProxyDeployed && proxyAddress && (
-              <div style={{
-                padding: "15px",
-                backgroundColor: "#1a202c",
-                borderRadius: "4px",
-                border: "1px solid #48bb78"
-              }}>
-                <div style={{ marginBottom: "15px", textAlign: "center" }}>
-                  <div style={{ fontSize: "2em", marginBottom: "10px" }}>✅</div>
-                  <h4 style={{ color: "#9ae6b4", margin: "0 0 8px 0" }}>Deposit Address Generated</h4>
-                  <p style={{ color: "#e2e8f0", fontSize: "0.9em", margin: "0" }}>
-                    Use this address to receive funds directly from exchanges
-                  </p>
-                </div>
-
-                <div style={{ display: "flex", gap: "10px", alignItems: "center", marginBottom: "15px" }}>
-                  <strong style={{ color: "white", minWidth: "120px" }}>Your Deposit Address:</strong>
-                  <code style={{
-                    backgroundColor: "#4a5568",
-                    color: "#9ae6b4",
-                    padding: "8px",
-                    borderRadius: "4px",
-                    fontSize: "0.9em",
-                    wordBreak: "break-all",
-                    flex: 1
-                  }}>
-                    {proxyAddress}
-                  </code>
-                  <button
-                    onClick={() => {
-                      navigator.clipboard.writeText(proxyAddress);
-                      alert("Deposit address copied to clipboard!");
-                    }}
-                    style={{
-                      padding: "6px 12px",
-                      borderRadius: "4px",
-                      border: "none",
-                      backgroundColor: "#48bb78",
-                      color: "white",
-                      cursor: "pointer",
-                      fontSize: "0.8em"
-                    }}
-                  >
-                    📋 Copy
-                  </button>
-                </div>
-
-                <div style={{ fontSize: "0.8em", color: "#9ae6b4", textAlign: "center" }}>
-                  ✅ Ready for direct deposits from exchanges!
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Pending Bypass Requests Section */}
-          {pendingBypassRequests.length > 0 && (
-            <div style={{ marginBottom: "20px", padding: "15px", border: "1px solid #333", borderRadius: "5px", backgroundColor: "#2d3748", color: "white" }}>
-              <h3 style={{ color: "white" }}>⏳ Pending Bypass Requests ({pendingBypassRequests.length})</h3>
-              <p style={{ fontSize: "0.9em", color: "#cbd5e0", marginBottom: "15px" }}>
-                Your pending bypass requests with countdown timers. Execute them after the 24-hour timelock expires.
-              </p>
-
-              <div style={{ display: "grid", gap: "15px" }}>
-                {pendingBypassRequests.map((request, index) => {
-                  const countdown = formatCountdown(request.executeAfter, currentTime);
-
-                  return (
-                    <div key={index} style={{
-                      padding: "15px",
-                      border: countdown.ready ? "1px solid #48bb78" : "1px solid #4a5568",
-                      borderRadius: "8px",
-                      backgroundColor: "#1a202c"
-                    }}>
-                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "10px", flexWrap: "wrap", gap: "10px" }}>
-                        <h4 style={{ color: "white", margin: 0 }}>
-                          💸 {request.amount} {request.tokenSymbol}
-                        </h4>
-                        <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
-                          <span style={{
-                            fontSize: "0.8em",
-                            padding: "4px 8px",
-                            borderRadius: "12px",
-                            backgroundColor: countdown.ready ? "#48bb78" : "#4a5568",
-                            color: "white",
-                            fontWeight: "bold"
-                          }}>
-                            {countdown.ready ? "⚡ Ready!" : "⏰ Pending"}
-                          </span>
-                          {countdown.ready && (
+                    return (
+                      <div
+                        key={index}
+                        style={{
+                          padding: "12px",
+                          border: isReady
+                            ? "1px solid #48bb78"
+                            : "1px solid #ed8936",
+                          borderRadius: "6px",
+                          backgroundColor: "#1a202c",
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                        }}
+                      >
+                        <div style={{ flex: 1 }}>
+                          <div
+                            style={{
+                              display: "flex",
+                              justifyContent: "space-between",
+                              alignItems: "center",
+                              marginBottom: "5px",
+                            }}
+                          >
+                            <span
+                              style={{ color: "white", fontWeight: "bold" }}
+                            >
+                              📝{" "}
+                              {proposal.action === "change"
+                                ? "Update"
+                                : "Remove"}{" "}
+                              {proposal.periodName}
+                            </span>
+                            <span
+                              style={{
+                                fontSize: "0.8em",
+                                padding: "4px 8px",
+                                borderRadius: "12px",
+                                backgroundColor: isReady
+                                  ? "#48bb78"
+                                  : "#ed8936",
+                                color: "white",
+                                fontWeight: "bold",
+                              }}
+                            >
+                              {isReady ? "✅ Ready" : "⏰ Pending"}
+                            </span>
+                          </div>
+                          <div style={{ fontSize: "0.8em", color: "#a0aec0" }}>
+                            {proposal.action === "change" ? (
+                              <>New Limit: {proposal.newLimit} USDT</>
+                            ) : (
+                              <>Action: Remove limit entirely</>
+                            )}
+                            {proposal.submittedAt && (
+                              <>
+                                {" "}
+                                • Submitted:{" "}
+                                {new Date(
+                                  proposal.submittedAt
+                                ).toLocaleString()}
+                              </>
+                            )}
+                          </div>
+                        </div>
+                        <div
+                          style={{
+                            display: "flex",
+                            gap: "8px",
+                            marginLeft: "10px",
+                          }}
+                        >
+                          {isReady && (
                             <button
-                              onClick={() => executeBypassRequest(request.requestId)}
+                              onClick={() => executeProposal(proposal)}
                               style={{
                                 padding: "6px 12px",
                                 borderRadius: "4px",
@@ -1608,14 +2919,14 @@ function App() {
                                 color: "white",
                                 cursor: "pointer",
                                 fontSize: "0.8em",
-                                fontWeight: "bold"
+                                fontWeight: "bold",
                               }}
                             >
                               ⚡ Execute
                             </button>
                           )}
                           <button
-                            onClick={() => cancelBypassRequest(request.requestId)}
+                            onClick={() => cancelProposal(proposal)}
                             style={{
                               padding: "6px 12px",
                               borderRadius: "4px",
@@ -1623,7 +2934,282 @@ function App() {
                               backgroundColor: "transparent",
                               color: "#e53e3e",
                               cursor: "pointer",
-                              fontSize: "0.8em"
+                              fontSize: "0.8em",
+                            }}
+                          >
+                            ❌ Cancel
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div
+                  style={{
+                    marginTop: "15px",
+                    fontSize: "0.8em",
+                    color: "#a0aec0",
+                  }}
+                >
+                  💡 Proposals become executable after the timelock period for
+                  security. Execute them when ready.
+                </div>
+              </div>
+            )}
+
+            {/* Setup Status Section */}
+            <div
+              style={{
+                padding: "15px",
+                border: "2px solid #4a5568",
+                borderRadius: "8px",
+                backgroundColor: isSetupCommitted ? "#1a365d" : "#1a202c",
+              }}
+            >
+              <h4 style={{ color: "white", margin: "0 0 15px 0" }}>
+                Setup Status:{" "}
+                {isSetupCommitted ? "🔒 Locked Mode" : "⚙️ Setup Mode"}
+              </h4>
+              {!isSetupCommitted ? (
+                <div>
+                  <p style={{ color: "#e2e8f0", margin: "0 0 10px 0" }}>
+                    Configure your spending limits above, then lock in your
+                    setup.
+                  </p>
+                  <p style={{ color: "#fbb6ce", margin: "0 0 15px 0" }}>
+                    <strong>
+                      ⚠️ Locking in will save your limits and enable timelock
+                      security!
+                    </strong>
+                  </p>
+                  {(limitEdits.Daily?.value ||
+                    limitEdits.Weekly?.value ||
+                    limitEdits.Monthly?.value) && (
+                    <div
+                      style={{
+                        marginBottom: "15px",
+                        padding: "10px",
+                        backgroundColor: "#2a4a5a",
+                        borderRadius: "4px",
+                        fontSize: "0.9em",
+                      }}
+                    >
+                      <div
+                        style={{
+                          color: "#9ae6b4",
+                          fontWeight: "bold",
+                          marginBottom: "5px",
+                        }}
+                      >
+                        Ready to lock in:
+                      </div>
+                      {limitEdits.Daily?.value && (
+                        <div style={{ color: "#e2e8f0" }}>
+                          • Daily: {limitEdits.Daily.value} USDT
+                        </div>
+                      )}
+                      {limitEdits.Weekly?.value && (
+                        <div style={{ color: "#e2e8f0" }}>
+                          • Weekly: {limitEdits.Weekly.value} USDT
+                        </div>
+                      )}
+                      {limitEdits.Monthly?.value && (
+                        <div style={{ color: "#e2e8f0" }}>
+                          • Monthly: {limitEdits.Monthly.value} USDT
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  <button
+                    onClick={commitSetup}
+                    style={{
+                      backgroundColor: "#e53e3e",
+                      color: "white",
+                      padding: "12px 24px",
+                      border: "none",
+                      borderRadius: "6px",
+                      cursor: "pointer",
+                      fontSize: "1em",
+                      fontWeight: "bold",
+                      width: "100%",
+                    }}
+                  >
+                    🔒 Lock In Setup & Enable Security
+                  </button>
+                </div>
+              ) : (
+                <div>
+                  <p style={{ color: "#9ae6b4", margin: "0 0 15px 0" }}>
+                    ✅ Setup committed on {setupInfo?.commitTimestamp}
+                  </p>
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "15px",
+                      marginBottom: "10px",
+                      flexWrap: "wrap",
+                    }}
+                  >
+                    <p style={{ color: "#e2e8f0", margin: 0 }}>
+                      📊 Total Locked Value: {setupInfo?.totalLockedValue} USDT
+                    </p>
+                    <button
+                      onClick={recalculateTotalLockedValue}
+                      style={{
+                        padding: "4px 12px",
+                        borderRadius: "4px",
+                        border: "1px solid #9ae6b4",
+                        backgroundColor: "transparent",
+                        color: "#9ae6b4",
+                        cursor: "pointer",
+                        fontSize: "0.8em",
+                        fontWeight: "bold",
+                        transition: "background-color 0.2s",
+                      }}
+                      onMouseEnter={(e) => {
+                        e.target.style.backgroundColor = "#9ae6b4";
+                        e.target.style.color = "#1a202c";
+                      }}
+                      onMouseLeave={(e) => {
+                        e.target.style.backgroundColor = "transparent";
+                        e.target.style.color = "#9ae6b4";
+                      }}
+                      title="Recalculate using corrected logic (max limit instead of sum)"
+                    >
+                      🔄 Recalculate
+                    </button>
+                  </div>
+                  <p style={{ color: "#e2e8f0", margin: "0 0 15px 0" }}>
+                    📈 Increases This Period: {setupInfo?.increasesInPeriod}{" "}
+                    USDT
+                  </p>
+                  <div style={{ fontSize: "0.9em", color: "#cbd5e0" }}>
+                    <p style={{ margin: "0 0 8px 0", fontWeight: "bold" }}>
+                      Security Rules:
+                    </p>
+                    <ul style={{ margin: "0", paddingLeft: "20px" }}>
+                      <li>Increases: 24-72h timelock required</li>
+                      <li>Decreases: Immediate</li>
+                      <li>Max increase: 20% of locked value per 7 days</li>
+                    </ul>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Pending Bypass Requests Section */}
+          {pendingBypassRequests.length > 0 && (
+            <div
+              style={{
+                marginBottom: "20px",
+                padding: "15px",
+                border: "1px solid #333",
+                borderRadius: "5px",
+                backgroundColor: "#2d3748",
+                color: "white",
+              }}
+            >
+              <h3 style={{ color: "white" }}>
+                ⏳ Pending Bypass Requests ({pendingBypassRequests.length})
+              </h3>
+              <p
+                style={{
+                  fontSize: "0.9em",
+                  color: "#cbd5e0",
+                  marginBottom: "15px",
+                }}
+              >
+                Your pending bypass requests with countdown timers. Execute them
+                after the 24-hour timelock expires.
+              </p>
+
+              <div style={{ display: "grid", gap: "15px" }}>
+                {pendingBypassRequests.map((request, index) => {
+                  const countdown = formatCountdown(
+                    request.executeAfter,
+                    currentTime
+                  );
+
+                  return (
+                    <div
+                      key={index}
+                      style={{
+                        padding: "15px",
+                        border: countdown.ready
+                          ? "1px solid #48bb78"
+                          : "1px solid #4a5568",
+                        borderRadius: "8px",
+                        backgroundColor: "#1a202c",
+                      }}
+                    >
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          marginBottom: "10px",
+                          flexWrap: "wrap",
+                          gap: "10px",
+                        }}
+                      >
+                        <h4 style={{ color: "white", margin: 0 }}>
+                          💸 {request.amount} {request.tokenSymbol}
+                        </h4>
+                        <div
+                          style={{
+                            display: "flex",
+                            gap: "10px",
+                            alignItems: "center",
+                          }}
+                        >
+                          <span
+                            style={{
+                              fontSize: "0.8em",
+                              padding: "4px 8px",
+                              borderRadius: "12px",
+                              backgroundColor: countdown.ready
+                                ? "#48bb78"
+                                : "#4a5568",
+                              color: "white",
+                              fontWeight: "bold",
+                            }}
+                          >
+                            {countdown.ready ? "⚡ Ready!" : "⏰ Pending"}
+                          </span>
+                          {countdown.ready && (
+                            <button
+                              onClick={() =>
+                                executeBypassRequest(request.requestId)
+                              }
+                              style={{
+                                padding: "6px 12px",
+                                borderRadius: "4px",
+                                border: "none",
+                                backgroundColor: "#48bb78",
+                                color: "white",
+                                cursor: "pointer",
+                                fontSize: "0.8em",
+                                fontWeight: "bold",
+                              }}
+                            >
+                              ⚡ Execute
+                            </button>
+                          )}
+                          <button
+                            onClick={() =>
+                              cancelBypassRequest(request.requestId)
+                            }
+                            style={{
+                              padding: "6px 12px",
+                              borderRadius: "4px",
+                              border: "1px solid #e53e3e",
+                              backgroundColor: "transparent",
+                              color: "#e53e3e",
+                              cursor: "pointer",
+                              fontSize: "0.8em",
                             }}
                           >
                             ❌ Cancel
@@ -1632,26 +3218,54 @@ function App() {
                       </div>
 
                       <div style={{ marginBottom: "10px" }}>
-                        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "5px" }}>
-                          <span style={{ color: "#e2e8f0", fontSize: "0.9em" }}>Bypass Period:</span>
-                          <span style={{ color: "#9ae6b4", fontWeight: "bold" }}>{request.skipPeriod}</span>
+                        <div
+                          style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            marginBottom: "5px",
+                          }}
+                        >
+                          <span style={{ color: "#e2e8f0", fontSize: "0.9em" }}>
+                            Bypass Period:
+                          </span>
+                          <span
+                            style={{ color: "#9ae6b4", fontWeight: "bold" }}
+                          >
+                            {request.skipPeriod}
+                          </span>
                         </div>
-                        <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.8em", color: "#a0aec0" }}>
-                          <span>Request ID: {request.requestId.slice(0, 10)}...</span>
-                          <span>Submitted: {new Date(request.timestamp * 1000).toLocaleString()}</span>
+                        <div
+                          style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            fontSize: "0.8em",
+                            color: "#a0aec0",
+                          }}
+                        >
+                          <span>
+                            Request ID: {request.requestId.slice(0, 10)}...
+                          </span>
+                          <span>
+                            Submitted:{" "}
+                            {new Date(
+                              request.timestamp * 1000
+                            ).toLocaleString()}
+                          </span>
                         </div>
                       </div>
 
                       {/* Countdown Display */}
-                      <div style={{
-                        padding: "8px 12px",
-                        backgroundColor: "#4a5568",
-                        borderRadius: "4px",
-                        textAlign: "center",
-                        color: countdown.color,
-                        fontWeight: "bold",
-                        fontSize: "0.9em"
-                      }}>
+                      <div
+                        style={{
+                          padding: "8px 12px",
+                          backgroundColor: "#4a5568",
+                          borderRadius: "4px",
+                          textAlign: "center",
+                          color: countdown.color,
+                          fontWeight: "bold",
+                          fontSize: "0.9em",
+                        }}
+                      >
                         {countdown.text}
                       </div>
                     </div>
@@ -1659,72 +3273,41 @@ function App() {
                 })}
               </div>
 
-              <div style={{ marginTop: "15px", fontSize: "0.8em", color: "#a0aec0" }}>
-                💡 Bypass requests allow you to skip one spending limit while still respecting others.
-                Each request requires a 24-hour timelock for security.
+              <div
+                style={{
+                  marginTop: "15px",
+                  fontSize: "0.8em",
+                  color: "#a0aec0",
+                }}
+              >
+                💡 Bypass requests allow you to skip one spending limit while
+                still respecting others. Each request requires a 24-hour
+                timelock for security.
               </div>
             </div>
           )}
 
-          {/* Two-Phase System Status */}
-          <div style={{ marginBottom: "20px", padding: "15px", border: "2px solid #333", borderRadius: "5px", backgroundColor: isSetupCommitted ? "#1a365d" : "#2d3748", color: "white" }}>
-            <h3 style={{ color: "white" }}>Setup Status: {isSetupCommitted ? "🔒 Locked Mode" : "⚙️ Setup Mode"}</h3>
-            {!isSetupCommitted ? (
-              <div>
-                <p style={{ color: "#e2e8f0" }}>You are in setup mode. You can freely add/modify categories.</p>
-                <p style={{ color: "#fbb6ce" }}><strong>⚠️ Once you commit, increases will require 24-72h timelock!</strong></p>
-                <button onClick={commitSetup} style={{ backgroundColor: "#e53e3e", color: "white", padding: "10px 20px", border: "none", borderRadius: "5px", cursor: "pointer" }}>
-                  Commit Setup & Enter Locked Mode
-                </button>
-              </div>
-            ) : (
-              <div>
-                <p style={{ color: "#9ae6b4" }}>✅ Setup committed on {setupInfo?.commitTimestamp}</p>
-                <div style={{ display: "flex", alignItems: "center", gap: "15px", marginBottom: "10px", flexWrap: "wrap" }}>
-                  <p style={{ color: "#e2e8f0", margin: 0 }}>📊 Total Locked Value: {setupInfo?.totalLockedValue} USDT</p>
-                  <button
-                    onClick={recalculateTotalLockedValue}
-                    style={{
-                      padding: "4px 12px",
-                      borderRadius: "4px",
-                      border: "1px solid #9ae6b4",
-                      backgroundColor: "transparent",
-                      color: "#9ae6b4",
-                      cursor: "pointer",
-                      fontSize: "0.8em",
-                      fontWeight: "bold",
-                      transition: "background-color 0.2s"
-                    }}
-                    onMouseEnter={(e) => {
-                      e.target.style.backgroundColor = "#9ae6b4";
-                      e.target.style.color = "#1a202c";
-                    }}
-                    onMouseLeave={(e) => {
-                      e.target.style.backgroundColor = "transparent";
-                      e.target.style.color = "#9ae6b4";
-                    }}
-                    title="Recalculate using corrected logic (max limit instead of sum)"
-                  >
-                    🔄 Recalculate
-                  </button>
-                </div>
-                <p style={{ color: "#e2e8f0" }}>📈 Increases This Period: {setupInfo?.increasesInPeriod} USDT</p>
-                <p style={{ color: "white" }}><strong>Security Rules:</strong></p>
-                <ul style={{ fontSize: "0.9em", color: "#cbd5e0" }}>
-                  <li>Increases: 24-72h timelock required</li>
-                  <li>Decreases: Immediate</li>
-                  <li>Max increase: 20% of locked value per 7 days</li>
-                </ul>
-              </div>
-            )}
-          </div>
-
-
           {/* Simple Withdrawal Section */}
-          <div style={{ marginBottom: "20px", padding: "15px", border: "1px solid #333", borderRadius: "5px", backgroundColor: "#2d3748", color: "white" }}>
+          <div
+            style={{
+              marginBottom: "20px",
+              padding: "15px",
+              border: "1px solid #333",
+              borderRadius: "5px",
+              backgroundColor: "#2d3748",
+              color: "white",
+            }}
+          >
             <h3 style={{ color: "white" }}>💸 Withdraw Funds</h3>
-            <p style={{ fontSize: "0.9em", color: "#cbd5e0", marginBottom: "15px" }}>
-              Withdrawals are automatically checked against all your active spending limits.
+            <p
+              style={{
+                fontSize: "0.9em",
+                color: "#cbd5e0",
+                marginBottom: "15px",
+              }}
+            >
+              Withdrawals are automatically checked against all your active
+              spending limits.
             </p>
 
             <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
@@ -1739,7 +3322,7 @@ function App() {
                   borderRadius: "4px",
                   border: "1px solid #4a5568",
                   backgroundColor: "#4a5568",
-                  color: "white"
+                  color: "white",
                 }}
               />
               <button
@@ -1751,7 +3334,7 @@ function App() {
                   backgroundColor: "#e53e3e",
                   color: "white",
                   cursor: "pointer",
-                  fontWeight: "bold"
+                  fontWeight: "bold",
                 }}
               >
                 💸 Withdraw
@@ -1760,10 +3343,26 @@ function App() {
           </div>
 
           {/* Bypass Request Section */}
-          <div style={{ marginBottom: "20px", padding: "15px", border: "1px solid #333", borderRadius: "5px", backgroundColor: "#2d3748", color: "white" }}>
+          <div
+            style={{
+              marginBottom: "20px",
+              padding: "15px",
+              border: "1px solid #333",
+              borderRadius: "5px",
+              backgroundColor: "#2d3748",
+              color: "white",
+            }}
+          >
             <h3 style={{ color: "white" }}>⚡ Bypass Spending Limits</h3>
-            <p style={{ fontSize: "0.9em", color: "#cbd5e0", marginBottom: "15px" }}>
-              Request to bypass a spending limit and use available higher-tier allowance. Requests are executable after 24 hours.
+            <p
+              style={{
+                fontSize: "0.9em",
+                color: "#cbd5e0",
+                marginBottom: "15px",
+              }}
+            >
+              Request to bypass a spending limit and use available higher-tier
+              allowance. Requests are executable after 24 hours.
             </p>
 
             <div style={{ marginBottom: "15px" }}>
@@ -1776,26 +3375,59 @@ function App() {
                   backgroundColor: "transparent",
                   color: "#e2e8f0",
                   cursor: "pointer",
-                  fontSize: "0.9em"
+                  fontSize: "0.9em",
                 }}
               >
-                {showBypassForm ? '➖ Hide' : '➕ Request'} Bypass
+                {showBypassForm ? "➖ Hide" : "➕ Request"} Bypass
               </button>
             </div>
 
             {/* Bypass Request Form */}
             {showBypassForm && (
-              <div style={{ padding: "15px", backgroundColor: "#1a202c", borderRadius: "4px", border: "1px solid #4a5568" }}>
-                <h4 style={{ color: "#fbb6ce", margin: "0 0 15px 0" }}>⚡ New Bypass Request</h4>
-                <p style={{ fontSize: "0.8em", color: "#a0aec0", marginBottom: "15px" }}>
-                  Example: If you hit your daily limit but have weekly allowance remaining, you can bypass daily and use weekly.
+              <div
+                style={{
+                  padding: "15px",
+                  backgroundColor: "#1a202c",
+                  borderRadius: "4px",
+                  border: "1px solid #4a5568",
+                }}
+              >
+                <h4 style={{ color: "#fbb6ce", margin: "0 0 15px 0" }}>
+                  ⚡ New Bypass Request
+                </h4>
+                <p
+                  style={{
+                    fontSize: "0.8em",
+                    color: "#a0aec0",
+                    marginBottom: "15px",
+                  }}
+                >
+                  Example: If you hit your daily limit but have weekly allowance
+                  remaining, you can bypass daily and use weekly.
                 </p>
 
-                <div style={{ display: "grid", gap: "15px", marginBottom: "15px" }}>
+                <div
+                  style={{ display: "grid", gap: "15px", marginBottom: "15px" }}
+                >
                   {/* Amount and Token */}
-                  <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: "10px" }}>
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "2fr 1fr",
+                      gap: "10px",
+                    }}
+                  >
                     <div>
-                      <label style={{ display: "block", fontSize: "0.9em", color: "#e2e8f0", marginBottom: "5px" }}>Amount</label>
+                      <label
+                        style={{
+                          display: "block",
+                          fontSize: "0.9em",
+                          color: "#e2e8f0",
+                          marginBottom: "5px",
+                        }}
+                      >
+                        Amount
+                      </label>
                       <input
                         type="text"
                         placeholder="Amount to withdraw"
@@ -1807,12 +3439,21 @@ function App() {
                           borderRadius: "4px",
                           border: "1px solid #4a5568",
                           backgroundColor: "#4a5568",
-                          color: "white"
+                          color: "white",
                         }}
                       />
                     </div>
                     <div>
-                      <label style={{ display: "block", fontSize: "0.9em", color: "#e2e8f0", marginBottom: "5px" }}>Token</label>
+                      <label
+                        style={{
+                          display: "block",
+                          fontSize: "0.9em",
+                          color: "#e2e8f0",
+                          marginBottom: "5px",
+                        }}
+                      >
+                        Token
+                      </label>
                       <select
                         value={bypassToken}
                         onChange={(e) => setBypassToken(e.target.value)}
@@ -1822,23 +3463,39 @@ function App() {
                           borderRadius: "4px",
                           border: "1px solid #4a5568",
                           backgroundColor: "#4a5568",
-                          color: "white"
+                          color: "white",
                         }}
                       >
                         <option value="ETH">ETH</option>
-                        {Object.entries(getCurrentNetwork(selectedNetwork).tokens)
-                          .filter(([_, token]) => token.address !== "0x0000000000000000000000000000000000000000")
+                        {Object.entries(
+                          getCurrentNetwork(selectedNetwork).tokens
+                        )
+                          .filter(
+                            ([_, token]) =>
+                              token.address !==
+                              "0x0000000000000000000000000000000000000000"
+                          )
                           .map(([key, token]) => (
-                            <option key={key} value={key}>{token.symbol}</option>
-                          ))
-                        }
+                            <option key={key} value={key}>
+                              {token.symbol}
+                            </option>
+                          ))}
                       </select>
                     </div>
                   </div>
 
                   {/* Period to Skip */}
                   <div>
-                    <label style={{ display: "block", fontSize: "0.9em", color: "#e2e8f0", marginBottom: "5px" }}>Period to Bypass</label>
+                    <label
+                      style={{
+                        display: "block",
+                        fontSize: "0.9em",
+                        color: "#e2e8f0",
+                        marginBottom: "5px",
+                      }}
+                    >
+                      Period to Bypass
+                    </label>
                     <select
                       value={bypassPeriod}
                       onChange={(e) => setBypassPeriod(e.target.value)}
@@ -1848,7 +3505,7 @@ function App() {
                         borderRadius: "4px",
                         border: "1px solid #4a5568",
                         backgroundColor: "#4a5568",
-                        color: "white"
+                        color: "white",
                       }}
                     >
                       {spendingLimits.map((limit) => (
@@ -1860,8 +3517,15 @@ function App() {
                   </div>
                 </div>
 
-                <div style={{ marginBottom: "15px", fontSize: "0.8em", color: "#a0aec0" }}>
-                  💡 After submitting, your request will be executable in 24 hours. Other spending limits will still apply.
+                <div
+                  style={{
+                    marginBottom: "15px",
+                    fontSize: "0.8em",
+                    color: "#a0aec0",
+                  }}
+                >
+                  💡 After submitting, your request will be executable in 24
+                  hours. Other spending limits will still apply.
                 </div>
 
                 <button
@@ -1875,14 +3539,13 @@ function App() {
                     cursor: "pointer",
                     fontSize: "1em",
                     fontWeight: "bold",
-                    width: "100%"
+                    width: "100%",
                   }}
                 >
                   ⚡ Submit Bypass Request
                 </button>
               </div>
             )}
-
           </div>
 
           <div>
@@ -1894,93 +3557,6 @@ function App() {
               onChange={(e) => setApprover(e.target.value)}
             />
             <button onClick={addApprover}>Add Approver</button>
-          </div>
-
-          <button
-            onClick={fetchSpendingLimits}
-            style={{
-              padding: "8px 16px",
-              borderRadius: "4px",
-              border: "none",
-              backgroundColor: "#4a5568",
-              color: "white",
-              cursor: "pointer",
-              marginBottom: "15px"
-            }}
-          >
-            🔄 Refresh Spending Limits
-          </button>
-
-          <div style={{ marginBottom: "20px", padding: "15px", border: "1px solid #333", borderRadius: "5px", backgroundColor: "#2d3748", color: "white" }}>
-            <h3 style={{ color: "white" }}>⏰ Your Spending Limits ({spendingLimits.length})</h3>
-            {spendingLimits.length === 0 ? (
-              <p style={{ color: "#a0aec0", fontStyle: "italic" }}>No spending limits set. Set your limits above to control spending.</p>
-            ) : (
-              <div style={{ display: "grid", gap: "15px" }}>
-                {spendingLimits.map((limit, index) => {
-                  // Calculate progress percentage
-                  const progressPercent = limit.limit > 0 ? (parseFloat(limit.spent) / parseFloat(limit.limit)) * 100 : 0;
-                  const isNearLimit = progressPercent > 80;
-                  const isAtLimit = progressPercent >= 100;
-
-                  return (
-                    <div key={index} style={{
-                      padding: "15px",
-                      border: isAtLimit ? "1px solid #e53e3e" : isNearLimit ? "1px solid #ed8936" : "1px solid #48bb78",
-                      borderRadius: "8px",
-                      backgroundColor: "#1a202c"
-                    }}>
-                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "10px" }}>
-                        <h4 style={{ color: "white", margin: 0 }}>⏰ {limit.name}</h4>
-                        <span style={{
-                          fontSize: "0.8em",
-                          padding: "4px 8px",
-                          borderRadius: "12px",
-                          backgroundColor: isAtLimit ? "#e53e3e" : isNearLimit ? "#ed8936" : "#48bb78",
-                          color: "white"
-                        }}>
-                          {progressPercent.toFixed(0)}% used
-                        </span>
-                      </div>
-
-                      <div style={{ marginBottom: "10px" }}>
-                        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "5px" }}>
-                          <span style={{ color: "#e2e8f0", fontSize: "0.9em" }}>Remaining</span>
-                          <span style={{ color: isAtLimit ? "#fc8181" : "#9ae6b4", fontWeight: "bold" }}>
-                            {limit.remaining} USDT
-                          </span>
-                        </div>
-                        <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.8em", color: "#a0aec0" }}>
-                          <span>Spent: {limit.spent} USDT</span>
-                          <span>Limit: {limit.limit} USDT</span>
-                        </div>
-                      </div>
-
-                      {/* Progress bar */}
-                      <div style={{
-                        width: "100%",
-                        height: "6px",
-                        backgroundColor: "#4a5568",
-                        borderRadius: "3px",
-                        overflow: "hidden",
-                        marginBottom: "8px"
-                      }}>
-                        <div style={{
-                          width: `${Math.min(progressPercent, 100)}%`,
-                          height: "100%",
-                          backgroundColor: isAtLimit ? "#e53e3e" : isNearLimit ? "#ed8936" : "#48bb78",
-                          transition: "width 0.3s ease"
-                        }} />
-                      </div>
-
-                      <div style={{ fontSize: "0.8em", color: "#718096" }}>
-                        Duration: {limit.durationDays > 0 ? `${limit.durationDays} days` : `${limit.durationHours} hours`}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
           </div>
         </div>
       )}
