@@ -244,6 +244,13 @@
   },
   {
     "inputs": [],
+    "name": "commitInitialSetup",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
     "name": "deployUserProxy",
     "outputs": [
       {
@@ -704,6 +711,13 @@
     "type": "function"
   },
   {
+    "inputs": [],
+    "name": "recalculateTotalLockedValue",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
     "inputs": [
       {
         "internalType": "bytes32",
@@ -755,12 +769,42 @@
   {
     "inputs": [
       {
+        "internalType": "uint256",
+        "name": "dailyLimit",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "weeklyLimit",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "monthlyLimit",
+        "type": "uint256"
+      }
+    ],
+    "name": "setCommonPeriodLimits",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
         "internalType": "bool",
         "name": "_developmentMode",
         "type": "bool"
       }
     ],
     "name": "setDevelopmentMode",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "setupModuleCrossReferences",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"

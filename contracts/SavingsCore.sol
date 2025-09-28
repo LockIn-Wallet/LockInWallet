@@ -361,6 +361,47 @@ contract SavingsCore is Initializable, UUPSUpgradeable, OwnableUpgradeable, ISav
         return limitsModule.getActivePeriodCount(user);
     }
 
+    // ========== SPENDING LIMITS SETUP FUNCTIONS ==========
+
+    function setCommonPeriodLimits(
+        uint256 dailyLimit,
+        uint256 weeklyLimit,
+        uint256 monthlyLimit
+    ) external {
+        ITimePeriodLimitsModule limitsModule = ITimePeriodLimitsModule(modules[ModuleIds.TIME_PERIOD_LIMITS]);
+        require(address(limitsModule) != address(0), "TimePeriodLimitsModule not registered");
+        limitsModule.setCommonPeriodLimits(msg.sender, dailyLimit, weeklyLimit, monthlyLimit);
+    }
+
+    function commitInitialSetup() external {
+        IProposalSystemModule proposalModule = IProposalSystemModule(modules[ModuleIds.PROPOSAL_SYSTEM]);
+        require(address(proposalModule) != address(0), "ProposalSystemModule not registered");
+        proposalModule.commitInitialSetup(msg.sender);
+    }
+
+    function recalculateTotalLockedValue() external {
+        IProposalSystemModule proposalModule = IProposalSystemModule(modules[ModuleIds.PROPOSAL_SYSTEM]);
+        require(address(proposalModule) != address(0), "ProposalSystemModule not registered");
+        proposalModule.recalculateTotalLockedValue(msg.sender);
+    }
+
+    // ========== MODULE SETUP FUNCTIONS (OWNER ONLY) ==========
+
+    function setupModuleCrossReferences() external onlyOwner {
+        address timePeriodLimitsAddr = modules[ModuleIds.TIME_PERIOD_LIMITS];
+        address proposalSystemAddr = modules[ModuleIds.PROPOSAL_SYSTEM];
+        address bypassSystemAddr = modules[ModuleIds.BYPASS_SYSTEM];
+
+        require(timePeriodLimitsAddr != address(0), "TimePeriodLimitsModule not registered");
+        require(proposalSystemAddr != address(0), "ProposalSystemModule not registered");
+        require(bypassSystemAddr != address(0), "BypassSystemModule not registered");
+
+        // Set TimePeriodLimitsModule reference in ProposalSystemModule
+        IProposalSystemModule(proposalSystemAddr).setTimePeriodLimitsModule(timePeriodLimitsAddr);
+
+        // Set TimePeriodLimitsModule reference in BypassSystemModule
+        IBypassSystemModule(bypassSystemAddr).setTimePeriodLimitsModule(timePeriodLimitsAddr);
+    }
 
     // ========== USER PROXY FUNCTIONS ==========
 

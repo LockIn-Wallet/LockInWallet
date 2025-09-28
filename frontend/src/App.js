@@ -18,10 +18,10 @@ const NETWORKS = {
     },
     rpcUrls: ["http://127.0.0.1:8545"],
     blockExplorerUrls: [""],
-    savingsContract: "0xF32D39ff9f6Aa7a7A64d7a4F00a54826Ef791a55",
+    savingsContract: "0x4bf010f1b9beDA5450a8dD702ED602A104ff65EE",
     tokens: {
       USDT: {
-        address: "0xD42912755319665397FF090fBB63B1a31aE87Cee",
+        address: "0xc582Bc0317dbb0908203541971a358c44b1F3766",
         symbol: "USDT",
         name: "Tether USD",
         decimals: 6,
@@ -3673,14 +3673,14 @@ function App() {
 
               {/* My Wallet Option */}
               <div style={{ marginBottom: "8px" }}>
-                <label style={{ display: "flex", alignItems: "center", cursor: "pointer", padding: "8px", borderRadius: "4px", backgroundColor: selectedWithdrawalDestination === "self" ? "#2d3748" : "transparent", border: "1px solid #4a5568" }}>
+                <label style={{ display: "flex", alignItems: "flex-start", cursor: "pointer", padding: "8px", borderRadius: "4px", backgroundColor: selectedWithdrawalDestination === "self" ? "#2d3748" : "transparent", border: "1px solid #4a5568" }}>
                   <input
                     type="radio"
                     name="withdrawalDestination"
                     value="self"
                     checked={selectedWithdrawalDestination === "self"}
                     onChange={(e) => setSelectedWithdrawalDestination(e.target.value)}
-                    style={{ marginRight: "8px" }}
+                    style={{ marginRight: "8px", marginTop: "2px" }}
                   />
                   <span style={{ color: "white" }}>
                     🏠 My Wallet ({userAddress ? `${userAddress.slice(0, 6)}...${userAddress.slice(-4)}` : ""})
@@ -3691,15 +3691,15 @@ function App() {
               {/* Withdrawal Addresses as Radio Buttons */}
               {withdrawalAddresses.map((addr, index) => (
                 <div key={index} style={{ marginBottom: "8px" }}>
-                  <div style={{ display: "flex", alignItems: "center", border: "1px solid #4a5568", borderRadius: "4px", backgroundColor: selectedWithdrawalDestination === addr.destination ? "#2d3748" : "transparent" }}>
-                    <label style={{ display: "flex", alignItems: "center", cursor: "pointer", padding: "8px", flex: 1 }}>
+                  <div style={{ display: "flex", alignItems: "flex-start", border: "1px solid #4a5568", borderRadius: "4px", backgroundColor: selectedWithdrawalDestination === addr.destination ? "#2d3748" : "transparent" }}>
+                    <label style={{ display: "flex", alignItems: "flex-start", cursor: "pointer", padding: "8px", flex: 1 }}>
                       <input
                         type="radio"
                         name="withdrawalDestination"
                         value={addr.destination}
                         checked={selectedWithdrawalDestination === addr.destination}
                         onChange={(e) => setSelectedWithdrawalDestination(e.target.value)}
-                        style={{ marginRight: "8px" }}
+                        style={{ marginRight: "8px", marginTop: "2px" }}
                       />
                       <div>
                         <div style={{ color: "white", fontWeight: "bold" }}>
@@ -3739,12 +3739,25 @@ function App() {
                   style={{
                     padding: "8px 16px",
                     borderRadius: "4px",
-                    border: "1px solid #48bb78",
-                    backgroundColor: "transparent",
-                    color: "#48bb78",
+                    border: "1px solid #4a5568",
+                    backgroundColor: "#2d3748",
+                    backgroundImage: "none",
+                    color: "#a0aec0",
                     cursor: "pointer",
-                    fontSize: "0.9em",
-                    fontWeight: "bold",
+                    fontSize: "0.85em",
+                    fontWeight: "normal",
+                    opacity: 0.7,
+                    transition: "all 0.2s ease",
+                  }}
+                  onMouseEnter={(e) => {
+                    e.target.style.opacity = "1";
+                    e.target.style.color = "#e2e8f0";
+                    e.target.style.borderColor = "#718096";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.target.style.opacity = "0.7";
+                    e.target.style.color = "#a0aec0";
+                    e.target.style.borderColor = "#4a5568";
                   }}
                 >
                   ➕ Add Withdrawal Address

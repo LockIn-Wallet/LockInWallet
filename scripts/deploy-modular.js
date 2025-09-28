@@ -2,8 +2,22 @@ const { ethers, upgrades } = require("hardhat");
 const fs = require("fs");
 const path = require("path");
 
-// Configuration - store the current proxy address
-const PROXY_ADDRESS = "0x0000000000000000000000000000000000000000"; // Set to zero for initial deployment
+// Auto-detect existing proxy address from frontend
+function getExistingProxyAddress() {
+  try {
+    const frontendPath = path.join(__dirname, "../frontend/src/App.js");
+    const frontendContent = fs.readFileSync(frontendPath, "utf8");
+    const match = frontendContent.match(/savingsContract: "([^"]+)"/);
+    if (match && match[1] !== "0x0000000000000000000000000000000000000000") {
+      return match[1];
+    }
+  } catch (error) {
+    console.log("Could not read existing address from frontend");
+  }
+  return null;
+}
+
+const PROXY_ADDRESS = getExistingProxyAddress();
 
 // Check for development mode flag
 const isDevelopmentMode = process.env.DEV_MODE === 'true';
@@ -22,16 +36,17 @@ async function main() {
 
   try {
     // Check if proxy already exists
-    if (PROXY_ADDRESS && PROXY_ADDRESS !== "0x0000000000000000000000000000000000000000") {
+    if (PROXY_ADDRESS) {
+      console.log(`🔍 Attempting to upgrade existing contract at: ${PROXY_ADDRESS}`);
       try {
         // Try to interact with the existing proxy to see if it exists
         const existingContract = await ethers.getContractAt("SavingsCore", PROXY_ADDRESS);
         const owner = await existingContract.owner();
-        console.log(`📋 Found existing proxy at: ${PROXY_ADDRESS}`);
+        console.log(`✅ Found existing proxy at: ${PROXY_ADDRESS}`);
         console.log(`   Current owner: ${owner}`);
 
         // Perform upgrade
-        console.log("⬆️  Upgrading existing proxy...");
+        console.log("⬆️  Upgrading existing proxy implementation...");
         const SavingsCore = await ethers.getContractFactory("SavingsCore");
         const upgraded = await upgrades.upgradeProxy(PROXY_ADDRESS, SavingsCore);
         await upgraded.waitForDeployment();
@@ -39,13 +54,17 @@ async function main() {
         isUpgrade = true;
 
         console.log(`✅ Core contract upgraded successfully!`);
-        console.log(`   Proxy address (unchanged): ${savingsAddress}`);
+        console.log(`   Proxy address (preserved): ${savingsAddress}`);
 
       } catch (error) {
+        console.log(`❌ Upgrade failed: ${error.message}`);
         console.log(`⚠️  Proxy at ${PROXY_ADDRESS} not found or not accessible`);
-        console.log("   Proceeding with fresh deployment...\n");
+        console.log("🔄 Proceeding with fresh deployment...\n");
         isUpgrade = false;
       }
+    } else {
+      console.log("🆕 No existing contract address found in frontend");
+      console.log("🔄 Proceeding with fresh deployment...\n");
     }
 
     if (!isUpgrade) {
@@ -133,6 +152,13 @@ async function main() {
     await tx.wait();
 
     console.log("   ✅ All modules registered successfully");
+
+    // Set up module cross-references
+    console.log("\n🔗 Setting up module cross-references...");
+    console.log("   Configuring inter-module dependencies through SavingsCore...");
+    tx = await savingsCore.setupModuleCrossReferences();
+    await tx.wait();
+    console.log("   ✅ Module cross-references configured");
 
     // Set up module interactions
     console.log("\n🔧 Modular system configured...");

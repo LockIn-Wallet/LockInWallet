@@ -1,15 +1,14 @@
 {
-  "core": "0xF32D39ff9f6Aa7a7A64d7a4F00a54826Ef791a55",
+  "core": "0x4bf010f1b9beDA5450a8dD702ED602A104ff65EE",
   "modules": {
-    "timePeriodLimits": "0x927b167526bAbB9be047421db732C663a0b77B11",
-    "proposalSystem": "0x32EEce76C2C2e8758584A83Ee2F522D4788feA0f",
-    "bypassSystem": "0x01c1DeF3b91672704716159C9041Aeca392DdFfb",
-    "approvalSystem": "0x02b0B4EFd909240FCB2Eb5FAe060dC60D112E3a4"
+    "timePeriodLimits": "0x71089Ba41e478702e1904692385Be3972B2cBf9e",
+    "proposalSystem": "0x8F4ec854Dd12F1fe79500a1f53D0cbB30f9b6134",
+    "bypassSystem": "0xC66AB83418C20A65C3f8e83B3d11c8C3a6097b6F",
+    "approvalSystem": "0xeF31027350Be2c7439C1b0BE022d49421488b72C"
   },
   "tokens": {
-    "usdt": "0xD42912755319665397FF090fBB63B1a31aE87Cee"
+    "usdt": "0xc582Bc0317dbb0908203541971a358c44b1F3766"
   },
   "network": "localhost",
-  "deployedAt": "2025-09-28T21:37:57.513Z",
-  "isUpgrade": true
+  "deployedAt": "2025-09-28T22:23:21.053Z"
 }

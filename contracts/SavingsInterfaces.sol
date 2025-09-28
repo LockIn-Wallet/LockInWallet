@@ -51,6 +51,7 @@ interface ITimePeriodLimitsModule {
     function addTimePeriodLimit(address user, string calldata periodName, uint256 limit, uint256 durationInSeconds) external;
     function removeTimePeriodLimit(address user, string calldata periodName) external;
     function updateTimePeriodLimit(address user, string calldata periodName, uint256 newLimit) external;
+    function setCommonPeriodLimits(address user, uint256 dailyLimit, uint256 weeklyLimit, uint256 monthlyLimit) external;
 
     // Limit checking and spending
     function checkAllTimePeriodLimits(address user, uint256 amount) external;
@@ -94,6 +95,7 @@ interface IProposalSystemModule {
     // Setup management
     function commitInitialSetup(address user) external;
     function recalculateTotalLockedValue(address user) external;
+    function setTimePeriodLimitsModule(address _timePeriodLimitsModule) external;
 
     // View functions
     function getProposal(address user, bytes32 proposalId) external view returns (
@@ -136,6 +138,9 @@ interface IBypassSystemModule {
         bool executed,
         bool exists
     );
+
+    // Module setup
+    function setTimePeriodLimitsModule(address _timePeriodLimitsModule) external;
 
     // Events
     event BypassRequested(address indexed user, bytes32 indexed requestId, string skipPeriod, uint256 amount, address token, uint256 executeAfter);
