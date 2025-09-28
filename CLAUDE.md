@@ -9,9 +9,17 @@ This is a savings wallet DApp that allows users to deposit ETH and ERC20 tokens 
 ## Architecture
 
 ### Smart Contract Layer (Hardhat + TypeScript)
-- **Main Contract**: `contracts/Lock.sol` - Renamed to `Savings` contract, an upgradeable savings wallet using OpenZeppelin's UUPS proxy pattern
+- **Modular Architecture**: Contract split into multiple modules to stay under size limits
+- **Core Contract**: `contracts/SavingsCore.sol` - Main coordinator using UUPS proxy pattern
+- **Shared Interfaces**: `contracts/SavingsInterfaces.sol` - Common data structures and interfaces
+- **Modules**:
+  - `TimePeriodLimitsModule.sol` - Spending limits with time periods (Daily/Weekly/Monthly/Custom)
+  - `ProposalSystemModule.sol` - Two-phase proposal system with timelock security
+  - `BypassSystemModule.sol` - Emergency bypass system for urgent withdrawals
+  - `ApprovalSystemModule.sol` - Multi-signature approval system
+- **User Proxies**: `contracts/UserProxy.sol` - Deterministic deposit addresses for users
 - **Test Token**: `contracts/MockUSDT.sol` - Mock USDT token for testing (6 decimals)
-- **Deployment**: Uses OpenZeppelin upgrades plugin for proxy deployment and upgrades
+- **Deployment**: Uses modular deployment with module registration and automated ABI sync
 
 ### Frontend (React + ethers.js)
 - **Framework**: Create React App with ethers.js v6 for blockchain interaction
@@ -20,12 +28,15 @@ This is a savings wallet DApp that allows users to deposit ETH and ERC20 tokens 
 
 ## Core Features
 
-The Savings contract implements:
-- Multi-token support (ETH and ERC20 tokens)
-- Withdrawal categories with spending limits and time periods
-- Multi-signature approval system for category changes
-- Emergency full withdrawal with approval
-- Upgradeability via UUPS proxy pattern
+The modular savings system implements:
+- **Multi-token support** (ETH and ERC20 tokens) with token-specific balances
+- **Time-based spending limits** with Daily/Weekly/Monthly periods and custom durations
+- **Two-phase proposal system** with 24-72 hour timelock for security
+- **Emergency bypass system** for urgent withdrawals with timelock protection
+- **Multi-signature approval system** for emergency and administrative functions
+- **Deterministic user proxies** for permanent deposit addresses from exchanges
+- **Module upgradeability** - Individual modules can be upgraded without affecting others
+- **Contract size optimization** - Modular architecture stays under deployment limits
 
 ## Development Commands
 
@@ -43,34 +54,40 @@ npx hardhat test
 # Start local blockchain
 npx hardhat node
 
-# AUTOMATED WORKFLOW (RECOMMENDED):
+# AUTOMATED MODULAR WORKFLOW (RECOMMENDED):
 
-# 1. Development Cycle
-npx hardhat compile                                      # Auto-updates frontend ABIs
-npx hardhat run scripts/deploy-upgrade.js --network localhost  # Smart deploy + validation
-cd frontend && npm start                                # Everything ready!
+# 1. Modular Development Cycle
+npx hardhat compile                                        # Auto-updates frontend ABIs
+npx hardhat run scripts/deploy-modular.js --network localhost  # Modular deploy + validation
+cd frontend && npm start                                  # Everything ready!
 
-# MANUAL OPTIONS (if needed):
+# MODULAR DEPLOYMENT OPTIONS:
 
-# Option 1: Smart Deploy/Upgrade
-# - Automatically detects if proxy exists
-# - Uses upgrade if proxy found, deploy if not
+# Option 1: Modular Deploy (RECOMMENDED)
+# - Deploys SavingsCore + all 4 modules
+# - Registers modules and sets up interactions
 # - Includes validation and ABI updates
+npx hardhat run scripts/deploy-modular.js --network localhost
+
+# Option 2: Individual Module Upgrade
+# - Upgrades specific module while preserving data
+# - Updates module registration automatically
+npx hardhat run scripts/upgrade-module.js --network localhost <ModuleName> <CoreAddress>
+# Example: npx hardhat run scripts/upgrade-module.js --network localhost TimePeriodLimitsModule 0x1234...
+
+# Option 3: Legacy Deploy (for compatibility)
+# - Uses older deployment method
+# - May be needed for specific scenarios
 npx hardhat run scripts/deploy-upgrade.js --network localhost
-
-# Option 2: Fresh deployment (DATA LOSS WARNING!)
-# - Always deploys new proxy (loses all user data)
-# - Only use for initial setup or when data loss is acceptable
-# - Includes validation and ABI updates
-npx hardhat run scripts/deploy-all.js --network localhost
-
-# Option 3: Manual upgrade (if you know proxy address)
-# - Updates existing proxy implementation
-# - Preserves all user data
-npx hardhat run scripts/upgrade.ts --network localhost
 
 # Option 4: Validation only
 npx hardhat run scripts/validate-deployment.js --network localhost
+
+# AVAILABLE MODULES FOR UPGRADE:
+# - TimePeriodLimitsModule
+# - ProposalSystemModule
+# - BypassSystemModule
+# - ApprovalSystemModule
 ```
 
 ### Frontend Development
@@ -94,15 +111,24 @@ npm test
 ## Key Technical Details
 
 ### Contract Architecture
-- **Inheritance**: `Initializable`, `UUPSUpgradeable`, `OwnableUpgradeable`
-- **Storage**: Uses mappings for user data with token-specific balances
-- **Security**: Includes reentrancy protection and authorization checks
-- **Events**: Comprehensive event emission for all major actions
+- **Modular Design**: SavingsCore coordinates 4 specialized modules via delegated calls
+- **Core Contract**: `Initializable`, `UUPSUpgradeable`, `OwnableUpgradeable`
+- **Module Authorization**: Each module has `onlyCore` modifier for security isolation
+- **Shared Storage**: All modules access storage through SavingsCore
+- **Module Registration**: Dynamic module registration with keccak256 identifiers:
+  - `TIME_PERIOD_LIMITS` → TimePeriodLimitsModule
+  - `PROPOSAL_SYSTEM` → ProposalSystemModule
+  - `BYPASS_SYSTEM` → BypassSystemModule
+  - `APPROVAL_SYSTEM` → ApprovalSystemModule
+- **Security**: Includes reentrancy protection, authorization checks, and timelock mechanisms
+- **Events**: Comprehensive event emission across all modules for transparency
 
 ### Frontend Integration
-- **Contract Address**: Hardcoded in `frontend/src/App.js`
-- **ABI**: Stored in `frontend/src/SavingsABI.json`
+- **Contract Address**: SavingsCore address hardcoded in `frontend/src/App.js`
+- **Main ABI**: Stored in `frontend/src/SavingsABI.json` (SavingsCore ABI)
+- **Module ABIs**: Individual module ABIs available in `frontend/src/`
 - **Network**: Configured for localhost development (port 8545)
+- **Module Config**: Module addresses stored in `frontend/src/moduleAddresses.json`
 
 ### Token Support
 - **ETH**: Native token (address: `0x0000000000000000000000000000000000000000`)
@@ -112,47 +138,88 @@ npm test
 
 ### Initial Setup (First Time)
 1. Start local Hardhat node: `npx hardhat node`
-2. Deploy contracts: `node scripts/deploy-upgrade.js`
+2. Deploy modular contracts: `npx hardhat run scripts/deploy-modular.js --network localhost`
 3. Start frontend: `cd frontend && npm start`
 
 ### Contract Updates (After Initial Setup)
-1. Make changes to `contracts/Lock.sol`
-2. Compile: `npx hardhat compile`
-3. Upgrade: `node scripts/deploy-upgrade.js` (preserves user data)
-4. Frontend automatically updated
+1. Make changes to any contract in `contracts/`
+2. Compile: `npx hardhat compile` (auto-updates ABIs)
+3. **For Core changes**: `npx hardhat run scripts/deploy-modular.js --network localhost`
+4. **For Module changes**: `npx hardhat run scripts/upgrade-module.js --network localhost <ModuleName> <CoreAddress>`
+5. Frontend automatically updated with new ABIs
 
-## Understanding the Upgrade System
+## Understanding the Modular System
+
+### Modular Architecture Benefits
+**Why we switched from monolithic to modular:**
+- **Contract Size Limits**: Ethereum has ~24KB deployment limit, our contract was too large
+- **Independent Upgrades**: Upgrade individual modules without affecting others
+- **Specialized Functionality**: Each module focuses on one responsibility
+- **Reduced Gas Costs**: Only deploy/upgrade what needs to change
+
+### Module System Design
+```
+SavingsCore (Proxy)
+├── TimePeriodLimitsModule    → Daily/Weekly/Monthly spending limits
+├── ProposalSystemModule      → Two-phase proposals with timelock
+├── BypassSystemModule        → Emergency withdrawal bypass
+└── ApprovalSystemModule      → Multi-signature approvals
+```
+
+### Module Registration Process
+```solidity
+// Modules are registered with keccak256 identifiers:
+bytes32 moduleId = keccak256(abi.encodePacked("TIME_PERIOD_LIMITS"));
+savingsCore.registerModule(moduleId, moduleAddress);
+```
 
 ### UUPS Proxy Pattern
 This project uses OpenZeppelin's **UUPS (Universal Upgradeable Proxy Standard)** pattern:
 
-- **Proxy Contract**: Permanent address that users interact with
-- **Implementation Contract**: Contains the actual logic, can be updated
+- **SavingsCore Proxy**: Permanent address that users and frontend interact with
+- **Module Implementations**: Can be updated independently without changing core
+- **Shared Storage**: All modules access storage through SavingsCore
 - **Storage**: Always stored in the proxy, preserved across upgrades
 
-### Why Addresses Were Changing (Fixed)
-**Previous Issue**: Using `deploy-all.js` always created new proxy contracts
-**Solution**: `deploy-upgrade.js` detects existing proxies and preserves them
+### Module vs Core Upgrades
+**SavingsCore Upgrades:**
+- Use UUPS proxy upgrade pattern
+- Preserve all user data and module registrations
+- Require careful storage layout management
+
+**Module Upgrades:**
+- Deploy new module implementation
+- Update registration in SavingsCore
+- Old module automatically deregistered
+- Module-specific data preserved in SavingsCore storage
 
 ### Upgrade Safety
-✅ **Safe Operations**:
+✅ **Safe Operations (Core & Modules)**:
 - Adding new functions
 - Adding new state variables (at end of struct)
 - Modifying function logic
 - Adding events
+- Adding new modules
+
+✅ **Safe Module Operations**:
+- Complete module replacement
+- New module implementations
+- Updated module logic
 
 ⚠️ **Dangerous Operations**:
-- Reordering state variables
-- Changing variable types
-- Removing state variables
-- Changing inheritance order
+- Reordering state variables in SavingsCore
+- Changing variable types in shared storage
+- Removing state variables from SavingsCore
+- Changing inheritance order in SavingsCore
 
 ### Data Preservation
 When using proper upgrade scripts:
-- ✅ User balances preserved
-- ✅ Spending limits preserved
-- ✅ Proxy addresses preserved
+- ✅ User balances preserved (stored in SavingsCore)
+- ✅ Spending limits preserved (stored in SavingsCore)
+- ✅ SavingsCore proxy address preserved
 - ✅ User proxy contracts preserved
+- ✅ Module registrations updated automatically
+- ✅ Module-specific data preserved across module upgrades
 
 ## Configuration Files
 
@@ -162,13 +229,74 @@ When using proper upgrade scripts:
 
 ## Testing Strategy
 
-- **Smart Contracts**: Hardhat test suite in `test/Lock.ts` (needs updating for Savings contract)
+- **Smart Contracts**: Hardhat test suite needs updating for modular architecture
+- **Module Testing**: Each module can be tested independently
+- **Integration Testing**: Full system testing through SavingsCore
 - **Frontend**: Create React App test runner (minimal tests currently)
+- **Validation Scripts**: Automated deployment validation in `scripts/validate-deployment.js`
+
+## Troubleshooting
+
+### Common ABI/Contract Issues
+
+#### **"could not decode result data" Error**
+```bash
+# Quick fixes (in order):
+1. Clear browser cache (Ctrl+Shift+R / Cmd+Shift+R)
+2. Check MetaMask network (should be localhost:8545, Chain ID: 31337)
+3. Restart Hardhat node and redeploy:
+   npx hardhat node
+   npx hardhat run scripts/deploy-modular.js --network localhost
+4. Force recompile: npx hardhat clean && npx hardhat compile
+```
+
+#### **Module Registration Issues**
+```bash
+# Validate deployment and module registration:
+npx hardhat run scripts/validate-deployment.js --network localhost
+
+# Check specific module status:
+npx hardhat run scripts/debug-contract.js --network localhost
+```
+
+#### **ABI Sync Issues**
+```bash
+# Force update all ABIs:
+npx hardhat compile --force
+
+# Verify ABI compatibility:
+npx hardhat run scripts/test-frontend-connection.js --network localhost
+```
+
+### Nuclear Reset (Last Resort)
+```bash
+# Stop all terminals, then:
+npx hardhat clean
+npx hardhat compile
+npx hardhat node  # Terminal 1
+npx hardhat run scripts/deploy-modular.js --network localhost  # Terminal 2
+cd frontend && npm start  # Terminal 3
+# Clear browser cache completely
+```
 
 ## Important Notes
 
-- Contract addresses are hardcoded in frontend - update after each deployment
+### **Modular Architecture Notes**
+- **SavingsCore** is the main contract - frontend always interacts with this address
+- **Modules** are registered dynamically and can be upgraded individually
+- **Module addresses** change on upgrade, but SavingsCore address stays constant
+- **Module interactions** are handled automatically through core delegation
+
+### **Development Best Practices**
+- Always use `deploy-modular.js` for full system deployment
+- Use `upgrade-module.js` for individual module updates
+- ABIs are auto-updated on compilation - never edit manually
+- Validation scripts catch issues early - always check output
 - MockUSDT uses 6 decimals to match real USDT
-- Withdrawal limits and periods are token-agnostic but amounts are token-specific
-- Contract is upgradeable - use upgrade script for updates, not redeployment
 - Frontend expects MetaMask for wallet connection
+
+### **Data Preservation**
+- **SavingsCore upgrades**: Preserve all user data (use UUPS pattern)
+- **Module upgrades**: Preserve module-specific data and registrations
+- **Fresh deployments**: Only use for initial setup (DATA LOSS)
+- **User proxies**: Permanent addresses tied to user wallets

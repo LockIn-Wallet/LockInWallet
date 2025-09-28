@@ -17,10 +17,10 @@ const NETWORKS = {
     },
     rpcUrls: ["http://127.0.0.1:8545"],
     blockExplorerUrls: [""],
-    savingsContract: "0xDc64a140Aa3E981100a9becA4E685f962f0cF6C9",
+    savingsContract: "0x4c5859f0F772848b2D91F1D83E2Fe57935348029",
     tokens: {
       USDT: {
-        address: "0x5FC8d32690cc91D4c39d9d3abcBD16989F875707",
+        address: "0xc351628EB244ec633d5f21fBD6621e1a683B1181",
         symbol: "USDT",
         name: "Tether USD",
         decimals: 6,
@@ -188,6 +188,13 @@ function App() {
   const [customPeriodName, setCustomPeriodName] = useState("");
   const [customPeriodLimit, setCustomPeriodLimit] = useState("");
   const [customPeriodDuration, setCustomPeriodDuration] = useState("86400"); // Default 1 day
+
+  // Card interaction state for hover and focus
+  const [cardStates, setCardStates] = useState({
+    Daily: { isHovered: false, isFocused: false },
+    Weekly: { isHovered: false, isFocused: false },
+    Monthly: { isHovered: false, isFocused: false },
+  });
   const [depositAmount, setDepositAmount] = useState(""); // New state for deposit amount
   const [selectedToken, setSelectedToken] = useState("USDT"); // Default to USDT
   const [userAddress, setUserAddress] = useState(""); // Store user address
@@ -2014,17 +2021,6 @@ function App() {
                       </strong>{" "}
                       to receive funds directly from exchanges
                     </p>
-                    <p
-                      style={{
-                        color: "#fbb6ce",
-                        fontSize: "0.8em",
-                        margin: "0",
-                        fontStyle: "italic",
-                      }}
-                    >
-                      ⚠️ This address is permanent and will always belong to you
-                      - save it securely!
-                    </p>
                   </div>
 
                   <button
@@ -2255,23 +2251,79 @@ function App() {
                   const isNearLimit = progressPercent > 80;
                   const isAtLimit = progressPercent >= 100;
 
+                  // Determine card state for styling
+                  const isBeingConfigured = edit?.value && edit.value.trim() !== "" && !isActive;
+                  const hasUnsavedChanges = edit?.value && edit.value.trim() !== "" && isActive && edit.value !== existingLimit?.limit;
+                  const isInteractive = !isActive || edit?.isEditing;
+
                   const cardStyle = {
                     padding: "15px",
                     borderRadius: "8px",
-                    backgroundColor: isActive ? "#1a202c" : "#4a5568",
+                    backgroundColor: isActive
+                      ? "#1a202c"
+                      : isBeingConfigured
+                        ? "#2a4a5a"
+                        : "#4a5568",
                     border: isActive
                       ? isAtLimit
                         ? "2px solid #e53e3e"
                         : isNearLimit
                         ? "2px solid #ed8936"
                         : "2px solid #48bb78"
-                      : "2px dashed #718096",
-                    opacity: isActive ? 1 : 0.7,
+                      : isBeingConfigured || hasUnsavedChanges
+                        ? "2px solid #9ae6b4"
+                        : "2px dashed #718096",
+                    opacity: isActive ? 1 : isBeingConfigured ? 0.9 : 0.7,
                     transition: "all 0.3s ease",
+                    boxShadow: isBeingConfigured || hasUnsavedChanges
+                      ? "0 0 0 1px rgba(154, 230, 180, 0.3)"
+                      : "none",
+                    cursor: isInteractive ? "pointer" : "default",
+                  };
+
+                  // Hover and focus enhancement styles
+                  const getEnhancedCardStyle = (isHovered = false, isFocused = false) => ({
+                    ...cardStyle,
+                    backgroundColor: (isHovered || isFocused) && isInteractive
+                      ? isActive
+                        ? "#2d3748"
+                        : isBeingConfigured
+                          ? "#3a5a6a"
+                          : "#5a6578"
+                      : cardStyle.backgroundColor,
+                    border: (isHovered || isFocused) && isInteractive
+                      ? isActive
+                        ? isAtLimit
+                          ? "2px solid #fc8181"
+                          : isNearLimit
+                          ? "2px solid #f6ad55"
+                          : "2px solid #68d391"
+                        : "2px solid #9ae6b4"
+                      : cardStyle.border,
+                    boxShadow: (isHovered || isFocused) && isInteractive
+                      ? "0 0 0 2px rgba(154, 230, 180, 0.4), 0 4px 12px rgba(0, 0, 0, 0.15)"
+                      : cardStyle.boxShadow,
+                    transform: (isHovered || isFocused) && isInteractive ? "translateY(-1px)" : "none",
+                  });
+
+                  // Get current card state
+                  const currentCardState = cardStates[periodName] || { isHovered: false, isFocused: false };
+                  const { isHovered, isFocused } = currentCardState;
+
+                  const updateCardState = (updates) => {
+                    setCardStates(prev => ({
+                      ...prev,
+                      [periodName]: { ...prev[periodName], ...updates }
+                    }));
                   };
 
                   return (
-                    <div key={periodName} style={cardStyle}>
+                    <div
+                      key={periodName}
+                      style={getEnhancedCardStyle(isHovered, isFocused)}
+                      onMouseEnter={() => updateCardState({ isHovered: true })}
+                      onMouseLeave={() => updateCardState({ isHovered: false })}
+                    >
                       {/* Card Header */}
                       <div
                         style={{
@@ -2283,7 +2335,11 @@ function App() {
                       >
                         <h5
                           style={{
-                            color: isActive ? "white" : "#a0aec0",
+                            color: isActive
+                              ? "white"
+                              : isBeingConfigured
+                                ? "#e2e8f0"
+                                : "#a0aec0",
                             margin: 0,
                             fontSize: "1.1em",
                             fontWeight: "bold",
@@ -2330,6 +2386,8 @@ function App() {
                             onChange={(e) =>
                               updateLimitEdit(periodName, e.target.value)
                             }
+                            onFocus={() => updateCardState({ isFocused: true })}
+                            onBlur={() => updateCardState({ isFocused: false })}
                             style={{
                               width: "100%",
                               padding: "10px",
