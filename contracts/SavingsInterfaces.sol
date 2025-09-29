@@ -139,6 +139,14 @@ interface IBypassSystemModule {
         bool exists
     );
 
+    function getUserActiveBypassRequests(address user) external view returns (
+        bytes32[] memory requestIds,
+        uint256[] memory amounts,
+        string[] memory skipPeriods,
+        address[] memory tokens,
+        uint256[] memory executeAfters
+    );
+
     // Module setup
     function setTimePeriodLimitsModule(address _timePeriodLimitsModule) external;
 

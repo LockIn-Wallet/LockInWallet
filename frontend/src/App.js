@@ -18,10 +18,10 @@ const NETWORKS = {
     },
     rpcUrls: ["http://127.0.0.1:8545"],
     blockExplorerUrls: [""],
-    savingsContract: "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0",
+    savingsContract: "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512",
     tokens: {
       USDT: {
-        address: "0xA51c1fc2f0D1a1b8494Ed1FE312d7C3a78Ed91C0",
+        address: "0xB7f8BC63BbcaD18155201308C8f3540b07f84F5e",
         symbol: "USDT",
         name: "Tether USD",
         decimals: 6,
@@ -405,6 +405,7 @@ function App() {
           setProvider(null);
           setSigner(null);
           setSavingsContract(null);
+          setApprovalModule(null);
           setBalances({});
           setUserAddress("");
           setIsSetupCommitted(false);
@@ -1929,7 +1930,6 @@ function App() {
       const amount = ethers.parseUnits(withdrawalAmount, decimals);
 
       const tx = await savingsContract.requestLimitBypass(
-        userAddress,
         amount,
         exceedingPeriod,
         tokenAddress

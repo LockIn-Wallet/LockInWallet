@@ -385,6 +385,57 @@ contract SavingsCore is Initializable, UUPSUpgradeable, OwnableUpgradeable, ISav
         proposalModule.recalculateTotalLockedValue(msg.sender);
     }
 
+    // ========== BYPASS SYSTEM FUNCTIONS ==========
+
+    function requestLimitBypass(
+        uint256 amount,
+        string calldata skipPeriod,
+        address token
+    ) external returns (bytes32 requestId) {
+        IBypassSystemModule bypassModule = IBypassSystemModule(modules[ModuleIds.BYPASS_SYSTEM]);
+        require(address(bypassModule) != address(0), "BypassSystemModule not registered");
+        return bypassModule.requestLimitBypass(msg.sender, amount, skipPeriod, token);
+    }
+
+    function executeBypassWithdrawal(bytes32 requestId) external {
+        IBypassSystemModule bypassModule = IBypassSystemModule(modules[ModuleIds.BYPASS_SYSTEM]);
+        require(address(bypassModule) != address(0), "BypassSystemModule not registered");
+        bypassModule.executeBypassWithdrawal(msg.sender, requestId);
+    }
+
+    function getUserActiveBypassRequests() external view returns (
+        bytes32[] memory requestIds,
+        uint256[] memory amounts,
+        string[] memory skipPeriods,
+        address[] memory tokens,
+        uint256[] memory executeAfters
+    ) {
+        IBypassSystemModule bypassModule = IBypassSystemModule(modules[ModuleIds.BYPASS_SYSTEM]);
+        if (address(bypassModule) == address(0)) {
+            return (new bytes32[](0), new uint256[](0), new string[](0), new address[](0), new uint256[](0));
+        }
+        return bypassModule.getUserActiveBypassRequests(msg.sender);
+    }
+
+    function getBypassRequest(bytes32 requestId) external view returns (
+        uint256 amount,
+        string memory skipPeriod,
+        address token,
+        uint256 executeAfter,
+        bool executed,
+        bool exists
+    ) {
+        IBypassSystemModule bypassModule = IBypassSystemModule(modules[ModuleIds.BYPASS_SYSTEM]);
+        require(address(bypassModule) != address(0), "BypassSystemModule not registered");
+        return bypassModule.getBypassRequest(msg.sender, requestId);
+    }
+
+    function cancelBypassRequest(bytes32 requestId) external {
+        IBypassSystemModule bypassModule = IBypassSystemModule(modules[ModuleIds.BYPASS_SYSTEM]);
+        require(address(bypassModule) != address(0), "BypassSystemModule not registered");
+        bypassModule.cancelBypassRequest(msg.sender, requestId);
+    }
+
     // ========== MODULE SETUP FUNCTIONS (OWNER ONLY) ==========
 
     function setupModuleCrossReferences() external onlyOwner {
