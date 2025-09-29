@@ -257,11 +257,7 @@ function App() {
   const [setupInfo, setSetupInfo] = useState(null);
 
   // Bypass system state
-  const [bypassAmount, setBypassAmount] = useState("");
-  const [bypassPeriod, setBypassPeriod] = useState("Daily");
-  const [bypassToken, setBypassToken] = useState("USDT");
   const [pendingBypassRequests, setPendingBypassRequests] = useState([]);
-  const [showBypassForm, setShowBypassForm] = useState(false);
   const [currentTime, setCurrentTime] = useState(Math.floor(Date.now() / 1000));
 
   // Withdrawal address management state
@@ -1381,223 +1377,7 @@ function App() {
     }
   };
 
-  const requestBypass = async () => {
-    if (savingsContract && bypassAmount && bypassPeriod) {
-      try {
-        if (!isCorrectNetwork()) {
-          const currentNetwork = getCurrentNetwork(selectedNetwork);
-          alert(
-            `Please switch to ${currentNetwork.name} to make bypass requests`
-          );
-          return;
-        }
 
-        const currentNetwork = getCurrentNetwork(selectedNetwork);
-        let tokenAddress;
-        let decimals;
-        let tokenSymbol;
-
-        // Determine token details based on selection
-        if (bypassToken === "ETH") {
-          tokenAddress = ETH_ADDRESS;
-          decimals = 18;
-          tokenSymbol = "ETH";
-        } else if (currentNetwork.tokens[bypassToken]) {
-          const token = currentNetwork.tokens[bypassToken];
-          if (token.address === "0x0000000000000000000000000000000000000000") {
-            alert(`${token.symbol} is not available on ${currentNetwork.name}`);
-            return;
-          }
-          tokenAddress = token.address;
-          decimals = token.decimals;
-          tokenSymbol = token.symbol;
-        } else {
-          alert("Please select a valid token");
-          return;
-        }
-
-        const amount = ethers.parseUnits(bypassAmount, decimals);
-
-        const tx = await savingsContract.requestLimitBypass(
-          amount,
-          bypassPeriod,
-          tokenAddress
-        );
-        const receipt = await tx.wait();
-
-        // Find the BypassRequested event to get the request ID
-        const event = receipt.logs.find((log) => {
-          try {
-            const parsed = savingsContract.interface.parseLog(log);
-            return parsed.name === "BypassRequested";
-          } catch {
-            return false;
-          }
-        });
-
-        if (event) {
-          const parsed = savingsContract.interface.parseLog(event);
-          const requestId = parsed.args.requestId;
-          const executeAfter = Number(parsed.args.executeAfter);
-
-          // Store request in localStorage for tracking
-          const requestData = {
-            requestId,
-            amount: bypassAmount,
-            tokenSymbol,
-            tokenDecimals: decimals,
-            skipPeriod: bypassPeriod,
-            executeAfter,
-            timestamp: Math.floor(Date.now() / 1000),
-          };
-
-          const existingRequests = JSON.parse(
-            localStorage.getItem(`bypassRequests_${userAddress}`) || "[]"
-          );
-          existingRequests.push(requestData);
-          localStorage.setItem(
-            `bypassRequests_${userAddress}`,
-            JSON.stringify(existingRequests)
-          );
-
-          alert(
-            `✅ Bypass request submitted successfully!\nRequest ID: ${requestId}\nAmount: ${bypassAmount} ${tokenSymbol}\nSkip Period: ${bypassPeriod}\nExecutable after: 24 hours`
-          );
-        } else {
-          alert(
-            `✅ Bypass request submitted successfully!\nAmount: ${bypassAmount} ${tokenSymbol}\nSkip Period: ${bypassPeriod}\nExecutable after: 24 hours`
-          );
-        }
-
-        // Clear form
-        setBypassAmount("");
-        setShowBypassForm(false);
-
-        // Refresh pending requests
-        await fetchPendingBypassRequests(savingsContract, userAddress);
-      } catch (error) {
-        console.error("Bypass request error:", error);
-        if (error.message.includes("Insufficient balance")) {
-          alert("Insufficient balance for this bypass request");
-        } else if (error.message.includes("Period not found")) {
-          alert("Selected period not found or inactive");
-        } else if (error.message.includes("Request already exists")) {
-          alert("A bypass request with these parameters already exists");
-        } else {
-          alert(`Failed to submit bypass request: ${error.message}`);
-        }
-      }
-    } else {
-      alert("Please fill in all bypass request fields");
-    }
-  };
-
-  const executeBypassRequest = async (requestId) => {
-    if (savingsContract) {
-      try {
-        const tx = await savingsContract.executeBypassWithdrawal(requestId);
-        await tx.wait();
-        alert("✅ Bypass withdrawal executed successfully!");
-
-        // Refresh data
-        await fetchAllBalances();
-        await fetchSpendingLimits();
-        await fetchPendingBypassRequests();
-      } catch (error) {
-        console.error("Execute bypass error:", error);
-        if (error.message.includes("Request still in timelock")) {
-          alert("Request is still in 24-hour timelock period");
-        } else if (error.message.includes("Request does not exist")) {
-          alert("Request not found");
-        } else if (error.message.includes("Request already executed")) {
-          alert("Request has already been executed");
-        } else if (error.message.includes("Insufficient balance")) {
-          alert("Insufficient balance for this withdrawal");
-        } else if (error.message.includes("Exceeds")) {
-          alert(`Withdrawal blocked: ${error.message}`);
-        } else {
-          alert(`Failed to execute bypass: ${error.message}`);
-        }
-      }
-    }
-  };
-
-  const cancelBypassRequest = async (requestId) => {
-    if (savingsContract) {
-      try {
-        const tx = await savingsContract.cancelBypassRequest(requestId);
-        await tx.wait();
-        alert("Bypass request cancelled successfully!");
-
-        // Refresh pending requests
-        await fetchPendingBypassRequests(savingsContract, userAddress);
-      } catch (error) {
-        console.error("Cancel bypass error:", error);
-        alert(`Failed to cancel bypass request: ${error.message}`);
-      }
-    }
-  };
-
-  const fetchPendingBypassRequests = async (
-    contract = savingsContract,
-    userAddr = null
-  ) => {
-    const currentUserAddress = userAddr || userAddress;
-    const currentContract = contract || savingsContract;
-
-    if (!currentUserAddress || !currentContract) return;
-
-    try {
-      console.log("🔍 Fetching bypass requests for:", currentUserAddress);
-
-      // Get active bypass requests directly from contract
-      const bypassData = await currentContract.getUserActiveBypassRequests();
-      console.log("📊 Raw bypass data:", bypassData);
-
-      const [requestIds, amounts, skipPeriods, tokens, executeAfters] = bypassData;
-      console.log("📊 Request IDs length:", requestIds.length);
-
-      const requests = [];
-      for (let i = 0; i < requestIds.length; i++) {
-        // Determine token info for display
-        let tokenSymbol = "Unknown";
-        let tokenDecimals = 18;
-
-        const tokenAddress = tokens[i];
-        if (tokenAddress === "0x0000000000000000000000000000000000000000") {
-          tokenSymbol = "ETH";
-          tokenDecimals = 18;
-        } else {
-          // Check if it's USDT or other known tokens
-          const moduleAddresses = await import('./moduleAddresses.json');
-          if (tokenAddress.toLowerCase() === moduleAddresses.tokens.usdt.toLowerCase()) {
-            tokenSymbol = "USDT";
-            tokenDecimals = 6;
-          }
-        }
-
-        requests.push({
-          requestId: requestIds[i],
-          amount: ethers.formatUnits(amounts[i], tokenDecimals),
-          period: skipPeriods[i],
-          token: tokenSymbol,
-          tokenAddress: tokenAddress,
-          tokenDecimals: tokenDecimals,
-          executeAfter: Number(executeAfters[i]),
-          executed: false,
-          exists: true,
-        });
-      }
-
-      console.log(`Found ${requests.length} active bypass requests for ${currentUserAddress}`);
-      console.log("📋 Requests array:", requests);
-      setPendingBypassRequests(requests);
-      console.log("✅ setPendingBypassRequests called with", requests.length, "requests");
-    } catch (error) {
-      console.error("Error fetching bypass requests:", error);
-      setPendingBypassRequests([]);
-    }
-  };
 
   const fetchSpendingLimits = async (
     contract = savingsContract,
@@ -1956,6 +1736,113 @@ function App() {
         alert("This amount is within your spending limits - use instant withdrawal instead");
       } else {
         alert(`Failed to request bypass: ${error.message}`);
+      }
+    }
+  };
+
+  const fetchPendingBypassRequests = async (
+    contract = savingsContract,
+    userAddr = null
+  ) => {
+    const currentUserAddress = userAddr || userAddress;
+    const currentContract = contract || savingsContract;
+
+    if (!currentUserAddress || !currentContract) return;
+
+    try {
+      console.log("🔍 Fetching bypass requests for:", currentUserAddress);
+
+      // Get active bypass requests directly from contract
+      const bypassData = await currentContract.getUserActiveBypassRequests();
+      console.log("📊 Raw bypass data:", bypassData);
+
+      const [requestIds, amounts, skipPeriods, tokens, executeAfters] = bypassData;
+      console.log("📊 Request IDs length:", requestIds.length);
+
+      const requests = [];
+      for (let i = 0; i < requestIds.length; i++) {
+        // Determine token info for display
+        let tokenSymbol = "Unknown";
+        let tokenDecimals = 18;
+
+        const tokenAddress = tokens[i];
+        if (tokenAddress === "0x0000000000000000000000000000000000000000") {
+          tokenSymbol = "ETH";
+          tokenDecimals = 18;
+        } else {
+          // Check if it's USDT or other known tokens
+          const moduleAddresses = await import('./moduleAddresses.json');
+          if (tokenAddress.toLowerCase() === moduleAddresses.tokens.usdt.toLowerCase()) {
+            tokenSymbol = "USDT";
+            tokenDecimals = 6;
+          }
+        }
+
+        requests.push({
+          requestId: requestIds[i],
+          amount: ethers.formatUnits(amounts[i], tokenDecimals),
+          period: skipPeriods[i],
+          token: tokenSymbol,
+          tokenAddress: tokenAddress,
+          tokenDecimals: tokenDecimals,
+          executeAfter: Number(executeAfters[i]),
+          executed: false,
+          exists: true,
+        });
+      }
+
+      console.log(`Found ${requests.length} active bypass requests for ${currentUserAddress}`);
+      console.log("📋 Requests array:", requests);
+      setPendingBypassRequests(requests);
+      console.log("✅ setPendingBypassRequests called with", requests.length, "requests");
+    } catch (error) {
+      console.error("Error fetching bypass requests:", error);
+      setPendingBypassRequests([]);
+    }
+  };
+
+  const executeBypassRequest = async (requestId) => {
+    if (savingsContract) {
+      try {
+        const tx = await savingsContract.executeBypassWithdrawal(requestId);
+        await tx.wait();
+        alert("✅ Bypass withdrawal executed successfully!");
+
+        // Refresh data
+        await fetchAllBalances();
+        await fetchSpendingLimits();
+        await fetchPendingBypassRequests();
+      } catch (error) {
+        console.error("Execute bypass error:", error);
+        if (error.message.includes("Request still in timelock")) {
+          alert("Request is still in 24-hour timelock period");
+        } else if (error.message.includes("Request does not exist")) {
+          alert("Request not found");
+        } else if (error.message.includes("Request already executed")) {
+          alert("Request has already been executed");
+        } else if (error.message.includes("Insufficient balance")) {
+          alert("Insufficient balance for this withdrawal");
+        } else if (error.message.includes("Exceeds")) {
+          alert(`Withdrawal blocked: ${error.message}`);
+        } else {
+          alert(`Failed to execute bypass: ${error.message}`);
+        }
+      }
+    }
+  };
+
+  const cancelBypassRequest = async (requestId) => {
+    if (savingsContract) {
+      try {
+        const tx = await savingsContract.cancelBypassRequest(requestId);
+        await tx.wait();
+        alert("Bypass request cancelled successfully!");
+
+        // Refresh pending requests
+        await fetchPendingBypassRequests(savingsContract, userAddress);
+      } catch (error) {
+        console.error("Cancel bypass error:", error);
+        alert(`Failed to cancel bypass request: ${error.message}`);
       }
     }
   };
@@ -4156,211 +4043,6 @@ function App() {
             )}
           </div>
 
-          {/* Bypass Request Section */}
-          <div
-            style={{
-              marginBottom: "20px",
-              padding: "15px",
-              border: "1px solid #333",
-              borderRadius: "5px",
-              backgroundColor: "#2d3748",
-              color: "white",
-            }}
-          >
-            <h3 style={{ color: "white" }}>⚡ Bypass Spending Limits</h3>
-            <p
-              style={{
-                fontSize: "0.9em",
-                color: "#cbd5e0",
-                marginBottom: "15px",
-              }}
-            >
-              Request to bypass a spending limit and use available higher-tier
-              allowance. Requests are executable after 24 hours.
-            </p>
-
-            <div style={{ marginBottom: "15px" }}>
-              <button
-                onClick={() => setShowBypassForm(!showBypassForm)}
-                style={{
-                  padding: "8px 16px",
-                  borderRadius: "4px",
-                  border: "1px solid #4a5568",
-                  backgroundColor: "transparent",
-                  color: "#e2e8f0",
-                  cursor: "pointer",
-                  fontSize: "0.9em",
-                }}
-              >
-                {showBypassForm ? "➖ Hide" : "➕ Request"} Bypass
-              </button>
-            </div>
-
-            {/* Bypass Request Form */}
-            {showBypassForm && (
-              <div
-                style={{
-                  padding: "15px",
-                  backgroundColor: "#1a202c",
-                  borderRadius: "4px",
-                  border: "1px solid #4a5568",
-                }}
-              >
-                <h4 style={{ color: "#fbb6ce", margin: "0 0 15px 0" }}>
-                  ⚡ New Bypass Request
-                </h4>
-                <p
-                  style={{
-                    fontSize: "0.8em",
-                    color: "#a0aec0",
-                    marginBottom: "15px",
-                  }}
-                >
-                  Example: If you hit your daily limit but have weekly allowance
-                  remaining, you can bypass daily and use weekly.
-                </p>
-
-                <div
-                  style={{ display: "grid", gap: "15px", marginBottom: "15px" }}
-                >
-                  {/* Amount and Token */}
-                  <div
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: "2fr 1fr",
-                      gap: "10px",
-                    }}
-                  >
-                    <div>
-                      <label
-                        style={{
-                          display: "block",
-                          fontSize: "0.9em",
-                          color: "#e2e8f0",
-                          marginBottom: "5px",
-                        }}
-                      >
-                        Amount
-                      </label>
-                      <input
-                        type="text"
-                        placeholder="Amount to withdraw"
-                        value={bypassAmount}
-                        onChange={(e) => setBypassAmount(e.target.value)}
-                        style={{
-                          width: "100%",
-                          padding: "8px",
-                          borderRadius: "4px",
-                          border: "1px solid #4a5568",
-                          backgroundColor: "#4a5568",
-                          color: "white",
-                        }}
-                      />
-                    </div>
-                    <div>
-                      <label
-                        style={{
-                          display: "block",
-                          fontSize: "0.9em",
-                          color: "#e2e8f0",
-                          marginBottom: "5px",
-                        }}
-                      >
-                        Token
-                      </label>
-                      <select
-                        value={bypassToken}
-                        onChange={(e) => setBypassToken(e.target.value)}
-                        style={{
-                          width: "100%",
-                          padding: "8px",
-                          borderRadius: "4px",
-                          border: "1px solid #4a5568",
-                          backgroundColor: "#4a5568",
-                          color: "white",
-                        }}
-                      >
-                        <option value="ETH">ETH</option>
-                        {Object.entries(
-                          getCurrentNetwork(selectedNetwork).tokens
-                        )
-                          .filter(
-                            ([_, token]) =>
-                              token.address !==
-                              "0x0000000000000000000000000000000000000000"
-                          )
-                          .map(([key, token]) => (
-                            <option key={key} value={key}>
-                              {token.symbol}
-                            </option>
-                          ))}
-                      </select>
-                    </div>
-                  </div>
-
-                  {/* Period to Skip */}
-                  <div>
-                    <label
-                      style={{
-                        display: "block",
-                        fontSize: "0.9em",
-                        color: "#e2e8f0",
-                        marginBottom: "5px",
-                      }}
-                    >
-                      Period to Bypass
-                    </label>
-                    <select
-                      value={bypassPeriod}
-                      onChange={(e) => setBypassPeriod(e.target.value)}
-                      style={{
-                        width: "100%",
-                        padding: "8px",
-                        borderRadius: "4px",
-                        border: "1px solid #4a5568",
-                        backgroundColor: "#4a5568",
-                        color: "white",
-                      }}
-                    >
-                      {spendingLimits.map((limit) => (
-                        <option key={limit.name} value={limit.name}>
-                          {limit.name} (Remaining: {limit.remaining} USDT)
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-
-                <div
-                  style={{
-                    marginBottom: "15px",
-                    fontSize: "0.8em",
-                    color: "#a0aec0",
-                  }}
-                >
-                  💡 After submitting, your request will be executable in 24
-                  hours. Other spending limits will still apply.
-                </div>
-
-                <button
-                  onClick={requestBypass}
-                  style={{
-                    padding: "12px 24px",
-                    borderRadius: "4px",
-                    border: "none",
-                    backgroundColor: "#ed64a6",
-                    color: "white",
-                    cursor: "pointer",
-                    fontSize: "1em",
-                    fontWeight: "bold",
-                    width: "100%",
-                  }}
-                >
-                  ⚡ Submit Bypass Request
-                </button>
-              </div>
-            )}
-          </div>
 
           <div>
             <h3>Add Approver</h3>
