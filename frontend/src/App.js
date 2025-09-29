@@ -1548,51 +1548,51 @@ function App() {
     if (!currentUserAddress || !currentContract) return;
 
     try {
-      // Get stored requests from localStorage
-      const storedRequests = localStorage.getItem(
-        `bypassRequests_${currentUserAddress}`
-      );
-      const requests = storedRequests ? JSON.parse(storedRequests) : [];
+      console.log("🔍 Fetching bypass requests for:", currentUserAddress);
 
-      console.log(
-        `Loading ${requests.length} stored bypass requests for ${currentUserAddress}`
-      );
+      // Get active bypass requests directly from contract
+      const bypassData = await currentContract.getUserActiveBypassRequests();
+      console.log("📊 Raw bypass data:", bypassData);
 
-      // Filter out executed/cancelled requests and validate with contract
-      const validRequests = [];
-      for (const request of requests) {
-        try {
-          const contractData = await currentContract.getBypassRequest(
-            request.requestId
-          );
-          if (contractData.exists && !contractData.executed) {
-            validRequests.push({
-              ...request,
-              amount: ethers.formatUnits(
-                contractData.amount,
-                request.tokenDecimals
-              ),
-              executeAfter: Number(contractData.executeAfter),
-              executed: contractData.executed,
-              exists: contractData.exists,
-            });
+      const [requestIds, amounts, skipPeriods, tokens, executeAfters] = bypassData;
+      console.log("📊 Request IDs length:", requestIds.length);
+
+      const requests = [];
+      for (let i = 0; i < requestIds.length; i++) {
+        // Determine token info for display
+        let tokenSymbol = "Unknown";
+        let tokenDecimals = 18;
+
+        const tokenAddress = tokens[i];
+        if (tokenAddress === "0x0000000000000000000000000000000000000000") {
+          tokenSymbol = "ETH";
+          tokenDecimals = 18;
+        } else {
+          // Check if it's USDT or other known tokens
+          const moduleAddresses = await import('./moduleAddresses.json');
+          if (tokenAddress.toLowerCase() === moduleAddresses.tokens.usdt.toLowerCase()) {
+            tokenSymbol = "USDT";
+            tokenDecimals = 6;
           }
-        } catch (error) {
-          console.log(
-            `Request ${request.requestId} no longer valid:`,
-            error.message
-          );
         }
+
+        requests.push({
+          requestId: requestIds[i],
+          amount: ethers.formatUnits(amounts[i], tokenDecimals),
+          period: skipPeriods[i],
+          token: tokenSymbol,
+          tokenAddress: tokenAddress,
+          tokenDecimals: tokenDecimals,
+          executeAfter: Number(executeAfters[i]),
+          executed: false,
+          exists: true,
+        });
       }
 
-      console.log(`Found ${validRequests.length} valid bypass requests`);
-
-      // Update localStorage with valid requests only
-      localStorage.setItem(
-        `bypassRequests_${currentUserAddress}`,
-        JSON.stringify(validRequests)
-      );
-      setPendingBypassRequests(validRequests);
+      console.log(`Found ${requests.length} active bypass requests for ${currentUserAddress}`);
+      console.log("📋 Requests array:", requests);
+      setPendingBypassRequests(requests);
+      console.log("✅ setPendingBypassRequests called with", requests.length, "requests");
     } catch (error) {
       console.error("Error fetching bypass requests:", error);
       setPendingBypassRequests([]);

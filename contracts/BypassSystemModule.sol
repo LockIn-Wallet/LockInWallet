@@ -14,6 +14,9 @@ contract BypassSystemModule is IBypassSystemModule {
     // Storage for bypass requests
     mapping(address => mapping(bytes32 => BypassRequest)) private userBypassRequests;
 
+    // Track active request IDs per user for enumeration
+    mapping(address => bytes32[]) private userActiveRequestIds;
+
     // Add this modifier to prevent reentrancy
     modifier nonReentrant() {
         require(!locked, "Reentrant call");
@@ -76,6 +79,9 @@ contract BypassSystemModule is IBypassSystemModule {
             exists: true
         });
 
+        // Add to active requests tracking
+        userActiveRequestIds[user].push(requestId);
+
         emit BypassRequested(user, requestId, skipPeriod, amount, token, block.timestamp + 24 hours);
         return requestId;
     }
@@ -92,6 +98,9 @@ contract BypassSystemModule is IBypassSystemModule {
 
         // Mark request as executed
         request.executed = true;
+
+        // Remove from active requests tracking
+        _removeRequestFromTracking(user, requestId);
 
         // Update balances and spending for non-bypassed periods
         savingsCore.updateTokenBalance(user, request.token, request.amount, false);
@@ -112,6 +121,9 @@ contract BypassSystemModule is IBypassSystemModule {
     function cancelBypassRequest(address user, bytes32 requestId) external onlyAuthorized {
         BypassRequest storage request = userBypassRequests[user][requestId];
         require(request.exists && !request.executed, "Invalid request");
+
+        // Remove from active requests tracking
+        _removeRequestFromTracking(user, requestId);
 
         // Delete the request
         delete userBypassRequests[user][requestId];
@@ -149,16 +161,36 @@ contract BypassSystemModule is IBypassSystemModule {
         address[] memory tokens,
         uint256[] memory executeAfters
     ) {
-        // Note: This is a simplified implementation
-        // In practice, you might want to track request IDs in an array for efficient enumeration
-        // For now, this function signature is provided for future implementation
+        bytes32[] memory allRequestIds = userActiveRequestIds[user];
+        uint256 activeCount = 0;
 
-        // Return empty arrays as placeholder
-        requestIds = new bytes32[](0);
-        amounts = new uint256[](0);
-        skipPeriods = new string[](0);
-        tokens = new address[](0);
-        executeAfters = new uint256[](0);
+        // First pass: count active requests
+        for (uint256 i = 0; i < allRequestIds.length; i++) {
+            BypassRequest storage request = userBypassRequests[user][allRequestIds[i]];
+            if (request.exists && !request.executed) {
+                activeCount++;
+            }
+        }
+
+        // Second pass: populate arrays with active requests
+        requestIds = new bytes32[](activeCount);
+        amounts = new uint256[](activeCount);
+        skipPeriods = new string[](activeCount);
+        tokens = new address[](activeCount);
+        executeAfters = new uint256[](activeCount);
+
+        uint256 activeIndex = 0;
+        for (uint256 i = 0; i < allRequestIds.length; i++) {
+            BypassRequest storage request = userBypassRequests[user][allRequestIds[i]];
+            if (request.exists && !request.executed) {
+                requestIds[activeIndex] = allRequestIds[i];
+                amounts[activeIndex] = request.amount;
+                skipPeriods[activeIndex] = request.skipPeriod;
+                tokens[activeIndex] = request.token;
+                executeAfters[activeIndex] = request.executeAfter;
+                activeIndex++;
+            }
+        }
     }
 
     function canExecuteBypass(address user, bytes32 requestId) external view returns (bool canExecute, string memory reason) {
@@ -198,6 +230,22 @@ contract BypassSystemModule is IBypassSystemModule {
             return 0;
         } else {
             return request.executeAfter - block.timestamp;
+        }
+    }
+
+    // ========== INTERNAL HELPER FUNCTIONS ==========
+
+    function _removeRequestFromTracking(address user, bytes32 requestId) internal {
+        bytes32[] storage requestIds = userActiveRequestIds[user];
+
+        // Find and remove the request ID from the array
+        for (uint256 i = 0; i < requestIds.length; i++) {
+            if (requestIds[i] == requestId) {
+                // Replace with last element and pop
+                requestIds[i] = requestIds[requestIds.length - 1];
+                requestIds.pop();
+                break;
+            }
         }
     }
 
