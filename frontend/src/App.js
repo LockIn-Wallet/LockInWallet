@@ -18,10 +18,10 @@ const NETWORKS = {
     },
     rpcUrls: ["http://127.0.0.1:8545"],
     blockExplorerUrls: [""],
-    savingsContract: "0x4bf010f1b9beDA5450a8dD702ED602A104ff65EE",
+    savingsContract: "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0",
     tokens: {
       USDT: {
-        address: "0xc582Bc0317dbb0908203541971a358c44b1F3766",
+        address: "0xA51c1fc2f0D1a1b8494Ed1FE312d7C3a78Ed91C0",
         symbol: "USDT",
         name: "Tether USD",
         decimals: 6,
@@ -157,6 +157,53 @@ const formatCountdown = (executeAfter, currentTime) => {
   }
 };
 
+// Helper function to calculate instantly withdrawable amount
+const calculateInstantWithdrawableAmount = (spendingLimits) => {
+  if (!spendingLimits || spendingLimits.length === 0) {
+    return { amount: 0, limitingPeriod: null };
+  }
+
+  let smallestRemaining = Infinity;
+  let limitingPeriod = null;
+
+  for (const limit of spendingLimits) {
+    if (limit.active && typeof limit.remaining === 'number' && limit.remaining < smallestRemaining) {
+      smallestRemaining = limit.remaining;
+      limitingPeriod = limit.name;
+    }
+  }
+
+  return {
+    amount: smallestRemaining === Infinity ? 0 : Number(smallestRemaining) || 0,
+    limitingPeriod
+  };
+};
+
+// Helper function to detect which period limit would be exceeded
+const detectExceedingPeriod = (amount, spendingLimits) => {
+  if (!spendingLimits || spendingLimits.length === 0 || !amount) {
+    return null;
+  }
+
+  const numericAmount = parseFloat(amount);
+  if (isNaN(numericAmount) || numericAmount <= 0) {
+    return null;
+  }
+
+  // Find the first period that would be exceeded, prioritizing shorter periods
+  const periodPriority = { "Daily": 1, "Weekly": 2, "Monthly": 3 };
+
+  const exceedingPeriods = spendingLimits
+    .filter(limit => limit.active && numericAmount > limit.remaining)
+    .sort((a, b) => {
+      const aPriority = periodPriority[a.name] || 999;
+      const bPriority = periodPriority[b.name] || 999;
+      return aPriority - bPriority;
+    });
+
+  return exceedingPeriods.length > 0 ? exceedingPeriods[0].name : null;
+};
+
 // For backward compatibility
 const USDT_ADDRESS = "0x610178dA211FEF7D417bC0e6FeD39F05609AD788"; // Updated: 0x610178dA211FEF7D417bC0e6FeD39F05609AD788
 
@@ -225,6 +272,13 @@ function App() {
   const [newWithdrawalAddress, setNewWithdrawalAddress] = useState("");
   const [selectedWithdrawalDestination, setSelectedWithdrawalDestination] = useState("self");
   const [approvalModule, setApprovalModule] = useState(null);
+
+  // Enhanced withdrawal system state
+  const [instantWithdrawableAmount, setInstantWithdrawableAmount] = useState(0);
+  const [limitingPeriod, setLimitingPeriod] = useState(null); // Which period is limiting
+  const [withdrawalAmount, setWithdrawalAmount] = useState("");
+  const [exceedsInstantLimit, setExceedsInstantLimit] = useState(false);
+  const [exceedingPeriod, setExceedingPeriod] = useState(null); // Which period would be exceeded
 
   // Network detection and switching functions
   const detectCurrentNetwork = async () => {
@@ -392,6 +446,20 @@ function App() {
       fetchAllBalances();
     }
   }, [selectedNetwork, savingsContract, signer]);
+
+  // Calculate instant withdrawal amount whenever spending limits change
+  useEffect(() => {
+    const result = calculateInstantWithdrawableAmount(spendingLimits);
+    setInstantWithdrawableAmount(result.amount);
+    setLimitingPeriod(result.limitingPeriod);
+  }, [spendingLimits]);
+
+  // Update withdrawal analysis whenever amount changes
+  useEffect(() => {
+    const exceedingPeriod = detectExceedingPeriod(withdrawalAmount, spendingLimits);
+    setExceedingPeriod(exceedingPeriod);
+    setExceedsInstantLimit(parseFloat(withdrawalAmount || 0) > instantWithdrawableAmount);
+  }, [withdrawalAmount, spendingLimits, instantWithdrawableAmount]);
 
   const fetchAllBalances = async (
     contract = savingsContract,
@@ -1158,9 +1226,9 @@ function App() {
 
       try {
         if (
-          !depositAmount ||
-          isNaN(depositAmount) ||
-          parseFloat(depositAmount) <= 0
+          !withdrawalAmount ||
+          isNaN(withdrawalAmount) ||
+          parseFloat(withdrawalAmount) <= 0
         ) {
           alert("Please enter a valid withdrawal amount");
           return;
@@ -1168,10 +1236,10 @@ function App() {
 
         const currentNetwork = getCurrentNetwork(selectedNetwork);
         const usdtToken = currentNetwork.tokens.USDT;
-        const amount = ethers.parseUnits(depositAmount, usdtToken.decimals);
+        const amount = ethers.parseUnits(withdrawalAmount, usdtToken.decimals);
         const tx = await savingsContract.withdraw(amount, usdtToken.address);
         await tx.wait();
-        alert(`Withdrawal of ${depositAmount} USDT successful!`);
+        alert(`Withdrawal of ${withdrawalAmount} USDT successful!`);
 
         // Clear form and refresh balances and spending limits
         setDepositAmount("");
@@ -1551,7 +1619,7 @@ function App() {
               name: names[i],
               limit: ethers.formatUnits(limits[i], 6),
               spent: ethers.formatUnits(spent[i], 6),
-              remaining: ethers.formatUnits(remaining[i], 6),
+              remaining: Number(ethers.formatUnits(remaining[i], 6)),
               duration: durations[i].toString(),
               active: active[i],
               // Helper fields for display
@@ -1748,7 +1816,7 @@ function App() {
   };
 
   const withdrawToDestination = async () => {
-    if (savingsContract && selectedToken && depositAmount) {
+    if (savingsContract && selectedToken && withdrawalAmount) {
       // Check if user is on the correct network
       if (!isCorrectNetwork()) {
         const currentNetwork = getCurrentNetwork(selectedNetwork);
@@ -1758,9 +1826,9 @@ function App() {
 
       try {
         if (
-          !depositAmount ||
-          isNaN(depositAmount) ||
-          parseFloat(depositAmount) <= 0
+          !withdrawalAmount ||
+          isNaN(withdrawalAmount) ||
+          parseFloat(withdrawalAmount) <= 0
         ) {
           alert("Please enter a valid withdrawal amount");
           return;
@@ -1790,7 +1858,7 @@ function App() {
           return;
         }
 
-        const amount = ethers.parseUnits(depositAmount, decimals);
+        const amount = ethers.parseUnits(withdrawalAmount, decimals);
 
         let tx;
         if (selectedWithdrawalDestination === "self") {
@@ -1802,7 +1870,7 @@ function App() {
         }
 
         await tx.wait();
-        alert(`Withdrawal of ${depositAmount} ${tokenSymbol} successful!`);
+        alert(`Withdrawal of ${withdrawalAmount} ${tokenSymbol} successful!`);
 
         // Clear form and refresh balances and spending limits
         setDepositAmount("");
@@ -1820,6 +1888,74 @@ function App() {
         } else {
           alert("Failed to withdraw. Please try again.");
         }
+      }
+    }
+  };
+
+  // Function to request bypass for withdrawal
+  const requestBypassForWithdrawal = async () => {
+    if (!savingsContract || !withdrawalAmount || !exceedingPeriod) {
+      alert("Invalid withdrawal request");
+      return;
+    }
+
+    // Show confirmation dialog
+    const confirmed = window.confirm(
+      `Request withdrawal of ${withdrawalAmount} ${selectedToken} above ${exceedingPeriod} limit?\n\n` +
+      `This will require a 24-hour waiting period before you can execute the withdrawal.\n\n` +
+      `Click OK to submit the request.`
+    );
+
+    if (!confirmed) return;
+
+    try {
+      const currentNetwork = getCurrentNetwork(selectedNetwork);
+      let tokenAddress;
+      let decimals;
+
+      // Determine token details
+      if (selectedToken === "ETH") {
+        tokenAddress = ETH_ADDRESS;
+        decimals = 18;
+      } else if (currentNetwork.tokens[selectedToken]) {
+        const token = currentNetwork.tokens[selectedToken];
+        tokenAddress = token.address;
+        decimals = token.decimals;
+      } else {
+        alert("Please select a valid token");
+        return;
+      }
+
+      const amount = ethers.parseUnits(withdrawalAmount, decimals);
+
+      const tx = await savingsContract.requestLimitBypass(
+        userAddress,
+        amount,
+        exceedingPeriod,
+        tokenAddress
+      );
+      await tx.wait();
+
+      alert(
+        `✅ Bypass request submitted successfully!\n\n` +
+        `Amount: ${withdrawalAmount} ${selectedToken}\n` +
+        `Period: ${exceedingPeriod}\n` +
+        `Executable after: 24 hours\n\n` +
+        `You can execute this request from the "Pending Bypass Requests" section once the waiting period is over.`
+      );
+
+      // Clear form and refresh data
+      setWithdrawalAmount("");
+      await fetchPendingBypassRequests();
+      await fetchSpendingLimits();
+    } catch (error) {
+      console.error("Error requesting bypass:", error);
+      if (error.message.includes("Insufficient balance")) {
+        alert("Insufficient balance for this withdrawal");
+      } else if (error.message.includes("Amount within limits")) {
+        alert("This amount is within your spending limits - use instant withdrawal instead");
+      } else {
+        alert(`Failed to request bypass: ${error.message}`);
       }
     }
   };
@@ -3650,8 +3786,8 @@ function App() {
                 <input
                   type="text"
                   placeholder={`Amount (${selectedToken})`}
-                  value={depositAmount}
-                  onChange={(e) => setDepositAmount(e.target.value)}
+                  value={withdrawalAmount}
+                  onChange={(e) => setWithdrawalAmount(e.target.value)}
                   style={{
                     flex: "2",
                     padding: "8px",
@@ -3663,6 +3799,33 @@ function App() {
                   }}
                 />
               </div>
+            </div>
+
+            {/* Instant Withdrawal Information */}
+            <div style={{ marginBottom: "15px", padding: "10px", backgroundColor: "#1a202c", borderRadius: "4px", border: "1px solid #4a5568" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "5px" }}>
+                <span style={{ fontSize: "0.9em", color: "#cbd5e0" }}>
+                  💡 Instant Withdrawable:
+                </span>
+                <span style={{ fontWeight: "bold", color: "#48bb78" }}>
+                  {(typeof instantWithdrawableAmount === 'number' ? instantWithdrawableAmount : 0).toFixed(2)} {selectedToken}
+                </span>
+              </div>
+              {limitingPeriod && (
+                <div style={{ fontSize: "0.8em", color: "#a0aec0" }}>
+                  Limited by: {limitingPeriod} spending limit
+                </div>
+              )}
+              {withdrawalAmount && exceedsInstantLimit && exceedingPeriod && (
+                <div style={{ marginTop: "8px", padding: "8px", backgroundColor: "#2d3748", borderRadius: "4px", border: "1px solid #ed8936" }}>
+                  <div style={{ fontSize: "0.85em", color: "#ed8936", fontWeight: "bold" }}>
+                    ⚠️ Amount exceeds {exceedingPeriod} limit
+                  </div>
+                  <div style={{ fontSize: "0.8em", color: "#a0aec0", marginTop: "2px" }}>
+                    This withdrawal will require a 24-hour approval period
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Destination Selection as Radio Buttons */}
@@ -3765,22 +3928,67 @@ function App() {
               </div>
             </div>
 
-            <button
-              onClick={withdrawToDestination}
-              style={{
-                padding: "12px 24px",
-                borderRadius: "4px",
-                border: "none",
-                backgroundColor: "#e53e3e",
-                color: "white",
-                cursor: "pointer",
-                fontWeight: "bold",
-                width: "100%",
-                fontSize: "1em",
-              }}
-            >
-              💸 Withdraw {selectedToken}
-            </button>
+            {/* Dynamic Withdrawal Buttons */}
+            <div style={{ display: "flex", gap: "10px", width: "100%" }}>
+              {!exceedsInstantLimit ? (
+                <button
+                  onClick={withdrawToDestination}
+                  disabled={!withdrawalAmount || parseFloat(withdrawalAmount) <= 0}
+                  style={{
+                    padding: "12px 24px",
+                    borderRadius: "4px",
+                    border: "none",
+                    backgroundColor: !withdrawalAmount || parseFloat(withdrawalAmount) <= 0 ? "#4a5568" : "#48bb78",
+                    color: "white",
+                    cursor: !withdrawalAmount || parseFloat(withdrawalAmount) <= 0 ? "not-allowed" : "pointer",
+                    fontWeight: "bold",
+                    flex: "1",
+                    fontSize: "1em",
+                    opacity: !withdrawalAmount || parseFloat(withdrawalAmount) <= 0 ? 0.5 : 1,
+                  }}
+                >
+                  ⚡ Instant Withdraw {selectedToken}
+                </button>
+              ) : (
+                <>
+                  <button
+                    disabled={true}
+                    style={{
+                      padding: "12px 24px",
+                      borderRadius: "4px",
+                      border: "none",
+                      backgroundColor: "#4a5568",
+                      color: "#a0aec0",
+                      cursor: "not-allowed",
+                      fontWeight: "bold",
+                      flex: "1",
+                      fontSize: "1em",
+                      opacity: 0.5,
+                    }}
+                  >
+                    ⚡ Instant Withdraw
+                  </button>
+                  <button
+                    onClick={() => requestBypassForWithdrawal()}
+                    disabled={!withdrawalAmount || parseFloat(withdrawalAmount) <= 0}
+                    style={{
+                      padding: "12px 24px",
+                      borderRadius: "4px",
+                      border: "none",
+                      backgroundColor: !withdrawalAmount || parseFloat(withdrawalAmount) <= 0 ? "#4a5568" : "#ed8936",
+                      color: "white",
+                      cursor: !withdrawalAmount || parseFloat(withdrawalAmount) <= 0 ? "not-allowed" : "pointer",
+                      fontWeight: "bold",
+                      flex: "1",
+                      fontSize: "0.9em",
+                      opacity: !withdrawalAmount || parseFloat(withdrawalAmount) <= 0 ? 0.5 : 1,
+                    }}
+                  >
+                    🕐 Request Above {exceedingPeriod} Limit
+                  </button>
+                </>
+              )}
+            </div>
 
             {/* Add New Withdrawal Address Form */}
             {showWithdrawalAddressForm && (
