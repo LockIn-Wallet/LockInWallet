@@ -1,0 +1,296 @@
+{
+  "timestamp": "2025-09-30T11:24:10.926Z",
+  "gasPrice": "1.179278988",
+  "ethPrice": 4158.02,
+  "deployment": {
+    "SavingsCore deployment": {
+      "gasEstimate": 2800000,
+      "baseCost": "3301981166400000",
+      "scenarios": {
+        "LOW": "3301981166400000",
+        "MEDIUM": "4952971749600000",
+        "HIGH": "8254952916000000",
+        "EXTREME": "16509905832000000"
+      }
+    },
+    "TimePeriodLimitsModule deployment": {
+      "gasEstimate": 1500000,
+      "baseCost": "1768918482000000",
+      "scenarios": {
+        "LOW": "1768918482000000",
+        "MEDIUM": "2653377723000000",
+        "HIGH": "4422296205000000",
+        "EXTREME": "8844592410000000"
+      }
+    },
+    "ProposalSystemModule deployment": {
+      "gasEstimate": 1800000,
+      "baseCost": "2122702178400000",
+      "scenarios": {
+        "LOW": "2122702178400000",
+        "MEDIUM": "3184053267600000",
+        "HIGH": "5306755446000000",
+        "EXTREME": "10613510892000000"
+      }
+    },
+    "BypassSystemModule deployment": {
+      "gasEstimate": 1200000,
+      "baseCost": "1415134785600000",
+      "scenarios": {
+        "LOW": "1415134785600000",
+        "MEDIUM": "2122702178400000",
+        "HIGH": "3537836964000000",
+        "EXTREME": "7075673928000000"
+      }
+    },
+    "ApprovalSystemModule deployment": {
+      "gasEstimate": 1600000,
+      "baseCost": "1886846380800000",
+      "scenarios": {
+        "LOW": "1886846380800000",
+        "MEDIUM": "2830269571200000",
+        "HIGH": "4717115952000000",
+        "EXTREME": "9434231904000000"
+      }
+    },
+    "UserProxy deployment": {
+      "gasEstimate": 250000,
+      "baseCost": "294819747000000",
+      "scenarios": {
+        "LOW": "294819747000000",
+        "MEDIUM": "442229620500000",
+        "HIGH": "737049367500000",
+        "EXTREME": "1474098735000000"
+      }
+    }
+  },
+  "operations": {
+    "deployUserProxy": {
+      "gasEstimate": 519590,
+      "baseCost": "612741569374920",
+      "scenarios": {
+        "LOW": "612741569374920",
+        "MEDIUM": "919112354062380",
+        "HIGH": "1531853923437300",
+        "EXTREME": "3063707846874600"
+      }
+    },
+    "setCommonPeriodLimits": {
+      "gasEstimate": 180000,
+      "baseCost": "212270217840000",
+      "scenarios": {
+        "LOW": "212270217840000",
+        "MEDIUM": "318405326760000",
+        "HIGH": "530675544600000",
+        "EXTREME": "1061351089200000"
+      },
+      "note": "Fallback estimate"
+    },
+    "commitInitialSetup": {
+      "gasEstimate": 119806,
+      "baseCost": "141284698436328",
+      "scenarios": {
+        "LOW": "141284698436328",
+        "MEDIUM": "211927047654492",
+        "HIGH": "353211746090820",
+        "EXTREME": "706423492181640"
+      }
+    },
+    "deposit (ETH)": {
+      "gasEstimate": 51563,
+      "baseCost": "60807162458244",
+      "scenarios": {
+        "LOW": "60807162458244",
+        "MEDIUM": "91210743687366",
+        "HIGH": "152017906145610",
+        "EXTREME": "304035812291220"
+      }
+    },
+    "deposit (ERC20)": {
+      "gasEstimate": 150000,
+      "baseCost": "176891848200000",
+      "scenarios": {
+        "LOW": "176891848200000",
+        "MEDIUM": "265337772300000",
+        "HIGH": "442229620500000",
+        "EXTREME": "884459241000000"
+      },
+      "note": "Fallback estimate"
+    },
+    "withdraw (simple)": {
+      "gasEstimate": 150000,
+      "baseCost": "176891848200000",
+      "scenarios": {
+        "LOW": "176891848200000",
+        "MEDIUM": "265337772300000",
+        "HIGH": "442229620500000",
+        "EXTREME": "884459241000000"
+      },
+      "note": "Fallback estimate"
+    },
+    "withdrawTo": {
+      "gasEstimate": 180000,
+      "baseCost": "212270217840000",
+      "scenarios": {
+        "LOW": "212270217840000",
+        "MEDIUM": "318405326760000",
+        "HIGH": "530675544600000",
+        "EXTREME": "1061351089200000"
+      },
+      "note": "Fallback estimate"
+    },
+    "requestLimitBypass": {
+      "gasEstimate": 200000,
+      "baseCost": "235855797600000",
+      "scenarios": {
+        "LOW": "235855797600000",
+        "MEDIUM": "353783696400000",
+        "HIGH": "589639494000000",
+        "EXTREME": "1179278988000000"
+      },
+      "note": "Fallback estimate"
+    },
+    "proposeLimitRemoval": {
+      "gasEstimate": 120000,
+      "baseCost": "141513478560000",
+      "scenarios": {
+        "LOW": "141513478560000",
+        "MEDIUM": "212270217840000",
+        "HIGH": "353783696400000",
+        "EXTREME": "707567392800000"
+      },
+      "note": "Fallback estimate"
+    },
+    "requestWithdrawalAddress": {
+      "gasEstimate": 202083,
+      "baseCost": "238312235732004",
+      "scenarios": {
+        "LOW": "238312235732004",
+        "MEDIUM": "357468353598006",
+        "HIGH": "595780589330010",
+        "EXTREME": "1191561178660020"
+      }
+    },
+    "executeBypassWithdrawal": {
+      "gasEstimate": 180000,
+      "baseCost": "212270217840000",
+      "scenarios": {
+        "LOW": "212270217840000",
+        "MEDIUM": "318405326760000",
+        "HIGH": "530675544600000",
+        "EXTREME": "1061351089200000"
+      },
+      "note": "Fallback estimate"
+    },
+    "executeLimitProposal": {
+      "gasEstimate": 100000,
+      "baseCost": "117927898800000",
+      "scenarios": {
+        "LOW": "117927898800000",
+        "MEDIUM": "176891848200000",
+        "HIGH": "294819747000000",
+        "EXTREME": "589639494000000"
+      },
+      "note": "Fallback estimate"
+    },
+    "executeWithdrawalAddressRequest": {
+      "gasEstimate": 120000,
+      "baseCost": "141513478560000",
+      "scenarios": {
+        "LOW": "141513478560000",
+        "MEDIUM": "212270217840000",
+        "HIGH": "353783696400000",
+        "EXTREME": "707567392800000"
+      },
+      "note": "Fallback estimate"
+    },
+    "addApprovalAddress": {
+      "gasEstimate": 80000,
+      "baseCost": "94342319040000",
+      "scenarios": {
+        "LOW": "94342319040000",
+        "MEDIUM": "141513478560000",
+        "HIGH": "235855797600000",
+        "EXTREME": "471711595200000"
+      },
+      "note": "Fallback estimate"
+    },
+    "revokeApprovalAddress": {
+      "gasEstimate": 60000,
+      "baseCost": "70756739280000",
+      "scenarios": {
+        "LOW": "70756739280000",
+        "MEDIUM": "106135108920000",
+        "HIGH": "176891848200000",
+        "EXTREME": "353783696400000"
+      },
+      "note": "Fallback estimate"
+    },
+    "addTimePeriodLimit": {
+      "gasEstimate": 120000,
+      "baseCost": "141513478560000",
+      "scenarios": {
+        "LOW": "141513478560000",
+        "MEDIUM": "212270217840000",
+        "HIGH": "353783696400000",
+        "EXTREME": "707567392800000"
+      },
+      "note": "Fallback estimate"
+    },
+    "removeTimePeriodLimit": {
+      "gasEstimate": 100000,
+      "baseCost": "117927898800000",
+      "scenarios": {
+        "LOW": "117927898800000",
+        "MEDIUM": "176891848200000",
+        "HIGH": "294819747000000",
+        "EXTREME": "589639494000000"
+      },
+      "note": "Fallback estimate"
+    },
+    "cancelLimitProposal": {
+      "gasEstimate": 80000,
+      "baseCost": "94342319040000",
+      "scenarios": {
+        "LOW": "94342319040000",
+        "MEDIUM": "141513478560000",
+        "HIGH": "235855797600000",
+        "EXTREME": "471711595200000"
+      },
+      "note": "Fallback estimate"
+    },
+    "cancelBypassRequest": {
+      "gasEstimate": 80000,
+      "baseCost": "94342319040000",
+      "scenarios": {
+        "LOW": "94342319040000",
+        "MEDIUM": "141513478560000",
+        "HIGH": "235855797600000",
+        "EXTREME": "471711595200000"
+      },
+      "note": "Fallback estimate"
+    }
+  },
+  "scenarios": {
+    "LOW": {
+      "name": "Low Congestion",
+      "multiplier": 1,
+      "description": "Normal network conditions"
+    },
+    "MEDIUM": {
+      "name": "Medium Congestion",
+      "multiplier": 1.5,
+      "description": "Busy network"
+    },
+    "HIGH": {
+      "name": "High Congestion",
+      "multiplier": 2.5,
+      "description": "Network congestion"
+    },
+    "EXTREME": {
+      "name": "Extreme Congestion",
+      "multiplier": 5,
+      "description": "DeFi mania / NFT drops"
+    }
+  }
+}
