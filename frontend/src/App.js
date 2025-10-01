@@ -4,10 +4,35 @@ import SavingsABI from "./SavingsABI.json";
 import MockUSDT_ABI from "./MockUSDT_ABI.json";
 import ApprovalSystemModuleABI from "./ApprovalSystemModuleABI.json";
 
-const ETH_ADDRESS = "0x0000000000000000000000000000000000000000"; // ETH address (native token)
+// Solana imports
+import { Connection, PublicKey, clusterApiUrl } from '@solana/web3.js';
+import {
+  ConnectionProvider,
+  WalletProvider,
+  useWallet,
+  useConnection
+} from '@solana/wallet-adapter-react';
+import { WalletAdapterNetwork } from '@solana/wallet-adapter-base';
+import {
+  PhantomWalletAdapter,
+  SolflareWalletAdapter,
+} from '@solana/wallet-adapter-wallets';
+import {
+  WalletModalProvider,
+  WalletMultiButton,
+  WalletDisconnectButton,
+} from '@solana/wallet-adapter-react-ui';
 
-// Network configuration
+// Import Solana wallet adapter CSS
+import '@solana/wallet-adapter-react-ui/styles.css';
+
+const ETH_ADDRESS = "0x0000000000000000000000000000000000000000"; // ETH address (native token)
+const SOL_ADDRESS = "So11111111111111111111111111111111111111112"; // SOL address (native token)
+
+// Network configuration - now supports both EVM and Solana
 const NETWORKS = {
+  // EVM Networks
+  evm: {
   localhost: {
     chainId: 31337,
     name: "Localhost",
@@ -113,15 +138,92 @@ const NETWORKS = {
       },
     },
   },
+  },
+  // Solana Networks
+  solana: {
+    localhost: {
+      network: WalletAdapterNetwork.Devnet, // Use devnet for local testing
+      name: "Solana Localhost",
+      rpcUrl: "http://127.0.0.1:8899",
+      programId: "Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS", // From our Anchor.toml
+      tokens: {
+        SOL: {
+          mint: SOL_ADDRESS,
+          symbol: "SOL",
+          name: "Solana",
+          decimals: 9,
+          recommended: true,
+        },
+        USDC: {
+          mint: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v", // USDC on Solana
+          symbol: "USDC",
+          name: "USD Coin",
+          decimals: 6,
+          recommended: true,
+        },
+      },
+    },
+    devnet: {
+      network: WalletAdapterNetwork.Devnet,
+      name: "Solana Devnet",
+      rpcUrl: clusterApiUrl(WalletAdapterNetwork.Devnet),
+      programId: "Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS",
+      tokens: {
+        SOL: {
+          mint: SOL_ADDRESS,
+          symbol: "SOL",
+          name: "Solana",
+          decimals: 9,
+          recommended: true,
+        },
+        USDC: {
+          mint: "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU", // USDC on Devnet
+          symbol: "USDC",
+          name: "USD Coin",
+          decimals: 6,
+          recommended: true,
+        },
+      },
+    },
+    mainnet: {
+      network: WalletAdapterNetwork.Mainnet,
+      name: "Solana Mainnet",
+      rpcUrl: clusterApiUrl(WalletAdapterNetwork.Mainnet),
+      programId: "0x0000000000000000000000000000000000000000", // TODO: Deploy to mainnet
+      tokens: {
+        SOL: {
+          mint: SOL_ADDRESS,
+          symbol: "SOL",
+          name: "Solana",
+          decimals: 9,
+          recommended: true,
+        },
+        USDC: {
+          mint: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+          symbol: "USDC",
+          name: "USD Coin",
+          decimals: 6,
+          recommended: true,
+        },
+      },
+    },
+  },
 };
 
 // Helper functions for network management
 const getNetworkByChainId = (chainId) => {
-  return Object.values(NETWORKS).find((network) => network.chainId === chainId);
+  return Object.values(NETWORKS.evm).find((network) => network.chainId === chainId);
 };
 
-const getCurrentNetwork = (selectedNetwork) => {
-  return NETWORKS[selectedNetwork] || NETWORKS.localhost;
+const getCurrentNetwork = (networkType, selectedNetwork) => {
+  if (networkType === 'solana') {
+    return NETWORKS.solana[selectedNetwork] || NETWORKS.solana.localhost;
+  }
+  return NETWORKS.evm[selectedNetwork] || NETWORKS.evm.localhost;
+};
+
+const isSolanaNetwork = (networkType) => {
+  return networkType === 'solana';
 };
 
 // Helper function to format countdown timer
@@ -207,14 +309,42 @@ const detectExceedingPeriod = (amount, spendingLimits) => {
 // For backward compatibility
 const USDT_ADDRESS = "0x610178dA211FEF7D417bC0e6FeD39F05609AD788"; // Updated: 0x610178dA211FEF7D417bC0e6FeD39F05609AD788
 
-function App() {
+// Solana Wallet Provider Component
+function SolanaWalletProvider({ children, networkType, selectedNetwork }) {
+  const network = networkType === 'solana' ? NETWORKS.solana[selectedNetwork]?.network || WalletAdapterNetwork.Devnet : WalletAdapterNetwork.Devnet;
+  const endpoint = networkType === 'solana' ? (NETWORKS.solana[selectedNetwork]?.rpcUrl || "http://127.0.0.1:8899") : "http://127.0.0.1:8899";
+
+  const wallets = [
+    new PhantomWalletAdapter(),
+    new SolflareWalletAdapter(),
+  ];
+
+  return (
+    <ConnectionProvider endpoint={endpoint}>
+      <WalletProvider wallets={wallets} autoConnect>
+        <WalletModalProvider>
+          {children}
+        </WalletModalProvider>
+      </WalletProvider>
+    </ConnectionProvider>
+  );
+}
+
+// Main App Component
+function AppContent() {
+  // EVM state
   const [provider, setProvider] = useState(null);
   const [signer, setSigner] = useState(null);
   const [savingsContract, setSavingsContract] = useState(null);
   const [balances, setBalances] = useState({}); // Multi-token balances
   const [approver, setApprover] = useState("");
 
+  // Solana wallet hooks (only used when networkType is 'solana')
+  const { connected: solanaConnected, publicKey: solanaPublicKey, disconnect: solanaDisconnect } = useWallet();
+  const { connection } = useConnection();
+
   // Network state management
+  const [networkType, setNetworkType] = useState("evm"); // "evm" or "solana"
   const [selectedNetwork, setSelectedNetwork] = useState("localhost"); // Current selected network
   const [currentChainId, setCurrentChainId] = useState(null); // MetaMask's current chain ID
   const [isNetworkSwitching, setIsNetworkSwitching] = useState(false);
@@ -304,13 +434,39 @@ function App() {
     return null;
   };
 
+  // Network type switching (EVM vs Solana)
+  const switchNetworkType = (newNetworkType) => {
+    setNetworkType(newNetworkType);
+    if (newNetworkType === 'solana') {
+      // Disconnect EVM wallet when switching to Solana
+      if (provider) {
+        setProvider(null);
+        setSigner(null);
+        setSavingsContract(null);
+        setUserAddress("");
+      }
+    } else {
+      // Disconnect Solana wallet when switching to EVM
+      if (solanaConnected) {
+        solanaDisconnect();
+      }
+    }
+  };
+
   const switchNetwork = async (networkKey) => {
+    if (networkType === 'solana') {
+      // For Solana networks, just update the selected network
+      setSelectedNetwork(networkKey);
+      return true;
+    }
+
+    // EVM network switching logic
     if (!window.ethereum) {
       alert("Please install MetaMask!");
       return false;
     }
 
-    const network = NETWORKS[networkKey];
+    const network = NETWORKS.evm[networkKey];
     if (!network) {
       alert("Unsupported network");
       return false;
@@ -364,7 +520,13 @@ function App() {
   };
 
   const isCorrectNetwork = () => {
-    const expectedNetwork = getCurrentNetwork(selectedNetwork);
+    if (networkType === 'solana') {
+      // For Solana, consider connected if wallet is connected
+      return solanaConnected;
+    }
+
+    // For EVM networks
+    const expectedNetwork = getCurrentNetwork(networkType, selectedNetwork);
     return currentChainId === expectedNetwork.chainId;
   };
 
@@ -386,11 +548,12 @@ function App() {
 
         const network = getNetworkByChainId(numericChainId);
         if (network) {
-          const networkKey = Object.keys(NETWORKS).find(
-            (key) => NETWORKS[key].chainId === numericChainId
+          const networkKey = Object.keys(NETWORKS.evm).find(
+            (key) => NETWORKS.evm[key].chainId === numericChainId
           );
           if (networkKey) {
             setSelectedNetwork(networkKey);
+            setNetworkType('evm'); // Ensure we're on EVM type
           }
         }
       };
@@ -1873,21 +2036,57 @@ function App() {
           >
             <h3 style={{ margin: 0, color: "#e2e8f0" }}>
               🔗 Connected:{" "}
-              {userAddress
-                ? `${userAddress.slice(0, 6)}...${userAddress.slice(-4)}`
-                : "Loading..."}
+              {networkType === 'solana'
+                ? solanaPublicKey
+                  ? `${solanaPublicKey.toString().slice(0, 6)}...${solanaPublicKey.toString().slice(-4)}`
+                  : "Loading..."
+                : userAddress
+                  ? `${userAddress.slice(0, 6)}...${userAddress.slice(-4)}`
+                  : "Loading..."
+              }
             </h3>
+
+            {/* Wallet Buttons for Solana */}
+            {networkType === 'solana' && (
+              <div style={{ display: "flex", gap: "10px" }}>
+                <WalletMultiButton />
+                {solanaConnected && <WalletDisconnectButton />}
+              </div>
+            )}
           </div>
 
-          {/* Network Selector */}
+          {/* Network Type Selector */}
           <div
             style={{
               display: "flex",
               alignItems: "center",
               gap: "15px",
               flexWrap: "wrap",
+              marginBottom: "15px",
             }}
           >
+            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+              <span style={{ color: "#a0aec0", fontSize: "0.9em" }}>
+                Blockchain:
+              </span>
+              <select
+                value={networkType}
+                onChange={(e) => switchNetworkType(e.target.value)}
+                style={{
+                  padding: "6px 12px",
+                  borderRadius: "4px",
+                  border: "1px solid #4a5568",
+                  backgroundColor: "#4a5568",
+                  color: "white",
+                  fontSize: "0.9em",
+                  cursor: "pointer",
+                }}
+              >
+                <option value="evm">Ethereum (EVM)</option>
+                <option value="solana">Solana</option>
+              </select>
+            </div>
+
             <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
               <span style={{ color: "#a0aec0", fontSize: "0.9em" }}>
                 Network:
@@ -1906,9 +2105,19 @@ function App() {
                   cursor: isNetworkSwitching ? "not-allowed" : "pointer",
                 }}
               >
-                <option value="localhost">Localhost</option>
-                <option value="ethereum">Ethereum Mainnet</option>
-                <option value="optimism">Optimism</option>
+                {networkType === 'solana' ? (
+                  <>
+                    <option value="localhost">Solana Localhost</option>
+                    <option value="devnet">Solana Devnet</option>
+                    <option value="mainnet">Solana Mainnet</option>
+                  </>
+                ) : (
+                  <>
+                    <option value="localhost">Localhost</option>
+                    <option value="ethereum">Ethereum Mainnet</option>
+                    <option value="optimism">Optimism</option>
+                  </>
+                )}
               </select>
               {isNetworkSwitching && (
                 <span style={{ color: "#fbb6ce", fontSize: "0.8em" }}>
@@ -1934,10 +2143,12 @@ function App() {
                 }}
               >
                 {isCorrectNetwork()
-                  ? `Connected to ${getCurrentNetwork(selectedNetwork).name}`
-                  : `Wrong network - Switch to ${
-                      getCurrentNetwork(selectedNetwork).name
-                    }`}
+                  ? `Connected to ${getCurrentNetwork(networkType, selectedNetwork).name}`
+                  : networkType === 'solana'
+                    ? `Connect Solana wallet`
+                    : `Wrong network - Switch to ${
+                        getCurrentNetwork(networkType, selectedNetwork).name
+                      }`}
               </span>
             </div>
           </div>
@@ -4057,6 +4268,15 @@ function App() {
         </div>
       )}
     </div>
+  );
+}
+
+// Wrapped App component with Solana wallet provider
+function App() {
+  return (
+    <SolanaWalletProvider networkType="evm" selectedNetwork="localhost">
+      <AppContent />
+    </SolanaWalletProvider>
   );
 }
 

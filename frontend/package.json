@@ -3,23 +3,30 @@
   "version": "0.1.0",
   "private": true,
   "dependencies": {
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
-    "react-scripts": "5.0.1",
-    "ethers": "^6.6.0",
     "@solana/wallet-adapter-base": "^0.9.23",
     "@solana/wallet-adapter-react": "^0.15.35",
     "@solana/wallet-adapter-react-ui": "^0.9.35",
-    "@solana/wallet-adapter-phantom": "^0.9.24",
-    "@solana/wallet-adapter-solflare": "^0.6.28",
-    "@solana/web3.js": "^1.87.6",
-    "@solana/spl-token": "^0.3.11"
+    "@solana/wallet-adapter-wallets": "^0.19.32",
+    "@solana/web3.js": "^1.78.9",
+    "ajv": "^8.17.1",
+    "ethers": "^6.6.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-scripts": "^5.0.1"
   },
   "scripts": {
-    "start": "react-scripts start",
-    "build": "react-scripts build",
-    "test": "react-scripts test",
-    "eject": "react-scripts eject"
+    "start": "craco start",
+    "start:quiet": "GENERATE_SOURCEMAP=false craco start",
+    "start:debug": "REACT_APP_DEBUG=true craco start",
+    "start:clean": "npm run clean && npm start",
+    "build": "craco build",
+    "build:clean": "npm run clean && npm run build",
+    "test": "craco test",
+    "eject": "react-scripts eject",
+    "clean": "rm -rf node_modules/.cache && rm -rf build",
+    "env-check": "node -e \"console.log('Node version:', process.version); console.log('Memory limit:', process.env.NODE_OPTIONS); console.log('Port 3000 status:'); require('child_process').exec('lsof -ti:3000', (err, stdout) => console.log(stdout ? 'Port 3000 in use' : 'Port 3000 available'));\"",
+    "port-kill": "lsof -ti:3000 | xargs kill -9 2>/dev/null || echo 'No process found on port 3000'",
+    "troubleshoot": "npm run env-check && npm run port-kill && npm run clean"
   },
   "browserslist": {
     "production": [
@@ -32,5 +39,15 @@
       "last 1 firefox version",
       "last 1 safari version"
     ]
+  },
+  "devDependencies": {
+    "@craco/craco": "^7.1.0",
+    "assert": "^2.1.0",
+    "browserify-zlib": "^0.2.0",
+    "buffer": "^6.0.3",
+    "crypto-browserify": "^3.12.1",
+    "process": "^0.11.10",
+    "stream-browserify": "^3.0.0",
+    "util": "^0.12.5"
   }
 }
