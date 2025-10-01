@@ -40,7 +40,36 @@ The modular savings system implements:
 
 ## Development Commands
 
-### Smart Contract Development
+### ⚡ Multi-Blockchain Development Startup
+
+**For complete multi-blockchain development, start both chains:**
+
+```bash
+# Terminal 1: Start EVM blockchain (Hardhat)
+npx hardhat node
+
+# Terminal 2: Start Solana blockchain
+npm run solana:localnet
+
+# Terminal 3: Start frontend (connects to both chains)
+cd frontend && npm start
+```
+
+**Quick Setup (EVM + Solana + Frontend):**
+```bash
+# Terminal 1: EVM Chain
+npx hardhat node
+
+# Terminal 2: Solana Chain
+npm run solana:localnet
+
+# Terminal 3: Deploy contracts and start frontend
+npx hardhat run scripts/deploy-modular.js --network localhost  # Deploy EVM contracts
+npm run solana:setup                                           # Build + deploy Solana programs
+cd frontend && npm start                                       # Start React app with dual blockchain support
+```
+
+### EVM Smart Contract Development (Hardhat)
 ```bash
 # Install dependencies
 npm install
@@ -51,7 +80,7 @@ npx hardhat compile
 # Run tests
 npx hardhat test
 
-# Start local blockchain
+# Start local EVM blockchain
 npx hardhat node
 
 # AUTOMATED MODULAR WORKFLOW (RECOMMENDED):
@@ -90,7 +119,34 @@ npx hardhat run scripts/validate-deployment.js --network localhost
 # - ApprovalSystemModule
 ```
 
-### Frontend Development
+### Solana Smart Contract Development (Anchor)
+```bash
+# Start local Solana validator
+npm run solana:localnet
+
+# Build Solana programs
+npm run solana:build
+
+# Test Solana programs
+npm run solana:test
+
+# Deploy to local Solana validator
+npm run solana:deploy
+
+# Deploy to devnet
+npm run solana:deploy:dev
+
+# Deploy to mainnet
+npm run solana:deploy:prod
+
+# Complete setup (build + deploy + update frontend)
+npm run solana:setup
+
+# Update frontend with Solana program addresses
+npm run solana:update-frontend
+```
+
+### Frontend Development (Multi-Blockchain)
 ```bash
 # Navigate to frontend
 cd frontend
@@ -98,7 +154,7 @@ cd frontend
 # Install dependencies
 npm install
 
-# Start development server
+# Start development server (connects to both EVM and Solana)
 npm start
 
 # Build for production
@@ -106,6 +162,10 @@ npm run build
 
 # Run tests
 npm test
+
+# Alternative start commands
+npm run start:quiet    # Start without source maps (cleaner output)
+npm run start:clean    # Clean cache and start
 ```
 
 ## Key Technical Details
@@ -123,30 +183,71 @@ npm test
 - **Security**: Includes reentrancy protection, authorization checks, and timelock mechanisms
 - **Events**: Comprehensive event emission across all modules for transparency
 
-### Frontend Integration
+### Frontend Integration (Multi-Blockchain)
+
+**EVM Integration:**
 - **Contract Address**: SavingsCore address hardcoded in `frontend/src/App.js`
 - **Main ABI**: Stored in `frontend/src/SavingsABI.json` (SavingsCore ABI)
 - **Module ABIs**: Individual module ABIs available in `frontend/src/`
-- **Network**: Configured for localhost development (port 8545)
+- **Network**: EVM localhost development (port 8545)
 - **Module Config**: Module addresses stored in `frontend/src/moduleAddresses.json`
 
+**Solana Integration:**
+- **Program Addresses**: Stored in `frontend/src/solanaAddresses.json`
+- **Network**: Solana localhost validator (port 8899)
+- **Wallet Support**: Phantom, Solflare, and other Solana wallets
+- **RPC Endpoint**: `http://127.0.0.1:8899` for local development
+
+**Frontend Network Switching:**
+- **Blockchain Selector**: Switch between EVM and Solana networks
+- **Network Types**: Each blockchain supports multiple networks (localhost, testnet, mainnet)
+- **Wallet Integration**: MetaMask for EVM, Phantom/Solflare for Solana
+- **Frontend Port**: React development server runs on port 3000
+
 ### Token Support
+
+**EVM Tokens:**
 - **ETH**: Native token (address: `0x0000000000000000000000000000000000000000`)
 - **ERC20**: Any ERC20 token (tested with MockUSDT using 6 decimals)
 
+**Solana Tokens:**
+- **SOL**: Native token
+- **SPL Tokens**: Solana Program Library tokens
+
 ## Deployment Process
 
-### Initial Setup (First Time)
+### Initial Setup (First Time) - Multi-Blockchain
+
+**Complete Multi-Blockchain Setup:**
+1. **Terminal 1**: Start EVM chain: `npx hardhat node`
+2. **Terminal 2**: Start Solana chain: `npm run solana:localnet`
+3. **Terminal 3**: Deploy EVM contracts: `npx hardhat run scripts/deploy-modular.js --network localhost`
+4. **Terminal 3**: Setup Solana programs: `npm run solana:setup`
+5. **Terminal 3**: Start frontend: `cd frontend && npm start`
+
+**EVM-Only Setup (Legacy):**
 1. Start local Hardhat node: `npx hardhat node`
 2. Deploy modular contracts: `npx hardhat run scripts/deploy-modular.js --network localhost`
 3. Start frontend: `cd frontend && npm start`
 
+**Solana-Only Setup:**
+1. Start Solana validator: `npm run solana:localnet`
+2. Setup Solana programs: `npm run solana:setup`
+3. Start frontend: `cd frontend && npm start`
+
 ### Contract Updates (After Initial Setup)
+
+**EVM Contract Updates:**
 1. Make changes to any contract in `contracts/`
 2. Compile: `npx hardhat compile` (auto-updates ABIs)
 3. **For Core changes**: `npx hardhat run scripts/deploy-modular.js --network localhost`
 4. **For Module changes**: `npx hardhat run scripts/upgrade-module.js --network localhost <ModuleName> <CoreAddress>`
 5. Frontend automatically updated with new ABIs
+
+**Solana Program Updates:**
+1. Make changes to programs in `solana/programs/`
+2. Build and deploy: `npm run solana:setup`
+3. Frontend automatically updated with new program addresses
 
 ## Understanding the Modular System
 
