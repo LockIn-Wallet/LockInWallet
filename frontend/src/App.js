@@ -4,6 +4,9 @@ import SavingsABI from "./SavingsABI.json";
 import MockUSDT_ABI from "./MockUSDT_ABI.json";
 import ApprovalSystemModuleABI from "./ApprovalSystemModuleABI.json";
 
+// Import our new blockchain adapters
+import { TransactionManager } from "./adapters/TransactionManager.js";
+
 // Solana imports
 import { Connection, PublicKey, clusterApiUrl } from '@solana/web3.js';
 import {
@@ -148,16 +151,17 @@ const NETWORKS = {
       programId: "Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS", // From our Anchor.toml
       tokens: {
         SOL: {
+          address: "native", // Use "native" for SOL deposits
           mint: SOL_ADDRESS,
           symbol: "SOL",
           name: "Solana",
           decimals: 9,
           recommended: true,
         },
-        USDC: {
-          mint: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v", // USDC on Solana
-          symbol: "USDC",
-          name: "USD Coin",
+        USDT: {
+          mint: "7eiivKs9hWhqcfFnVJ6Mi6XkLaabfqSeWEjYQnZgGY2b", // Test USDT mint address
+          symbol: "USDT",
+          name: "Test USDT",
           decimals: 6,
           recommended: true,
         },
@@ -340,7 +344,15 @@ function AppContent() {
   const [approver, setApprover] = useState("");
 
   // Solana wallet hooks (only used when networkType is 'solana')
-  const { connected: solanaConnected, publicKey: solanaPublicKey, disconnect: solanaDisconnect } = useWallet();
+  const {
+    connected: solanaConnected,
+    publicKey: solanaPublicKey,
+    disconnect: solanaDisconnect,
+    wallet: solanaWallet,
+    sendTransaction: solanaSendTransaction,
+    signTransaction: solanaSignTransaction,
+    signAllTransactions: solanaSignAllTransactions
+  } = useWallet();
   const { connection } = useConnection();
 
   // Network state management
@@ -348,6 +360,9 @@ function AppContent() {
   const [selectedNetwork, setSelectedNetwork] = useState("localhost"); // Current selected network
   const [currentChainId, setCurrentChainId] = useState(null); // MetaMask's current chain ID
   const [isNetworkSwitching, setIsNetworkSwitching] = useState(false);
+
+  // Multi-blockchain transaction manager
+  const [transactionManager, setTransactionManager] = useState(null);
 
   // Time-based spending limits state - unified interface
   const [spendingLimits, setSpendingLimits] = useState([]); // Array of all time periods
@@ -434,9 +449,48 @@ function AppContent() {
     return null;
   };
 
+  // Initialize TransactionManager for the current network
+  const initializeTransactionManager = async (networkType, selectedNetwork) => {
+    try {
+      const txManager = new TransactionManager();
+      const networkConfig = getCurrentNetwork(networkType, selectedNetwork);
+
+      if (networkType === 'evm') {
+        await txManager.initialize('evm', networkConfig);
+      } else if (networkType === 'solana') {
+        console.log('Solana wallet info:', {
+          connected: solanaConnected,
+          publicKey: solanaPublicKey?.toString(),
+          wallet: solanaWallet
+        });
+
+        const walletConfig = {
+          wallet: {
+            connected: solanaConnected,
+            publicKey: solanaPublicKey,
+            sendTransaction: solanaSendTransaction,
+            signTransaction: solanaSignTransaction,
+            signAllTransactions: solanaSignAllTransactions,
+            disconnect: solanaDisconnect
+          },
+          connection: connection
+        };
+        await txManager.initialize('solana', networkConfig, walletConfig);
+      }
+
+      setTransactionManager(txManager);
+      console.log(`TransactionManager initialized for ${networkType}`);
+      return txManager;
+    } catch (error) {
+      console.error('Error initializing TransactionManager:', error);
+      return null;
+    }
+  };
+
   // Network type switching (EVM vs Solana)
-  const switchNetworkType = (newNetworkType) => {
+  const switchNetworkType = async (newNetworkType) => {
     setNetworkType(newNetworkType);
+
     if (newNetworkType === 'solana') {
       // Disconnect EVM wallet when switching to Solana
       if (provider) {
@@ -445,11 +499,15 @@ function AppContent() {
         setSavingsContract(null);
         setUserAddress("");
       }
+      // Initialize Solana TransactionManager
+      await initializeTransactionManager('solana', selectedNetwork);
     } else {
       // Disconnect Solana wallet when switching to EVM
       if (solanaConnected) {
         solanaDisconnect();
       }
+      // Initialize EVM TransactionManager
+      await initializeTransactionManager('evm', selectedNetwork);
     }
   };
 
@@ -620,6 +678,23 @@ function AppContent() {
     setExceedingPeriod(exceedingPeriod);
     setExceedsInstantLimit(parseFloat(withdrawalAmount || 0) > instantWithdrawableAmount);
   }, [withdrawalAmount, spendingLimits, instantWithdrawableAmount]);
+
+  // Initialize TransactionManager when network type changes or Solana wallet connects
+  useEffect(() => {
+    const initTxManager = async () => {
+      if (networkType === 'solana' && solanaConnected && solanaPublicKey && connection) {
+        await initializeTransactionManager('solana', selectedNetwork);
+      } else if (networkType === 'evm') {
+        // EVM TransactionManager will be initialized when MetaMask connects
+        // For now, we'll initialize it when switching to EVM even without connection
+        await initializeTransactionManager('evm', selectedNetwork);
+      }
+    };
+
+    initTxManager().catch(error => {
+      console.error('Failed to initialize TransactionManager:', error);
+    });
+  }, [networkType, selectedNetwork, solanaConnected, solanaPublicKey, connection]);
 
   const fetchAllBalances = async (
     contract = savingsContract,
@@ -934,22 +1009,41 @@ function AppContent() {
   };
 
   const deposit = async () => {
-    if (savingsContract && selectedToken && depositAmount) {
-      // Check if user is on the correct network
-      if (!isCorrectNetwork()) {
-        const currentNetwork = getCurrentNetwork(selectedNetwork);
+    // Validate basic requirements
+    if (!selectedToken || !depositAmount) {
+      alert("Please select a token and enter an amount");
+      return;
+    }
+
+    try {
+      // Get current network configuration
+      const currentNetwork = getCurrentNetwork(networkType, selectedNetwork);
+
+      // Check if we have a transaction manager
+      if (!transactionManager) {
+        alert("Transaction manager not initialized. Please refresh the page and try again.");
+        return;
+      }
+
+      // Check network connection
+      if (!(await transactionManager.isCorrectNetwork())) {
         alert(`Please switch to ${currentNetwork.name} to make deposits`);
         return;
       }
 
-      try {
-        let tokenAddress;
-        let decimals;
-        let tokenSymbol;
+      // Check wallet connection
+      if (!(await transactionManager.isConnected())) {
+        alert("Please connect your wallet first");
+        return;
+      }
 
-        const currentNetwork = getCurrentNetwork(selectedNetwork);
+      // Determine token details based on blockchain type and selection
+      let tokenAddress;
+      let decimals;
+      let tokenSymbol;
 
-        // Determine token details based on selection
+      if (networkType === 'evm') {
+        // EVM token logic
         if (selectedToken === "ETH") {
           tokenAddress = ETH_ADDRESS;
           decimals = 18;
@@ -967,47 +1061,80 @@ function AppContent() {
           alert("Please select a valid token");
           return;
         }
-
-        const amount = ethers.parseUnits(depositAmount, decimals);
-
-        // Approve the Savings contract to spend ERC20 tokens (not needed for ETH)
-        if (tokenAddress !== ETH_ADDRESS) {
-          const currentNetwork = getCurrentNetwork(selectedNetwork);
-          const tokenContract = new ethers.Contract(
-            tokenAddress,
-            MockUSDT_ABI,
-            signer
-          );
-          const approvalTx = await tokenContract.approve(
-            currentNetwork.savingsContract,
-            amount
-          );
-          await approvalTx.wait();
-          console.log(`${tokenSymbol} approval successful`);
+      } else if (networkType === 'solana') {
+        // Solana token logic
+        if (selectedToken === "SOL") {
+          tokenAddress = "native"; // Solana native token
+          decimals = 9;
+          tokenSymbol = "SOL";
+        } else if (currentNetwork.tokens && currentNetwork.tokens[selectedToken]) {
+          const token = currentNetwork.tokens[selectedToken];
+          tokenAddress = token.mint || token.address; // Use mint for Solana, address for EVM
+          decimals = token.decimals;
+          tokenSymbol = token.symbol;
+        } else {
+          alert("Please select a valid token");
+          return;
         }
-
-        // Call the deposit function (use the 2-parameter version)
-        const depositTx = await savingsContract["deposit(address,uint256)"](
-          tokenAddress,
-          amount,
-          {
-            value: tokenAddress === ETH_ADDRESS ? amount : 0, // Only send ETH if depositing ETH
-          }
-        );
-        await depositTx.wait();
-        alert(`Deposit of ${depositAmount} ${tokenSymbol} successful!`);
-
-        // Clear form and refresh balances
-        setDepositAmount("");
-        await fetchAllBalances();
-      } catch (error) {
-        console.error("Deposit error:", error);
-        alert(
-          "Failed to deposit. Please check the token selection and amount."
-        );
+      } else {
+        alert("Unsupported network type");
+        return;
       }
-    } else {
-      alert("Please select a token and enter an amount");
+
+      // Validate amount
+      const numAmount = parseFloat(depositAmount);
+      if (isNaN(numAmount) || numAmount <= 0) {
+        alert("Please enter a valid deposit amount");
+        return;
+      }
+
+      console.log(`🚀 Starting ${networkType.toUpperCase()} deposit:`, {
+        tokenSymbol,
+        amount: depositAmount,
+        tokenAddress,
+        decimals
+      });
+
+      // Execute deposit through TransactionManager
+      const result = await transactionManager.deposit(tokenAddress, depositAmount, decimals);
+
+      console.log(`✅ ${networkType.toUpperCase()} deposit successful:`, result);
+
+      // Show success message
+      const message = `Deposit of ${depositAmount} ${tokenSymbol} successful!${
+        result.hash ? `\nTransaction: ${result.hash}` : ''
+      }`;
+      alert(message);
+
+      // Clear form and refresh balances
+      setDepositAmount("");
+
+      // Refresh balances using appropriate method
+      if (networkType === 'evm') {
+        await fetchAllBalances();
+      } else {
+        // For Solana, we might need to implement a different balance refresh
+        console.log("Solana balance refresh - to be implemented");
+      }
+
+    } catch (error) {
+      console.error(`${networkType.toUpperCase()} deposit error:`, error);
+
+      // Provide user-friendly error messages
+      let errorMessage = "Failed to deposit. ";
+      if (error.message.includes('User rejected')) {
+        errorMessage += "Transaction was rejected.";
+      } else if (error.message.includes('insufficient funds')) {
+        errorMessage += "Insufficient funds.";
+      } else if (error.message.includes('network')) {
+        errorMessage += "Network error. Please check your connection.";
+      } else if (error.message.includes('not connected')) {
+        errorMessage += "Wallet not connected.";
+      } else {
+        errorMessage += "Please check the token selection and amount.";
+      }
+
+      alert(errorMessage);
     }
   };
 

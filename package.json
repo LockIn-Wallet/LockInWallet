@@ -15,6 +15,8 @@
     "update-frontend": "node scripts/update-frontend-addresses.js",
     "transfer-usdt": "npx hardhat run scripts/transferUSDT.js --network localhost --",
     "solana:localnet": "solana-test-validator --reset --quiet",
+    "solana:localnet:setup": "npm run solana:localnet & sleep 10 && node scripts/setup-solana-tokens.js",
+    "solana:setup-tokens": "node scripts/setup-solana-tokens.js",
     "solana:build": "cd solana && anchor build",
     "solana:test": "cd solana && anchor test",
     "solana:deploy": "cd solana && anchor deploy --provider.cluster localnet",
@@ -39,6 +41,7 @@
   "dependencies": {
     "@coral-xyz/anchor": "^0.29.0",
     "@openzeppelin/contracts-upgradeable": "^5.3.0",
+    "@solana/spl-token": "^0.4.14",
     "@solana/web3.js": "^1.87.6",
     "ethers": "^6.13.5",
     "hardhat-ignition": "^0.0.1"

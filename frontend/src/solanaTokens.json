@@ -1,0 +1,10 @@
+{
+  "solanaTokens": {
+    "usdtMint": "7eiivKs9hWhqcfFnVJ6Mi6XkLaabfqSeWEjYQnZgGY2b",
+    "userTokenAccount": "BK5C6HkrEgaLdA1Xane6cxh3Tfw6riPRdTJdvc3qwScu",
+    "userAddress": "4xo6a3qHYgtsDkKUAy1wMQhyN1zoXo3tKPR5foxa3hV4",
+    "mintAuthority": "MQGDHogoVfRHXU8WpgbhjNuVi1dPotd11psGhQnBTjq",
+    "balance": 1000000,
+    "createdAt": "2025-10-01T18:13:04.206Z"
+  }
+}
