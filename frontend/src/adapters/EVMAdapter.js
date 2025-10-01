@@ -120,9 +120,7 @@ export class EVMAdapter extends BlockchainAdapter {
 
     const balances = {};
 
-    // Fetch ETH balance
-    const ethBalance = await this.savingsContract.getTokenBalance(userAddress, this.ETH_ADDRESS);
-    balances["ETH"] = this.formatAmount(ethBalance, 18);
+    // Skip ETH balance - only fetch stablecoins
 
     // Fetch token balances
     if (this.networkConfig.tokens) {

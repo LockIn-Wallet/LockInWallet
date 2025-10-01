@@ -389,6 +389,7 @@ function AppContent() {
     Monthly: { isHovered: false, isFocused: false },
   });
   const [depositAmount, setDepositAmount] = useState(""); // New state for deposit amount
+  const [isDepositing, setIsDepositing] = useState(false); // Loading state for deposit button
   const [selectedToken, setSelectedToken] = useState("USDT"); // Default to USDT
   const [userAddress, setUserAddress] = useState(""); // Store user address
 
@@ -684,6 +685,17 @@ function AppContent() {
     const initTxManager = async () => {
       if (networkType === 'solana' && solanaConnected && solanaPublicKey && connection) {
         await initializeTransactionManager('solana', selectedNetwork);
+
+        // Fetch Solana balances after TransactionManager is initialized
+        try {
+          console.log("🔄 Fetching initial Solana balances...");
+          const userAddress = await transactionManager.getAddress();
+          const solanaBalances = await transactionManager.getAllBalances(userAddress);
+          setBalances(solanaBalances);
+          console.log("✅ Initial Solana balances loaded:", solanaBalances);
+        } catch (error) {
+          console.error("❌ Error fetching initial Solana balances:", error);
+        }
       } else if (networkType === 'evm') {
         // EVM TransactionManager will be initialized when MetaMask connects
         // For now, we'll initialize it when switching to EVM even without connection
@@ -706,12 +718,7 @@ function AppContent() {
         const currentNetwork = getCurrentNetwork(selectedNetwork);
         const newBalances = {};
 
-        // Fetch ETH balance
-        const ethBalance = await contract.getTokenBalance(
-          userAddress,
-          ETH_ADDRESS
-        );
-        newBalances["ETH"] = ethers.formatUnits(ethBalance, 18);
+        // Skip ETH balance - only fetch stablecoins
 
         // Fetch stablecoin balances using current network's token addresses
         for (const [key, token] of Object.entries(currentNetwork.tokens)) {
@@ -1015,6 +1022,9 @@ function AppContent() {
       return;
     }
 
+    // Set loading state
+    setIsDepositing(true);
+
     try {
       // Get current network configuration
       const currentNetwork = getCurrentNetwork(networkType, selectedNetwork);
@@ -1112,9 +1122,17 @@ function AppContent() {
       // Refresh balances using appropriate method
       if (networkType === 'evm') {
         await fetchAllBalances();
-      } else {
-        // For Solana, we might need to implement a different balance refresh
-        console.log("Solana balance refresh - to be implemented");
+      } else if (networkType === 'solana') {
+        // For Solana, use TransactionManager to get balances
+        console.log("🔄 Refreshing Solana balances...");
+        try {
+          const userAddress = await transactionManager.getAddress();
+          const solanaBalances = await transactionManager.getAllBalances(userAddress);
+          setBalances(solanaBalances);
+          console.log("✅ Solana balances refreshed:", solanaBalances);
+        } catch (error) {
+          console.error("❌ Error refreshing Solana balances:", error);
+        }
       }
 
     } catch (error) {
@@ -1135,6 +1153,9 @@ function AppContent() {
       }
 
       alert(errorMessage);
+    } finally {
+      // Always reset loading state
+      setIsDepositing(false);
     }
   };
 
@@ -2327,9 +2348,23 @@ function AppContent() {
           }}
         >
           <h3 style={{ color: "white", margin: 0 }}>💰 Your Balances</h3>
-          {provider && (
+          {(provider || (networkType === 'solana' && solanaWallet?.connected)) && (
             <button
-              onClick={() => fetchAllBalances()}
+              onClick={async () => {
+                if (networkType === 'evm') {
+                  await fetchAllBalances();
+                } else if (networkType === 'solana') {
+                  console.log("🔄 Refreshing Solana balances...");
+                  try {
+                    const userAddress = await transactionManager.getAddress();
+                    const solanaBalances = await transactionManager.getAllBalances(userAddress);
+                    setBalances(solanaBalances);
+                    console.log("✅ Solana balances refreshed:", solanaBalances);
+                  } catch (error) {
+                    console.error("❌ Error refreshing Solana balances:", error);
+                  }
+                }
+              }}
               style={{
                 padding: "6px 12px",
                 borderRadius: "4px",
@@ -2381,28 +2416,6 @@ function AppContent() {
               gap: "10px",
             }}
           >
-            {/* Show ETH balance */}
-            <div
-              style={{
-                padding: "12px",
-                backgroundColor: "#4a5568",
-                borderRadius: "6px",
-                color: "white",
-              }}
-            >
-              <div
-                style={{
-                  fontSize: "0.8em",
-                  color: "#a0aec0",
-                  marginBottom: "4px",
-                }}
-              >
-                ETH
-              </div>
-              <div style={{ fontSize: "1.2em", fontWeight: "bold" }}>
-                {balances.ETH || "0"}
-              </div>
-            </div>
 
             {/* Show stablecoins */}
             {Object.entries(getCurrentNetwork(selectedNetwork).tokens).map(
@@ -2567,23 +2580,26 @@ function AppContent() {
 
                 <button
                   onClick={deposit}
+                  disabled={isDepositing}
                   style={{
                     padding: "8px 16px",
                     borderRadius: "4px",
                     border: "none",
-                    backgroundColor:
-                      selectedToken &&
-                      getCurrentNetwork(selectedNetwork).tokens[selectedToken]
-                        ?.recommended
+                    backgroundColor: isDepositing
+                      ? "#6b7280"
+                      : selectedToken &&
+                        getCurrentNetwork(selectedNetwork).tokens[selectedToken]
+                          ?.recommended
                         ? "#28a745"
                         : "#3182ce",
                     color: "white",
-                    cursor: "pointer",
+                    cursor: isDepositing ? "not-allowed" : "pointer",
                     minWidth: "100px",
                     fontWeight: "bold",
+                    opacity: isDepositing ? 0.7 : 1,
                   }}
                 >
-                  💰 Deposit Now
+                  {isDepositing ? "⏳ Processing..." : "💰 Deposit Now"}
                 </button>
               </div>
             </div>

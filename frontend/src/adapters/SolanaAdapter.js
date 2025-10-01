@@ -124,19 +124,21 @@ export class SolanaAdapter extends BlockchainAdapter {
   async getAllBalances(userAddress) {
     const balances = {};
 
-    // Get SOL balance
-    const solBalance = await this.getTokenBalance(userAddress, 'SOL');
-    balances['SOL'] = this.formatAmount(solBalance, 9); // SOL has 9 decimals
+    // Skip SOL balance - only fetch stablecoins
 
     // Get SPL token balances
     if (this.networkConfig.tokens) {
       for (const [key, token] of Object.entries(this.networkConfig.tokens)) {
-        if (token.address && token.address !== 'native') {
+        // For Solana, use 'mint' field instead of 'address'
+        const tokenAddress = token.mint || token.address;
+        if (tokenAddress && tokenAddress !== 'native') {
           try {
-            const tokenBalance = await this.getTokenBalance(userAddress, token.address);
+            console.log(`Fetching balance for ${key}:`, { tokenAddress, decimals: token.decimals });
+            const tokenBalance = await this.getTokenBalance(userAddress, tokenAddress);
             balances[key] = this.formatAmount(tokenBalance, token.decimals);
+            console.log(`✅ ${key} balance:`, balances[key]);
           } catch (error) {
-            console.error(`Error fetching ${key} balance:`, error);
+            console.error(`❌ Error fetching ${key} balance:`, error);
             balances[key] = "0";
           }
         }
