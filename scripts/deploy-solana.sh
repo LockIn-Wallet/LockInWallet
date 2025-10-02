@@ -10,7 +10,7 @@ echo "🚀 Starting Solana Program Deployment..."
 # Configuration
 ANCHOR_PATH="/opt/homebrew/bin/anchor"
 SOLANA_DIR="./solana"
-SCRIPTS_DIR="./scripts"
+SCRIPTS_DIR="$(dirname "$0")"
 
 # Colors for output
 RED='\033[0;31m'
@@ -75,6 +75,52 @@ check_validator() {
     else
         log_info "✅ Validator is already running"
     fi
+}
+
+# Ensure program ID consistency
+sync_program_id() {
+    log_info "Ensuring program ID consistency..."
+
+    cd "$SOLANA_DIR"
+
+    # Set up proper Solana environment with Agave CLI 2.1.15
+    export PATH="/Users/andriy/.local/share/solana/install/active_release/bin:/opt/homebrew/bin:$PATH"
+
+    # Step 1: Generate program keypair if it doesn't exist
+    KEYPAIR_PATH="target/deploy/savings_core-keypair.json"
+    if [ ! -f "$KEYPAIR_PATH" ]; then
+        log_info "Generating new program keypair..."
+        mkdir -p target/deploy
+        solana-keygen new --outfile "$KEYPAIR_PATH" --no-bip39-passphrase --silent
+        if [ $? -ne 0 ]; then
+            log_error "Failed to generate program keypair"
+            exit 1
+        fi
+    fi
+
+    # Step 2: Get the program ID from keypair
+    PROGRAM_ID=$(solana-keygen pubkey "$KEYPAIR_PATH")
+    log_info "Program ID from keypair: $PROGRAM_ID"
+
+    # Step 3: Update Anchor.toml with the correct program ID
+    log_info "Updating Anchor.toml with program ID: $PROGRAM_ID"
+    sed -i.bak "s/savings_core = \".*\"/savings_core = \"$PROGRAM_ID\"/" Anchor.toml
+
+    # Step 4: Update declare_id! in the Rust code
+    log_info "Updating declare_id! in Rust code..."
+    RUST_FILE="programs/savings-core/src/lib.rs"
+    sed -i.bak "s/declare_id!(\".*\")/declare_id!(\"$PROGRAM_ID\")/" "$RUST_FILE"
+
+    # Step 5: Sync keys with Anchor
+    log_info "Syncing Anchor keys..."
+    if $ANCHOR_PATH keys sync; then
+        log_info "✅ Program ID consistency ensured: $PROGRAM_ID"
+    else
+        log_error "Failed to sync Anchor keys"
+        exit 1
+    fi
+
+    cd ..
 }
 
 # Build the program
@@ -181,6 +227,7 @@ main() {
 
     check_prerequisites
     check_validator
+    sync_program_id
     build_program
     deploy_program
     update_frontend

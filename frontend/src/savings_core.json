@@ -1,45 +1,60 @@
 {
-  "version": "0.1.0",
-  "name": "savings_core",
+  "address": "HPETsRTsHi8ez2dBbzSHRE2KDfHFYuvYK4Bg6f8K1tB6",
+  "metadata": {
+    "name": "savings_core",
+    "version": "0.1.0",
+    "spec": "0.1.0",
+    "description": "Solana Savings Wallet Core Program"
+  },
   "instructions": [
     {
-      "name": "initialize",
-      "accounts": [
-        {
-          "name": "savingsAccount",
-          "isMut": true,
-          "isSigner": false
-        },
-        {
-          "name": "user",
-          "isMut": true,
-          "isSigner": true
-        },
-        {
-          "name": "systemProgram",
-          "isMut": false,
-          "isSigner": false
-        }
+      "name": "deposit_sol",
+      "docs": [
+        "Deposit SOL to the savings account"
       ],
-      "args": []
-    },
-    {
-      "name": "depositSol",
+      "discriminator": [
+        108,
+        81,
+        78,
+        117,
+        125,
+        155,
+        56,
+        200
+      ],
       "accounts": [
         {
-          "name": "savingsAccount",
-          "isMut": true,
-          "isSigner": false
+          "name": "savings_account",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  97,
+                  118,
+                  105,
+                  110,
+                  103,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "user"
+              }
+            ]
+          }
         },
         {
           "name": "user",
-          "isMut": true,
-          "isSigner": true
+          "writable": true,
+          "signer": true
         },
         {
-          "name": "systemProgram",
-          "isMut": false,
-          "isSigner": false
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
         }
       ],
       "args": [
@@ -50,47 +65,167 @@
       ]
     },
     {
-      "name": "depositSpl",
+      "name": "deposit_spl",
+      "docs": [
+        "Deposit SPL tokens to the savings account"
+      ],
+      "discriminator": [
+        224,
+        0,
+        198,
+        175,
+        198,
+        47,
+        105,
+        204
+      ],
       "accounts": [
         {
-          "name": "savingsAccount",
-          "isMut": true,
-          "isSigner": false
+          "name": "savings_account",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  97,
+                  118,
+                  105,
+                  110,
+                  103,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "user"
+              }
+            ]
+          }
         },
         {
           "name": "user",
-          "isMut": true,
-          "isSigner": true
+          "writable": true,
+          "signer": true
         },
         {
-          "name": "userTokenAccount",
-          "isMut": true,
-          "isSigner": false
+          "name": "user_token_account",
+          "docs": [
+            "User's token account that holds the tokens to deposit"
+          ],
+          "writable": true
         },
         {
-          "name": "savingsTokenAccount",
-          "isMut": true,
-          "isSigner": false
+          "name": "savings_token_account",
+          "docs": [
+            "The savings account's token account for this mint"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "savings_account"
+              },
+              {
+                "kind": "const",
+                "value": [
+                  6,
+                  221,
+                  246,
+                  225,
+                  215,
+                  101,
+                  161,
+                  147,
+                  217,
+                  203,
+                  225,
+                  70,
+                  206,
+                  235,
+                  121,
+                  172,
+                  28,
+                  180,
+                  133,
+                  237,
+                  95,
+                  91,
+                  55,
+                  145,
+                  58,
+                  140,
+                  245,
+                  133,
+                  126,
+                  255,
+                  0,
+                  169
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
         },
         {
           "name": "mint",
-          "isMut": false,
-          "isSigner": false
+          "docs": [
+            "The mint of the SPL token being deposited"
+          ]
         },
         {
-          "name": "tokenProgram",
-          "isMut": false,
-          "isSigner": false
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
         },
         {
-          "name": "associatedTokenProgram",
-          "isMut": false,
-          "isSigner": false
+          "name": "associated_token_program",
+          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
         },
         {
-          "name": "systemProgram",
-          "isMut": false,
-          "isSigner": false
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
         }
       ],
       "args": [
@@ -101,163 +236,437 @@
       ]
     },
     {
-      "name": "withdrawSol",
-      "accounts": [
-        {
-          "name": "savingsAccount",
-          "isMut": true,
-          "isSigner": false
-        },
-        {
-          "name": "user",
-          "isMut": true,
-          "isSigner": true
-        },
-        {
-          "name": "systemProgram",
-          "isMut": false,
-          "isSigner": false
-        }
+      "name": "get_sol_balance",
+      "docs": [
+        "Get user's total SOL balance"
       ],
-      "args": [
-        {
-          "name": "amount",
-          "type": "u64"
-        }
-      ]
-    },
-    {
-      "name": "withdrawSpl",
-      "accounts": [
-        {
-          "name": "savingsAccount",
-          "isMut": true,
-          "isSigner": false
-        },
-        {
-          "name": "user",
-          "isMut": true,
-          "isSigner": true
-        },
-        {
-          "name": "userTokenAccount",
-          "isMut": true,
-          "isSigner": false
-        },
-        {
-          "name": "savingsTokenAccount",
-          "isMut": true,
-          "isSigner": false
-        },
-        {
-          "name": "mint",
-          "isMut": false,
-          "isSigner": false
-        },
-        {
-          "name": "tokenProgram",
-          "isMut": false,
-          "isSigner": false
-        }
+      "discriminator": [
+        177,
+        197,
+        179,
+        97,
+        50,
+        111,
+        178,
+        70
       ],
-      "args": [
-        {
-          "name": "amount",
-          "type": "u64"
-        }
-      ]
-    },
-    {
-      "name": "getSolBalance",
       "accounts": [
         {
-          "name": "savingsAccount",
-          "isMut": false,
-          "isSigner": false
+          "name": "savings_account",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  97,
+                  118,
+                  105,
+                  110,
+                  103,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "user"
+              }
+            ]
+          }
         },
         {
           "name": "user",
-          "isMut": false,
-          "isSigner": true
+          "signer": true
         }
       ],
       "args": [],
       "returns": "u64"
     },
     {
-      "name": "getSplBalance",
+      "name": "get_spl_balance",
+      "docs": [
+        "Get user's SPL token balance for a specific mint"
+      ],
+      "discriminator": [
+        92,
+        135,
+        40,
+        171,
+        133,
+        246,
+        90,
+        120
+      ],
       "accounts": [
         {
-          "name": "savingsAccount",
-          "isMut": false,
-          "isSigner": false
+          "name": "savings_account",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  97,
+                  118,
+                  105,
+                  110,
+                  103,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "user"
+              }
+            ]
+          }
         },
         {
           "name": "user",
-          "isMut": false,
-          "isSigner": true
+          "signer": true
         }
       ],
       "args": [
         {
           "name": "mint",
-          "type": "publicKey"
+          "type": "pubkey"
         }
       ],
       "returns": "u64"
+    },
+    {
+      "name": "initialize",
+      "docs": [
+        "Initialize a savings account for a user"
+      ],
+      "discriminator": [
+        175,
+        175,
+        109,
+        31,
+        13,
+        152,
+        155,
+        237
+      ],
+      "accounts": [
+        {
+          "name": "savings_account",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  97,
+                  118,
+                  105,
+                  110,
+                  103,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "user"
+              }
+            ]
+          }
+        },
+        {
+          "name": "user",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "withdraw_sol",
+      "docs": [
+        "Withdraw SOL from the savings account"
+      ],
+      "discriminator": [
+        145,
+        131,
+        74,
+        136,
+        65,
+        137,
+        42,
+        38
+      ],
+      "accounts": [
+        {
+          "name": "savings_account",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  97,
+                  118,
+                  105,
+                  110,
+                  103,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "user"
+              }
+            ]
+          }
+        },
+        {
+          "name": "user",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "withdraw_spl",
+      "docs": [
+        "Withdraw SPL tokens from the savings account"
+      ],
+      "discriminator": [
+        181,
+        154,
+        94,
+        86,
+        62,
+        115,
+        6,
+        186
+      ],
+      "accounts": [
+        {
+          "name": "savings_account",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  97,
+                  118,
+                  105,
+                  110,
+                  103,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "user"
+              }
+            ]
+          }
+        },
+        {
+          "name": "user",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "user_token_account",
+          "docs": [
+            "User's token account to receive the withdrawn tokens"
+          ],
+          "writable": true
+        },
+        {
+          "name": "savings_token_account",
+          "docs": [
+            "The savings account's token account for this mint"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "savings_account"
+              },
+              {
+                "kind": "const",
+                "value": [
+                  6,
+                  221,
+                  246,
+                  225,
+                  215,
+                  101,
+                  161,
+                  147,
+                  217,
+                  203,
+                  225,
+                  70,
+                  206,
+                  235,
+                  121,
+                  172,
+                  28,
+                  180,
+                  133,
+                  237,
+                  95,
+                  91,
+                  55,
+                  145,
+                  58,
+                  140,
+                  245,
+                  133,
+                  126,
+                  255,
+                  0,
+                  169
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "mint",
+          "docs": [
+            "The mint of the SPL token being withdrawn"
+          ]
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
     }
   ],
   "accounts": [
     {
       "name": "SavingsAccount",
+      "discriminator": [
+        136,
+        151,
+        16,
+        72,
+        219,
+        51,
+        51,
+        116
+      ],
+      "size": 469,
       "type": {
         "kind": "struct",
         "fields": [
           {
             "name": "owner",
-            "type": "publicKey"
+            "docs": [
+              "The owner of this savings account"
+            ],
+            "type": "pubkey"
           },
           {
-            "name": "solBalance",
+            "name": "sol_balance",
+            "docs": [
+              "Total SOL deposited (in lamports)"
+            ],
             "type": "u64"
           },
           {
-            "name": "splBalances",
+            "name": "spl_balances",
+            "docs": [
+              "SPL token balances"
+            ],
             "type": {
-              "vec": {
-                "defined": "TokenBalance"
-              }
+              "vec": "TokenBalance"
             }
           },
           {
             "name": "bump",
+            "docs": [
+              "Bump seed for this PDA"
+            ],
             "type": "u8"
           },
           {
-            "name": "createdAt",
+            "name": "created_at",
+            "docs": [
+              "When this account was created"
+            ],
             "type": "i64"
           },
           {
-            "name": "updatedAt",
+            "name": "updated_at",
+            "docs": [
+              "Last update timestamp"
+            ],
             "type": "i64"
-          }
-        ]
-      }
-    }
-  ],
-  "types": [
-    {
-      "name": "TokenBalance",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "mint",
-            "type": "publicKey"
-          },
-          {
-            "name": "amount",
-            "type": "u64"
           }
         ]
       }
@@ -271,12 +680,12 @@
     },
     {
       "code": 6001,
-      "name": "MathOverflow",
+      "name": "ArithmeticOverflow",
       "msg": "Math overflow occurred"
     },
     {
       "code": 6002,
-      "name": "TooManyTokens",
+      "name": "TokenLimitExceeded",
       "msg": "Too many different tokens in account (max 10 supported)"
     },
     {
@@ -293,6 +702,90 @@
       "code": 6005,
       "name": "AccountNotInitialized",
       "msg": "Account not properly initialized"
+    }
+  ],
+  "types": [
+    {
+      "name": "SavingsAccount",
+      "docs": [
+        "Main savings account that stores user's deposit information",
+        "Similar to the userTokenBalances mapping in your EVM contract"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "owner",
+            "docs": [
+              "The owner of this savings account"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "sol_balance",
+            "docs": [
+              "Total SOL deposited (in lamports)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "spl_balances",
+            "docs": [
+              "SPL token balances"
+            ],
+            "type": {
+              "vec": "TokenBalance"
+            }
+          },
+          {
+            "name": "bump",
+            "docs": [
+              "Bump seed for this PDA"
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "created_at",
+            "docs": [
+              "When this account was created"
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "updated_at",
+            "docs": [
+              "Last update timestamp"
+            ],
+            "type": "i64"
+          }
+        ]
+      },
+      "size": 469
+    },
+    {
+      "name": "TokenBalance",
+      "docs": [
+        "Represents a balance for a specific SPL token"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "mint",
+            "docs": [
+              "The mint address of the SPL token"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "docs": [
+              "The amount of tokens deposited"
+            ],
+            "type": "u64"
+          }
+        ]
+      }
     }
   ]
 }
