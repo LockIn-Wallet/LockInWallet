@@ -59,14 +59,14 @@ impl SavingsAccount {
         for token_balance in &mut self.spl_balances {
             if token_balance.mint == mint {
                 token_balance.amount = token_balance.amount.checked_add(amount)
-                    .ok_or(error::ErrorCode::MathOverflow)?;
+                    .ok_or(crate::error::ErrorCode::ArithmeticOverflow)?;
                 return Ok(());
             }
         }
 
         // If token not found, add new entry
         if self.spl_balances.len() >= Self::MAX_TOKENS {
-            return Err(error::ErrorCode::TooManyTokens.into());
+            return Err(crate::error::ErrorCode::TokenLimitExceeded.into());
         }
 
         self.spl_balances.push(TokenBalance { mint, amount });

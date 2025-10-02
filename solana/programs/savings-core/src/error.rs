@@ -7,10 +7,10 @@ pub enum ErrorCode {
     InvalidAmount,
 
     #[msg("Math overflow occurred")]
-    MathOverflow,
+    ArithmeticOverflow,
 
     #[msg("Too many different tokens in account (max 10 supported)")]
-    TooManyTokens,
+    TokenLimitExceeded,
 
     #[msg("Insufficient balance for this operation")]
     InsufficientBalance,

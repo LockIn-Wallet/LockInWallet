@@ -33,6 +33,16 @@ pub mod savings_core {
         instructions::deposit_spl(ctx, amount)
     }
 
+    /// Withdraw SOL from the savings account
+    pub fn withdraw_sol(ctx: Context<WithdrawSol>, amount: u64) -> Result<()> {
+        instructions::withdraw_sol(ctx, amount)
+    }
+
+    /// Withdraw SPL tokens from the savings account
+    pub fn withdraw_spl(ctx: Context<WithdrawSpl>, amount: u64) -> Result<()> {
+        instructions::withdraw_spl(ctx, amount)
+    }
+
     /// Get user's total SOL balance
     pub fn get_sol_balance(ctx: Context<GetBalance>) -> Result<u64> {
         Ok(ctx.accounts.savings_account.sol_balance)

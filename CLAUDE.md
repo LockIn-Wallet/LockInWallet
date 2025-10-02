@@ -65,7 +65,7 @@ npm run solana:localnet
 
 # Terminal 3: Deploy contracts and start frontend
 npx hardhat run scripts/deploy-modular.js --network localhost  # Deploy EVM contracts
-npm run solana:setup                                           # Build + deploy Solana programs
+npm run solana:deploy-reliable                                 # 🎯 RELIABLE Solana deployment
 cd frontend && npm start                                       # Start React app with dual blockchain support
 ```
 
@@ -120,11 +120,27 @@ npx hardhat run scripts/validate-deployment.js --network localhost
 ```
 
 ### Solana Smart Contract Development (Anchor)
+
+#### ⚡ **RECOMMENDED: Reliable Deployment (IMPORTANT!)**
+```bash
+# 🎯 ONE-COMMAND DEPLOYMENT (handles everything automatically)
+npm run solana:deploy-reliable
+
+# This script automatically:
+# - Checks prerequisites (Anchor CLI, etc.)
+# - Starts local validator if needed
+# - Builds the program (bypassing version conflicts)
+# - Deploys to local validator
+# - Updates frontend addresses
+# - Provides deployment summary
+```
+
+#### **Individual Commands (Advanced Users)**
 ```bash
 # Start local Solana validator
 npm run solana:localnet
 
-# Build Solana programs
+# Build Solana programs (may have version conflicts)
 npm run solana:build
 
 # Test Solana programs
@@ -144,6 +160,19 @@ npm run solana:setup
 
 # Update frontend with Solana program addresses
 npm run solana:update-frontend
+```
+
+#### **✅ WORKING CONFIGURATION (Updated)**
+**Required Versions for Successful Build/Deploy:**
+- **Solana CLI**: 2.1.15+ (Agave) - `sh -c "$(curl -sSfL https://release.anza.xyz/v2.1.15/install)"`
+- **Anchor CLI**: 0.31.1 (homebrew) - `brew install anchor-cli`
+- **Rust**: 1.85.0+ (we use 1.90.0) - `rustup update`
+
+**Deployment:**
+```bash
+npm run solana:deploy-reliable  # Still recommended for automation
+# OR manual deployment:
+cd solana && anchor build && anchor deploy --provider.cluster localnet
 ```
 
 ### Frontend Development (Multi-Blockchain)
@@ -194,6 +223,7 @@ npm run start:clean    # Clean cache and start
 
 **Solana Integration:**
 - **Program Addresses**: Stored in `frontend/src/solanaAddresses.json`
+- **Current Program ID**: `HPETsRTsHi8ez2dBbzSHRE2KDfHFYuvYK4Bg6f8K1tB6` (Oct 2024)
 - **Network**: Solana localhost validator (port 8899)
 - **Wallet Support**: Phantom, Solflare, and other Solana wallets
 - **RPC Endpoint**: `http://127.0.0.1:8899` for local development
@@ -222,7 +252,7 @@ npm run start:clean    # Clean cache and start
 1. **Terminal 1**: Start EVM chain: `npx hardhat node`
 2. **Terminal 2**: Start Solana chain: `npm run solana:localnet`
 3. **Terminal 3**: Deploy EVM contracts: `npx hardhat run scripts/deploy-modular.js --network localhost`
-4. **Terminal 3**: Setup Solana programs: `npm run solana:setup`
+4. **Terminal 3**: Setup Solana programs: `npm run solana:deploy-reliable` **⚡ RECOMMENDED**
 5. **Terminal 3**: Start frontend: `cd frontend && npm start`
 
 **EVM-Only Setup (Legacy):**
@@ -232,7 +262,7 @@ npm run start:clean    # Clean cache and start
 
 **Solana-Only Setup:**
 1. Start Solana validator: `npm run solana:localnet`
-2. Setup Solana programs: `npm run solana:setup`
+2. Setup Solana programs: `npm run solana:deploy-reliable` **⚡ RECOMMENDED**
 3. Start frontend: `cd frontend && npm start`
 
 ### Contract Updates (After Initial Setup)
@@ -381,6 +411,37 @@ cd frontend && npm start  # Terminal 3
 ```
 
 ## Important Notes
+
+### ✅ **WORKING: Solana Deployment (Updated Oct 2024)**
+
+**SUCCESSFUL CONFIGURATION:**
+- **Solana CLI**: 2.1.15 (Agave) ✅
+- **Anchor CLI**: 0.31.1 (homebrew) ✅
+- **Rust**: 1.90.0 ✅
+
+**Deployment Commands:**
+```bash
+# Option 1: Automated (recommended)
+npm run solana:deploy-reliable
+
+# Option 2: Manual step-by-step
+cd solana
+export PATH="/Users/andriy/.local/share/solana/install/active_release/bin:$PATH"
+anchor build
+anchor deploy --provider.cluster localnet
+```
+
+**If You Get Build Errors:**
+- ❌ `"build-sbf not found"` → **Upgrade to Agave CLI 2.1.15+**
+- ❌ `"Bumps trait not satisfied"` → **Already fixed in current code**
+- ❌ `"init-if-needed feature missing"` → **Already fixed in Cargo.toml**
+
+**Migration from Old Setup:**
+```bash
+# Install Agave CLI (replaces deprecated solana-install)
+sh -c "$(curl -sSfL https://release.anza.xyz/v2.1.15/install)"
+rustup update  # Ensure Rust 1.85.0+
+```
 
 ### **Modular Architecture Notes**
 - **SavingsCore** is the main contract - frontend always interacts with this address
