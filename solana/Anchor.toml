@@ -6,13 +6,13 @@ skip-lint = false
 anchor_version = "0.31.1"
 
 [programs.localnet]
-savings_core = "HPETsRTsHi8ez2dBbzSHRE2KDfHFYuvYK4Bg6f8K1tB6"
+savings_core = "HNi2JKTNeHvz2ENckdVBW1ncfkJUYppuYeBwNhWjkK7d"
 
 [programs.devnet]
-savings_core = "HPETsRTsHi8ez2dBbzSHRE2KDfHFYuvYK4Bg6f8K1tB6"
+savings_core = "HNi2JKTNeHvz2ENckdVBW1ncfkJUYppuYeBwNhWjkK7d"
 
 [programs.mainnet]
-savings_core = "HPETsRTsHi8ez2dBbzSHRE2KDfHFYuvYK4Bg6f8K1tB6"
+savings_core = "HNi2JKTNeHvz2ENckdVBW1ncfkJUYppuYeBwNhWjkK7d"
 
 [registry]
 url = "https://api.apr.dev"

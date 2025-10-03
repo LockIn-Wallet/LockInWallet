@@ -148,7 +148,7 @@ const NETWORKS = {
       network: WalletAdapterNetwork.Devnet, // Use devnet for local testing
       name: "Solana Localhost",
       rpcUrl: "http://127.0.0.1:8899",
-      programId: "HPETsRTsHi8ez2dBbzSHRE2KDfHFYuvYK4Bg6f8K1tB6", // From our Anchor.toml
+      programId: "HNi2JKTNeHvz2ENckdVBW1ncfkJUYppuYeBwNhWjkK7d", // From our Anchor.toml
       tokens: {
         SOL: {
           address: "native", // Use "native" for SOL deposits
@@ -159,7 +159,7 @@ const NETWORKS = {
           recommended: true,
         },
         USDT: {
-          mint: "7eiivKs9hWhqcfFnVJ6Mi6XkLaabfqSeWEjYQnZgGY2b", // Test USDT mint address
+          mint: "4hfpnxTtKLzTPy8W98ischzWSzn4jn8uLN6EDsnTK7cn", // Test USDT mint address
           symbol: "USDT",
           name: "Test USDT",
           decimals: 6,
@@ -171,7 +171,7 @@ const NETWORKS = {
       network: WalletAdapterNetwork.Devnet,
       name: "Solana Devnet",
       rpcUrl: clusterApiUrl(WalletAdapterNetwork.Devnet),
-      programId: "HPETsRTsHi8ez2dBbzSHRE2KDfHFYuvYK4Bg6f8K1tB6",
+      programId: "HNi2JKTNeHvz2ENckdVBW1ncfkJUYppuYeBwNhWjkK7d",
       tokens: {
         SOL: {
           mint: SOL_ADDRESS,
@@ -193,7 +193,7 @@ const NETWORKS = {
       network: WalletAdapterNetwork.Mainnet,
       name: "Solana Mainnet",
       rpcUrl: clusterApiUrl(WalletAdapterNetwork.Mainnet),
-      programId: "HPETsRTsHi8ez2dBbzSHRE2KDfHFYuvYK4Bg6f8K1tB6", // TODO: Deploy to mainnet
+      programId: "HNi2JKTNeHvz2ENckdVBW1ncfkJUYppuYeBwNhWjkK7d", // TODO: Deploy to mainnet
       tokens: {
         SOL: {
           mint: SOL_ADDRESS,

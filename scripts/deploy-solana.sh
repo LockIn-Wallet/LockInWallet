@@ -98,18 +98,18 @@ sync_program_id() {
         fi
     fi
 
-    # Step 2: Get the program ID from keypair
+    # Step 2: Get the program ID from keypair (this is the authoritative source)
     PROGRAM_ID=$(solana-keygen pubkey "$KEYPAIR_PATH")
     log_info "Program ID from keypair: $PROGRAM_ID"
 
-    # Step 3: Update Anchor.toml with the correct program ID
+    # Step 3: Update Anchor.toml with the correct program ID (replace all occurrences)
     log_info "Updating Anchor.toml with program ID: $PROGRAM_ID"
-    sed -i.bak "s/savings_core = \".*\"/savings_core = \"$PROGRAM_ID\"/" Anchor.toml
+    sed -i.bak "s/savings_core = \"[^\"]*\"/savings_core = \"$PROGRAM_ID\"/g" Anchor.toml
 
     # Step 4: Update declare_id! in the Rust code
     log_info "Updating declare_id! in Rust code..."
     RUST_FILE="programs/savings-core/src/lib.rs"
-    sed -i.bak "s/declare_id!(\".*\")/declare_id!(\"$PROGRAM_ID\")/" "$RUST_FILE"
+    sed -i.bak "s/declare_id!(\"[^\"]*\")/declare_id!(\"$PROGRAM_ID\")/" "$RUST_FILE"
 
     # Step 5: Sync keys with Anchor
     log_info "Syncing Anchor keys..."
@@ -123,9 +123,9 @@ sync_program_id() {
     cd ..
 }
 
-# Build the program
+# Clean and build the program
 build_program() {
-    log_info "Building Solana program..."
+    log_info "Cleaning and building Solana program..."
 
     cd "$SOLANA_DIR"
 
@@ -134,11 +134,43 @@ build_program() {
 
     log_info "Using Solana CLI version: $(solana --version)"
     log_info "Using Anchor CLI at: $ANCHOR_PATH"
+
+    # Clean previous build artifacts to eliminate caching issues
+    log_info "Cleaning previous build artifacts..."
+    if [ -d "target" ]; then
+        # Preserve the keypair if it exists
+        if [ -f "target/deploy/savings_core-keypair.json" ]; then
+            cp target/deploy/savings_core-keypair.json ./savings_core-keypair.json.backup
+            log_info "✅ Backed up existing keypair"
+        fi
+        rm -rf target
+        log_info "✅ Cleaned target directory"
+
+        # Restore the keypair
+        if [ -f "./savings_core-keypair.json.backup" ]; then
+            mkdir -p target/deploy
+            cp ./savings_core-keypair.json.backup target/deploy/savings_core-keypair.json
+            rm ./savings_core-keypair.json.backup
+            log_info "✅ Restored keypair"
+        fi
+    fi
+
     log_info "Building... (this may take a few minutes and appear silent)"
 
     # Use homebrew anchor directly
     if $ANCHOR_PATH build; then
         log_info "✅ Program built successfully"
+
+        # Copy binary to expected location for deployment
+        log_info "Copying binary to deployment location..."
+        mkdir -p target/deploy
+        if [ -f "programs/savings-core/target/deploy/savings_core.so" ]; then
+            cp programs/savings-core/target/deploy/savings_core.so target/deploy/
+            log_info "✅ Binary copied to target/deploy/"
+        else
+            log_error "Binary not found at programs/savings-core/target/deploy/savings_core.so"
+            exit 1
+        fi
     else
         log_error "Anchor build failed"
         log_error "Please try running 'anchor build' manually in the solana/ directory"
@@ -188,6 +220,134 @@ update_frontend() {
     fi
 }
 
+# Setup test tokens
+setup_test_tokens() {
+    log_info "Setting up test tokens..."
+
+    cd "$SCRIPT_DIR"
+
+    # Set up proper Solana environment with Agave CLI 2.1.15
+    export PATH="/Users/andriy/.local/share/solana/install/active_release/bin:/opt/homebrew/bin:$PATH"
+
+    if [ -f "scripts/setup-solana-tokens.js" ]; then
+        log_info "Running token setup script..."
+        if node scripts/setup-solana-tokens.js; then
+            log_info "✅ Test tokens setup completed"
+        else
+            log_warning "Token setup failed, but deployment continues"
+            log_warning "You can run 'node scripts/setup-solana-tokens.js' manually later"
+        fi
+    else
+        log_warning "Token setup script not found, skipping token setup"
+    fi
+
+    cd "$SOLANA_DIR/.."
+}
+
+# Verify program ID consistency
+verify_program_id() {
+    log_info "Verifying program ID consistency..."
+
+    cd "$SOLANA_DIR"
+
+    # Set up proper Solana environment
+    export PATH="/Users/andriy/.local/share/solana/install/active_release/bin:/opt/homebrew/bin:$PATH"
+
+    # Get program ID from keypair
+    if [ -f "target/deploy/savings_core-keypair.json" ]; then
+        PROGRAM_ID=$(solana-keygen pubkey "target/deploy/savings_core-keypair.json" 2>/dev/null)
+        log_info "Program ID from keypair: $PROGRAM_ID"
+    else
+        log_error "Program keypair not found"
+        cd ..
+        return 1
+    fi
+
+    # Check program ID in lib.rs
+    RUST_FILE="programs/savings-core/src/lib.rs"
+    if [ -f "$RUST_FILE" ]; then
+        DECLARED_ID=$(grep "declare_id!" "$RUST_FILE" | sed 's/.*declare_id!("\([^"]*\)").*/\1/')
+        log_info "Program ID in lib.rs: $DECLARED_ID"
+
+        if [ "$PROGRAM_ID" = "$DECLARED_ID" ]; then
+            log_info "✅ lib.rs program ID matches keypair"
+        else
+            log_error "❌ lib.rs program ID mismatch!"
+            log_error "  Keypair: $PROGRAM_ID"
+            log_error "  lib.rs:  $DECLARED_ID"
+            cd ..
+            return 1
+        fi
+    else
+        log_error "lib.rs not found"
+        cd ..
+        return 1
+    fi
+
+    # Check program ID in Anchor.toml
+    if [ -f "Anchor.toml" ]; then
+        ANCHOR_ID=$(grep "savings_core" Anchor.toml | sed 's/.*savings_core = "\([^"]*\)".*/\1/')
+        log_info "Program ID in Anchor.toml: $ANCHOR_ID"
+
+        if [ "$PROGRAM_ID" = "$ANCHOR_ID" ]; then
+            log_info "✅ Anchor.toml program ID matches keypair"
+        else
+            log_error "❌ Anchor.toml program ID mismatch!"
+            log_error "  Keypair:     $PROGRAM_ID"
+            log_error "  Anchor.toml: $ANCHOR_ID"
+            cd ..
+            return 1
+        fi
+    else
+        log_error "Anchor.toml not found"
+        cd ..
+        return 1
+    fi
+
+    # Check if program is actually deployed
+    log_info "Checking if program is deployed on validator..."
+    if solana program show "$PROGRAM_ID" > /dev/null 2>&1; then
+        log_info "✅ Program is deployed on validator"
+
+        # Get deployment info
+        DEPLOYED_INFO=$(solana program show "$PROGRAM_ID" 2>/dev/null)
+        if echo "$DEPLOYED_INFO" | grep -q "Program Id: $PROGRAM_ID"; then
+            log_info "✅ Deployed program ID matches expected ID"
+        else
+            log_error "❌ Deployed program info doesn't match expected ID"
+            cd ..
+            return 1
+        fi
+    else
+        log_error "❌ Program not found on validator"
+        cd ..
+        return 1
+    fi
+
+    # Check frontend addresses file
+    FRONTEND_ADDRESSES="../frontend/src/savings_core.json"
+    if [ -f "$FRONTEND_ADDRESSES" ]; then
+        FRONTEND_ID=$(grep '"address"' "$FRONTEND_ADDRESSES" | sed 's/.*"address": "\([^"]*\)".*/\1/')
+        log_info "Program ID in frontend: $FRONTEND_ID"
+
+        if [ "$PROGRAM_ID" = "$FRONTEND_ID" ]; then
+            log_info "✅ Frontend program ID matches keypair"
+        else
+            log_error "❌ Frontend program ID mismatch!"
+            log_error "  Keypair:  $PROGRAM_ID"
+            log_error "  Frontend: $FRONTEND_ID"
+            cd ..
+            return 1
+        fi
+    else
+        log_warning "Frontend addresses file not found, will be created by update script"
+    fi
+
+    cd ..
+    log_info "🎉 All program ID consistency checks passed!"
+    return 0
+}
+
 # Generate deployment summary
 generate_summary() {
     log_info "Generating deployment summary..."
@@ -208,6 +368,12 @@ generate_summary() {
     if [ -f "$SOLANA_DIR/target/deploy/savings_core-keypair.json" ]; then
         PROGRAM_ID=$(solana-keygen pubkey "$SOLANA_DIR/target/deploy/savings_core-keypair.json" 2>/dev/null || echo "Unable to read")
         echo "🆔 Program ID: $PROGRAM_ID"
+    fi
+
+    # Show token information if available
+    if [ -f "frontend/src/solanaTokens.json" ]; then
+        USDT_MINT=$(grep '"usdtMint"' frontend/src/solanaTokens.json | sed 's/.*"usdtMint": "\([^"]*\)".*/\1/')
+        echo "🪙 USDT Mint Address: $USDT_MINT"
     fi
 
     echo ""
@@ -231,9 +397,18 @@ main() {
     build_program
     deploy_program
     update_frontend
-    generate_summary
+    setup_test_tokens
 
-    log_info "🎉 Deployment completed successfully!"
+    # Verify everything is consistent
+    if verify_program_id; then
+        generate_summary
+        log_info "🎉 Deployment completed successfully!"
+    else
+        log_error "❌ Program ID verification failed!"
+        log_error "Please check the errors above and run the deployment again."
+        exit 1
+    fi
+
     echo ""
 }
 

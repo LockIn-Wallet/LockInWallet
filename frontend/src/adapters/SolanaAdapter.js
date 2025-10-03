@@ -32,7 +32,7 @@ export class SolanaAdapter extends BlockchainAdapter {
     this.wallet = wallet;
     this.connection = connection;
     this.userAddress = null;
-    this.PROGRAM_ID = new PublicKey("HPETsRTsHi8ez2dBbzSHRE2KDfHFYuvYK4Bg6f8K1tB6"); // Updated 2025-10-02
+    this.PROGRAM_ID = new PublicKey("HNi2JKTNeHvz2ENckdVBW1ncfkJUYppuYeBwNhWjkK7d"); // Updated 2025-10-03
 
     if (this.wallet?.connected && this.wallet?.publicKey) {
       this.userAddress = this.wallet.publicKey.toString();

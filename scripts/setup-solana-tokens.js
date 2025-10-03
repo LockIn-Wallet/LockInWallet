@@ -23,33 +23,20 @@ const path = require('path');
 const USER_ADDRESS = '4xo6a3qHYgtsDkKUAy1wMQhyN1zoXo3tKPR5foxa3hV4';
 const RPC_URL = 'http://127.0.0.1:8899';
 
-async function waitForValidator() {
-  console.log('Waiting for Solana validator to be ready...');
-  const connection = new Connection(RPC_URL, 'confirmed');
-  let attempts = 0;
-  const maxAttempts = 30;
-
-  while (attempts < maxAttempts) {
-    try {
-      await connection.getVersion();
-      console.log('✅ Solana validator is ready!');
-      return connection;
-    } catch (error) {
-      attempts++;
-      console.log(`Attempt ${attempts}/${maxAttempts}: Validator not ready yet...`);
-      await new Promise(resolve => setTimeout(resolve, 2000));
-    }
-  }
-
-  throw new Error('Solana validator failed to start after 60 seconds');
-}
-
 async function setupTokens() {
   try {
     console.log('🚀 Setting up Solana test tokens...');
 
-    // Wait for validator to be ready
-    const connection = await waitForValidator();
+    // Connect directly to existing validator (assume it's running from deployment script)
+    console.log('Connecting to existing validator...');
+    const connection = new Connection(RPC_URL, 'confirmed');
+    try {
+      await connection.getVersion();
+      console.log('✅ Connected to existing validator!');
+    } catch (error) {
+      console.error('❌ Cannot connect to existing validator:', error.message);
+      throw error;
+    }
 
     // Create user public key
     const userPublicKey = new PublicKey(USER_ADDRESS);
