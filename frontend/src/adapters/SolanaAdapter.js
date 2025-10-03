@@ -752,8 +752,44 @@ export class SolanaAdapter extends BlockchainAdapter {
         return null;
       }
 
-      // Deserialize the account data using the program
-      const savingsAccountData = await this.program.account.savingsAccount.fetch(savingsAccount);
+      // Manually deserialize the account data (since we're using pure web3.js)
+      const data = accountInfo.data;
+
+      // Skip the 8-byte discriminator and read the account data
+      // Based on the SavingsAccount struct: owner(32) + sol_balance(8) + spl_balances(vec) + bump(1) + created_at(8) + updated_at(8)
+      let offset = 8; // Skip discriminator
+
+      // Read owner (32 bytes)
+      const owner = new PublicKey(data.slice(offset, offset + 32));
+      offset += 32;
+
+      // Read sol_balance (8 bytes, little-endian u64)
+      const solBalance = new DataView(data.buffer, data.byteOffset + offset, 8).getBigUint64(0, true);
+      offset += 8;
+
+      // Read spl_balances vector length (4 bytes, little-endian u32)
+      const splBalancesLength = new DataView(data.buffer, data.byteOffset + offset, 4).getUint32(0, true);
+      offset += 4;
+
+      const splBalances = [];
+      for (let i = 0; i < splBalancesLength; i++) {
+        // Read mint (32 bytes)
+        const mint = new PublicKey(data.slice(offset, offset + 32));
+        offset += 32;
+
+        // Read amount (8 bytes, little-endian u64)
+        const amount = new DataView(data.buffer, data.byteOffset + offset, 8).getBigUint64(0, true);
+        offset += 8;
+
+        splBalances.push({ mint: mint.toString(), amount: amount.toString() });
+      }
+
+      const savingsAccountData = {
+        owner: owner.toString(),
+        solBalance: solBalance.toString(),
+        splBalances
+      };
+
       console.log('Savings account data:', savingsAccountData);
 
       return {

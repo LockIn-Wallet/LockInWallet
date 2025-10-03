@@ -355,8 +355,18 @@ function AppContent() {
   } = useWallet();
   const { connection } = useConnection();
 
-  // Network state management
-  const [networkType, setNetworkType] = useState("evm"); // "evm" or "solana"
+  // Network state management - try to restore from localStorage or detect Solana connection
+  const [networkType, setNetworkType] = useState(() => {
+    // Check localStorage first
+    const saved = localStorage.getItem('preferredNetworkType');
+    if (saved === 'solana' || saved === 'evm') {
+      return saved;
+    }
+
+    // Default to Solana if we detect a Solana wallet connection
+    // Note: solanaConnected might not be available yet during initialization
+    return localStorage.getItem('walletName') ? 'solana' : 'evm';
+  }); // "evm" or "solana"
   const [selectedNetwork, setSelectedNetwork] = useState("localhost"); // Current selected network
   const [currentChainId, setCurrentChainId] = useState(null); // MetaMask's current chain ID
   const [isNetworkSwitching, setIsNetworkSwitching] = useState(false);
@@ -491,6 +501,8 @@ function AppContent() {
   // Network type switching (EVM vs Solana)
   const switchNetworkType = async (newNetworkType) => {
     setNetworkType(newNetworkType);
+    // Persist user's network type preference
+    localStorage.setItem('preferredNetworkType', newNetworkType);
 
     if (newNetworkType === 'solana') {
       // Disconnect EVM wallet when switching to Solana
@@ -500,13 +512,19 @@ function AppContent() {
         setSavingsContract(null);
         setUserAddress("");
       }
-      // Initialize Solana TransactionManager
-      await initializeTransactionManager('solana', selectedNetwork);
-    } else {
-      // Disconnect Solana wallet when switching to EVM
-      if (solanaConnected) {
-        solanaDisconnect();
+      // DON'T disconnect Solana wallet - let it stay connected
+      // Initialize Solana TransactionManager if Solana wallet is connected
+      if (solanaConnected && solanaPublicKey && connection) {
+        const newTxManager = await initializeTransactionManager('solana', selectedNetwork);
+        if (newTxManager) {
+          await refreshBalances(newTxManager);
+        }
       }
+    } else {
+      // Keep Solana wallet connected when switching to EVM
+      // if (solanaConnected) {
+      //   solanaDisconnect();
+      // }
       // Initialize EVM TransactionManager
       await initializeTransactionManager('evm', selectedNetwork);
     }
@@ -612,7 +630,11 @@ function AppContent() {
           );
           if (networkKey) {
             setSelectedNetwork(networkKey);
-            setNetworkType('evm'); // Ensure we're on EVM type
+            // Only set to EVM if user hasn't explicitly chosen Solana
+            const savedNetworkType = localStorage.getItem('preferredNetworkType');
+            if (!savedNetworkType || savedNetworkType === 'evm') {
+              setNetworkType('evm');
+            }
           }
         }
       };
@@ -659,12 +681,32 @@ function AppContent() {
     }
   }, []); // Run once on mount
 
-  // Refresh balances when network changes
+  // Refresh balances when network changes (EVM only)
   useEffect(() => {
-    if (savingsContract && signer) {
+    if (networkType === 'evm' && savingsContract && signer) {
       fetchAllBalances();
     }
-  }, [selectedNetwork, savingsContract, signer]);
+  }, [selectedNetwork, savingsContract, signer, networkType]);
+
+  // Detect existing Solana connection on page load
+  useEffect(() => {
+    const detectSolanaConnection = async () => {
+      // Only run if user preferred Solana or if we need to auto-detect
+      const savedNetworkType = localStorage.getItem('preferredNetworkType');
+      if (savedNetworkType === 'solana' && !solanaConnected) {
+        // Try to auto-connect to existing Solana wallet
+        if (solanaWallet && !solanaConnected) {
+          try {
+            await solanaWallet.connect();
+          } catch (error) {
+            console.log('No existing Solana connection to restore');
+          }
+        }
+      }
+    };
+
+    detectSolanaConnection();
+  }, []); // Run once on mount
 
   // Calculate instant withdrawal amount whenever spending limits change
   useEffect(() => {
@@ -680,26 +722,38 @@ function AppContent() {
     setExceedsInstantLimit(parseFloat(withdrawalAmount || 0) > instantWithdrawableAmount);
   }, [withdrawalAmount, spendingLimits, instantWithdrawableAmount]);
 
+  // Unified balance refresh function for both EVM and Solana
+  const refreshBalances = async (txManager = transactionManager) => {
+    if (networkType === 'evm') {
+      await fetchAllBalances();
+    } else if (networkType === 'solana' && txManager) {
+      try {
+        console.log("🔄 Refreshing Solana balances...");
+        const userAddress = await txManager.getAddress();
+        const solanaBalances = await txManager.getAllBalances(userAddress);
+        setBalances(solanaBalances);
+        console.log("✅ Solana balances refreshed:", solanaBalances);
+      } catch (error) {
+        console.error("❌ Error refreshing Solana balances:", error);
+      }
+    }
+  };
+
   // Initialize TransactionManager when network type changes or Solana wallet connects
   useEffect(() => {
     const initTxManager = async () => {
       if (networkType === 'solana' && solanaConnected && solanaPublicKey && connection) {
-        await initializeTransactionManager('solana', selectedNetwork);
+        const newTxManager = await initializeTransactionManager('solana', selectedNetwork);
 
-        // Fetch Solana balances after TransactionManager is initialized
-        try {
-          console.log("🔄 Fetching initial Solana balances...");
-          const userAddress = await transactionManager.getAddress();
-          const solanaBalances = await transactionManager.getAllBalances(userAddress);
-          setBalances(solanaBalances);
-          console.log("✅ Initial Solana balances loaded:", solanaBalances);
-        } catch (error) {
-          console.error("❌ Error fetching initial Solana balances:", error);
+        // Load balances after TransactionManager is initialized
+        if (newTxManager) {
+          await refreshBalances(newTxManager);
         }
       } else if (networkType === 'evm') {
         // EVM TransactionManager will be initialized when MetaMask connects
         // For now, we'll initialize it when switching to EVM even without connection
-        await initializeTransactionManager('evm', selectedNetwork);
+        const newTxManager = await initializeTransactionManager('evm', selectedNetwork);
+        // For EVM, balances will be loaded when wallet connects
       }
     };
 
@@ -707,6 +761,8 @@ function AppContent() {
       console.error('Failed to initialize TransactionManager:', error);
     });
   }, [networkType, selectedNetwork, solanaConnected, solanaPublicKey, connection]);
+
+  // Note: Balance loading when switching networks is now handled directly in switchNetworkType()
 
   const fetchAllBalances = async (
     contract = savingsContract,
@@ -1119,21 +1175,8 @@ function AppContent() {
       // Clear form and refresh balances
       setDepositAmount("");
 
-      // Refresh balances using appropriate method
-      if (networkType === 'evm') {
-        await fetchAllBalances();
-      } else if (networkType === 'solana') {
-        // For Solana, use TransactionManager to get balances
-        console.log("🔄 Refreshing Solana balances...");
-        try {
-          const userAddress = await transactionManager.getAddress();
-          const solanaBalances = await transactionManager.getAllBalances(userAddress);
-          setBalances(solanaBalances);
-          console.log("✅ Solana balances refreshed:", solanaBalances);
-        } catch (error) {
-          console.error("❌ Error refreshing Solana balances:", error);
-        }
-      }
+      // Refresh balances using unified method
+      await refreshBalances();
 
     } catch (error) {
       console.error(`${networkType.toUpperCase()} deposit error:`, error);
@@ -1551,7 +1594,7 @@ function AppContent() {
 
         // Clear form and refresh balances and spending limits
         setDepositAmount("");
-        await fetchAllBalances();
+        await refreshBalances();
         await fetchSpendingLimits();
       } catch (error) {
         console.error("Withdrawal error:", error);
@@ -1966,7 +2009,7 @@ function AppContent() {
 
         // Clear form and refresh balances and spending limits
         setDepositAmount("");
-        await fetchAllBalances();
+        await refreshBalances();
         await fetchSpendingLimits();
       } catch (error) {
         console.error("Withdrawal error:", error);
@@ -2120,7 +2163,7 @@ function AppContent() {
         alert("✅ Bypass withdrawal executed successfully!");
 
         // Refresh data
-        await fetchAllBalances();
+        await refreshBalances();
         await fetchSpendingLimits();
         await fetchPendingBypassRequests();
       } catch (error) {
@@ -2350,21 +2393,7 @@ function AppContent() {
           <h3 style={{ color: "white", margin: 0 }}>💰 Your Balances</h3>
           {(provider || (networkType === 'solana' && solanaWallet?.connected)) && (
             <button
-              onClick={async () => {
-                if (networkType === 'evm') {
-                  await fetchAllBalances();
-                } else if (networkType === 'solana') {
-                  console.log("🔄 Refreshing Solana balances...");
-                  try {
-                    const userAddress = await transactionManager.getAddress();
-                    const solanaBalances = await transactionManager.getAllBalances(userAddress);
-                    setBalances(solanaBalances);
-                    console.log("✅ Solana balances refreshed:", solanaBalances);
-                  } catch (error) {
-                    console.error("❌ Error refreshing Solana balances:", error);
-                  }
-                }
-              }}
+              onClick={() => refreshBalances()}
               style={{
                 padding: "6px 12px",
                 borderRadius: "4px",

@@ -462,3 +462,7 @@ rustup update  # Ensure Rust 1.85.0+
 - **Module upgrades**: Preserve module-specific data and registrations
 - **Fresh deployments**: Only use for initial setup (DATA LOSS)
 - **User proxies**: Permanent addresses tied to user wallets
+
+### **Best Coding Practices**
+- always use DRY principle
+- never have inline imports
