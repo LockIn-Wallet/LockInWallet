@@ -159,7 +159,7 @@ const NETWORKS = {
           recommended: true,
         },
         USDT: {
-          mint: "CpeUJjdVrUn8ctsu146ounrNo1TWL98zKb5BYEZ21fWZ", // Test USDT mint address
+          mint: "J5geF16j56Pqe18VM8NZof9kpAam2gpQLzt2WCqBEzvi", // Test USDT mint address
           symbol: "USDT",
           name: "Test USDT",
           decimals: 6,
@@ -746,20 +746,19 @@ function AppContent() {
     }
   };
 
-  // Initialize TransactionManager when network type changes or Solana wallet connects
+  // Initialize TransactionManager when network type changes
   useEffect(() => {
     const initTxManager = async () => {
-      if (networkType === 'solana' && solanaConnected && solanaPublicKey && connection) {
-        const newTxManager = await initializeTransactionManager('solana', selectedNetwork);
+      console.log('🔄 TransactionManager useEffect triggered:', {
+        networkType,
+        selectedNetwork
+      });
 
-        // Load balances and check proxy status after TransactionManager is initialized
-        if (newTxManager) {
-          await refreshBalances(newTxManager);
-          // Check proxy status for Solana
-          const userAddress = await newTxManager.getAddress();
-          await checkSolanaProxyStatus(newTxManager, userAddress);
-        }
+      if (networkType === 'solana') {
+        console.log('🟡 Solana network selected, TransactionManager will be initialized when wallet connects');
+        // For Solana, we'll wait for wallet connection in separate useEffect
       } else if (networkType === 'evm') {
+        console.log('🔵 Initializing EVM TransactionManager...');
         // EVM TransactionManager will be initialized when MetaMask connects
         // For now, we'll initialize it when switching to EVM even without connection
         const newTxManager = await initializeTransactionManager('evm', selectedNetwork);
@@ -770,6 +769,56 @@ function AppContent() {
     initTxManager().catch(error => {
       console.error('Failed to initialize TransactionManager:', error);
     });
+  }, [networkType, selectedNetwork]);
+
+  // Separate useEffect for Solana wallet connection - loads data after wallet is connected
+  useEffect(() => {
+    const initSolanaWallet = async () => {
+      console.log('🔄 Solana wallet useEffect triggered:', {
+        networkType,
+        solanaConnected,
+        solanaPublicKey: !!solanaPublicKey,
+        connection: !!connection,
+        selectedNetwork
+      });
+
+      if (networkType === 'solana' && solanaConnected && solanaPublicKey && connection) {
+        console.log('✅ All Solana conditions met, initializing TransactionManager...');
+        const newTxManager = await initializeTransactionManager('solana', selectedNetwork);
+
+        // Load balances and check proxy status after TransactionManager is initialized
+        if (newTxManager) {
+          console.log('🔄 Solana TransactionManager initialized, loading data...');
+
+          // Set the TransactionManager state BEFORE loading data
+          setTransactionManager(newTxManager);
+          console.log('✅ TransactionManager state updated');
+
+          await refreshBalances(newTxManager);
+          // Check proxy status for Solana
+          const userAddress = await newTxManager.getAddress();
+          await checkSolanaProxyStatus(newTxManager, userAddress);
+
+          // Load spending limits for Solana (pass txManager directly to avoid state timing issues)
+          console.log('📋 Loading Solana spending limits...');
+          await fetchSpendingLimitsWithTxManager(newTxManager);
+          console.log('✅ Solana spending limits loading completed');
+        }
+      } else if (networkType === 'solana') {
+        console.log('❌ Solana wallet not ready yet:', {
+          solanaConnected,
+          solanaPublicKey: !!solanaPublicKey,
+          connection: !!connection
+        });
+      }
+    };
+
+    // Only run this effect for Solana network
+    if (networkType === 'solana') {
+      initSolanaWallet().catch(error => {
+        console.error('Failed to initialize Solana wallet:', error);
+      });
+    }
   }, [networkType, selectedNetwork, solanaConnected, solanaPublicKey, connection]);
 
   // Note: Balance loading when switching networks is now handled directly in switchNetworkType()
@@ -1887,38 +1936,131 @@ function AppContent() {
 
 
 
-  const fetchSpendingLimits = async (
-    contract = savingsContract,
-    userSigner = signer
-  ) => {
+  // Helper function that accepts TransactionManager directly (for initialization)
+  const fetchSpendingLimitsWithTxManager = async (txManager) => {
+    console.log('🚀 fetchSpendingLimitsWithTxManager called for network:', networkType);
+    console.log('🔗 txManager available:', !!txManager);
+    console.log('📋 getSpendingLimits method available:', !!txManager?.getSpendingLimits);
+
     if (networkType === 'solana') {
+      console.log('🔵 Processing Solana spending limits with direct txManager...');
       // Solana spending limits fetching
       try {
-        if (!transactionManager?.getSpendingLimits) {
-          console.log("Solana spending limits not available yet");
+        if (!txManager?.getSpendingLimits) {
+          console.log("❌ Solana spending limits method not available in passed txManager");
+          console.log("txManager state:", {
+            exists: !!txManager,
+            methods: txManager ? Object.keys(txManager) : 'none'
+          });
           setSpendingLimits([]);
           setLimitsLoaded(true);
           return;
         }
 
-        const spendingData = await transactionManager.getSpendingLimits();
-        console.log("Fetched Solana spending limits:", spendingData);
+        console.log('🔄 Calling txManager.getSpendingLimits()...');
+        const spendingData = await txManager.getSpendingLimits();
+        console.log("✅ Fetched Solana spending limits:", spendingData);
+        console.log("📊 Limits array length:", spendingData?.limits?.length || 0);
 
-        // Convert Solana format to unified format
+        // Convert Solana format to unified format (values are already in SOL)
         const fetchedLimits = spendingData.limits.map(limit => ({
           name: limit.name,
-          limit: (limit.limit / 1000000).toString(), // Convert from smallest unit to display unit
-          spent: (limit.spent / 1000000).toString(),
-          remaining: Math.max(0, (limit.limit - limit.spent) / 1000000),
+          limit: limit.limit.toString(), // Already converted to SOL in SolanaAdapter
+          spent: limit.spent.toString(),
+          remaining: Math.max(0, limit.remaining),
           duration: limit.duration.toString(),
           active: limit.active,
           durationHours: Math.floor(Number(limit.duration) / 3600),
           durationDays: Math.floor(Number(limit.duration) / 86400),
         }));
 
+        console.log("🔄 Converted limits for frontend:", fetchedLimits);
+        console.log("📊 Setup committed status:", spendingData.isSetupCommitted);
+
         setSpendingLimits(fetchedLimits);
         setLimitsLoaded(true);
         setIsSetupCommitted(spendingData.isSetupCommitted);
+
+        console.log("✅ Solana spending limits state updated!");
+        console.log("📋 Final spending limits count:", fetchedLimits.length);
+
+        // Update unified limit editing state based on fetched limits
+        const newLimitEdits = {
+          Daily: { value: "", isActive: false, isEditing: false },
+          Weekly: { value: "", isActive: false, isEditing: false },
+          Monthly: { value: "", isActive: false, isEditing: false },
+        };
+
+        fetchedLimits.forEach((limit) => {
+          if (["Daily", "Weekly", "Monthly"].includes(limit.name)) {
+            newLimitEdits[limit.name] = {
+              value: limit.limit,
+              isActive: true,
+              isEditing: false,
+            };
+          }
+        });
+
+        setLimitEdits(newLimitEdits);
+        console.log("🎯 Limit editing state updated for Solana");
+
+      } catch (error) {
+        console.error("Error fetching Solana spending limits:", error);
+        setSpendingLimits([]);
+        setLimitsLoaded(true);
+      }
+    }
+  };
+
+  const fetchSpendingLimits = async (
+    contract = savingsContract,
+    userSigner = signer
+  ) => {
+    console.log('🚀 fetchSpendingLimits called for network:', networkType);
+    console.log('🔗 transactionManager available:', !!transactionManager);
+    console.log('📋 getSpendingLimits method available:', !!transactionManager?.getSpendingLimits);
+
+    if (networkType === 'solana') {
+      console.log('🔵 Processing Solana spending limits...');
+      // Solana spending limits fetching
+      try {
+        if (!transactionManager?.getSpendingLimits) {
+          console.log("❌ Solana spending limits method not available yet");
+          console.log("TransactionManager state:", {
+            exists: !!transactionManager,
+            methods: transactionManager ? Object.keys(transactionManager) : 'none'
+          });
+          setSpendingLimits([]);
+          setLimitsLoaded(true);
+          return;
+        }
+
+        console.log('🔄 Calling transactionManager.getSpendingLimits()...');
+        const spendingData = await transactionManager.getSpendingLimits();
+        console.log("✅ Fetched Solana spending limits:", spendingData);
+        console.log("📊 Limits array length:", spendingData?.limits?.length || 0);
+
+        // Convert Solana format to unified format (values are already in SOL)
+        const fetchedLimits = spendingData.limits.map(limit => ({
+          name: limit.name,
+          limit: limit.limit.toString(), // Already converted to SOL in SolanaAdapter
+          spent: limit.spent.toString(),
+          remaining: Math.max(0, limit.remaining),
+          duration: limit.duration.toString(),
+          active: limit.active,
+          durationHours: Math.floor(Number(limit.duration) / 3600),
+          durationDays: Math.floor(Number(limit.duration) / 86400),
+        }));
+
+        console.log("🔄 Converted limits for frontend:", fetchedLimits);
+        console.log("📊 Setup committed status:", spendingData.isSetupCommitted);
+
+        setSpendingLimits(fetchedLimits);
+        setLimitsLoaded(true);
+        setIsSetupCommitted(spendingData.isSetupCommitted);
+
+        console.log("✅ Solana spending limits state updated!");
+        console.log("📋 Final spending limits count:", fetchedLimits.length);
 
         // Update unified limit editing state based on fetched limits
         const newLimitEdits = {

@@ -2,10 +2,29 @@
 
 # Reliable Solana Program Deployment Script
 # This script bypasses Anchor version issues and provides consistent deployment
+# Supports both fresh deployment and program upgrades
 
 set -e  # Exit on any error
 
-echo "🚀 Starting Solana Program Deployment..."
+# Parse command line arguments
+UPGRADE_MODE=false
+for arg in "$@"; do
+    case $arg in
+        --upgrade)
+            UPGRADE_MODE=true
+            shift
+            ;;
+        *)
+            # Unknown option
+            ;;
+    esac
+done
+
+if [ "$UPGRADE_MODE" = true ]; then
+    echo "🔄 Starting Solana Program Upgrade..."
+else
+    echo "🚀 Starting Solana Program Deployment..."
+fi
 
 # Configuration
 ANCHOR_PATH="/opt/homebrew/bin/anchor"
@@ -225,24 +244,181 @@ build_program() {
     cd ..
 }
 
-# Deploy the program
-deploy_program() {
-    log_info "Deploying program to local validator..."
+# Check if program exists on chain
+check_program_exists() {
+    local program_id="$1"
+    log_info "Checking if program $program_id exists on chain..."
 
+    if solana program show "$program_id" --url http://127.0.0.1:8899 > /dev/null 2>&1; then
+        log_info "✅ Program exists on chain"
+        return 0
+    else
+        log_info "📝 Program not found on chain"
+        return 1
+    fi
+}
+
+# Deploy or upgrade the program
+deploy_program() {
     cd "$SOLANA_DIR"
 
     # Set up proper Solana environment with Agave CLI 2.1.15
     export PATH="/Users/andriy/.local/share/solana/install/active_release/bin:/opt/homebrew/bin:$PATH"
 
-    # Deploy using homebrew anchor directly
-    if $ANCHOR_PATH deploy --provider.cluster localnet; then
-        log_info "✅ Program deployed successfully"
+    # Get program ID
+    if [ -f "target/deploy/savings_core-keypair.json" ]; then
+        PROGRAM_ID=$(solana-keygen pubkey "target/deploy/savings_core-keypair.json" 2>/dev/null)
+        log_info "Program ID: $PROGRAM_ID"
     else
-        log_error "Failed to deploy program"
-        log_error "Using Anchor at: $ANCHOR_PATH"
-        log_error "Current Solana version: $(solana --version)"
+        log_error "Program keypair not found"
         exit 1
     fi
+
+    # Determine action based on mode and program existence
+    if [ "$UPGRADE_MODE" = true ]; then
+        log_info "🔄 Upgrading existing program..."
+        if check_program_exists "$PROGRAM_ID"; then
+            if $ANCHOR_PATH upgrade --provider.cluster localnet --program-id "$PROGRAM_ID" target/deploy/savings_core.so; then
+                log_info "✅ Program upgraded successfully"
+            else
+                log_error "Failed to upgrade program"
+                log_error "Using Anchor at: $ANCHOR_PATH"
+                log_error "Current Solana version: $(solana --version)"
+                exit 1
+            fi
+        else
+            log_warning "Program not found on chain, falling back to deployment..."
+            if $ANCHOR_PATH deploy --provider.cluster localnet; then
+                log_info "✅ Program deployed successfully"
+            else
+                log_error "Failed to deploy program"
+                exit 1
+            fi
+        fi
+    else
+        # Check if program exists and suggest upgrade if it does
+        if check_program_exists "$PROGRAM_ID"; then
+            log_warning "Program already exists on chain!"
+            log_warning "Consider using --upgrade flag to upgrade instead of redeploy"
+            log_info "Proceeding with deployment (may fail if program is immutable)..."
+        fi
+
+        log_info "🚀 Deploying program to local validator..."
+        if $ANCHOR_PATH deploy --provider.cluster localnet; then
+            log_info "✅ Program deployed successfully"
+        else
+            log_error "Failed to deploy program"
+            log_error "Using Anchor at: $ANCHOR_PATH"
+            log_error "Current Solana version: $(solana --version)"
+            log_error "💡 Try using --upgrade flag if the program already exists"
+            exit 1
+        fi
+    fi
+
+    cd ..
+}
+
+# Extract discriminators from IDL and update frontend
+update_discriminators() {
+    log_info "Extracting instruction discriminators from IDL..."
+
+    cd "$SOLANA_DIR"
+
+    IDL_FILE="target/idl/savings_core.json"
+    ADAPTER_FILE="../frontend/src/adapters/SolanaAdapter.js"
+
+    if [ ! -f "$IDL_FILE" ]; then
+        log_error "IDL file not found: $IDL_FILE"
+        cd ..
+        return 1
+    fi
+
+    if [ ! -f "$ADAPTER_FILE" ]; then
+        log_error "SolanaAdapter file not found: $ADAPTER_FILE"
+        cd ..
+        return 1
+    fi
+
+    # Create a temporary Node.js script to extract discriminators
+    cat > temp_extract_discriminators.js << 'EOF'
+const fs = require('fs');
+const path = require('path');
+
+// Read IDL file
+const idlPath = process.argv[2];
+const adapterPath = process.argv[3];
+
+if (!fs.existsSync(idlPath)) {
+    console.error('IDL file not found:', idlPath);
+    process.exit(1);
+}
+
+if (!fs.existsSync(adapterPath)) {
+    console.error('Adapter file not found:', adapterPath);
+    process.exit(1);
+}
+
+const idl = JSON.parse(fs.readFileSync(idlPath, 'utf8'));
+const discriminators = {};
+
+// Extract discriminators from instructions
+if (idl.instructions) {
+    idl.instructions.forEach(instruction => {
+        // Convert snake_case to PascalCase
+        const methodName = instruction.name
+            .split('_')
+            .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+            .join('');
+
+        if (instruction.discriminator) {
+            discriminators[methodName] = instruction.discriminator;
+        }
+    });
+}
+
+console.log(`Found ${Object.keys(discriminators).length} discriminators:`);
+Object.entries(discriminators).forEach(([name, disc]) => {
+    console.log(`  ${name}: [${disc.join(', ')}]`);
+});
+
+// Read current adapter file
+let adapterContent = fs.readFileSync(adapterPath, 'utf8');
+
+// Build new discriminator object
+const discriminatorEntries = Object.entries(discriminators)
+    .map(([key, value]) => `      '${key}': [${value.join(', ')}]`)
+    .join(',\n');
+
+const newDiscriminatorBlock = `// Actual discriminators from anchor build IDL (auto-generated)
+    const discriminators = {
+${discriminatorEntries}
+    };`;
+
+// Find and replace the discriminator section
+const discriminatorRegex = /(\/\/ .*discriminators.*\n\s*const discriminators = \{)([\s\S]*?)(\};)/;
+
+if (discriminatorRegex.test(adapterContent)) {
+    adapterContent = adapterContent.replace(discriminatorRegex, newDiscriminatorBlock);
+    fs.writeFileSync(adapterPath, adapterContent);
+    console.log('✅ SolanaAdapter updated with new discriminators');
+} else {
+    console.error('❌ Could not find discriminator section in SolanaAdapter');
+    console.error('💡 Manual update may be required');
+    process.exit(1);
+}
+EOF
+
+    # Run the discriminator extraction script
+    if node temp_extract_discriminators.js "$IDL_FILE" "$ADAPTER_FILE"; then
+        log_info "✅ Discriminators extracted and updated in frontend"
+    else
+        log_error "Failed to extract discriminators"
+        cd ..
+        return 1
+    fi
+
+    # Clean up temporary script
+    rm -f temp_extract_discriminators.js
 
     cd ..
 }
@@ -261,6 +437,9 @@ update_frontend() {
     else
         log_warning "Frontend update script not found, skipping..."
     fi
+
+    # Also update discriminators
+    update_discriminators
 }
 
 # Setup test tokens
@@ -445,10 +624,18 @@ main() {
     # Verify everything is consistent
     if verify_program_id; then
         generate_summary
-        log_info "🎉 Deployment completed successfully!"
+        if [ "$UPGRADE_MODE" = true ]; then
+            log_info "🎉 Program upgrade completed successfully!"
+        else
+            log_info "🎉 Deployment completed successfully!"
+        fi
     else
         log_error "❌ Program ID verification failed!"
-        log_error "Please check the errors above and run the deployment again."
+        if [ "$UPGRADE_MODE" = true ]; then
+            log_error "Please check the errors above and run the upgrade again."
+        else
+            log_error "Please check the errors above and run the deployment again."
+        fi
         exit 1
     fi
 

@@ -25,16 +25,6 @@ const INSTRUCTION_DISCRIMINATORS = {
   WithdrawSol: [145, 131, 74, 136, 65, 137, 42, 38],
   WithdrawSpl: [181, 154, 94, 86, 62, 115, 6, 186],
 
-  // Spending Limits Instructions
-  InitializeSpendingLimits: [132, 244, 107, 216, 88, 45, 100, 151],
-  AddTimePeriodLimit: [241, 38, 147, 173, 91, 158, 235, 140],
-  RemoveTimePeriodLimit: [163, 89, 201, 108, 241, 71, 88, 142],
-  SetCommonPeriodLimits: [122, 159, 89, 124, 201, 88, 156, 167],
-  CommitInitialSetup: [89, 145, 201, 124, 88, 178, 201, 147],
-  GetSpendingLimits: [178, 91, 124, 88, 201, 147, 89, 124],
-  WithdrawSolWithLimits: [201, 124, 89, 147, 178, 91, 88, 201],
-  WithdrawSplWithLimits: [147, 178, 91, 201, 124, 89, 147, 88],
-
   // Deposit Proxy Program (auto-generated on 2025-10-03)
   InitializeProxy: [245, 74, 175, 136, 0, 146, 100, 224],
   ForwardSolDeposit: [29, 156, 48, 213, 90, 128, 229, 58],
@@ -782,15 +772,18 @@ export class SolanaAdapter extends BlockchainAdapter {
     return proxyInfo !== null;
   }
 
-  // Spending Limits (would need to be implemented in Solana program)
+  // Legacy method - redirects to the proper implementation
   async getSpendingLimits(userAddress) {
-    // Placeholder - would need implementation in Solana program
-    return [];
+    // Redirect to the proper implementation that doesn't need userAddress parameter
+    return await this.fetchSpendingLimitsFromAccount();
   }
 
   async setSpendingLimits(daily, weekly, monthly) {
-    // Placeholder - would need implementation in Solana program
-    throw new Error('Spending limits not yet implemented for Solana');
+    // Redirect to setCommonPeriodLimits
+    const dailyLimit = daily > 0 ? daily : null;
+    const weeklyLimit = weekly > 0 ? weekly : null;
+    const monthlyLimit = monthly > 0 ? monthly : null;
+    return await this.setCommonPeriodLimits(dailyLimit, weeklyLimit, monthlyLimit);
   }
 
   // Utility Methods
@@ -1169,16 +1162,25 @@ export class SolanaAdapter extends BlockchainAdapter {
 
   // Helper function to generate discriminators (from actual IDL)
   _generateDiscriminator(methodName) {
-    // Actual discriminators from anchor build IDL
+    // Actual discriminators from anchor build IDL (auto-generated)
     const discriminators = {
-      'InitializeSpendingLimits': [240, 49, 54, 19, 46, 201, 202, 42],
       'AddTimePeriodLimit': [241, 217, 123, 93, 14, 188, 236, 51],
-      'RemoveTimePeriodLimit': [163, 89, 201, 108, 241, 71, 88, 142], // TODO: Get actual discriminator
-      'SetCommonPeriodLimits': [200, 130, 17, 128, 169, 59, 33, 89],
       'CommitInitialSetup': [248, 193, 240, 26, 1, 132, 74, 226],
-      'GetSpendingLimits': [178, 91, 124, 88, 201, 147, 89, 124], // TODO: Get actual discriminator
-      'WithdrawSolWithLimits': [201, 124, 89, 147, 178, 91, 88, 201], // TODO: Get actual discriminator
-      'WithdrawSplWithLimits': [147, 178, 91, 201, 124, 89, 147, 88] // TODO: Get actual discriminator
+      'DepositSol': [108, 81, 78, 117, 125, 155, 56, 200],
+      'DepositSolSelf': [253, 113, 121, 194, 75, 233, 114, 223],
+      'DepositSpl': [224, 0, 198, 175, 198, 47, 105, 204],
+      'DepositSplSelf': [177, 32, 212, 139, 117, 61, 41, 95],
+      'GetSolBalance': [177, 197, 179, 97, 50, 111, 178, 70],
+      'GetSpendingLimits': [23, 121, 238, 204, 69, 213, 157, 147],
+      'GetSplBalance': [92, 135, 40, 171, 133, 246, 90, 120],
+      'Initialize': [175, 175, 109, 31, 13, 152, 155, 237],
+      'InitializeSpendingLimits': [240, 49, 54, 19, 46, 201, 202, 42],
+      'RemoveTimePeriodLimit': [213, 185, 190, 218, 206, 221, 93, 152],
+      'SetCommonPeriodLimits': [200, 130, 17, 128, 169, 59, 33, 89],
+      'WithdrawSol': [145, 131, 74, 136, 65, 137, 42, 38],
+      'WithdrawSolWithLimits': [75, 241, 60, 175, 113, 191, 138, 113],
+      'WithdrawSpl': [181, 154, 94, 86, 62, 115, 6, 186],
+      'WithdrawSplWithLimits': [103, 31, 251, 151, 88, 136, 64, 53]
     };
     return discriminators[methodName] || [0, 0, 0, 0, 0, 0, 0, 0];
   }
@@ -1382,20 +1384,32 @@ export class SolanaAdapter extends BlockchainAdapter {
     return await this.wallet.sendTransaction(transaction, this.connection);
   }
 
-  // Fetch spending limits from account
-  async getSpendingLimits() {
+  // Fetch spending limits from account (main implementation)
+  async fetchSpendingLimitsFromAccount() {
+    console.log('🔵 SolanaAdapter: fetchSpendingLimitsFromAccount called');
+
     if (!this.wallet?.publicKey) {
+      console.log('❌ SolanaAdapter: Wallet not connected');
       throw new Error('Wallet not connected');
     }
 
     try {
       const userPubkey = this.wallet.publicKey;
+      console.log('👤 SolanaAdapter: User pubkey:', userPubkey.toString());
+
       const [spendingLimitsAccount] = await this.getSpendingLimitsPDA(userPubkey);
+      console.log('🔑 SolanaAdapter: Spending limits PDA:', spendingLimitsAccount.toString());
 
       // Check if account exists
       const accountInfo = await this.connection.getAccountInfo(spendingLimitsAccount);
+      console.log('📄 SolanaAdapter: Account info:', {
+        exists: !!accountInfo,
+        hasData: !!accountInfo?.data,
+        dataLength: accountInfo?.data?.length || 0
+      });
+
       if (!accountInfo || !accountInfo.data) {
-        console.log('Spending limits account not found, returning empty limits');
+        console.log('❌ SolanaAdapter: Spending limits account not found, returning empty limits');
         return {
           limits: [],
           isSetupCommitted: false,
@@ -1403,13 +1417,20 @@ export class SolanaAdapter extends BlockchainAdapter {
         };
       }
 
-      // For now, return placeholder data - this should be properly decoded from the account data
-      // TODO: Implement proper account data deserialization based on the Rust struct
-      return {
-        limits: [], // Should decode TimePeriodLimit[] from account data
-        isSetupCommitted: false, // Should decode from UserSetupData
-        totalLockedValue: 0 // Should decode from UserSetupData
-      };
+      console.log('✅ SolanaAdapter: Found spending limits account, deserializing data...');
+      console.log('📊 SolanaAdapter: Account data length:', accountInfo.data.length);
+
+      // Deserialize the account data
+      const accountData = this.deserializeSpendingLimitsAccount(accountInfo.data);
+      console.log('📋 SolanaAdapter: Deserialized account data:', accountData);
+
+      // Convert Solana spending limits to frontend format
+      const formattedLimits = this.formatSpendingLimitsForFrontend(accountData);
+      console.log('🎨 SolanaAdapter: Formatted limits for frontend:', formattedLimits);
+
+      console.log('✅ SolanaAdapter: Returning spending limits data');
+      return formattedLimits;
+
     } catch (error) {
       console.error('Error fetching spending limits:', error);
       return {
@@ -1418,6 +1439,177 @@ export class SolanaAdapter extends BlockchainAdapter {
         totalLockedValue: 0
       };
     }
+  }
+
+  // Deserialize spending limits account data from Solana
+  deserializeSpendingLimitsAccount(data) {
+    console.log('🔄 SolanaAdapter: Starting deserialization of account data');
+    console.log('📊 SolanaAdapter: Data buffer length:', data.length);
+
+    try {
+      // Basic deserialization based on SpendingLimitsAccount struct
+      // Account data format: 8-byte discriminator + struct data
+      let offset = 0;
+
+      // Skip the 8-byte Anchor discriminator
+      console.log('🔄 SolanaAdapter: Skipping 8-byte Anchor discriminator');
+      offset += 8;
+
+      // Read owner pubkey (32 bytes)
+      const owner = new PublicKey(data.slice(offset, offset + 32));
+      console.log('👤 SolanaAdapter: Account owner:', owner.toString());
+      offset += 32;
+
+      // Read time_period_limits vector
+      // First 4 bytes are vector length
+      const limitsCount = data.readUInt32LE(offset);
+      console.log('📊 SolanaAdapter: Time period limits count:', limitsCount);
+      offset += 4;
+
+      // Sanity check: limit count should be reasonable (0-10 typically)
+      if (limitsCount > 100) {
+        console.error('❌ SolanaAdapter: Unreasonable limits count, data may be corrupted:', limitsCount);
+        throw new Error(`Invalid limits count: ${limitsCount}`);
+      }
+
+      const timePeriodLimits = [];
+      for (let i = 0; i < limitsCount; i++) {
+        console.log(`🔄 SolanaAdapter: Reading limit ${i + 1}/${limitsCount}, current offset: ${offset}, remaining bytes: ${data.length - offset}`);
+
+        // Ensure we have enough bytes for fixed-size fields (33 bytes: 4*u64 + 1*i64 + 1*bool)
+        if (offset + 33 > data.length) {
+          console.error(`❌ SolanaAdapter: Not enough bytes for fixed fields at offset ${offset}`);
+          throw new Error(`Buffer underrun reading fixed fields for limit ${i}`);
+        }
+
+        // Read TimePeriodLimit struct fields in Rust order:
+        // 1. limit: u64
+        const limit = data.readBigUInt64LE(offset);
+        offset += 8;
+
+        // 2. spent: u64
+        const currentSpent = data.readBigUInt64LE(offset);
+        offset += 8;
+
+        // 3. last_reset: i64
+        const lastReset = data.readBigInt64LE(offset);
+        offset += 8;
+
+        // 4. duration: u64
+        const duration = data.readBigUInt64LE(offset);
+        offset += 8;
+
+        // 5. name: String (variable length)
+        // First read the string length (u32)
+        if (offset + 4 > data.length) {
+          console.error(`❌ SolanaAdapter: Not enough bytes for name length at offset ${offset}`);
+          throw new Error(`Buffer underrun reading name length for limit ${i}`);
+        }
+
+        const nameLength = data.readUInt32LE(offset);
+        console.log(`📝 SolanaAdapter: Name length for limit ${i}: ${nameLength}`);
+        offset += 4;
+
+        // Validate name length
+        if (nameLength > 1000) {
+          console.error(`❌ SolanaAdapter: Invalid name length: ${nameLength} at limit ${i}`);
+          throw new Error(`Invalid name length: ${nameLength}`);
+        }
+
+        // Read the string data
+        if (offset + nameLength > data.length) {
+          console.error(`❌ SolanaAdapter: Not enough bytes for name at offset ${offset}, need ${nameLength} bytes`);
+          throw new Error(`Buffer underrun reading name for limit ${i}`);
+        }
+
+        const name = data.slice(offset, offset + nameLength).toString('utf8');
+        console.log(`📝 SolanaAdapter: Limit ${i} name: "${name}"`);
+        offset += nameLength;
+
+        // 6. active: bool
+        if (offset + 1 > data.length) {
+          console.error(`❌ SolanaAdapter: Not enough bytes for active flag at offset ${offset}`);
+          throw new Error(`Buffer underrun reading active flag for limit ${i}`);
+        }
+
+        const active = data.readUInt8(offset) === 1;
+        offset += 1;
+
+        console.log(`✅ SolanaAdapter: Limit ${i}: name="${name}", limit=${limit}, spent=${currentSpent}, duration=${duration}, active=${active}`);
+
+        timePeriodLimits.push({
+          name,
+          limit,
+          duration,
+          currentSpent,
+          lastReset,
+          active
+        });
+      }
+
+      // Read setup_data
+      const isSetupCommitted = data.readUInt8(offset) === 1;
+      offset += 1;
+
+      const totalLockedValue = data.readBigUInt64LE(offset);
+      offset += 8;
+
+      return {
+        owner,
+        timePeriodLimits,
+        isSetupCommitted,
+        totalLockedValue
+      };
+    } catch (error) {
+      console.error('Error deserializing spending limits account:', error);
+      return {
+        owner: null,
+        timePeriodLimits: [],
+        isSetupCommitted: false,
+        totalLockedValue: 0n
+      };
+    }
+  }
+
+  // Format Solana spending limits for frontend display
+  formatSpendingLimitsForFrontend(accountData) {
+    const limits = [];
+
+    // Add time period limits
+    accountData.timePeriodLimits.forEach(limit => {
+      // Convert from lamports to SOL (divide by 1000000)
+      const limitAmount = Number(limit.limit) / 1000000;
+      const spentAmount = Number(limit.currentSpent) / 1000000;
+      const remainingAmount = limitAmount - spentAmount;
+
+      // Calculate time remaining for reset
+      const now = Math.floor(Date.now() / 1000);
+      const lastReset = Number(limit.lastReset);
+      const duration = Number(limit.duration);
+      const nextReset = lastReset + duration;
+      const timeRemaining = Math.max(0, nextReset - now);
+
+      limits.push({
+        name: limit.name,
+        limit: limitAmount,      // Frontend expects 'limit' not 'amount'
+        spent: spentAmount,
+        remaining: remainingAmount,
+        timeRemaining,
+        active: true,            // Frontend expects 'active' not 'isActive'
+        duration: duration
+      });
+    });
+
+    return {
+      limits,
+      isSetupCommitted: accountData.isSetupCommitted,
+      totalLockedValue: Number(accountData.totalLockedValue) / 1000000 // Convert to SOL
+    };
+  }
+
+  // Legacy method name for compatibility
+  async getSpendingLimits() {
+    return await this.fetchSpendingLimitsFromAccount();
   }
 
   // Withdraw with spending limits validation
