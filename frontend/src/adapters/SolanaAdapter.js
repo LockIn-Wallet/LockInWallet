@@ -20,12 +20,12 @@ const INSTRUCTION_DISCRIMINATORS = {
   Initialize: [175, 175, 109, 31, 13, 152, 155, 237],
   DepositSol: [108, 81, 78, 117, 125, 155, 56, 200],
   DepositSpl: [224, 0, 198, 175, 198, 47, 105, 204],
-  DepositSolSelf: [108, 81, 78, 117, 125, 155, 56, 200], // Same as DepositSol for backward compatibility
-  DepositSplSelf: [224, 0, 198, 175, 198, 47, 105, 204], // Same as DepositSpl for backward compatibility
+  DepositSolSelf: [253, 113, 121, 194, 75, 233, 114, 223],
+  DepositSplSelf: [177, 32, 212, 139, 117, 61, 41, 95],
   WithdrawSol: [145, 131, 74, 136, 65, 137, 42, 38],
   WithdrawSpl: [181, 154, 94, 86, 62, 115, 6, 186],
 
-  // Deposit Proxy Program
+  // Deposit Proxy Program (auto-generated on 2025-10-03)
   InitializeProxy: [245, 74, 175, 136, 0, 146, 100, 224],
   ForwardSolDeposit: [29, 156, 48, 213, 90, 128, 229, 58],
   ForwardSplDeposit: [131, 71, 27, 250, 233, 24, 75, 240]

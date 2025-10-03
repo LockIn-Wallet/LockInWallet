@@ -504,6 +504,10 @@ function AppContent() {
     // Persist user's network type preference
     localStorage.setItem('preferredNetworkType', newNetworkType);
 
+    // Clear proxy state when switching networks
+    setIsProxyDeployed(false);
+    setProxyAddress("");
+
     if (newNetworkType === 'solana') {
       // Disconnect EVM wallet when switching to Solana
       if (provider) {

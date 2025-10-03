@@ -75,7 +75,34 @@ async function updateSolanaAddresses() {
     const frontendPath = path.join(__dirname, '../frontend/src/solanaAddresses.json');
     fs.writeFileSync(frontendPath, JSON.stringify(addressConfig, null, 2));
 
-    // Update SolanaAdapter.js with both program IDs
+    // Generate instruction discriminators
+    const crypto = require('crypto');
+    function sha256(data) {
+      return crypto.createHash('sha256').update(data).digest();
+    }
+
+    const discriminators = {
+      // Savings Core Program (these should be stable)
+      Initialize: Array.from(sha256('global:initialize').slice(0, 8)),
+      DepositSol: Array.from(sha256('global:deposit_sol').slice(0, 8)),
+      DepositSpl: Array.from(sha256('global:deposit_spl').slice(0, 8)),
+      DepositSolSelf: Array.from(sha256('global:deposit_sol_self').slice(0, 8)),
+      DepositSplSelf: Array.from(sha256('global:deposit_spl_self').slice(0, 8)),
+      WithdrawSol: Array.from(sha256('global:withdraw_sol').slice(0, 8)),
+      WithdrawSpl: Array.from(sha256('global:withdraw_spl').slice(0, 8)),
+
+      // Deposit Proxy Program (generated dynamically)
+      InitializeProxy: Array.from(sha256('global:initialize_proxy').slice(0, 8)),
+      ForwardSolDeposit: Array.from(sha256('global:forward_sol_deposit').slice(0, 8)),
+      ForwardSplDeposit: Array.from(sha256('global:forward_spl_deposit').slice(0, 8))
+    };
+
+    console.log("🔢 Generated instruction discriminators:");
+    Object.entries(discriminators).forEach(([name, disc]) => {
+      console.log(`  ${name}: [${disc.join(', ')}]`);
+    });
+
+    // Update SolanaAdapter.js with both program IDs and discriminators
     const adapterPath = path.join(__dirname, '../frontend/src/adapters/SolanaAdapter.js');
     if (fs.existsSync(adapterPath)) {
       let adapterContent = fs.readFileSync(adapterPath, 'utf8');
@@ -87,6 +114,24 @@ async function updateSolanaAddresses() {
       // Update deposit proxy program ID
       const proxyRegex = /this\.DEPOSIT_PROXY_PROGRAM_ID = new PublicKey\("[^"]+"\);[^\n]*/;
       const proxyReplacement = `this.DEPOSIT_PROXY_PROGRAM_ID = new PublicKey("${proxyProgramId}"); // Updated ${new Date().toISOString().split('T')[0]}`;
+
+      // Update instruction discriminators
+      const discriminatorRegex = /const INSTRUCTION_DISCRIMINATORS = \{[\s\S]*?\};/;
+      const discriminatorReplacement = `const INSTRUCTION_DISCRIMINATORS = {
+  // Savings Core Program
+  Initialize: [${discriminators.Initialize.join(', ')}],
+  DepositSol: [${discriminators.DepositSol.join(', ')}],
+  DepositSpl: [${discriminators.DepositSpl.join(', ')}],
+  DepositSolSelf: [${discriminators.DepositSolSelf.join(', ')}],
+  DepositSplSelf: [${discriminators.DepositSplSelf.join(', ')}],
+  WithdrawSol: [${discriminators.WithdrawSol.join(', ')}],
+  WithdrawSpl: [${discriminators.WithdrawSpl.join(', ')}],
+
+  // Deposit Proxy Program (auto-generated on ${new Date().toISOString().split('T')[0]})
+  InitializeProxy: [${discriminators.InitializeProxy.join(', ')}],
+  ForwardSolDeposit: [${discriminators.ForwardSolDeposit.join(', ')}],
+  ForwardSplDeposit: [${discriminators.ForwardSplDeposit.join(', ')}]
+};`;
 
       if (savingsRegex.test(adapterContent)) {
         adapterContent = adapterContent.replace(savingsRegex, savingsReplacement);
@@ -100,6 +145,13 @@ async function updateSolanaAddresses() {
         console.log("✅ Updated SolanaAdapter.js deposit proxy program ID");
       } else {
         console.log("⚠️  Could not find deposit proxy program ID pattern in SolanaAdapter.js");
+      }
+
+      if (discriminatorRegex.test(adapterContent)) {
+        adapterContent = adapterContent.replace(discriminatorRegex, discriminatorReplacement);
+        console.log("✅ Updated SolanaAdapter.js instruction discriminators");
+      } else {
+        console.log("⚠️  Could not find instruction discriminators pattern in SolanaAdapter.js");
       }
 
       fs.writeFileSync(adapterPath, adapterContent, 'utf8');
