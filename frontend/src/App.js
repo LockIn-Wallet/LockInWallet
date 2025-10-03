@@ -984,8 +984,10 @@ function AppContent() {
         const receipt = await tx.wait();
         console.log("Transaction confirmed:", receipt);
 
-        // Refresh proxy status
-        await checkProxyStatus();
+        // Refresh proxy status (only for EVM)
+        if (networkType === 'evm') {
+          await checkProxyStatus();
+        }
 
         alert(
           "🎉 Permanent deposit address generated successfully! This address is permanently tied to your wallet and you can use it for all future deposits from exchanges."
@@ -1128,8 +1130,10 @@ function AppContent() {
       console.log(`Connecting wallet for user: ${userAddress}`);
       await fetchAllBalances(savings, userAddress);
       console.log(`About to check proxy status...`);
-      await checkProxyStatusWithSigner(savings, web3Signer, userAddress);
-      console.log(`Proxy status check completed`);
+      if (networkType === 'evm') {
+        await checkProxyStatusWithSigner(savings, web3Signer, userAddress);
+        console.log(`Proxy status check completed`);
+      }
       await fetchSpendingLimits(savings, web3Signer);
       await fetchPendingBypassRequests(savings, userAddress);
       await fetchPendingLimitProposals(userAddress);
