@@ -20,4 +20,20 @@ pub enum ErrorCode {
 
     #[msg("Account not properly initialized")]
     AccountNotInitialized,
+
+    // Spending limits related errors
+    #[msg("Spending limit exceeded for this time period")]
+    SpendingLimitExceeded,
+
+    #[msg("Invalid spending limit parameters")]
+    InvalidLimitParameters,
+
+    #[msg("Setup must be committed before withdrawals are allowed")]
+    SetupNotCommitted,
+
+    #[msg("Spending limits account not found")]
+    SpendingLimitsNotFound,
+
+    #[msg("Period limit not found")]
+    PeriodLimitNotFound,
 }

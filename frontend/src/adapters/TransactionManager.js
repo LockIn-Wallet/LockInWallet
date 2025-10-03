@@ -204,6 +204,24 @@ export class TransactionManager {
     return await this.getCurrentAdapter().getSpendingLimits(userAddress);
   }
 
+  async initializeSpendingLimits() {
+    try {
+      const adapter = this.getCurrentAdapter();
+
+      if (!(await adapter.isConnected())) {
+        throw new Error('Wallet not connected');
+      }
+
+      const result = await adapter.initializeSpendingLimits();
+      console.log(`${this.networkType} spending limits initialized:`, result);
+      return result;
+
+    } catch (error) {
+      console.error(`${this.networkType} spending limits initialization error:`, error);
+      throw error;
+    }
+  }
+
   async setSpendingLimits(daily, weekly, monthly) {
     try {
       const adapter = this.getCurrentAdapter();
@@ -218,6 +236,42 @@ export class TransactionManager {
 
     } catch (error) {
       console.error(`${this.networkType} spending limits error:`, error);
+      throw error;
+    }
+  }
+
+  async setCommonPeriodLimits(dailyLimit, weeklyLimit, monthlyLimit) {
+    try {
+      const adapter = this.getCurrentAdapter();
+
+      if (!(await adapter.isConnected())) {
+        throw new Error('Wallet not connected');
+      }
+
+      const result = await adapter.setCommonPeriodLimits(dailyLimit, weeklyLimit, monthlyLimit);
+      console.log(`${this.networkType} common period limits updated:`, result);
+      return result;
+
+    } catch (error) {
+      console.error(`${this.networkType} common period limits error:`, error);
+      throw error;
+    }
+  }
+
+  async commitInitialSetup() {
+    try {
+      const adapter = this.getCurrentAdapter();
+
+      if (!(await adapter.isConnected())) {
+        throw new Error('Wallet not connected');
+      }
+
+      const result = await adapter.commitInitialSetup();
+      console.log(`${this.networkType} initial setup committed:`, result);
+      return result;
+
+    } catch (error) {
+      console.error(`${this.networkType} initial setup commit error:`, error);
       throw error;
     }
   }

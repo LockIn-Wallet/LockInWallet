@@ -14,6 +14,131 @@ export type SavingsCore = {
   },
   "instructions": [
     {
+      "name": "addTimePeriodLimit",
+      "docs": [
+        "Add or update a time period limit"
+      ],
+      "discriminator": [
+        241,
+        217,
+        123,
+        93,
+        14,
+        188,
+        236,
+        51
+      ],
+      "accounts": [
+        {
+          "name": "spendingLimitsAccount",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  112,
+                  101,
+                  110,
+                  100,
+                  105,
+                  110,
+                  103,
+                  95,
+                  108,
+                  105,
+                  109,
+                  105,
+                  116,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "user"
+              }
+            ]
+          }
+        },
+        {
+          "name": "user",
+          "writable": true,
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "name",
+          "type": "string"
+        },
+        {
+          "name": "limit",
+          "type": "u64"
+        },
+        {
+          "name": "duration",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "commitInitialSetup",
+      "docs": [
+        "Commit initial setup"
+      ],
+      "discriminator": [
+        248,
+        193,
+        240,
+        26,
+        1,
+        132,
+        74,
+        226
+      ],
+      "accounts": [
+        {
+          "name": "spendingLimitsAccount",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  112,
+                  101,
+                  110,
+                  100,
+                  105,
+                  110,
+                  103,
+                  95,
+                  108,
+                  105,
+                  109,
+                  105,
+                  116,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "user"
+              }
+            ]
+          }
+        },
+        {
+          "name": "user",
+          "writable": true,
+          "signer": true
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "depositSol",
       "docs": [
         "Deposit SOL to the savings account (supports CPI)"
@@ -535,6 +660,60 @@ export type SavingsCore = {
       "returns": "u64"
     },
     {
+      "name": "getSpendingLimits",
+      "docs": [
+        "Get spending limits information"
+      ],
+      "discriminator": [
+        23,
+        121,
+        238,
+        204,
+        69,
+        213,
+        157,
+        147
+      ],
+      "accounts": [
+        {
+          "name": "spendingLimitsAccount",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  112,
+                  101,
+                  110,
+                  100,
+                  105,
+                  110,
+                  103,
+                  95,
+                  108,
+                  105,
+                  109,
+                  105,
+                  116,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "user"
+              }
+            ]
+          }
+        },
+        {
+          "name": "user",
+          "signer": true
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "getSplBalance",
       "docs": [
         "Get user's SPL token balance for a specific mint"
@@ -639,6 +818,202 @@ export type SavingsCore = {
       "args": []
     },
     {
+      "name": "initializeSpendingLimits",
+      "docs": [
+        "Initialize a spending limits account for a user"
+      ],
+      "discriminator": [
+        240,
+        49,
+        54,
+        19,
+        46,
+        201,
+        202,
+        42
+      ],
+      "accounts": [
+        {
+          "name": "spendingLimitsAccount",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  112,
+                  101,
+                  110,
+                  100,
+                  105,
+                  110,
+                  103,
+                  95,
+                  108,
+                  105,
+                  109,
+                  105,
+                  116,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "user"
+              }
+            ]
+          }
+        },
+        {
+          "name": "user",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "removeTimePeriodLimit",
+      "docs": [
+        "Remove a time period limit"
+      ],
+      "discriminator": [
+        213,
+        185,
+        190,
+        218,
+        206,
+        221,
+        93,
+        152
+      ],
+      "accounts": [
+        {
+          "name": "spendingLimitsAccount",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  112,
+                  101,
+                  110,
+                  100,
+                  105,
+                  110,
+                  103,
+                  95,
+                  108,
+                  105,
+                  109,
+                  105,
+                  116,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "user"
+              }
+            ]
+          }
+        },
+        {
+          "name": "user",
+          "writable": true,
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "name",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "setCommonPeriodLimits",
+      "docs": [
+        "Set common period limits (Daily, Weekly, Monthly)"
+      ],
+      "discriminator": [
+        200,
+        130,
+        17,
+        128,
+        169,
+        59,
+        33,
+        89
+      ],
+      "accounts": [
+        {
+          "name": "spendingLimitsAccount",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  112,
+                  101,
+                  110,
+                  100,
+                  105,
+                  110,
+                  103,
+                  95,
+                  108,
+                  105,
+                  109,
+                  105,
+                  116,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "user"
+              }
+            ]
+          }
+        },
+        {
+          "name": "user",
+          "writable": true,
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "dailyLimit",
+          "type": {
+            "option": "u64"
+          }
+        },
+        {
+          "name": "weeklyLimit",
+          "type": {
+            "option": "u64"
+          }
+        },
+        {
+          "name": "monthlyLimit",
+          "type": {
+            "option": "u64"
+          }
+        }
+      ]
+    },
+    {
       "name": "withdrawSol",
       "docs": [
         "Withdraw SOL from the savings account"
@@ -668,6 +1043,95 @@ export type SavingsCore = {
                   105,
                   110,
                   103,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "user"
+              }
+            ]
+          }
+        },
+        {
+          "name": "user",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "withdrawSolWithLimits",
+      "docs": [
+        "Withdraw SOL with spending limits validation"
+      ],
+      "discriminator": [
+        75,
+        241,
+        60,
+        175,
+        113,
+        191,
+        138,
+        113
+      ],
+      "accounts": [
+        {
+          "name": "savingsAccount",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  97,
+                  118,
+                  105,
+                  110,
+                  103,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "user"
+              }
+            ]
+          }
+        },
+        {
+          "name": "spendingLimitsAccount",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  112,
+                  101,
+                  110,
+                  100,
+                  105,
+                  110,
+                  103,
+                  95,
+                  108,
+                  105,
+                  109,
+                  105,
+                  116,
                   115
                 ]
               },
@@ -857,6 +1321,201 @@ export type SavingsCore = {
           "type": "u64"
         }
       ]
+    },
+    {
+      "name": "withdrawSplWithLimits",
+      "docs": [
+        "Withdraw SPL tokens with spending limits validation"
+      ],
+      "discriminator": [
+        103,
+        31,
+        251,
+        151,
+        88,
+        136,
+        64,
+        53
+      ],
+      "accounts": [
+        {
+          "name": "savingsAccount",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  97,
+                  118,
+                  105,
+                  110,
+                  103,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "user"
+              }
+            ]
+          }
+        },
+        {
+          "name": "spendingLimitsAccount",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  112,
+                  101,
+                  110,
+                  100,
+                  105,
+                  110,
+                  103,
+                  95,
+                  108,
+                  105,
+                  109,
+                  105,
+                  116,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "user"
+              }
+            ]
+          }
+        },
+        {
+          "name": "user",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "userTokenAccount",
+          "docs": [
+            "User's token account to receive the withdrawn tokens"
+          ],
+          "writable": true
+        },
+        {
+          "name": "savingsTokenAccount",
+          "docs": [
+            "The savings account's token account for this mint"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "savingsAccount"
+              },
+              {
+                "kind": "const",
+                "value": [
+                  6,
+                  221,
+                  246,
+                  225,
+                  215,
+                  101,
+                  161,
+                  147,
+                  217,
+                  203,
+                  225,
+                  70,
+                  206,
+                  235,
+                  121,
+                  172,
+                  28,
+                  180,
+                  133,
+                  237,
+                  95,
+                  91,
+                  55,
+                  145,
+                  58,
+                  140,
+                  245,
+                  133,
+                  126,
+                  255,
+                  0,
+                  169
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "mint",
+          "docs": [
+            "The mint of the SPL token being withdrawn"
+          ]
+        },
+        {
+          "name": "tokenProgram",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
     }
   ],
   "accounts": [
@@ -871,6 +1530,19 @@ export type SavingsCore = {
         51,
         51,
         116
+      ]
+    },
+    {
+      "name": "spendingLimitsAccount",
+      "discriminator": [
+        38,
+        33,
+        131,
+        233,
+        159,
+        154,
+        149,
+        66
       ]
     }
   ],
@@ -904,6 +1576,31 @@ export type SavingsCore = {
       "code": 6005,
       "name": "accountNotInitialized",
       "msg": "Account not properly initialized"
+    },
+    {
+      "code": 6006,
+      "name": "spendingLimitExceeded",
+      "msg": "Spending limit exceeded for this time period"
+    },
+    {
+      "code": 6007,
+      "name": "invalidLimitParameters",
+      "msg": "Invalid spending limit parameters"
+    },
+    {
+      "code": 6008,
+      "name": "setupNotCommitted",
+      "msg": "Setup must be committed before withdrawals are allowed"
+    },
+    {
+      "code": 6009,
+      "name": "spendingLimitsNotFound",
+      "msg": "Spending limits account not found"
+    },
+    {
+      "code": 6010,
+      "name": "periodLimitNotFound",
+      "msg": "Period limit not found"
     }
   ],
   "types": [
@@ -968,6 +1665,123 @@ export type SavingsCore = {
       }
     },
     {
+      "name": "spendingLimitsAccount",
+      "docs": [
+        "Spending limits account that stores user's spending control configuration",
+        "Similar to the userSpendingLimits mapping in your EVM contract"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "owner",
+            "docs": [
+              "The owner of this spending limits account"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "timePeriodLimits",
+            "docs": [
+              "Array of time-based spending limits (Daily, Weekly, Monthly, Custom)"
+            ],
+            "type": {
+              "vec": {
+                "defined": {
+                  "name": "timePeriodLimit"
+                }
+              }
+            }
+          },
+          {
+            "name": "setupData",
+            "docs": [
+              "Setup and configuration data"
+            ],
+            "type": {
+              "defined": {
+                "name": "userSetupData"
+              }
+            }
+          },
+          {
+            "name": "bump",
+            "docs": [
+              "Bump seed for this PDA"
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "createdAt",
+            "docs": [
+              "When this account was created"
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "updatedAt",
+            "docs": [
+              "Last update timestamp"
+            ],
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "timePeriodLimit",
+      "docs": [
+        "Represents a time-based spending limit (mirrors EVM TimePeriodLimit struct)"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "limit",
+            "docs": [
+              "Spending limit for this period (in lamports for SOL, token amount for SPL)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "spent",
+            "docs": [
+              "Amount spent in current period"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "lastReset",
+            "docs": [
+              "When this period was last reset (Unix timestamp)"
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "duration",
+            "docs": [
+              "Period duration in seconds (86400 for daily, 604800 for weekly, etc.)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "name",
+            "docs": [
+              "Period name (\"Daily\", \"Weekly\", \"Monthly\", \"Custom Salary\", etc.)"
+            ],
+            "type": "string"
+          },
+          {
+            "name": "active",
+            "docs": [
+              "Whether this limit is currently active"
+            ],
+            "type": "bool"
+          }
+        ]
+      }
+    },
+    {
       "name": "tokenBalance",
       "docs": [
         "Represents a balance for a specific SPL token"
@@ -986,6 +1800,52 @@ export type SavingsCore = {
             "name": "amount",
             "docs": [
               "The amount of tokens deposited"
+            ],
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "userSetupData",
+      "docs": [
+        "User setup and configuration data (mirrors EVM UserSetupData struct)"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "hasCommittedSetup",
+            "docs": [
+              "Track if user has committed initial setup"
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "totalLockedValue",
+            "docs": [
+              "Total value locked across all periods (for validation)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "commitTimestamp",
+            "docs": [
+              "When setup was committed (Unix timestamp)"
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "lastIncreaseTimestamp",
+            "docs": [
+              "Track period start for increase limits"
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "increasesInPeriod",
+            "docs": [
+              "Amount increased in current 7-day period"
             ],
             "type": "u64"
           }

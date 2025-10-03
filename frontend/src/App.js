@@ -159,7 +159,7 @@ const NETWORKS = {
           recommended: true,
         },
         USDT: {
-          mint: "C1k9WgD5u5wFQ3iBDfMYwErRQQbK8MN8fNUuVRsrAkon", // Test USDT mint address
+          mint: "CpeUJjdVrUn8ctsu146ounrNo1TWL98zKb5BYEZ21fWZ", // Test USDT mint address
           symbol: "USDT",
           name: "Test USDT",
           decimals: 6,
@@ -1319,7 +1319,12 @@ function AppContent() {
   };
 
   const saveLimitChanges = async () => {
-    if (!savingsContract) {
+    // Check connection for both networks
+    if (networkType === 'solana' && (!transactionManager || !solanaConnected)) {
+      alert("Please connect your Solana wallet first");
+      return;
+    }
+    if (networkType === 'evm' && !savingsContract) {
       alert("Please connect your wallet first");
       return;
     }
@@ -1357,20 +1362,36 @@ function AppContent() {
 
       // For setup mode only - bulk changes
       if (!isSetupCommitted) {
-        const dailyLimitWei =
-          daily > 0 ? ethers.parseUnits(daily.toString(), 6) : 0;
-        const weeklyLimitWei =
-          weekly > 0 ? ethers.parseUnits(weekly.toString(), 6) : 0;
-        const monthlyLimitWei =
-          monthly > 0 ? ethers.parseUnits(monthly.toString(), 6) : 0;
+        if (networkType === 'solana') {
+          // Solana implementation
+          const dailyLimit = daily > 0 ? daily : null;
+          const weeklyLimit = weekly > 0 ? weekly : null;
+          const monthlyLimit = monthly > 0 ? monthly : null;
 
-        const tx = await savingsContract.setCommonPeriodLimits(
-          dailyLimitWei,
-          weeklyLimitWei,
-          monthlyLimitWei
-        );
-        await tx.wait();
-        alert("Spending limits set successfully!");
+          const txHash = await transactionManager.setCommonPeriodLimits(
+            dailyLimit,
+            weeklyLimit,
+            monthlyLimit
+          );
+          console.log("Solana spending limits transaction:", txHash);
+          alert("Spending limits set successfully!");
+        } else {
+          // EVM implementation (existing logic)
+          const dailyLimitWei =
+            daily > 0 ? ethers.parseUnits(daily.toString(), 6) : 0;
+          const weeklyLimitWei =
+            weekly > 0 ? ethers.parseUnits(weekly.toString(), 6) : 0;
+          const monthlyLimitWei =
+            monthly > 0 ? ethers.parseUnits(monthly.toString(), 6) : 0;
+
+          const tx = await savingsContract.setCommonPeriodLimits(
+            dailyLimitWei,
+            weeklyLimitWei,
+            monthlyLimitWei
+          );
+          await tx.wait();
+          alert("Spending limits set successfully!");
+        }
 
         // Reset edit modes
         setLimitEdits((prev) => {
@@ -1384,9 +1405,13 @@ function AppContent() {
         // Refresh spending limits
         await fetchSpendingLimits();
       } else {
-        alert(
-          "After setup lock, use individual Edit buttons for each limit to submit separate proposals"
-        );
+        if (networkType === 'solana') {
+          alert("After setup lock, you can still add individual limits or remove existing ones on Solana");
+        } else {
+          alert(
+            "After setup lock, use individual Edit buttons for each limit to submit separate proposals"
+          );
+        }
       }
     } catch (error) {
       console.error("Error saving limit changes:", error);
@@ -1705,35 +1730,57 @@ function AppContent() {
   };
 
   const commitSetup = async () => {
-    if (savingsContract) {
-      try {
-        // First, save any configured spending limits
-        const daily = limitEdits.Daily.value
-          ? parseFloat(limitEdits.Daily.value)
-          : 0;
-        const weekly = limitEdits.Weekly.value
-          ? parseFloat(limitEdits.Weekly.value)
-          : 0;
-        const monthly = limitEdits.Monthly.value
-          ? parseFloat(limitEdits.Monthly.value)
-          : 0;
+    // Check connection for both networks
+    if (networkType === 'solana' && (!transactionManager || !solanaConnected)) {
+      alert("Please connect your Solana wallet first");
+      return;
+    }
+    if (networkType === 'evm' && !savingsContract) {
+      alert("Please connect your wallet first");
+      return;
+    }
 
-        // Validate limit ordering if any limits are set
-        if (daily > 0 || weekly > 0 || monthly > 0) {
-          if (daily > 0 && weekly > 0 && daily * 7 > weekly) {
-            alert("Daily limit × 7 cannot exceed weekly limit");
-            return;
-          }
-          if (weekly > 0 && monthly > 0 && weekly * 4 > monthly) {
-            alert("Weekly limit × 4 cannot exceed monthly limit");
-            return;
-          }
-          if (daily > 0 && monthly > 0 && daily * 30 > monthly) {
-            alert("Daily limit × 30 cannot exceed monthly limit");
-            return;
-          }
+    try {
+      // First, save any configured spending limits
+      const daily = limitEdits.Daily.value
+        ? parseFloat(limitEdits.Daily.value)
+        : 0;
+      const weekly = limitEdits.Weekly.value
+        ? parseFloat(limitEdits.Weekly.value)
+        : 0;
+      const monthly = limitEdits.Monthly.value
+        ? parseFloat(limitEdits.Monthly.value)
+        : 0;
 
-          // Save the configured limits
+      // Validate limit ordering if any limits are set
+      if (daily > 0 || weekly > 0 || monthly > 0) {
+        if (daily > 0 && weekly > 0 && daily * 7 > weekly) {
+          alert("Daily limit × 7 cannot exceed weekly limit");
+          return;
+        }
+        if (weekly > 0 && monthly > 0 && weekly * 4 > monthly) {
+          alert("Weekly limit × 4 cannot exceed monthly limit");
+          return;
+        }
+        if (daily > 0 && monthly > 0 && daily * 30 > monthly) {
+          alert("Daily limit × 30 cannot exceed monthly limit");
+          return;
+        }
+
+        if (networkType === 'solana') {
+          // Solana implementation
+          const dailyLimit = daily > 0 ? daily : null;
+          const weeklyLimit = weekly > 0 ? weekly : null;
+          const monthlyLimit = monthly > 0 ? monthly : null;
+
+          const txHash = await transactionManager.setCommonPeriodLimits(
+            dailyLimit,
+            weeklyLimit,
+            monthlyLimit
+          );
+          console.log("Solana spending limits saved before setup commit:", txHash);
+        } else {
+          // EVM implementation (existing logic)
           const dailyLimitWei =
             daily > 0 ? ethers.parseUnits(daily.toString(), 6) : 0;
           const weeklyLimitWei =
@@ -1747,24 +1794,37 @@ function AppContent() {
             monthlyLimitWei
           );
           await limitsTx.wait();
-          console.log("Spending limits saved successfully before setup commit");
+          console.log("EVM spending limits saved successfully before setup commit");
         }
+      }
 
-        // Now commit the setup
+      // Now commit the setup
+      if (networkType === 'solana') {
+        const txHash = await transactionManager.commitInitialSetup();
+        console.log("Solana setup committed:", txHash);
+        alert(
+          "Setup locked in successfully! Your spending limits are now active."
+        );
+      } else {
         const tx = await savingsContract.commitInitialSetup();
         await tx.wait();
         alert(
           "Setup locked in successfully! You are now in secured mode with timelock protection."
         );
+      }
 
-        // Reset edit modes since we're now locked
-        setLimitEdits({
-          Daily: { value: "", isActive: false, isEditing: false },
-          Weekly: { value: "", isActive: false, isEditing: false },
-          Monthly: { value: "", isActive: false, isEditing: false },
-        });
+      // Reset edit modes since we're now locked
+      setLimitEdits({
+        Daily: { value: "", isActive: false, isEditing: false },
+        Weekly: { value: "", isActive: false, isEditing: false },
+        Monthly: { value: "", isActive: false, isEditing: false },
+      });
 
-        // Refresh setup status
+      // Refresh setup status
+      if (networkType === 'solana') {
+        // For Solana, we'll get the setup status when we fetch spending limits
+        setIsSetupCommitted(true);
+      } else {
         const setupCommitted = await savingsContract.isSetupCommitted();
         setIsSetupCommitted(setupCommitted);
 
@@ -1782,18 +1842,18 @@ function AppContent() {
             ).toLocaleDateString(),
           });
         }
+      }
 
-        // Refresh spending limits to show the saved values
-        await fetchSpendingLimits();
-      } catch (error) {
-        console.error("Error committing setup:", error);
-        if (error.message.includes("Daily limit too high")) {
-          alert("Daily limit is too high for the weekly limit");
-        } else if (error.message.includes("Weekly limit too high")) {
-          alert("Weekly limit is too high for the monthly limit");
-        } else {
-          alert(`Failed to lock in setup: ${error.message}`);
-        }
+      // Refresh spending limits to show the saved values
+      await fetchSpendingLimits();
+    } catch (error) {
+      console.error("Error committing setup:", error);
+      if (error.message.includes("Daily limit too high")) {
+        alert("Daily limit is too high for the weekly limit");
+      } else if (error.message.includes("Weekly limit too high")) {
+        alert("Weekly limit is too high for the monthly limit");
+      } else {
+        alert(`Failed to lock in setup: ${error.message}`);
       }
     }
   };
@@ -1831,7 +1891,60 @@ function AppContent() {
     contract = savingsContract,
     userSigner = signer
   ) => {
-    if (contract && userSigner) {
+    if (networkType === 'solana') {
+      // Solana spending limits fetching
+      try {
+        if (!transactionManager?.getSpendingLimits) {
+          console.log("Solana spending limits not available yet");
+          setSpendingLimits([]);
+          setLimitsLoaded(true);
+          return;
+        }
+
+        const spendingData = await transactionManager.getSpendingLimits();
+        console.log("Fetched Solana spending limits:", spendingData);
+
+        // Convert Solana format to unified format
+        const fetchedLimits = spendingData.limits.map(limit => ({
+          name: limit.name,
+          limit: (limit.limit / 1000000).toString(), // Convert from smallest unit to display unit
+          spent: (limit.spent / 1000000).toString(),
+          remaining: Math.max(0, (limit.limit - limit.spent) / 1000000),
+          duration: limit.duration.toString(),
+          active: limit.active,
+          durationHours: Math.floor(Number(limit.duration) / 3600),
+          durationDays: Math.floor(Number(limit.duration) / 86400),
+        }));
+
+        setSpendingLimits(fetchedLimits);
+        setLimitsLoaded(true);
+        setIsSetupCommitted(spendingData.isSetupCommitted);
+
+        // Update unified limit editing state based on fetched limits
+        const newLimitEdits = {
+          Daily: { value: "", isActive: false, isEditing: false },
+          Weekly: { value: "", isActive: false, isEditing: false },
+          Monthly: { value: "", isActive: false, isEditing: false },
+        };
+
+        fetchedLimits.forEach((limit) => {
+          if (["Daily", "Weekly", "Monthly"].includes(limit.name)) {
+            newLimitEdits[limit.name] = {
+              value: limit.limit,
+              isActive: true,
+              isEditing: false,
+            };
+          }
+        });
+
+        setLimitEdits(newLimitEdits);
+      } catch (error) {
+        console.error("Error fetching Solana spending limits:", error);
+        setSpendingLimits([]);
+        setLimitsLoaded(true);
+      }
+    } else if (contract && userSigner) {
+      // EVM spending limits fetching (existing logic)
       try {
         const userAddress = await userSigner.getAddress();
 
@@ -1880,7 +1993,7 @@ function AppContent() {
 
         setLimitEdits(newLimitEdits);
       } catch (error) {
-        console.error("Error fetching spending limits:", error);
+        console.error("Error fetching EVM spending limits:", error);
         // If the function doesn't exist, user hasn't set any limits yet
         setSpendingLimits([]);
         setLimitsLoaded(true);

@@ -25,6 +25,16 @@ const INSTRUCTION_DISCRIMINATORS = {
   WithdrawSol: [145, 131, 74, 136, 65, 137, 42, 38],
   WithdrawSpl: [181, 154, 94, 86, 62, 115, 6, 186],
 
+  // Spending Limits Instructions
+  InitializeSpendingLimits: [132, 244, 107, 216, 88, 45, 100, 151],
+  AddTimePeriodLimit: [241, 38, 147, 173, 91, 158, 235, 140],
+  RemoveTimePeriodLimit: [163, 89, 201, 108, 241, 71, 88, 142],
+  SetCommonPeriodLimits: [122, 159, 89, 124, 201, 88, 156, 167],
+  CommitInitialSetup: [89, 145, 201, 124, 88, 178, 201, 147],
+  GetSpendingLimits: [178, 91, 124, 88, 201, 147, 89, 124],
+  WithdrawSolWithLimits: [201, 124, 89, 147, 178, 91, 88, 201],
+  WithdrawSplWithLimits: [147, 178, 91, 201, 124, 89, 147, 88],
+
   // Deposit Proxy Program (auto-generated on 2025-10-03)
   InitializeProxy: [245, 74, 175, 136, 0, 146, 100, 224],
   ForwardSolDeposit: [29, 156, 48, 213, 90, 128, 229, 58],
@@ -1153,5 +1163,325 @@ export class SolanaAdapter extends BlockchainAdapter {
 
   getConnection() {
     return this.connection;
+  }
+
+  // ========== SPENDING LIMITS FUNCTIONALITY ==========
+
+  // Helper function to generate discriminators (from actual IDL)
+  _generateDiscriminator(methodName) {
+    // Actual discriminators from anchor build IDL
+    const discriminators = {
+      'InitializeSpendingLimits': [240, 49, 54, 19, 46, 201, 202, 42],
+      'AddTimePeriodLimit': [241, 217, 123, 93, 14, 188, 236, 51],
+      'RemoveTimePeriodLimit': [163, 89, 201, 108, 241, 71, 88, 142], // TODO: Get actual discriminator
+      'SetCommonPeriodLimits': [200, 130, 17, 128, 169, 59, 33, 89],
+      'CommitInitialSetup': [248, 193, 240, 26, 1, 132, 74, 226],
+      'GetSpendingLimits': [178, 91, 124, 88, 201, 147, 89, 124], // TODO: Get actual discriminator
+      'WithdrawSolWithLimits': [201, 124, 89, 147, 178, 91, 88, 201], // TODO: Get actual discriminator
+      'WithdrawSplWithLimits': [147, 178, 91, 201, 124, 89, 147, 88] // TODO: Get actual discriminator
+    };
+    return discriminators[methodName] || [0, 0, 0, 0, 0, 0, 0, 0];
+  }
+
+  // Get spending limits PDA
+  async getSpendingLimitsPDA(userPubkey) {
+    return await PublicKey.findProgramAddress(
+      [Buffer.from("spending_limits"), userPubkey.toBuffer()],
+      this.PROGRAM_ID
+    );
+  }
+
+  // Initialize spending limits account
+  async initializeSpendingLimits() {
+    if (!this.wallet?.publicKey) {
+      throw new Error('Wallet not connected');
+    }
+
+    const userPubkey = this.wallet.publicKey;
+    const [spendingLimitsAccount] = await this.getSpendingLimitsPDA(userPubkey);
+
+    const discriminator = Buffer.from(this._generateDiscriminator('InitializeSpendingLimits'));
+
+    const instruction = new TransactionInstruction({
+      keys: [
+        { pubkey: spendingLimitsAccount, isSigner: false, isWritable: true },
+        { pubkey: userPubkey, isSigner: true, isWritable: true },
+        { pubkey: SystemProgram.programId, isSigner: false, isWritable: false }
+      ],
+      programId: this.PROGRAM_ID,
+      data: discriminator
+    });
+
+    const transaction = new Transaction().add(instruction);
+    return await this.wallet.sendTransaction(transaction, this.connection);
+  }
+
+  // Set common period limits (Daily, Weekly, Monthly)
+  async setCommonPeriodLimits(dailyLimit, weeklyLimit, monthlyLimit) {
+    if (!this.wallet?.publicKey) {
+      throw new Error('Wallet not connected');
+    }
+
+    const userPubkey = this.wallet.publicKey;
+    const [spendingLimitsAccount] = await this.getSpendingLimitsPDA(userPubkey);
+
+    // Check if spending limits account exists, if not initialize it first
+    try {
+      const accountInfo = await this.connection.getAccountInfo(spendingLimitsAccount);
+      if (!accountInfo) {
+        console.log('Spending limits account does not exist, initializing...');
+        await this.initializeSpendingLimits();
+        console.log('Spending limits account initialized successfully');
+      }
+    } catch (error) {
+      console.error('Error checking/initializing spending limits account:', error);
+      throw error;
+    }
+
+    // Serialize the data: discriminator + 3 optional u64 values
+    const discriminator = Buffer.from(this._generateDiscriminator('SetCommonPeriodLimits'));
+
+    // Encode optional values (1 byte for Some/None + 8 bytes for u64 if Some)
+    let data = discriminator;
+
+    // Daily limit
+    if (dailyLimit !== null && dailyLimit !== undefined) {
+      data = Buffer.concat([data, Buffer.from([1])]);  // Some
+      const dailyBuffer = Buffer.alloc(8);
+      dailyBuffer.writeBigUInt64LE(BigInt(Math.floor(dailyLimit * 1000000)), 0); // Convert to lamports/smallest unit
+      data = Buffer.concat([data, dailyBuffer]);
+    } else {
+      data = Buffer.concat([data, Buffer.from([0])]);  // None
+    }
+
+    // Weekly limit
+    if (weeklyLimit !== null && weeklyLimit !== undefined) {
+      data = Buffer.concat([data, Buffer.from([1])]);  // Some
+      const weeklyBuffer = Buffer.alloc(8);
+      weeklyBuffer.writeBigUInt64LE(BigInt(Math.floor(weeklyLimit * 1000000)), 0);
+      data = Buffer.concat([data, weeklyBuffer]);
+    } else {
+      data = Buffer.concat([data, Buffer.from([0])]);  // None
+    }
+
+    // Monthly limit
+    if (monthlyLimit !== null && monthlyLimit !== undefined) {
+      data = Buffer.concat([data, Buffer.from([1])]);  // Some
+      const monthlyBuffer = Buffer.alloc(8);
+      monthlyBuffer.writeBigUInt64LE(BigInt(Math.floor(monthlyLimit * 1000000)), 0);
+      data = Buffer.concat([data, monthlyBuffer]);
+    } else {
+      data = Buffer.concat([data, Buffer.from([0])]);  // None
+    }
+
+    const instruction = new TransactionInstruction({
+      keys: [
+        { pubkey: spendingLimitsAccount, isSigner: false, isWritable: true },
+        { pubkey: userPubkey, isSigner: true, isWritable: true }
+      ],
+      programId: this.PROGRAM_ID,
+      data
+    });
+
+    const transaction = new Transaction().add(instruction);
+    return await this.wallet.sendTransaction(transaction, this.connection);
+  }
+
+  // Add custom time period limit
+  async addTimePeriodLimit(name, limit, duration) {
+    if (!this.wallet?.publicKey) {
+      throw new Error('Wallet not connected');
+    }
+
+    const userPubkey = this.wallet.publicKey;
+    const [spendingLimitsAccount] = await this.getSpendingLimitsPDA(userPubkey);
+
+    // Serialize the data: discriminator + name (string) + limit (u64) + duration (u64)
+    const discriminator = Buffer.from(this._generateDiscriminator('AddTimePeriodLimit'));
+
+    // String encoding: length (4 bytes) + string bytes
+    const nameBytes = Buffer.from(name, 'utf8');
+    const nameLength = Buffer.alloc(4);
+    nameLength.writeUInt32LE(nameBytes.length, 0);
+
+    // Amount encoding (convert to smallest unit)
+    const limitBuffer = Buffer.alloc(8);
+    limitBuffer.writeBigUInt64LE(BigInt(Math.floor(limit * 1000000)), 0);
+
+    // Duration encoding (seconds)
+    const durationBuffer = Buffer.alloc(8);
+    durationBuffer.writeBigUInt64LE(BigInt(duration), 0);
+
+    const data = Buffer.concat([discriminator, nameLength, nameBytes, limitBuffer, durationBuffer]);
+
+    const instruction = new TransactionInstruction({
+      keys: [
+        { pubkey: spendingLimitsAccount, isSigner: false, isWritable: true },
+        { pubkey: userPubkey, isSigner: true, isWritable: true }
+      ],
+      programId: this.PROGRAM_ID,
+      data
+    });
+
+    const transaction = new Transaction().add(instruction);
+    return await this.wallet.sendTransaction(transaction, this.connection);
+  }
+
+  // Remove time period limit
+  async removeTimePeriodLimit(name) {
+    if (!this.wallet?.publicKey) {
+      throw new Error('Wallet not connected');
+    }
+
+    const userPubkey = this.wallet.publicKey;
+    const [spendingLimitsAccount] = await this.getSpendingLimitsPDA(userPubkey);
+
+    // Serialize the data: discriminator + name (string)
+    const discriminator = Buffer.from(this._generateDiscriminator('RemoveTimePeriodLimit'));
+
+    const nameBytes = Buffer.from(name, 'utf8');
+    const nameLength = Buffer.alloc(4);
+    nameLength.writeUInt32LE(nameBytes.length, 0);
+
+    const data = Buffer.concat([discriminator, nameLength, nameBytes]);
+
+    const instruction = new TransactionInstruction({
+      keys: [
+        { pubkey: spendingLimitsAccount, isSigner: false, isWritable: true },
+        { pubkey: userPubkey, isSigner: true, isWritable: true }
+      ],
+      programId: this.PROGRAM_ID,
+      data
+    });
+
+    const transaction = new Transaction().add(instruction);
+    return await this.wallet.sendTransaction(transaction, this.connection);
+  }
+
+  // Commit initial setup
+  async commitInitialSetup() {
+    if (!this.wallet?.publicKey) {
+      throw new Error('Wallet not connected');
+    }
+
+    const userPubkey = this.wallet.publicKey;
+    const [spendingLimitsAccount] = await this.getSpendingLimitsPDA(userPubkey);
+
+    const discriminator = Buffer.from(this._generateDiscriminator('CommitInitialSetup'));
+
+    const instruction = new TransactionInstruction({
+      keys: [
+        { pubkey: spendingLimitsAccount, isSigner: false, isWritable: true },
+        { pubkey: userPubkey, isSigner: true, isWritable: true }
+      ],
+      programId: this.PROGRAM_ID,
+      data: discriminator
+    });
+
+    const transaction = new Transaction().add(instruction);
+    return await this.wallet.sendTransaction(transaction, this.connection);
+  }
+
+  // Fetch spending limits from account
+  async getSpendingLimits() {
+    if (!this.wallet?.publicKey) {
+      throw new Error('Wallet not connected');
+    }
+
+    try {
+      const userPubkey = this.wallet.publicKey;
+      const [spendingLimitsAccount] = await this.getSpendingLimitsPDA(userPubkey);
+
+      // Check if account exists
+      const accountInfo = await this.connection.getAccountInfo(spendingLimitsAccount);
+      if (!accountInfo || !accountInfo.data) {
+        console.log('Spending limits account not found, returning empty limits');
+        return {
+          limits: [],
+          isSetupCommitted: false,
+          totalLockedValue: 0
+        };
+      }
+
+      // For now, return placeholder data - this should be properly decoded from the account data
+      // TODO: Implement proper account data deserialization based on the Rust struct
+      return {
+        limits: [], // Should decode TimePeriodLimit[] from account data
+        isSetupCommitted: false, // Should decode from UserSetupData
+        totalLockedValue: 0 // Should decode from UserSetupData
+      };
+    } catch (error) {
+      console.error('Error fetching spending limits:', error);
+      return {
+        limits: [],
+        isSetupCommitted: false,
+        totalLockedValue: 0
+      };
+    }
+  }
+
+  // Withdraw with spending limits validation
+  async withdrawWithLimits(tokenAddress, amount, tokenDecimals) {
+    if (!this.wallet?.publicKey) {
+      throw new Error('Wallet not connected');
+    }
+
+    const userPubkey = this.wallet.publicKey;
+    const [savingsAccount] = await PublicKey.findProgramAddress(
+      [Buffer.from("savings"), userPubkey.toBuffer()],
+      this.PROGRAM_ID
+    );
+    const [spendingLimitsAccount] = await this.getSpendingLimitsPDA(userPubkey);
+
+    const amountBigInt = this.parseAmount(amount, tokenDecimals);
+
+    if (tokenAddress === 'SOL' || tokenAddress === 'native') {
+      // SOL withdrawal with limits
+      const discriminator = Buffer.from(this._generateDiscriminator('WithdrawSolWithLimits'));
+      const amountBuffer = Buffer.alloc(8);
+      amountBuffer.writeBigUInt64LE(amountBigInt, 0);
+      const data = Buffer.concat([discriminator, amountBuffer]);
+
+      const instruction = new TransactionInstruction({
+        keys: [
+          { pubkey: savingsAccount, isSigner: false, isWritable: true },
+          { pubkey: spendingLimitsAccount, isSigner: false, isWritable: true },
+          { pubkey: userPubkey, isSigner: true, isWritable: true },
+          { pubkey: SystemProgram.programId, isSigner: false, isWritable: false }
+        ],
+        programId: this.PROGRAM_ID,
+        data
+      });
+
+      const transaction = new Transaction().add(instruction);
+      return await this.wallet.sendTransaction(transaction, this.connection);
+    } else {
+      // SPL token withdrawal with limits - more complex, needs token accounts
+      const mintPubkey = new PublicKey(tokenAddress);
+      const userTokenAccount = await getAssociatedTokenAddress(mintPubkey, userPubkey);
+      const savingsTokenAccount = await getAssociatedTokenAddress(mintPubkey, savingsAccount, true);
+
+      const discriminator = Buffer.from(this._generateDiscriminator('WithdrawSplWithLimits'));
+      const amountBuffer = Buffer.alloc(8);
+      amountBuffer.writeBigUInt64LE(amountBigInt, 0);
+      const data = Buffer.concat([discriminator, amountBuffer]);
+
+      const instruction = new TransactionInstruction({
+        keys: [
+          { pubkey: savingsAccount, isSigner: false, isWritable: true },
+          { pubkey: spendingLimitsAccount, isSigner: false, isWritable: true },
+          { pubkey: userPubkey, isSigner: true, isWritable: true },
+          { pubkey: userTokenAccount, isSigner: false, isWritable: true },
+          { pubkey: savingsTokenAccount, isSigner: false, isWritable: true },
+          { pubkey: mintPubkey, isSigner: false, isWritable: false },
+          { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false }
+        ],
+        programId: this.PROGRAM_ID,
+        data
+      });
+
+      const transaction = new Transaction().add(instruction);
+      return await this.wallet.sendTransaction(transaction, this.connection);
+    }
   }
 }

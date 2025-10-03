@@ -70,4 +70,59 @@ pub mod savings_core {
 
         Ok(0) // Return 0 if token not found
     }
+
+    // ========== SPENDING LIMITS INSTRUCTIONS ==========
+
+    /// Initialize a spending limits account for a user
+    pub fn initialize_spending_limits(ctx: Context<InitializeSpendingLimits>) -> Result<()> {
+        instructions::initialize_spending_limits(ctx)
+    }
+
+    /// Add or update a time period limit
+    pub fn add_time_period_limit(
+        ctx: Context<AddTimePeriodLimit>,
+        name: String,
+        limit: u64,
+        duration: u64,
+    ) -> Result<()> {
+        instructions::add_time_period_limit(ctx, name, limit, duration)
+    }
+
+    /// Remove a time period limit
+    pub fn remove_time_period_limit(
+        ctx: Context<RemoveTimePeriodLimit>,
+        name: String,
+    ) -> Result<()> {
+        instructions::remove_time_period_limit(ctx, name)
+    }
+
+    /// Set common period limits (Daily, Weekly, Monthly)
+    pub fn set_common_period_limits(
+        ctx: Context<SetCommonPeriodLimits>,
+        daily_limit: Option<u64>,
+        weekly_limit: Option<u64>,
+        monthly_limit: Option<u64>,
+    ) -> Result<()> {
+        instructions::set_common_period_limits(ctx, daily_limit, weekly_limit, monthly_limit)
+    }
+
+    /// Commit initial setup
+    pub fn commit_initial_setup(ctx: Context<CommitInitialSetup>) -> Result<()> {
+        instructions::commit_initial_setup(ctx)
+    }
+
+    /// Get spending limits information
+    pub fn get_spending_limits(ctx: Context<GetSpendingLimits>) -> Result<()> {
+        instructions::get_spending_limits(ctx)
+    }
+
+    /// Withdraw SOL with spending limits validation
+    pub fn withdraw_sol_with_limits(ctx: Context<WithdrawSolWithLimits>, amount: u64) -> Result<()> {
+        instructions::withdraw_sol_with_limits(ctx, amount)
+    }
+
+    /// Withdraw SPL tokens with spending limits validation
+    pub fn withdraw_spl_with_limits(ctx: Context<WithdrawSplWithLimits>, amount: u64) -> Result<()> {
+        instructions::withdraw_spl_with_limits(ctx, amount)
+    }
 }
