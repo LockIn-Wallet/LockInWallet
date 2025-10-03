@@ -6,13 +6,16 @@ skip-lint = false
 anchor_version = "0.31.1"
 
 [programs.localnet]
-savings_core = "FVzExZfSVry5MoVsaqpQZ3AJj4zYBfd7Qe3ueJEjpZXh"
+savings_core = "HNi2JKTNeHvz2ENckdVBW1ncfkJUYppuYeBwNhWjkK7d"
+deposit_proxy = "4Tr7zEp7p5YtvXNAK98UnEUUpYP9q87sgKBJjfgfNtr4"
 
 [programs.devnet]
-savings_core = "FVzExZfSVry5MoVsaqpQZ3AJj4zYBfd7Qe3ueJEjpZXh"
+savings_core = "HNi2JKTNeHvz2ENckdVBW1ncfkJUYppuYeBwNhWjkK7d"
+deposit_proxy = "4Tr7zEp7p5YtvXNAK98UnEUUpYP9q87sgKBJjfgfNtr4"
 
 [programs.mainnet]
-savings_core = "FVzExZfSVry5MoVsaqpQZ3AJj4zYBfd7Qe3ueJEjpZXh"
+savings_core = "HNi2JKTNeHvz2ENckdVBW1ncfkJUYppuYeBwNhWjkK7d"
+deposit_proxy = "4Tr7zEp7p5YtvXNAK98UnEUUpYP9q87sgKBJjfgfNtr4"
 
 [registry]
 url = "https://api.apr.dev"

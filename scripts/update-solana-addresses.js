@@ -5,21 +5,33 @@ async function updateSolanaAddresses() {
   console.log("🔄 Updating Solana addresses in frontend...");
 
   try {
-    // Read program ID from IDL (more reliable than keypair)
-    const idlPath = path.join(__dirname, '../solana/target/idl/savings_core.json');
+    // Read savings-core program ID from IDL
+    const savingsIdlPath = path.join(__dirname, '../solana/target/idl/savings_core.json');
+    const proxyIdlPath = path.join(__dirname, '../solana/target/idl/deposit_proxy.json');
 
-    if (!fs.existsSync(idlPath)) {
-      console.log("⚠️  IDL not found. Run 'anchor build' first.");
+    if (!fs.existsSync(savingsIdlPath)) {
+      console.log("⚠️  Savings core IDL not found. Run 'anchor build' first.");
       return;
     }
 
-    const idl = JSON.parse(fs.readFileSync(idlPath, 'utf8'));
-    const programId = idl.address;
-
-    if (!programId) {
-      console.log("⚠️  No program address found in IDL.");
+    if (!fs.existsSync(proxyIdlPath)) {
+      console.log("⚠️  Deposit proxy IDL not found. Run 'anchor build' first.");
       return;
     }
+
+    const savingsIdl = JSON.parse(fs.readFileSync(savingsIdlPath, 'utf8'));
+    const proxyIdl = JSON.parse(fs.readFileSync(proxyIdlPath, 'utf8'));
+
+    const savingsProgramId = savingsIdl.address;
+    const proxyProgramId = proxyIdl.address;
+
+    if (!savingsProgramId || !proxyProgramId) {
+      console.log("⚠️  No program address found in IDLs.");
+      return;
+    }
+
+    console.log(`📋 Savings Program ID: ${savingsProgramId}`);
+    console.log(`📋 Deposit Proxy Program ID: ${proxyProgramId}`);
 
     // Read Anchor.toml to get network configuration
     const anchorTomlPath = path.join(__dirname, '../solana/Anchor.toml');
@@ -42,7 +54,14 @@ async function updateSolanaAddresses() {
 
     // Create address configuration
     const addressConfig = {
-      programId: programId,
+      savingsCore: {
+        programId: savingsProgramId,
+        name: "Savings Core Program"
+      },
+      depositProxy: {
+        programId: proxyProgramId,
+        name: "Deposit Proxy Program"
+      },
       network: network,
       endpoint: endpoints[network] || endpoints.localnet,
       deployedAt: new Date().toISOString(),
@@ -56,32 +75,36 @@ async function updateSolanaAddresses() {
     const frontendPath = path.join(__dirname, '../frontend/src/solanaAddresses.json');
     fs.writeFileSync(frontendPath, JSON.stringify(addressConfig, null, 2));
 
-    // Update SolanaAdapter.js
+    // Update SolanaAdapter.js with both program IDs
     const adapterPath = path.join(__dirname, '../frontend/src/adapters/SolanaAdapter.js');
     if (fs.existsSync(adapterPath)) {
       let adapterContent = fs.readFileSync(adapterPath, 'utf8');
-      const adapterRegex = /this\.PROGRAM_ID = new PublicKey\("[^"]+"\);[^\n]*/;
-      const adapterReplacement = `this.PROGRAM_ID = new PublicKey("${programId}"); // Updated ${new Date().toISOString().split('T')[0]}`;
 
-      if (adapterRegex.test(adapterContent)) {
-        adapterContent = adapterContent.replace(adapterRegex, adapterReplacement);
-        fs.writeFileSync(adapterPath, adapterContent, 'utf8');
-        console.log("✅ Updated SolanaAdapter.js program ID");
+      // Update savings core program ID
+      const savingsRegex = /this\.PROGRAM_ID = new PublicKey\("[^"]+"\);[^\n]*/;
+      const savingsReplacement = `this.PROGRAM_ID = new PublicKey("${savingsProgramId}"); // Updated ${new Date().toISOString().split('T')[0]}`;
+
+      // Update deposit proxy program ID
+      const proxyRegex = /this\.DEPOSIT_PROXY_PROGRAM_ID = new PublicKey\("[^"]+"\);[^\n]*/;
+      const proxyReplacement = `this.DEPOSIT_PROXY_PROGRAM_ID = new PublicKey("${proxyProgramId}"); // Updated ${new Date().toISOString().split('T')[0]}`;
+
+      if (savingsRegex.test(adapterContent)) {
+        adapterContent = adapterContent.replace(savingsRegex, savingsReplacement);
+        console.log("✅ Updated SolanaAdapter.js savings core program ID");
+      } else {
+        console.log("⚠️  Could not find savings core program ID pattern in SolanaAdapter.js");
       }
-    }
 
-    // Update App.js program IDs
-    const appPath = path.join(__dirname, '../frontend/src/App.js');
-    if (fs.existsSync(appPath)) {
-      let appContent = fs.readFileSync(appPath, 'utf8');
-      const appRegex = /programId: "[^"]+"/g;
-      const appReplacement = `programId: "${programId}"`;
-
-      if (appRegex.test(appContent)) {
-        appContent = appContent.replace(appRegex, appReplacement);
-        fs.writeFileSync(appPath, appContent, 'utf8');
-        console.log("✅ Updated App.js program IDs");
+      if (proxyRegex.test(adapterContent)) {
+        adapterContent = adapterContent.replace(proxyRegex, proxyReplacement);
+        console.log("✅ Updated SolanaAdapter.js deposit proxy program ID");
+      } else {
+        console.log("⚠️  Could not find deposit proxy program ID pattern in SolanaAdapter.js");
       }
+
+      fs.writeFileSync(adapterPath, adapterContent, 'utf8');
+    } else {
+      console.log("⚠️  SolanaAdapter.js not found");
     }
 
     // Copy IDL to frontend with size property fixes for Anchor 0.31.1 compatibility

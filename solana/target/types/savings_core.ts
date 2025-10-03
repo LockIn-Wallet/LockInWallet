@@ -16,7 +16,7 @@ export type SavingsCore = {
     {
       "name": "depositSol",
       "docs": [
-        "Deposit SOL to the savings account"
+        "Deposit SOL to the savings account (supports CPI)"
       ],
       "discriminator": [
         108,
@@ -27,6 +27,72 @@ export type SavingsCore = {
         155,
         56,
         200
+      ],
+      "accounts": [
+        {
+          "name": "savingsAccount",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  97,
+                  118,
+                  105,
+                  110,
+                  103,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "beneficiary"
+              }
+            ]
+          }
+        },
+        {
+          "name": "beneficiary",
+          "docs": [
+            "The beneficiary whose savings account will be credited"
+          ]
+        },
+        {
+          "name": "payer",
+          "docs": [
+            "The payer for account creation and transaction fees"
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "depositSolSelf",
+      "docs": [
+        "Deposit SOL for self (backward compatibility)"
+      ],
+      "discriminator": [
+        253,
+        113,
+        121,
+        194,
+        75,
+        233,
+        114,
+        223
       ],
       "accounts": [
         {
@@ -73,7 +139,7 @@ export type SavingsCore = {
     {
       "name": "depositSpl",
       "docs": [
-        "Deposit SPL tokens to the savings account"
+        "Deposit SPL tokens to the savings account (supports CPI)"
       ],
       "discriminator": [
         224,
@@ -84,6 +150,186 @@ export type SavingsCore = {
         47,
         105,
         204
+      ],
+      "accounts": [
+        {
+          "name": "savingsAccount",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  97,
+                  118,
+                  105,
+                  110,
+                  103,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "beneficiary"
+              }
+            ]
+          }
+        },
+        {
+          "name": "beneficiary",
+          "docs": [
+            "The beneficiary whose savings account will be credited"
+          ]
+        },
+        {
+          "name": "payer",
+          "docs": [
+            "The payer for account creation and transaction fees"
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "sourceTokenAccount",
+          "docs": [
+            "Source token account that holds the tokens to deposit"
+          ],
+          "writable": true
+        },
+        {
+          "name": "savingsTokenAccount",
+          "docs": [
+            "The savings account's token account for this mint"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "savingsAccount"
+              },
+              {
+                "kind": "const",
+                "value": [
+                  6,
+                  221,
+                  246,
+                  225,
+                  215,
+                  101,
+                  161,
+                  147,
+                  217,
+                  203,
+                  225,
+                  70,
+                  206,
+                  235,
+                  121,
+                  172,
+                  28,
+                  180,
+                  133,
+                  237,
+                  95,
+                  91,
+                  55,
+                  145,
+                  58,
+                  140,
+                  245,
+                  133,
+                  126,
+                  255,
+                  0,
+                  169
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "mint",
+          "docs": [
+            "The mint of the SPL token being deposited"
+          ]
+        },
+        {
+          "name": "tokenProgram",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "associatedTokenProgram",
+          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "depositSplSelf",
+      "docs": [
+        "Deposit SPL tokens for self (backward compatibility)"
+      ],
+      "discriminator": [
+        177,
+        32,
+        212,
+        139,
+        117,
+        61,
+        41,
+        95
       ],
       "accounts": [
         {

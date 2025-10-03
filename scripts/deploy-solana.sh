@@ -77,44 +77,67 @@ check_validator() {
     fi
 }
 
-# Ensure program ID consistency
+# Ensure program ID consistency for both programs
 sync_program_id() {
-    log_info "Ensuring program ID consistency..."
+    log_info "Ensuring program ID consistency for both programs..."
 
     cd "$SOLANA_DIR"
 
     # Set up proper Solana environment with Agave CLI 2.1.15
     export PATH="/Users/andriy/.local/share/solana/install/active_release/bin:/opt/homebrew/bin:$PATH"
 
-    # Step 1: Generate program keypair if it doesn't exist
-    KEYPAIR_PATH="target/deploy/savings_core-keypair.json"
-    if [ ! -f "$KEYPAIR_PATH" ]; then
-        log_info "Generating new program keypair..."
+    # Handle savings-core program
+    log_info "Processing savings-core program..."
+    SAVINGS_KEYPAIR_PATH="target/deploy/savings_core-keypair.json"
+    if [ ! -f "$SAVINGS_KEYPAIR_PATH" ]; then
+        log_info "Generating new savings-core program keypair..."
         mkdir -p target/deploy
-        solana-keygen new --outfile "$KEYPAIR_PATH" --no-bip39-passphrase --silent
+        solana-keygen new --outfile "$SAVINGS_KEYPAIR_PATH" --no-bip39-passphrase --silent
         if [ $? -ne 0 ]; then
-            log_error "Failed to generate program keypair"
+            log_error "Failed to generate savings-core program keypair"
             exit 1
         fi
     fi
 
-    # Step 2: Get the program ID from keypair (this is the authoritative source)
-    PROGRAM_ID=$(solana-keygen pubkey "$KEYPAIR_PATH")
-    log_info "Program ID from keypair: $PROGRAM_ID"
+    SAVINGS_PROGRAM_ID=$(solana-keygen pubkey "$SAVINGS_KEYPAIR_PATH")
+    log_info "Savings-core Program ID: $SAVINGS_PROGRAM_ID"
 
-    # Step 3: Update Anchor.toml with the correct program ID (replace all occurrences)
-    log_info "Updating Anchor.toml with program ID: $PROGRAM_ID"
-    sed -i.bak "s/savings_core = \"[^\"]*\"/savings_core = \"$PROGRAM_ID\"/g" Anchor.toml
+    # Handle deposit-proxy program
+    log_info "Processing deposit-proxy program..."
+    PROXY_KEYPAIR_PATH="target/deploy/deposit_proxy-keypair.json"
+    if [ ! -f "$PROXY_KEYPAIR_PATH" ]; then
+        log_info "Generating new deposit-proxy program keypair..."
+        mkdir -p target/deploy
+        solana-keygen new --outfile "$PROXY_KEYPAIR_PATH" --no-bip39-passphrase --silent
+        if [ $? -ne 0 ]; then
+            log_error "Failed to generate deposit-proxy program keypair"
+            exit 1
+        fi
+    fi
 
-    # Step 4: Update declare_id! in the Rust code
-    log_info "Updating declare_id! in Rust code..."
-    RUST_FILE="programs/savings-core/src/lib.rs"
-    sed -i.bak "s/declare_id!(\"[^\"]*\")/declare_id!(\"$PROGRAM_ID\")/" "$RUST_FILE"
+    PROXY_PROGRAM_ID=$(solana-keygen pubkey "$PROXY_KEYPAIR_PATH")
+    log_info "Deposit-proxy Program ID: $PROXY_PROGRAM_ID"
 
-    # Step 5: Sync keys with Anchor
+    # Update Anchor.toml with both program IDs
+    log_info "Updating Anchor.toml with both program IDs..."
+    sed -i.bak "s/savings_core = \"[^\"]*\"/savings_core = \"$SAVINGS_PROGRAM_ID\"/g" Anchor.toml
+    sed -i.bak2 "s/deposit_proxy = \"[^\"]*\"/deposit_proxy = \"$PROXY_PROGRAM_ID\"/g" Anchor.toml
+
+    # Update declare_id! in both Rust programs
+    log_info "Updating declare_id! in savings-core..."
+    SAVINGS_RUST_FILE="programs/savings-core/src/lib.rs"
+    sed -i.bak "s/declare_id!(\"[^\"]*\")/declare_id!(\"$SAVINGS_PROGRAM_ID\")/" "$SAVINGS_RUST_FILE"
+
+    log_info "Updating declare_id! in deposit-proxy..."
+    PROXY_RUST_FILE="programs/deposit-proxy/src/lib.rs"
+    sed -i.bak "s/declare_id!(\"[^\"]*\")/declare_id!(\"$PROXY_PROGRAM_ID\")/" "$PROXY_RUST_FILE"
+
+    # Sync keys with Anchor
     log_info "Syncing Anchor keys..."
     if $ANCHOR_PATH keys sync; then
-        log_info "✅ Program ID consistency ensured: $PROGRAM_ID"
+        log_info "✅ Program ID consistency ensured:"
+        log_info "  - Savings Core: $SAVINGS_PROGRAM_ID"
+        log_info "  - Deposit Proxy: $PROXY_PROGRAM_ID"
     else
         log_error "Failed to sync Anchor keys"
         exit 1
@@ -138,20 +161,29 @@ build_program() {
     # Clean previous build artifacts to eliminate caching issues
     log_info "Cleaning previous build artifacts..."
     if [ -d "target" ]; then
-        # Preserve the keypair if it exists
+        # Preserve both keypairs if they exist
         if [ -f "target/deploy/savings_core-keypair.json" ]; then
             cp target/deploy/savings_core-keypair.json ./savings_core-keypair.json.backup
-            log_info "✅ Backed up existing keypair"
+            log_info "✅ Backed up existing savings-core keypair"
+        fi
+        if [ -f "target/deploy/deposit_proxy-keypair.json" ]; then
+            cp target/deploy/deposit_proxy-keypair.json ./deposit_proxy-keypair.json.backup
+            log_info "✅ Backed up existing deposit-proxy keypair"
         fi
         rm -rf target
         log_info "✅ Cleaned target directory"
 
-        # Restore the keypair
+        # Restore both keypairs
+        mkdir -p target/deploy
         if [ -f "./savings_core-keypair.json.backup" ]; then
-            mkdir -p target/deploy
             cp ./savings_core-keypair.json.backup target/deploy/savings_core-keypair.json
             rm ./savings_core-keypair.json.backup
-            log_info "✅ Restored keypair"
+            log_info "✅ Restored savings-core keypair"
+        fi
+        if [ -f "./deposit_proxy-keypair.json.backup" ]; then
+            cp ./deposit_proxy-keypair.json.backup target/deploy/deposit_proxy-keypair.json
+            rm ./deposit_proxy-keypair.json.backup
+            log_info "✅ Restored deposit-proxy keypair"
         fi
     fi
 
@@ -161,14 +193,25 @@ build_program() {
     if $ANCHOR_PATH build; then
         log_info "✅ Program built successfully"
 
-        # Copy binary to expected location for deployment
-        log_info "Copying binary to deployment location..."
+        # Copy binaries to expected location for deployment
+        log_info "Copying binaries to deployment location..."
         mkdir -p target/deploy
+
+        # Copy savings-core binary
         if [ -f "programs/savings-core/target/deploy/savings_core.so" ]; then
             cp programs/savings-core/target/deploy/savings_core.so target/deploy/
-            log_info "✅ Binary copied to target/deploy/"
+            log_info "✅ Savings-core binary copied to target/deploy/"
         else
-            log_error "Binary not found at programs/savings-core/target/deploy/savings_core.so"
+            log_error "Savings-core binary not found at programs/savings-core/target/deploy/savings_core.so"
+            exit 1
+        fi
+
+        # Copy deposit-proxy binary
+        if [ -f "programs/deposit-proxy/target/deploy/deposit_proxy.so" ]; then
+            cp programs/deposit-proxy/target/deploy/deposit_proxy.so target/deploy/
+            log_info "✅ Deposit-proxy binary copied to target/deploy/"
+        else
+            log_error "Deposit-proxy binary not found at programs/deposit-proxy/target/deploy/deposit_proxy.so"
             exit 1
         fi
     else

@@ -27,6 +27,73 @@ pub struct Initialize<'info> {
 pub struct DepositSol<'info> {
     #[account(
         init_if_needed,
+        payer = payer,
+        space = 8 + SavingsAccount::INIT_SPACE,
+        seeds = [b"savings", beneficiary.key().as_ref()],
+        bump
+    )]
+    pub savings_account: Account<'info, SavingsAccount>,
+
+    /// The beneficiary whose savings account will be credited
+    /// CHECK: This account is used for PDA derivation and balance credit
+    pub beneficiary: UncheckedAccount<'info>,
+
+    /// The payer for account creation and transaction fees
+    #[account(mut)]
+    pub payer: Signer<'info>,
+
+    pub system_program: Program<'info, System>,
+}
+
+/// Deposit SPL tokens to the savings account
+#[derive(Accounts)]
+pub struct DepositSpl<'info> {
+    #[account(
+        init_if_needed,
+        payer = payer,
+        space = 8 + SavingsAccount::INIT_SPACE,
+        seeds = [b"savings", beneficiary.key().as_ref()],
+        bump
+    )]
+    pub savings_account: Account<'info, SavingsAccount>,
+
+    /// The beneficiary whose savings account will be credited
+    /// CHECK: This account is used for PDA derivation and balance credit
+    pub beneficiary: UncheckedAccount<'info>,
+
+    /// The payer for account creation and transaction fees
+    #[account(mut)]
+    pub payer: Signer<'info>,
+
+    /// Source token account that holds the tokens to deposit
+    #[account(
+        mut,
+        constraint = source_token_account.mint == mint.key()
+    )]
+    pub source_token_account: Account<'info, TokenAccount>,
+
+    /// The savings account's token account for this mint
+    #[account(
+        init_if_needed,
+        payer = payer,
+        associated_token::mint = mint,
+        associated_token::authority = savings_account,
+    )]
+    pub savings_token_account: Account<'info, TokenAccount>,
+
+    /// The mint of the SPL token being deposited
+    pub mint: Account<'info, Mint>,
+
+    pub token_program: Program<'info, Token>,
+    pub associated_token_program: Program<'info, AssociatedToken>,
+    pub system_program: Program<'info, System>,
+}
+
+/// Deposit SOL for self (backward compatibility)
+#[derive(Accounts)]
+pub struct DepositSolSelf<'info> {
+    #[account(
+        init_if_needed,
         payer = user,
         space = 8 + SavingsAccount::INIT_SPACE,
         seeds = [b"savings", user.key().as_ref()],
@@ -40,9 +107,9 @@ pub struct DepositSol<'info> {
     pub system_program: Program<'info, System>,
 }
 
-/// Deposit SPL tokens to the savings account
+/// Deposit SPL tokens for self (backward compatibility)
 #[derive(Accounts)]
-pub struct DepositSpl<'info> {
+pub struct DepositSplSelf<'info> {
     #[account(
         init_if_needed,
         payer = user,
@@ -115,23 +182,24 @@ pub fn deposit_sol(ctx: Context<DepositSol>, amount: u64) -> Result<()> {
     require!(amount > 0, ErrorCode::InvalidAmount);
 
     let savings_account = &mut ctx.accounts.savings_account;
-    let user = &ctx.accounts.user;
+    let beneficiary = &ctx.accounts.beneficiary;
+    let payer = &ctx.accounts.payer;
     let clock = Clock::get()?;
 
     // Initialize account if this is the first deposit
     if savings_account.owner == Pubkey::default() {
-        savings_account.owner = user.key();
+        savings_account.owner = beneficiary.key();
         savings_account.sol_balance = 0;
         savings_account.spl_balances = Vec::new();
         savings_account.bump = ctx.bumps.savings_account;
         savings_account.created_at = clock.unix_timestamp;
     }
 
-    // Transfer SOL from user to savings account
+    // Transfer SOL from payer to savings account
     let cpi_context = CpiContext::new(
         ctx.accounts.system_program.to_account_info(),
         anchor_lang::system_program::Transfer {
-            from: user.to_account_info(),
+            from: payer.to_account_info(),
             to: savings_account.to_account_info(),
         },
     );
@@ -146,8 +214,9 @@ pub fn deposit_sol(ctx: Context<DepositSol>, amount: u64) -> Result<()> {
     savings_account.updated_at = clock.unix_timestamp;
 
     msg!(
-        "Deposited {} lamports to savings account. New balance: {}",
+        "Deposited {} lamports to savings account for {}. New balance: {}",
         amount,
+        beneficiary.key(),
         savings_account.sol_balance
     );
 
@@ -159,24 +228,25 @@ pub fn deposit_spl(ctx: Context<DepositSpl>, amount: u64) -> Result<()> {
     require!(amount > 0, ErrorCode::InvalidAmount);
 
     let savings_account = &mut ctx.accounts.savings_account;
-    let user = &ctx.accounts.user;
+    let beneficiary = &ctx.accounts.beneficiary;
     let mint = &ctx.accounts.mint;
     let clock = Clock::get()?;
 
     // Initialize account if this is the first deposit
     if savings_account.owner == Pubkey::default() {
-        savings_account.owner = user.key();
+        savings_account.owner = beneficiary.key();
         savings_account.sol_balance = 0;
         savings_account.spl_balances = Vec::new();
         savings_account.bump = ctx.bumps.savings_account;
         savings_account.created_at = clock.unix_timestamp;
     }
 
-    // Transfer SPL tokens from user to savings account
+    // Transfer SPL tokens from source to savings account
+    // The authority must be whoever owns the source_token_account
     let cpi_accounts = Transfer {
-        from: ctx.accounts.user_token_account.to_account_info(),
+        from: ctx.accounts.source_token_account.to_account_info(),
         to: ctx.accounts.savings_token_account.to_account_info(),
-        authority: user.to_account_info(),
+        authority: ctx.accounts.payer.to_account_info(),
     };
     let cpi_program = ctx.accounts.token_program.to_account_info();
     let cpi_ctx = CpiContext::new(cpi_program, cpi_accounts);
@@ -187,9 +257,10 @@ pub fn deposit_spl(ctx: Context<DepositSpl>, amount: u64) -> Result<()> {
     savings_account.updated_at = clock.unix_timestamp;
 
     msg!(
-        "Deposited {} tokens of mint {} to savings account",
+        "Deposited {} tokens of mint {} to savings account for {}",
         amount,
-        mint.key()
+        mint.key(),
+        beneficiary.key()
     );
 
     Ok(())
@@ -336,6 +407,91 @@ pub fn withdraw_spl(ctx: Context<WithdrawSpl>, amount: u64) -> Result<()> {
 
     msg!(
         "Withdrew {} tokens of mint {} from savings account",
+        amount,
+        mint.key()
+    );
+
+    Ok(())
+}
+
+/// Deposit SOL for self (backward compatibility)
+pub fn deposit_sol_self(ctx: Context<DepositSolSelf>, amount: u64) -> Result<()> {
+    require!(amount > 0, ErrorCode::InvalidAmount);
+
+    let savings_account = &mut ctx.accounts.savings_account;
+    let user = &ctx.accounts.user;
+    let clock = Clock::get()?;
+
+    // Initialize account if this is the first deposit
+    if savings_account.owner == Pubkey::default() {
+        savings_account.owner = user.key();
+        savings_account.sol_balance = 0;
+        savings_account.spl_balances = Vec::new();
+        savings_account.bump = ctx.bumps.savings_account;
+        savings_account.created_at = clock.unix_timestamp;
+    }
+
+    // Transfer SOL from user to savings account
+    let cpi_context = CpiContext::new(
+        ctx.accounts.system_program.to_account_info(),
+        anchor_lang::system_program::Transfer {
+            from: user.to_account_info(),
+            to: savings_account.to_account_info(),
+        },
+    );
+    anchor_lang::system_program::transfer(cpi_context, amount)?;
+
+    // Update SOL balance
+    savings_account.sol_balance = savings_account
+        .sol_balance
+        .checked_add(amount)
+        .ok_or(crate::error::ErrorCode::ArithmeticOverflow)?;
+
+    savings_account.updated_at = clock.unix_timestamp;
+
+    msg!(
+        "Deposited {} lamports to savings account. New balance: {}",
+        amount,
+        savings_account.sol_balance
+    );
+
+    Ok(())
+}
+
+/// Deposit SPL tokens for self (backward compatibility)
+pub fn deposit_spl_self(ctx: Context<DepositSplSelf>, amount: u64) -> Result<()> {
+    require!(amount > 0, ErrorCode::InvalidAmount);
+
+    let savings_account = &mut ctx.accounts.savings_account;
+    let user = &ctx.accounts.user;
+    let mint = &ctx.accounts.mint;
+    let clock = Clock::get()?;
+
+    // Initialize account if this is the first deposit
+    if savings_account.owner == Pubkey::default() {
+        savings_account.owner = user.key();
+        savings_account.sol_balance = 0;
+        savings_account.spl_balances = Vec::new();
+        savings_account.bump = ctx.bumps.savings_account;
+        savings_account.created_at = clock.unix_timestamp;
+    }
+
+    // Transfer SPL tokens from user to savings account
+    let cpi_accounts = Transfer {
+        from: ctx.accounts.user_token_account.to_account_info(),
+        to: ctx.accounts.savings_token_account.to_account_info(),
+        authority: user.to_account_info(),
+    };
+    let cpi_program = ctx.accounts.token_program.to_account_info();
+    let cpi_ctx = CpiContext::new(cpi_program, cpi_accounts);
+    token::transfer(cpi_ctx, amount)?;
+
+    // Update token balance in savings account
+    savings_account.update_token_balance(mint.key(), amount)?;
+    savings_account.updated_at = clock.unix_timestamp;
+
+    msg!(
+        "Deposited {} tokens of mint {} to savings account",
         amount,
         mint.key()
     );

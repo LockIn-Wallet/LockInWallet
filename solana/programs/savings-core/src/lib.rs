@@ -23,14 +23,24 @@ pub mod savings_core {
         instructions::initialize(ctx)
     }
 
-    /// Deposit SOL to the savings account
+    /// Deposit SOL to the savings account (supports CPI)
     pub fn deposit_sol(ctx: Context<DepositSol>, amount: u64) -> Result<()> {
         instructions::deposit_sol(ctx, amount)
     }
 
-    /// Deposit SPL tokens to the savings account
+    /// Deposit SPL tokens to the savings account (supports CPI)
     pub fn deposit_spl(ctx: Context<DepositSpl>, amount: u64) -> Result<()> {
         instructions::deposit_spl(ctx, amount)
+    }
+
+    /// Deposit SOL for self (backward compatibility)
+    pub fn deposit_sol_self(ctx: Context<DepositSolSelf>, amount: u64) -> Result<()> {
+        instructions::deposit_sol_self(ctx, amount)
+    }
+
+    /// Deposit SPL tokens for self (backward compatibility)
+    pub fn deposit_spl_self(ctx: Context<DepositSplSelf>, amount: u64) -> Result<()> {
+        instructions::deposit_spl_self(ctx, amount)
     }
 
     /// Withdraw SOL from the savings account

@@ -1,7 +1,14 @@
 {
-  "programId": "HNi2JKTNeHvz2ENckdVBW1ncfkJUYppuYeBwNhWjkK7d",
+  "savingsCore": {
+    "programId": "HNi2JKTNeHvz2ENckdVBW1ncfkJUYppuYeBwNhWjkK7d",
+    "name": "Savings Core Program"
+  },
+  "depositProxy": {
+    "programId": "4Tr7zEp7p5YtvXNAK98UnEUUpYP9q87sgKBJjfgfNtr4",
+    "name": "Deposit Proxy Program"
+  },
   "network": "localnet",
   "endpoint": "http://127.0.0.1:8899",
-  "deployedAt": "2025-10-03T11:44:53.626Z",
+  "deployedAt": "2025-10-03T14:11:28.025Z",
   "accounts": {}
 }

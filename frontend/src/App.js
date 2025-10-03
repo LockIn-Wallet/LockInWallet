@@ -159,7 +159,7 @@ const NETWORKS = {
           recommended: true,
         },
         USDT: {
-          mint: "4hfpnxTtKLzTPy8W98ischzWSzn4jn8uLN6EDsnTK7cn", // Test USDT mint address
+          mint: "C1k9WgD5u5wFQ3iBDfMYwErRQQbK8MN8fNUuVRsrAkon", // Test USDT mint address
           symbol: "USDT",
           name: "Test USDT",
           decimals: 6,
@@ -518,6 +518,9 @@ function AppContent() {
         const newTxManager = await initializeTransactionManager('solana', selectedNetwork);
         if (newTxManager) {
           await refreshBalances(newTxManager);
+          // Check proxy status for Solana
+          const userAddress = await newTxManager.getAddress();
+          await checkSolanaProxyStatus(newTxManager, userAddress);
         }
       }
     } else {
@@ -745,9 +748,12 @@ function AppContent() {
       if (networkType === 'solana' && solanaConnected && solanaPublicKey && connection) {
         const newTxManager = await initializeTransactionManager('solana', selectedNetwork);
 
-        // Load balances after TransactionManager is initialized
+        // Load balances and check proxy status after TransactionManager is initialized
         if (newTxManager) {
           await refreshBalances(newTxManager);
+          // Check proxy status for Solana
+          const userAddress = await newTxManager.getAddress();
+          await checkSolanaProxyStatus(newTxManager, userAddress);
         }
       } else if (networkType === 'evm') {
         // EVM TransactionManager will be initialized when MetaMask connects
@@ -906,55 +912,135 @@ function AppContent() {
     await checkProxyStatusWithSigner(contract, signer, userAddr);
   };
 
-  const deployProxy = async () => {
-    if (!savingsContract || !signer) {
-      alert("Please connect your wallet first");
-      return;
-    }
+  const checkSolanaProxyStatus = async (txManager, userAddress) => {
+    console.log("🔍 checkSolanaProxyStatus called with:", {
+      txManager: !!txManager,
+      userAddress,
+    });
 
-    if (isProxyDeployed) {
-      alert("Proxy already deployed!");
+    if (!txManager) {
+      console.log("❌ No transaction manager provided to checkSolanaProxyStatus");
       return;
     }
 
     try {
-      setIsDeploying(true);
-      console.log("Deploying user proxy...");
+      console.log(`🔍 Checking Solana proxy status for user: ${userAddress}`);
 
-      // Call the deployUserProxy function
-      const tx = await savingsContract.deployUserProxy();
-      console.log("Transaction sent:", tx.hash);
+      // Check if proxy is already deployed
+      console.log("🔍 Calling txManager.isProxyDeployed...");
+      const proxyDeployed = await txManager.isProxyDeployed(userAddress);
+      console.log(`🔍 isProxyDeployed result: ${proxyDeployed}`);
 
-      // Wait for transaction confirmation
-      const receipt = await tx.wait();
-      console.log("Transaction confirmed:", receipt);
+      // Get the calculated deposit address (whether deployed or not)
+      console.log("🔍 Calling txManager.getDepositAddress...");
+      const depositAddress = await txManager.getDepositAddress(userAddress);
+      console.log(`🔍 getDepositAddress result: ${depositAddress}`);
 
-      // Refresh proxy status
-      await checkProxyStatus();
+      console.log(`✅ Solana proxy status for ${userAddress}:`);
+      console.log(`- Deployed: ${proxyDeployed}`);
+      console.log(`- Deposit Address: ${depositAddress}`);
 
-      alert(
-        "🎉 Permanent deposit address generated successfully! This address is permanently tied to your wallet and you can use it for all future deposits from exchanges."
+      // Update UI state
+      setIsProxyDeployed(proxyDeployed);
+      setProxyAddress(depositAddress);
+
+      console.log(
+        `✅ Solana state updated: isProxyDeployed=${proxyDeployed}, proxyAddress=${depositAddress}`
       );
     } catch (error) {
-      console.error("Error deploying proxy:", error);
+      console.error("❌ Error checking Solana proxy status:", error);
+      // Set default values on error
+      setIsProxyDeployed(false);
+      setProxyAddress("");
+    }
+  };
 
-      // Handle specific error cases
-      if (
-        error.message.includes("Already deployed") ||
-        error.message.includes("Proxy already deployed")
-      ) {
-        console.log("Proxy was already deployed, refreshing status...");
-        await checkProxyStatus(); // Refresh status to show the existing deposit address
-        alert(
-          "✅ Your permanent deposit address is ready! This address is permanently tied to your wallet and you can use it for all deposits from exchanges."
-        );
-      } else if (error.message.includes("user rejected")) {
-        alert("Transaction cancelled by user");
-      } else {
-        alert(`Failed to deploy proxy: ${error.message}`);
+  const deployProxy = async () => {
+    if (networkType === 'evm') {
+      // EVM proxy deployment
+      if (!savingsContract || !signer) {
+        alert("Please connect your wallet first");
+        return;
       }
-    } finally {
-      setIsDeploying(false);
+
+      if (isProxyDeployed) {
+        alert("Proxy already deployed!");
+        return;
+      }
+
+      try {
+        setIsDeploying(true);
+        console.log("Deploying EVM user proxy...");
+
+        // Call the deployUserProxy function
+        const tx = await savingsContract.deployUserProxy();
+        console.log("Transaction sent:", tx.hash);
+
+        // Wait for transaction confirmation
+        const receipt = await tx.wait();
+        console.log("Transaction confirmed:", receipt);
+
+        // Refresh proxy status
+        await checkProxyStatus();
+
+        alert(
+          "🎉 Permanent deposit address generated successfully! This address is permanently tied to your wallet and you can use it for all future deposits from exchanges."
+        );
+      } catch (error) {
+        console.error("Error deploying EVM proxy:", error);
+        alert(`Failed to deploy proxy: ${error.message}`);
+      } finally {
+        setIsDeploying(false);
+      }
+    } else if (networkType === 'solana') {
+      // Solana proxy deployment
+      if (!transactionManager || !solanaConnected) {
+        alert("Please connect your Solana wallet first");
+        return;
+      }
+
+      if (isProxyDeployed) {
+        alert("Deposit proxy already deployed!");
+        return;
+      }
+
+      try {
+        setIsDeploying(true);
+        console.log("Deploying Solana deposit proxy...");
+
+        // Deploy proxy using transaction manager
+        const result = await transactionManager.deployProxy();
+        console.log("Solana proxy deployment result:", result);
+
+        // Refresh proxy status
+        const userAddress = await transactionManager.getAddress();
+        await checkSolanaProxyStatus(transactionManager, userAddress);
+
+        alert(
+          "🎉 Permanent deposit address generated successfully! This address is permanently tied to your wallet and you can use it for all future deposits from exchanges."
+        );
+      } catch (error) {
+        console.error("Error deploying Solana proxy:", error);
+
+        // Handle specific error cases
+        if (
+          error.message.includes("already exists") ||
+          error.message.includes("already deployed")
+        ) {
+          console.log("Solana proxy was already deployed, refreshing status...");
+          const userAddress = await transactionManager.getAddress();
+          await checkSolanaProxyStatus(transactionManager, userAddress);
+          alert(
+            "✅ Your permanent deposit address is ready! This address is permanently tied to your wallet and you can use it for all deposits from exchanges."
+          );
+        } else if (error.message.includes("user rejected")) {
+          alert("Transaction cancelled by user");
+        } else {
+          alert(`Failed to deploy Solana proxy: ${error.message}`);
+        }
+      } finally {
+        setIsDeploying(false);
+      }
     }
   };
 

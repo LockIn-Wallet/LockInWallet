@@ -16,11 +16,19 @@ import { BlockchainAdapter } from './BlockchainAdapter.js';
 
 // Instruction discriminators from the IDL
 const INSTRUCTION_DISCRIMINATORS = {
+  // Savings Core Program
   Initialize: [175, 175, 109, 31, 13, 152, 155, 237],
   DepositSol: [108, 81, 78, 117, 125, 155, 56, 200],
   DepositSpl: [224, 0, 198, 175, 198, 47, 105, 204],
+  DepositSolSelf: [108, 81, 78, 117, 125, 155, 56, 200], // Same as DepositSol for backward compatibility
+  DepositSplSelf: [224, 0, 198, 175, 198, 47, 105, 204], // Same as DepositSpl for backward compatibility
   WithdrawSol: [145, 131, 74, 136, 65, 137, 42, 38],
-  WithdrawSpl: [181, 154, 94, 86, 62, 115, 6, 186]
+  WithdrawSpl: [181, 154, 94, 86, 62, 115, 6, 186],
+
+  // Deposit Proxy Program
+  InitializeProxy: [245, 74, 175, 136, 0, 146, 100, 224],
+  ForwardSolDeposit: [29, 156, 48, 213, 90, 128, 229, 58],
+  ForwardSplDeposit: [131, 71, 27, 250, 233, 24, 75, 240]
 };
 
 /**
@@ -33,6 +41,7 @@ export class SolanaAdapter extends BlockchainAdapter {
     this.connection = connection;
     this.userAddress = null;
     this.PROGRAM_ID = new PublicKey("HNi2JKTNeHvz2ENckdVBW1ncfkJUYppuYeBwNhWjkK7d"); // Updated 2025-10-03
+    this.DEPOSIT_PROXY_PROGRAM_ID = new PublicKey("4Tr7zEp7p5YtvXNAK98UnEUUpYP9q87sgKBJjfgfNtr4"); // Updated 2025-10-03
 
     if (this.wallet?.connected && this.wallet?.publicKey) {
       this.userAddress = this.wallet.publicKey.toString();
@@ -230,7 +239,7 @@ export class SolanaAdapter extends BlockchainAdapter {
       { pubkey: SystemProgram.programId, isSigner: false, isWritable: false }
     ];
 
-    return this.createInstruction('DepositSol', accounts, { amount });
+    return this.createInstruction('DepositSolSelf', accounts, { amount });
   }
 
   async createDepositSplInstruction(userPubkey, amount, mintPubkey, userTokenAccount, savingsTokenAccount) {
@@ -250,7 +259,7 @@ export class SolanaAdapter extends BlockchainAdapter {
       { pubkey: SystemProgram.programId, isSigner: false, isWritable: false }
     ];
 
-    return this.createInstruction('DepositSpl', accounts, { amount });
+    return this.createInstruction('DepositSplSelf', accounts, { amount });
   }
 
   // Deposit Operations
@@ -641,21 +650,23 @@ export class SolanaAdapter extends BlockchainAdapter {
   }
 
   async getDepositAddress(userAddress) {
-    // In Solana, the deposit address is the user's wallet address
-    // Or we could return the PDA address for the savings account
+    // Return the permanent deposit proxy address for this user
     const userPubkey = new PublicKey(userAddress);
-    const [savingsAccount] = await PublicKey.findProgramAddress(
-      [Buffer.from("savings"), userPubkey.toBuffer()],
-      this.PROGRAM_ID
+    const [depositProxy] = await PublicKey.findProgramAddress(
+      [Buffer.from("deposit_proxy"), userPubkey.toBuffer()],
+      this.DEPOSIT_PROXY_PROGRAM_ID
     );
 
-    return savingsAccount.toString();
+    return depositProxy.toString();
   }
 
   async deployProxy() {
-    if (!this.program || !this.wallet.publicKey) {
-      throw new Error('Program not initialized or wallet not connected');
+    if (!this.wallet?.publicKey) {
+      throw new Error('Wallet not connected');
     }
+
+    // Deploy deposit proxy first, then initialize savings account if needed
+    await this.initializeDepositProxy();
 
     const userPubkey = this.wallet.publicKey;
     const [savingsAccount] = await PublicKey.findProgramAddress(
@@ -663,25 +674,102 @@ export class SolanaAdapter extends BlockchainAdapter {
       this.PROGRAM_ID
     );
 
+    // Check if savings account already exists
+    const accountInfo = await this.connection.getAccountInfo(savingsAccount);
+    if (accountInfo) {
+      console.log('Savings account already exists');
+      return {
+        hash: 'already_exists',
+        success: true,
+        signature: 'already_exists'
+      };
+    }
+
+    // Initialize savings account
     try {
-      const tx = await this.program.methods
-        .initialize()
-        .accounts({
-          savingsAccount: savingsAccount,
-          user: userPubkey,
-          systemProgram: SystemProgram.programId,
-        })
-        .rpc();
+      const instruction = await this.createInitializeInstruction(userPubkey);
+      const transaction = new Transaction().add(instruction);
+
+      const signature = await this.wallet.sendTransaction(transaction, this.connection);
+      await this.connection.confirmTransaction(signature, 'confirmed');
+
+      console.log('✅ Savings account initialized:', signature);
 
       return {
-        hash: tx,
+        hash: signature,
         success: true,
-        signature: tx
+        signature: signature
       };
     } catch (error) {
       console.error('Error initializing Solana savings account:', error);
       throw error;
     }
+  }
+
+  async initializeDepositProxy() {
+    if (!this.wallet?.publicKey) {
+      throw new Error('Wallet not connected');
+    }
+
+    const userPubkey = this.wallet.publicKey;
+    const [depositProxy] = await PublicKey.findProgramAddress(
+      [Buffer.from("deposit_proxy"), userPubkey.toBuffer()],
+      this.DEPOSIT_PROXY_PROGRAM_ID
+    );
+
+    // Check if proxy already exists
+    const proxyInfo = await this.connection.getAccountInfo(depositProxy);
+    if (proxyInfo) {
+      console.log('Deposit proxy already exists');
+      return depositProxy.toString();
+    }
+
+    try {
+      // Create initialize proxy instruction
+      const instructionData = new Uint8Array([
+        ...INSTRUCTION_DISCRIMINATORS.InitializeProxy
+      ]);
+
+      const accounts = [
+        { pubkey: depositProxy, isSigner: false, isWritable: true },
+        { pubkey: userPubkey, isSigner: true, isWritable: true },
+        { pubkey: this.PROGRAM_ID, isSigner: false, isWritable: false }, // savings_program
+        { pubkey: SystemProgram.programId, isSigner: false, isWritable: false }
+      ];
+
+      const instruction = new TransactionInstruction({
+        keys: accounts,
+        programId: this.DEPOSIT_PROXY_PROGRAM_ID,
+        data: instructionData
+      });
+
+      const transaction = new Transaction().add(instruction);
+
+      // Set recent blockhash
+      const { blockhash } = await this.connection.getLatestBlockhash();
+      transaction.recentBlockhash = blockhash;
+      transaction.feePayer = userPubkey;
+
+      const signature = await this.wallet.sendTransaction(transaction, this.connection);
+      await this.connection.confirmTransaction(signature, 'confirmed');
+
+      console.log('✅ Deposit proxy initialized:', signature);
+      return depositProxy.toString();
+    } catch (error) {
+      console.error('Error initializing deposit proxy:', error);
+      throw error;
+    }
+  }
+
+  async isProxyDeployed(userAddress) {
+    const userPubkey = new PublicKey(userAddress);
+    const [depositProxy] = await PublicKey.findProgramAddress(
+      [Buffer.from("deposit_proxy"), userPubkey.toBuffer()],
+      this.DEPOSIT_PROXY_PROGRAM_ID
+    );
+
+    const proxyInfo = await this.connection.getAccountInfo(depositProxy);
+    return proxyInfo !== null;
   }
 
   // Spending Limits (would need to be implemented in Solana program)

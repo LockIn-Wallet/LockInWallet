@@ -466,3 +466,4 @@ rustup update  # Ensure Rust 1.85.0+
 ### **Best Coding Practices**
 - always use DRY principle
 - never have inline imports
+- as a code practive never hardcode any numbericals or addresses that could otherwise be genreated with our deployment script
