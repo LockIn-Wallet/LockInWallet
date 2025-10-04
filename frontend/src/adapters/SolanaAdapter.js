@@ -25,7 +25,7 @@ const INSTRUCTION_DISCRIMINATORS = {
   WithdrawSol: [145, 131, 74, 136, 65, 137, 42, 38],
   WithdrawSpl: [181, 154, 94, 86, 62, 115, 6, 186],
 
-  // Deposit Proxy Program (auto-generated on 2025-10-03)
+  // Deposit Proxy Program (auto-generated on 2025-10-04)
   InitializeProxy: [245, 74, 175, 136, 0, 146, 100, 224],
   ForwardSolDeposit: [29, 156, 48, 213, 90, 128, 229, 58],
   ForwardSplDeposit: [131, 71, 27, 250, 233, 24, 75, 240]
@@ -40,8 +40,8 @@ export class SolanaAdapter extends BlockchainAdapter {
     this.wallet = wallet;
     this.connection = connection;
     this.userAddress = null;
-    this.PROGRAM_ID = new PublicKey("HNi2JKTNeHvz2ENckdVBW1ncfkJUYppuYeBwNhWjkK7d"); // Updated 2025-10-03
-    this.DEPOSIT_PROXY_PROGRAM_ID = new PublicKey("4Tr7zEp7p5YtvXNAK98UnEUUpYP9q87sgKBJjfgfNtr4"); // Updated 2025-10-03
+    this.PROGRAM_ID = new PublicKey("HNi2JKTNeHvz2ENckdVBW1ncfkJUYppuYeBwNhWjkK7d"); // Updated 2025-10-04
+    this.DEPOSIT_PROXY_PROGRAM_ID = new PublicKey("4Tr7zEp7p5YtvXNAK98UnEUUpYP9q87sgKBJjfgfNtr4"); // Updated 2025-10-04
 
     if (this.wallet?.connected && this.wallet?.publicKey) {
       this.userAddress = this.wallet.publicKey.toString();
@@ -689,6 +689,7 @@ export class SolanaAdapter extends BlockchainAdapter {
     try {
       const instruction = await this.createInitializeInstruction(userPubkey);
       const transaction = new Transaction().add(instruction);
+      transaction.feePayer = userPubkey;
 
       const signature = await this.wallet.sendTransaction(transaction, this.connection);
       await this.connection.confirmTransaction(signature, 'confirmed');
@@ -1165,16 +1166,19 @@ export class SolanaAdapter extends BlockchainAdapter {
     // Actual discriminators from anchor build IDL (auto-generated)
     const discriminators = {
       'AddTimePeriodLimit': [241, 217, 123, 93, 14, 188, 236, 51],
+      'CancelLimitProposal': [201, 126, 142, 5, 126, 97, 232, 133],
       'CommitInitialSetup': [248, 193, 240, 26, 1, 132, 74, 226],
       'DepositSol': [108, 81, 78, 117, 125, 155, 56, 200],
       'DepositSolSelf': [253, 113, 121, 194, 75, 233, 114, 223],
       'DepositSpl': [224, 0, 198, 175, 198, 47, 105, 204],
       'DepositSplSelf': [177, 32, 212, 139, 117, 61, 41, 95],
+      'ExecuteLimitProposal': [77, 88, 235, 59, 216, 111, 1, 133],
       'GetSolBalance': [177, 197, 179, 97, 50, 111, 178, 70],
       'GetSpendingLimits': [23, 121, 238, 204, 69, 213, 157, 147],
       'GetSplBalance': [92, 135, 40, 171, 133, 246, 90, 120],
       'Initialize': [175, 175, 109, 31, 13, 152, 155, 237],
       'InitializeSpendingLimits': [240, 49, 54, 19, 46, 201, 202, 42],
+      'ProposeLimitChange': [146, 253, 178, 82, 191, 64, 35, 251],
       'RemoveTimePeriodLimit': [213, 185, 190, 218, 206, 221, 93, 152],
       'SetCommonPeriodLimits': [200, 130, 17, 128, 169, 59, 33, 89],
       'WithdrawSol': [145, 131, 74, 136, 65, 137, 42, 38],
@@ -1215,28 +1219,48 @@ export class SolanaAdapter extends BlockchainAdapter {
     });
 
     const transaction = new Transaction().add(instruction);
+    transaction.feePayer = this.wallet.publicKey;
     return await this.wallet.sendTransaction(transaction, this.connection);
   }
 
   // Set common period limits (Daily, Weekly, Monthly)
   async setCommonPeriodLimits(dailyLimit, weeklyLimit, monthlyLimit) {
+    console.log('🔧 SolanaAdapter: setCommonPeriodLimits called with:', { dailyLimit, weeklyLimit, monthlyLimit });
+
     if (!this.wallet?.publicKey) {
       throw new Error('Wallet not connected');
     }
 
     const userPubkey = this.wallet.publicKey;
     const [spendingLimitsAccount] = await this.getSpendingLimitsPDA(userPubkey);
+    console.log('🔑 SolanaAdapter: Using spending limits PDA:', spendingLimitsAccount.toString());
 
-    // Check if spending limits account exists, if not initialize it first
+    // Check if spending limits account exists and is valid
     try {
+      console.log('🔍 SolanaAdapter: Checking if spending limits account exists...');
       const accountInfo = await this.connection.getAccountInfo(spendingLimitsAccount);
+      console.log('📊 SolanaAdapter: Account info result:', accountInfo ? 'EXISTS' : 'NULL');
+
       if (!accountInfo) {
-        console.log('Spending limits account does not exist, initializing...');
+        console.log('🔧 SolanaAdapter: Spending limits account does not exist, initializing...');
         await this.initializeSpendingLimits();
-        console.log('Spending limits account initialized successfully');
+        console.log('✅ SolanaAdapter: Spending limits account initialized successfully');
+      } else {
+        // Account exists, but check if it's properly formatted by trying to deserialize
+        console.log('🔍 SolanaAdapter: Account exists, checking if data is valid...');
+        try {
+          this.deserializeSpendingLimitsAccount(accountInfo.data);
+          console.log('✅ SolanaAdapter: Account data is valid');
+        } catch (deserializeError) {
+          console.log('⚠️ SolanaAdapter: Account data is corrupted/incompatible');
+          console.log('💡 SolanaAdapter: The account exists but has incompatible data structure');
+          console.log('🔧 SolanaAdapter: You may need to use a different wallet or reset the local validator');
+          console.log('❌ SolanaAdapter: Cannot proceed with corrupted account data');
+          throw new Error('Spending limits account has corrupted data. Please use a different wallet or reset the validator.');
+        }
       }
     } catch (error) {
-      console.error('Error checking/initializing spending limits account:', error);
+      console.error('❌ SolanaAdapter: Error checking/initializing spending limits account:', error);
       throw error;
     }
 
@@ -1286,7 +1310,42 @@ export class SolanaAdapter extends BlockchainAdapter {
     });
 
     const transaction = new Transaction().add(instruction);
-    return await this.wallet.sendTransaction(transaction, this.connection);
+
+    // Set the fee payer to the user's wallet
+    transaction.feePayer = userPubkey;
+
+    console.log('📋 SolanaAdapter: Transaction created with instruction:', instruction);
+    console.log('📋 SolanaAdapter: Transaction fee payer set to:', transaction.feePayer.toString());
+    console.log('📋 SolanaAdapter: Instruction data length:', instruction.data.length);
+    console.log('📋 SolanaAdapter: Instruction keys:', instruction.keys);
+
+    try {
+      // First simulate the transaction to get better error details
+      console.log('🔍 SolanaAdapter: Simulating transaction first...');
+      const simulation = await this.connection.simulateTransaction(transaction);
+      console.log('📊 SolanaAdapter: Simulation result:', simulation);
+
+      if (simulation.value.err) {
+        console.error('❌ SolanaAdapter: Simulation failed:', simulation.value.err);
+        if (simulation.value.logs) {
+          console.error('📋 SolanaAdapter: Simulation logs:', simulation.value.logs);
+        }
+        throw new Error(`Transaction simulation failed: ${JSON.stringify(simulation.value.err)}`);
+      }
+
+      console.log('✅ SolanaAdapter: Simulation passed, sending transaction...');
+      const txHash = await this.wallet.sendTransaction(transaction, this.connection);
+      console.log('✅ SolanaAdapter: Transaction sent successfully:', txHash);
+      return txHash;
+    } catch (error) {
+      console.error('❌ SolanaAdapter: Transaction failed:', error);
+      console.error('❌ SolanaAdapter: Error details:', error.message);
+      console.error('❌ SolanaAdapter: Full error object:', error);
+      if (error.logs) {
+        console.error('❌ SolanaAdapter: Transaction logs:', error.logs);
+      }
+      throw error;
+    }
   }
 
   // Add custom time period limit
@@ -1326,6 +1385,7 @@ export class SolanaAdapter extends BlockchainAdapter {
     });
 
     const transaction = new Transaction().add(instruction);
+    transaction.feePayer = this.wallet.publicKey;
     return await this.wallet.sendTransaction(transaction, this.connection);
   }
 
@@ -1357,6 +1417,7 @@ export class SolanaAdapter extends BlockchainAdapter {
     });
 
     const transaction = new Transaction().add(instruction);
+    transaction.feePayer = this.wallet.publicKey;
     return await this.wallet.sendTransaction(transaction, this.connection);
   }
 
@@ -1381,6 +1442,7 @@ export class SolanaAdapter extends BlockchainAdapter {
     });
 
     const transaction = new Transaction().add(instruction);
+    transaction.feePayer = this.wallet.publicKey;
     return await this.wallet.sendTransaction(transaction, this.connection);
   }
 
@@ -1547,11 +1609,53 @@ export class SolanaAdapter extends BlockchainAdapter {
         });
       }
 
-      // Read setup_data
+      // Read pending_proposals vector (comes before setup_data)
+      const proposalsCount = data.readUInt32LE(offset);
+      console.log('📋 SolanaAdapter: Pending proposals count:', proposalsCount);
+      offset += 4;
+
+      // Properly skip pending proposals data by reading actual structure
+      if (proposalsCount > 0) {
+        console.log('📋 SolanaAdapter: Reading and skipping', proposalsCount, 'pending proposals...');
+
+        for (let i = 0; i < proposalsCount; i++) {
+          // Read proposal_id ([u8; 32])
+          offset += 32;
+
+          // Read period_name (String: u32 length + bytes)
+          const nameLength = data.readUInt32LE(offset);
+          offset += 4;
+          offset += nameLength; // Skip the actual name bytes
+
+          // Read new_limit (u64)
+          offset += 8;
+
+          // Read execute_after (i64)
+          offset += 8;
+
+          // Read executed (bool - 1 byte)
+          offset += 1;
+
+          // Read is_increase (bool - 1 byte)
+          offset += 1;
+
+          // Read created_at (i64)
+          offset += 8;
+
+          console.log(`📋 SolanaAdapter: Skipped proposal ${i + 1}/${proposalsCount}, offset now: ${offset}`);
+        }
+      }
+
+      // Read setup_data (UserSetupData struct)
       const isSetupCommitted = data.readUInt8(offset) === 1;
+      console.log('🔍 SolanaAdapter: Reading isSetupCommitted at offset', offset, ':', isSetupCommitted);
       offset += 1;
 
       const totalLockedValue = data.readBigUInt64LE(offset);
+      offset += 8;
+
+      // Skip commit_timestamp and other UserSetupData fields for now
+      // commit_timestamp: i64 (8 bytes)
       offset += 8;
 
       return {
@@ -1675,5 +1779,305 @@ export class SolanaAdapter extends BlockchainAdapter {
       const transaction = new Transaction().add(instruction);
       return await this.wallet.sendTransaction(transaction, this.connection);
     }
+  }
+
+  // ========== PROPOSAL MANAGEMENT FUNCTIONALITY ==========
+
+  // Propose a spending limit change
+  async proposeLimitChange(periodName, newLimit) {
+    if (!this.wallet?.publicKey) {
+      throw new Error('Wallet not connected');
+    }
+
+    const userPubkey = this.wallet.publicKey;
+    const [spendingLimitsAccount] = await this.getSpendingLimitsPDA(userPubkey);
+
+    // Check if spending limits account exists
+    const accountInfo = await this.connection.getAccountInfo(spendingLimitsAccount);
+    if (!accountInfo) {
+      throw new Error('Spending limits account not found. Please initialize spending limits first.');
+    }
+
+    // Check if setup is committed by reading the account data
+    try {
+      const data = accountInfo.data;
+      let offset = 8; // Skip discriminator
+      offset += 32; // Skip owner
+
+      // Skip time_period_limits vector
+      const timePeriodLimitsLength = new DataView(data.buffer, data.byteOffset + offset, 4).getUint32(0, true);
+      offset += 4;
+      offset += timePeriodLimitsLength * 67; // Skip all time period limits
+
+      // Skip pending_proposals vector
+      const proposalsLength = new DataView(data.buffer, data.byteOffset + offset, 4).getUint32(0, true);
+      offset += 4;
+      offset += proposalsLength * 120; // Skip all proposals (approximate size)
+
+      // Read setup_data.has_committed_setup
+      const hasCommittedSetup = data[offset] !== 0;
+
+      if (!hasCommittedSetup) {
+        throw new Error('Initial setup must be committed before creating proposals. Please commit your spending limits setup first.');
+      }
+
+      console.log('✅ Setup is committed, proceeding with proposal...');
+    } catch (error) {
+      if (error.message.includes('Initial setup must be committed')) {
+        throw error;
+      }
+      console.warn('⚠️ Could not verify setup status, proceeding anyway:', error.message);
+    }
+
+    // Convert newLimit to lamports/base units (same as EVM uses wei)
+    const newLimitBigInt = BigInt(Math.floor(parseFloat(newLimit) * Math.pow(10, 9))); // Convert to lamports
+
+    // Create instruction data: discriminator + period_name + new_limit
+    const discriminator = Buffer.from(this._generateDiscriminator('ProposeLimitChange'));
+
+    // Encode period name as Anchor string (4 bytes length + UTF-8 bytes)
+    const periodNameBytes = Buffer.from(periodName, 'utf8');
+    const periodNameLength = Buffer.alloc(4);
+    periodNameLength.writeUInt32LE(periodNameBytes.length, 0);
+
+    // Encode new limit (8 bytes, little-endian u64)
+    const newLimitBuffer = Buffer.alloc(8);
+    newLimitBuffer.writeBigUInt64LE(newLimitBigInt, 0);
+
+    const data = Buffer.concat([discriminator, periodNameLength, periodNameBytes, newLimitBuffer]);
+
+    const instruction = new TransactionInstruction({
+      keys: [
+        { pubkey: spendingLimitsAccount, isSigner: false, isWritable: true },
+        { pubkey: userPubkey, isSigner: true, isWritable: true }
+      ],
+      programId: this.PROGRAM_ID,
+      data
+    });
+
+    const transaction = new Transaction().add(instruction);
+
+    try {
+      console.log('📝 Sending proposal transaction with data:', {
+        periodName,
+        newLimit,
+        discriminator: Array.from(discriminator),
+        dataLength: data.length,
+        instruction: {
+          programId: this.PROGRAM_ID.toString(),
+          keys: instruction.keys.map(k => ({
+            pubkey: k.pubkey.toString(),
+            isSigner: k.isSigner,
+            isWritable: k.isWritable
+          }))
+        }
+      });
+
+      const txHash = await this.wallet.sendTransaction(transaction, this.connection);
+      console.log(`✅ Proposed limit change for ${periodName}: ${newLimit} (tx: ${txHash})`);
+      return txHash;
+    } catch (error) {
+      console.error('❌ Proposal transaction failed:', {
+        error: error.message,
+        logs: error.logs,
+        code: error.code,
+        periodName,
+        newLimit,
+        dataLength: data.length
+      });
+      throw error;
+    }
+  }
+
+  // Fetch pending proposals from the spending limits account
+  async fetchPendingProposals(userAddress = null) {
+    try {
+      const userPubkey = userAddress ? new PublicKey(userAddress) : this.wallet?.publicKey;
+      if (!userPubkey) {
+        throw new Error('No user address provided');
+      }
+
+      const [spendingLimitsAccount] = await this.getSpendingLimitsPDA(userPubkey);
+      const accountInfo = await this.connection.getAccountInfo(spendingLimitsAccount);
+
+      if (!accountInfo) {
+        console.log('No spending limits account found');
+        return [];
+      }
+
+      console.log('📋 Fetching proposals: Starting deserialization...');
+      const data = accountInfo.data;
+      let offset = 8; // Skip discriminator
+
+      // Skip owner (32 bytes)
+      offset += 32;
+
+      // Skip time_period_limits vector using CORRECT logic (same as deserializeSpendingLimitsAccount)
+      const timePeriodLimitsLength = data.readUInt32LE(offset);
+      console.log('📋 Fetching proposals: Skipping', timePeriodLimitsLength, 'time period limits...');
+      offset += 4;
+
+      for (let i = 0; i < timePeriodLimitsLength; i++) {
+        // Skip TimePeriodLimit fields in correct order:
+        offset += 8; // limit: u64
+        offset += 8; // spent: u64
+        offset += 8; // last_reset: i64
+        offset += 8; // duration: u64
+
+        // Skip name: String (u32 length + bytes)
+        const nameLength = data.readUInt32LE(offset);
+        offset += 4;
+        offset += nameLength;
+
+        // Skip active: bool
+        offset += 1;
+      }
+
+      // Read pending_proposals vector
+      const proposalsLength = new DataView(data.buffer, data.byteOffset + offset, 4).getUint32(0, true);
+      offset += 4;
+
+      const proposals = [];
+      for (let i = 0; i < proposalsLength; i++) {
+        // Read proposal_id (32 bytes)
+        const proposalId = Array.from(data.slice(offset, offset + 32));
+        offset += 32;
+
+        // Read period_name (4 bytes length + string)
+        const periodNameLength = data.readUInt32LE(offset);
+        offset += 4;
+        const periodName = new TextDecoder().decode(data.slice(offset, offset + periodNameLength));
+        offset += periodNameLength; // Skip actual string length, not fixed size
+
+        // Read new_limit (8 bytes)
+        const newLimit = new DataView(data.buffer, data.byteOffset + offset, 8).getBigUint64(0, true);
+        offset += 8;
+
+        // Read execute_after (8 bytes)
+        const executeAfter = new DataView(data.buffer, data.byteOffset + offset, 8).getBigInt64(0, true);
+        offset += 8;
+
+        // Read executed (1 byte)
+        const executed = data[offset] !== 0;
+        offset += 1;
+
+        // Read is_increase (1 byte)
+        const isIncrease = data[offset] !== 0;
+        offset += 1;
+
+        // Read created_at (8 bytes)
+        const createdAt = new DataView(data.buffer, data.byteOffset + offset, 8).getBigInt64(0, true);
+        offset += 8;
+
+        // Calculate timelock info
+        const executeAfterTimestamp = Number(executeAfter);
+        const currentTime = Math.floor(Date.now() / 1000);
+        const timeRemaining = Math.max(0, executeAfterTimestamp - currentTime);
+        const canExecute = timeRemaining === 0 && !executed;
+
+        console.log(`📋 Proposal ${i + 1}: ${periodName} -> ${Number(newLimit) / Math.pow(10, 9)} SOL, executeAfter: ${executeAfterTimestamp}, timeRemaining: ${timeRemaining}s`);
+
+        proposals.push({
+          proposalId: proposalId.join(''), // Convert array to string for UI
+          periodName,
+          newLimit: (Number(newLimit) / Math.pow(10, 9)).toString(), // Convert from lamports to SOL
+          executeAfter: executeAfterTimestamp,
+          executed,
+          isIncrease,
+          createdAt: Number(createdAt),
+          action: 'change', // For compatibility with EVM format
+          networkType: 'solana',
+          timeRemaining, // Time in seconds until executable
+          canExecute, // Boolean: can be executed now
+          // Readable time remaining for UI
+          timeRemainingText: timeRemaining > 0 ? this.formatTimeRemaining(timeRemaining) : 'Ready to execute'
+        });
+      }
+
+      console.log(`Found ${proposals.length} pending proposals for user ${userPubkey.toString()}`);
+      return proposals;
+    } catch (error) {
+      console.error('Error fetching pending proposals:', error);
+      return [];
+    }
+  }
+
+  // Helper function to format time remaining
+  formatTimeRemaining(seconds) {
+    if (seconds <= 0) return 'Ready to execute';
+
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const remainingSeconds = seconds % 60;
+
+    if (hours > 0) {
+      return `${hours}h ${minutes}m ${remainingSeconds}s`;
+    } else if (minutes > 0) {
+      return `${minutes}m ${remainingSeconds}s`;
+    } else {
+      return `${remainingSeconds}s`;
+    }
+  }
+
+  // Execute a pending proposal
+  async executeLimitProposal(proposalId) {
+    if (!this.wallet?.publicKey) {
+      throw new Error('Wallet not connected');
+    }
+
+    const userPubkey = this.wallet.publicKey;
+    const [spendingLimitsAccount] = await this.getSpendingLimitsPDA(userPubkey);
+
+    // Create instruction data: discriminator + proposal_id
+    const discriminator = Buffer.from(this._generateDiscriminator('ExecuteLimitProposal'));
+    const proposalIdBuffer = Buffer.from(proposalId);
+
+    const data = Buffer.concat([discriminator, proposalIdBuffer]);
+
+    const instruction = new TransactionInstruction({
+      keys: [
+        { pubkey: spendingLimitsAccount, isSigner: false, isWritable: true },
+        { pubkey: userPubkey, isSigner: true, isWritable: true }
+      ],
+      programId: this.PROGRAM_ID,
+      data
+    });
+
+    const transaction = new Transaction().add(instruction);
+    const txHash = await this.wallet.sendTransaction(transaction, this.connection);
+
+    console.log(`Executed proposal ${proposalId} (tx: ${txHash})`);
+    return txHash;
+  }
+
+  // Cancel a pending proposal
+  async cancelLimitProposal(proposalId) {
+    if (!this.wallet?.publicKey) {
+      throw new Error('Wallet not connected');
+    }
+
+    const userPubkey = this.wallet.publicKey;
+    const [spendingLimitsAccount] = await this.getSpendingLimitsPDA(userPubkey);
+
+    // Create instruction data: discriminator + proposal_id
+    const discriminator = Buffer.from(this._generateDiscriminator('CancelLimitProposal'));
+    const proposalIdBuffer = Buffer.from(proposalId);
+
+    const data = Buffer.concat([discriminator, proposalIdBuffer]);
+
+    const instruction = new TransactionInstruction({
+      keys: [
+        { pubkey: spendingLimitsAccount, isSigner: false, isWritable: true },
+        { pubkey: userPubkey, isSigner: true, isWritable: true }
+      ],
+      programId: this.PROGRAM_ID,
+      data
+    });
+
+    const transaction = new Transaction().add(instruction);
+    const txHash = await this.wallet.sendTransaction(transaction, this.connection);
+
+    console.log(`Cancelled proposal ${proposalId} (tx: ${txHash})`);
+    return txHash;
   }
 }

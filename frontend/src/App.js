@@ -159,7 +159,7 @@ const NETWORKS = {
           recommended: true,
         },
         USDT: {
-          mint: "J5geF16j56Pqe18VM8NZof9kpAam2gpQLzt2WCqBEzvi", // Test USDT mint address
+          mint: "8HzX7N298cgEvd16KGGruJXrPsnbcURLbN1E1Puv4G1m", // Test USDT mint address
           symbol: "USDT",
           name: "Test USDT",
           decimals: 6,
@@ -499,14 +499,37 @@ function AppContent() {
   };
 
   // Network type switching (EVM vs Solana)
+  // Helper function to format time remaining (matches SolanaAdapter)
+  const formatTimeRemaining = (seconds) => {
+    if (seconds <= 0) return 'Ready to execute';
+
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const remainingSeconds = seconds % 60;
+
+    if (hours > 0) {
+      return `${hours}h ${minutes}m ${remainingSeconds}s`;
+    } else if (minutes > 0) {
+      return `${minutes}m ${remainingSeconds}s`;
+    } else {
+      return `${remainingSeconds}s`;
+    }
+  };
+
   const switchNetworkType = async (newNetworkType) => {
     setNetworkType(newNetworkType);
     // Persist user's network type preference
     localStorage.setItem('preferredNetworkType', newNetworkType);
 
-    // Clear proxy state when switching networks
+    // Clear all state when switching networks to prevent cached data
     setIsProxyDeployed(false);
     setProxyAddress("");
+    setPendingLimitProposals([]); // Clear proposals to load new network's proposals
+    setSpendingLimits([]); // Clear spending limits to prevent cached cards
+    setIsSetupCommitted(false); // Reset setup status
+    setBalances({}); // Clear balances
+    setPendingBypassRequests([]); // Clear bypass requests
+    setPendingWithdrawalRequests([]); // Clear withdrawal requests
 
     if (newNetworkType === 'solana') {
       // Disconnect EVM wallet when switching to Solana
@@ -525,6 +548,9 @@ function AppContent() {
           // Check proxy status for Solana
           const userAddress = await newTxManager.getAddress();
           await checkSolanaProxyStatus(newTxManager, userAddress);
+          // Load spending limits and proposals
+          await fetchSpendingLimitsWithTxManager(newTxManager);
+          await fetchPendingLimitProposals();
         }
       }
     } else {
@@ -803,6 +829,12 @@ function AppContent() {
           console.log('📋 Loading Solana spending limits...');
           await fetchSpendingLimitsWithTxManager(newTxManager);
           console.log('✅ Solana spending limits loading completed');
+
+          // Load pending proposals for Solana
+          console.log('📋 Loading Solana pending proposals...');
+
+          await fetchPendingLimitProposals(null, newTxManager);
+          console.log('✅ Solana pending proposals loading completed');
         }
       } else if (networkType === 'solana') {
         console.log('❌ Solana wallet not ready yet:', {
@@ -1475,7 +1507,12 @@ function AppContent() {
   };
 
   const submitIndividualProposal = async (periodName) => {
-    if (!savingsContract) {
+    // Check connection for both networks
+    if (networkType === 'solana' && (!transactionManager || !solanaConnected)) {
+      alert("Please connect your Solana wallet first");
+      return;
+    }
+    if (networkType === 'evm' && !savingsContract) {
       alert("Please connect your wallet first");
       return;
     }
@@ -1488,38 +1525,35 @@ function AppContent() {
 
     try {
       const newLimit = parseFloat(edit.value);
+
+      if (networkType === 'solana') {
+        // For Solana: Create proposal using the new proposal system
+        console.log('📝 Solana: Creating limit change proposal...');
+        const adapter = transactionManager.getCurrentAdapter();
+        await adapter.proposeLimitChange(periodName, newLimit);
+
+        // Exit edit mode for this specific limit
+        setLimitEdits(prev => ({
+          ...prev,
+          [periodName]: {
+            ...prev[periodName],
+            isEditing: false
+          }
+        }));
+
+        // Refresh proposals
+        await fetchPendingLimitProposals();
+
+        alert(`✅ Proposal submitted for ${periodName} limit! It will be executable after the timelock period.`);
+        return;
+      }
+
+      // EVM path (existing logic)
       const limitWei = ethers.parseUnits(newLimit.toString(), 6);
       const tx = await savingsContract.proposeLimitChange(periodName, limitWei);
       await tx.wait();
 
-      // Store proposal in localStorage
-      const storedProposals = localStorage.getItem(
-        `limitProposals_${userAddress}`
-      );
-      const existingProposals = storedProposals
-        ? JSON.parse(storedProposals)
-        : [];
-
-      const proposal = {
-        periodName: periodName,
-        action: "change",
-        newLimit: newLimit,
-        executeAfter: Math.floor(Date.now() / 1000) + 24 * 60 * 60, // 24 hours from now
-        submittedAt: Date.now(),
-      };
-
-      // Remove any existing proposal for the same period
-      const updatedProposals = existingProposals.filter(
-        (p) => !(p.periodName === periodName && p.action === "change")
-      );
-      updatedProposals.push(proposal);
-      localStorage.setItem(
-        `limitProposals_${userAddress}`,
-        JSON.stringify(updatedProposals)
-      );
-      console.log(
-        `Stored ${updatedProposals.length} proposals in localStorage for ${userAddress}`
-      );
+      console.log(`✅ EVM proposal submitted for ${periodName}: ${newLimit}`);
 
       alert(
         `✅ ${periodName} limit change proposal submitted! It will be executable after the timelock period.`
@@ -1551,33 +1585,7 @@ function AppContent() {
         const tx = await savingsContract.proposeLimitRemoval(periodName);
         await tx.wait();
 
-        // Store removal proposal in localStorage
-        const storedProposals = localStorage.getItem(
-          `limitProposals_${userAddress}`
-        );
-        const existingProposals = storedProposals
-          ? JSON.parse(storedProposals)
-          : [];
-
-        const proposal = {
-          periodName: periodName,
-          action: "remove",
-          executeAfter: Math.floor(Date.now() / 1000) + 24 * 60 * 60, // 24 hours from now
-          submittedAt: Date.now(),
-        };
-
-        // Remove any existing proposal for the same period
-        const updatedProposals = existingProposals.filter(
-          (p) => !(p.periodName === periodName && p.action === "remove")
-        );
-        updatedProposals.push(proposal);
-        localStorage.setItem(
-          `limitProposals_${userAddress}`,
-          JSON.stringify(updatedProposals)
-        );
-        console.log(
-          `Stored ${updatedProposals.length} proposals in localStorage for ${userAddress} (including removal for ${periodName})`
-        );
+        // localStorage removed - proposals now tracked on-chain
 
         alert(
           `✅ Removal proposal submitted for ${periodName}! It will be executable after review.`
@@ -1596,58 +1604,67 @@ function AppContent() {
     }
   };
 
-  const fetchPendingLimitProposals = async (userAddr = null) => {
-    // This function will track pending proposals from localStorage and contract state
-    // For now, we'll implement basic tracking
-    const currentUserAddress = userAddr || userAddress;
+  const fetchPendingLimitProposals = async (userAddr = null, txManager = transactionManager) => {
+    const currentUserAddress = getCurrentUserAddress();
     if (!currentUserAddress) {
-      console.log("No user address available for fetching pending proposals");
+      console.log(`No user address available for fetching pending proposals on ${networkType} network`);
       return;
     }
 
-    try {
-      const storedProposals = localStorage.getItem(
-        `limitProposals_${currentUserAddress}`
-      );
-      const proposals = storedProposals ? JSON.parse(storedProposals) : [];
-      console.log(
-        `Loaded ${proposals.length} pending limit proposals for ${currentUserAddress}`
-      );
-      setPendingLimitProposals(proposals);
-    } catch (error) {
-      console.error("Error fetching pending proposals:", error);
-      setPendingLimitProposals([]);
+    if (networkType === 'solana') {
+      // For Solana: Fetch proposals from the on-chain program
+      console.log('📋 Fetching Solana pending proposals from program...');
+      if (!txManager) {
+        console.log('❌ Transaction manager not available, skipping proposal fetch');
+        setPendingLimitProposals([]);
+        return;
+      }
+
+      try {
+        const adapter = txManager.getCurrentAdapter();
+        const proposals = await adapter.fetchPendingProposals(currentUserAddress);
+
+        console.log(`✅ Found ${proposals.length} pending proposals for Solana`);
+        setPendingLimitProposals(proposals);
+      } catch (error) {
+        console.error("❌ Error fetching Solana proposals:", error);
+        setPendingLimitProposals([]);
+      }
+      return;
     }
+
+    // EVM: For now, no proposals since we removed localStorage
+    // TODO: Implement proper EVM on-chain proposal fetching
+    console.log('📋 EVM proposals not yet implemented for on-chain fetching');
+    setPendingLimitProposals([]);
   };
 
   const executeProposal = async (proposal) => {
-    if (!savingsContract) {
+    // Check connection for both networks
+    if (networkType === 'solana' && (!transactionManager || !solanaConnected)) {
+      alert("Please connect your Solana wallet first");
+      return;
+    }
+    if (networkType === 'evm' && !savingsContract) {
       alert("Please connect your wallet first");
       return;
     }
 
     try {
-      // This would call the actual contract method to execute the proposal
-      // For now, we'll simulate it by removing from localStorage
-      alert(
-        `✅ Executing ${proposal.action} proposal for ${proposal.periodName}...`
-      );
+      if (proposal.networkType === 'solana') {
+        // For Solana: Execute proposal through adapter
+        console.log('🔄 Executing Solana proposal:', proposal);
+        const adapter = transactionManager.getCurrentAdapter();
+        await adapter.executeLimitProposal(proposal.proposalId);
+        alert(`✅ Executed ${proposal.action} proposal for ${proposal.periodName}!`);
+      } else {
+        // EVM execution: Call contract method (placeholder for now)
+        console.log('🔄 Executing EVM proposal:', proposal);
+        alert(`✅ Executing ${proposal.action} proposal for ${proposal.periodName}...`);
+        // TODO: Add actual EVM contract execution when implemented
+      }
 
-      // Remove from localStorage
-      const storedProposals = localStorage.getItem(
-        `limitProposals_${userAddress}`
-      );
-      const proposals = storedProposals ? JSON.parse(storedProposals) : [];
-      const updatedProposals = proposals.filter(
-        (p) =>
-          !(
-            p.periodName === proposal.periodName && p.action === proposal.action
-          )
-      );
-      localStorage.setItem(
-        `limitProposals_${userAddress}`,
-        JSON.stringify(updatedProposals)
-      );
+      // localStorage removed - proposals now fetched from chain
 
       // Refresh data
       await fetchPendingLimitProposals();
@@ -1666,21 +1683,14 @@ function AppContent() {
 
   const cancelProposal = async (proposal) => {
     try {
-      // Remove from localStorage
-      const storedProposals = localStorage.getItem(
-        `limitProposals_${userAddress}`
-      );
-      const proposals = storedProposals ? JSON.parse(storedProposals) : [];
-      const updatedProposals = proposals.filter(
-        (p) =>
-          !(
-            p.periodName === proposal.periodName && p.action === proposal.action
-          )
-      );
-      localStorage.setItem(
-        `limitProposals_${userAddress}`,
-        JSON.stringify(updatedProposals)
-      );
+      // For Solana: Use adapter to cancel proposal
+      if (networkType === 'solana' && transactionManager) {
+        const adapter = transactionManager.getCurrentAdapter();
+        await adapter.cancelLimitProposal(proposal.proposalId);
+      } else if (networkType === 'evm') {
+        // EVM cancellation not implemented yet
+        console.log('EVM proposal cancellation not implemented');
+      }
 
       // Refresh proposals
       await fetchPendingLimitProposals();
@@ -1937,6 +1947,38 @@ function AppContent() {
 
 
   // Helper function that accepts TransactionManager directly (for initialization)
+  // Helper function to get current user address based on network (DRY)
+  const getCurrentUserAddress = (forNetworkType = null) => {
+    const targetNetwork = forNetworkType || networkType;
+    if (targetNetwork === 'solana') {
+      return solanaPublicKey?.toString();
+    } else {
+      return userAddress;
+    }
+  };
+
+  // Helper function to update limitEdits state from fetched limits (DRY)
+  const updateLimitEditsFromFetchedLimits = (fetchedLimits) => {
+    const newLimitEdits = {
+      Daily: { value: "", isActive: false, isEditing: false },
+      Weekly: { value: "", isActive: false, isEditing: false },
+      Monthly: { value: "", isActive: false, isEditing: false },
+    };
+
+    fetchedLimits.forEach((limit) => {
+      if (["Daily", "Weekly", "Monthly"].includes(limit.name)) {
+        newLimitEdits[limit.name] = {
+          value: limit.limit,
+          isActive: true,
+          isEditing: false,
+        };
+      }
+    });
+
+    setLimitEdits(newLimitEdits);
+    console.log("🎯 Limit editing state updated for", networkType);
+  };
+
   const fetchSpendingLimitsWithTxManager = async (txManager) => {
     console.log('🚀 fetchSpendingLimitsWithTxManager called for network:', networkType);
     console.log('🔗 txManager available:', !!txManager);
@@ -1976,6 +2018,8 @@ function AppContent() {
 
         console.log("🔄 Converted limits for frontend:", fetchedLimits);
         console.log("📊 Setup committed status:", spendingData.isSetupCommitted);
+        console.log("🚨 DEBUG: Contract shows setup committed but you expect it unlocked!");
+        console.log("🔧 If this is wrong, you may need to reset the contract or check deployment");
 
         setSpendingLimits(fetchedLimits);
         setLimitsLoaded(true);
@@ -1984,24 +2028,8 @@ function AppContent() {
         console.log("✅ Solana spending limits state updated!");
         console.log("📋 Final spending limits count:", fetchedLimits.length);
 
-        // Update unified limit editing state based on fetched limits
-        const newLimitEdits = {
-          Daily: { value: "", isActive: false, isEditing: false },
-          Weekly: { value: "", isActive: false, isEditing: false },
-          Monthly: { value: "", isActive: false, isEditing: false },
-        };
-
-        fetchedLimits.forEach((limit) => {
-          if (["Daily", "Weekly", "Monthly"].includes(limit.name)) {
-            newLimitEdits[limit.name] = {
-              value: limit.limit,
-              isActive: true,
-              isEditing: false,
-            };
-          }
-        });
-
-        setLimitEdits(newLimitEdits);
+        // Update unified limit editing state using shared helper function
+        updateLimitEditsFromFetchedLimits(fetchedLimits);
         console.log("🎯 Limit editing state updated for Solana");
 
       } catch (error) {
@@ -2041,16 +2069,19 @@ function AppContent() {
         console.log("📊 Limits array length:", spendingData?.limits?.length || 0);
 
         // Convert Solana format to unified format (values are already in SOL)
-        const fetchedLimits = spendingData.limits.map(limit => ({
-          name: limit.name,
-          limit: limit.limit.toString(), // Already converted to SOL in SolanaAdapter
-          spent: limit.spent.toString(),
-          remaining: Math.max(0, limit.remaining),
-          duration: limit.duration.toString(),
-          active: limit.active,
-          durationHours: Math.floor(Number(limit.duration) / 3600),
-          durationDays: Math.floor(Number(limit.duration) / 86400),
-        }));
+        // Filter to only include active limits for consistency with EVM
+        const fetchedLimits = spendingData.limits
+          .filter(limit => limit.active) // Only include active limits like EVM
+          .map(limit => ({
+            name: limit.name,
+            limit: limit.limit.toString(), // Already converted to SOL in SolanaAdapter
+            spent: limit.spent.toString(),
+            remaining: Math.max(0, limit.remaining),
+            duration: limit.duration.toString(),
+            active: limit.active,
+            durationHours: Math.floor(Number(limit.duration) / 3600),
+            durationDays: Math.floor(Number(limit.duration) / 86400),
+          }));
 
         console.log("🔄 Converted limits for frontend:", fetchedLimits);
         console.log("📊 Setup committed status:", spendingData.isSetupCommitted);
@@ -2062,24 +2093,8 @@ function AppContent() {
         console.log("✅ Solana spending limits state updated!");
         console.log("📋 Final spending limits count:", fetchedLimits.length);
 
-        // Update unified limit editing state based on fetched limits
-        const newLimitEdits = {
-          Daily: { value: "", isActive: false, isEditing: false },
-          Weekly: { value: "", isActive: false, isEditing: false },
-          Monthly: { value: "", isActive: false, isEditing: false },
-        };
-
-        fetchedLimits.forEach((limit) => {
-          if (["Daily", "Weekly", "Monthly"].includes(limit.name)) {
-            newLimitEdits[limit.name] = {
-              value: limit.limit,
-              isActive: true,
-              isEditing: false,
-            };
-          }
-        });
-
-        setLimitEdits(newLimitEdits);
+        // Update unified limit editing state using shared helper function
+        updateLimitEditsFromFetchedLimits(fetchedLimits);
       } catch (error) {
         console.error("Error fetching Solana spending limits:", error);
         setSpendingLimits([]);
@@ -2116,24 +2131,8 @@ function AppContent() {
         setSpendingLimits(fetchedLimits);
         setLimitsLoaded(true);
 
-        // Update unified limit editing state based on fetched limits
-        const newLimitEdits = {
-          Daily: { value: "", isActive: false, isEditing: false },
-          Weekly: { value: "", isActive: false, isEditing: false },
-          Monthly: { value: "", isActive: false, isEditing: false },
-        };
-
-        fetchedLimits.forEach((limit) => {
-          if (["Daily", "Weekly", "Monthly"].includes(limit.name)) {
-            newLimitEdits[limit.name] = {
-              value: limit.limit,
-              isActive: true,
-              isEditing: false,
-            };
-          }
-        });
-
-        setLimitEdits(newLimitEdits);
+        // Update unified limit editing state using shared helper function
+        updateLimitEditsFromFetchedLimits(fetchedLimits);
       } catch (error) {
         console.error("Error fetching EVM spending limits:", error);
         // If the function doesn't exist, user hasn't set any limits yet
@@ -2151,6 +2150,12 @@ function AppContent() {
     contract = savingsContract,
     userAddr = null
   ) => {
+    // Only run for EVM network
+    if (networkType !== 'evm') {
+      console.log(`⏭️ Skipping fetchWithdrawalAddresses for ${networkType} network`);
+      return;
+    }
+
     const currentUserAddress = userAddr || userAddress;
     if (!contract || !currentUserAddress) return;
 
@@ -2180,6 +2185,12 @@ function AppContent() {
     contract = savingsContract,
     userAddr = null
   ) => {
+    // Only run for EVM network
+    if (networkType !== 'evm') {
+      console.log(`⏭️ Skipping fetchPendingWithdrawalRequests for ${networkType} network`);
+      return;
+    }
+
     const currentUserAddress = userAddr || userAddress;
     if (!contract || !currentUserAddress) return;
 
@@ -2447,6 +2458,12 @@ function AppContent() {
     contract = savingsContract,
     userAddr = null
   ) => {
+    // Only run for EVM network
+    if (networkType !== 'evm') {
+      console.log(`⏭️ Skipping fetchPendingBypassRequests for ${networkType} network`);
+      return;
+    }
+
     const currentUserAddress = userAddr || userAddress;
     const currentContract = contract || savingsContract;
 
@@ -3249,7 +3266,7 @@ function AppContent() {
                   const existingLimit = spendingLimits.find(
                     (limit) => limit.name === periodName
                   );
-                  const isActive = existingLimit !== undefined; // Only use contract data for active state
+                  const isActive = existingLimit !== undefined && existingLimit.active !== false; // Check both existence and active field
 
                   const progressPercent = existingLimit
                     ? (parseFloat(existingLimit.spent) /
@@ -3494,11 +3511,28 @@ function AppContent() {
                               >
                                 📝 Submit Proposal
                               </button>
-                            ) : null}
+                            ) : (
+                              <button
+                                onClick={() => saveLimitChanges()}
+                                style={{
+                                  flex: 1,
+                                  padding: "8px",
+                                  borderRadius: "4px",
+                                  border: "none",
+                                  backgroundColor: "#48bb78",
+                                  color: "white",
+                                  cursor: "pointer",
+                                  fontSize: "0.9em",
+                                  fontWeight: "bold",
+                                }}
+                              >
+                                💾 Save Changes
+                              </button>
+                            )}
                             <button
                               onClick={() => toggleEditMode(periodName)}
                               style={{
-                                flex: isSetupCommitted ? 0 : 1,
+                                flex: 1,
                                 padding: "8px",
                                 borderRadius: "4px",
                                 border: "1px solid #4a5568",
@@ -3880,10 +3914,10 @@ function AppContent() {
             </div>
 
             {/* Pending Limit Proposals Section */}
-            {isSetupCommitted && pendingLimitProposals.length > 0 && (
+            {pendingLimitProposals.length > 0 && (
               <div style={{ marginBottom: "20px" }}>
                 <h4 style={{ color: "#ed8936", margin: "0 0 15px 0" }}>
-                  ⏳ Pending Limit Proposals ({pendingLimitProposals.length})
+                  ⏳ Pending Limit Changes ({pendingLimitProposals.length})
                 </h4>
                 <p
                   style={{
@@ -3892,8 +3926,10 @@ function AppContent() {
                     marginBottom: "15px",
                   }}
                 >
-                  These limit change proposals are waiting for the timelock
-                  period to expire before they can be executed.
+                  {networkType === 'evm'
+                    ? 'These limit change proposals are waiting for the timelock period to expire before they can be executed.'
+                    : 'These limit changes are waiting for the timelock period to expire before they can be applied.'
+                  }
                 </p>
 
                 <div style={{ display: "grid", gap: "10px" }}>
@@ -3901,6 +3937,12 @@ function AppContent() {
                     const isReady =
                       proposal.executeAfter &&
                       currentTime >= proposal.executeAfter;
+
+                    // Calculate real-time countdown
+                    const timeRemaining = proposal.executeAfter
+                      ? Math.max(0, proposal.executeAfter - currentTime)
+                      : 0;
+                    const countdownText = formatTimeRemaining(timeRemaining);
 
                     return (
                       <div
@@ -3947,7 +3989,7 @@ function AppContent() {
                                 fontWeight: "bold",
                               }}
                             >
-                              {isReady ? "✅ Ready" : "⏰ Pending"}
+                              {isReady ? "✅ Ready" : `⏰ ${countdownText}`}
                             </span>
                           </div>
                           <div style={{ fontSize: "0.8em", color: "#a0aec0" }}>

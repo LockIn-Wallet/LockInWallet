@@ -95,6 +95,9 @@ pub struct SpendingLimitsAccount {
     /// Array of time-based spending limits (Daily, Weekly, Monthly, Custom)
     pub time_period_limits: Vec<TimePeriodLimit>,
 
+    /// Pending proposals for limit changes (mirrors EVM proposal system)
+    pub pending_proposals: Vec<PendingProposal>,
+
     /// Setup and configuration data
     pub setup_data: UserSetupData,
 
@@ -130,6 +133,31 @@ pub struct TimePeriodLimit {
     pub active: bool,
 }
 
+/// Pending proposal for spending limit changes (mirrors EVM proposal system)
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Debug, PartialEq)]
+pub struct PendingProposal {
+    /// Unique identifier for this proposal
+    pub proposal_id: [u8; 32],
+
+    /// Period name being modified ("Daily", "Weekly", "Monthly", etc.)
+    pub period_name: String,
+
+    /// New limit being proposed
+    pub new_limit: u64,
+
+    /// Unix timestamp when this proposal can be executed
+    pub execute_after: i64,
+
+    /// Whether this proposal has been executed
+    pub executed: bool,
+
+    /// Whether this is a limit increase (true) or decrease/removal (false)
+    pub is_increase: bool,
+
+    /// When this proposal was created
+    pub created_at: i64,
+}
+
 /// User setup and configuration data (mirrors EVM UserSetupData struct)
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Debug, PartialEq, Default)]
 pub struct UserSetupData {
@@ -161,6 +189,7 @@ impl SpendingLimitsAccount {
     pub const STRING_OVERHEAD: usize = 4; // String length prefix
     pub const MAX_NAME_LENGTH: usize = 32; // Max characters for period name
     pub const MAX_PERIODS: usize = 10; // Support up to 10 different time periods
+    pub const MAX_PROPOSALS: usize = 5; // Support up to 5 pending proposals
 
     // TimePeriodLimit size calculation
     pub const TIME_PERIOD_LIMIT_SIZE: usize = Self::U64_SIZE // limit
@@ -169,6 +198,15 @@ impl SpendingLimitsAccount {
         + Self::U64_SIZE // duration
         + Self::STRING_OVERHEAD + Self::MAX_NAME_LENGTH // name
         + Self::BOOL_SIZE; // active
+
+    // PendingProposal size calculation
+    pub const PENDING_PROPOSAL_SIZE: usize = 32 // proposal_id ([u8; 32])
+        + Self::STRING_OVERHEAD + Self::MAX_NAME_LENGTH // period_name
+        + Self::U64_SIZE // new_limit
+        + Self::I64_SIZE // execute_after
+        + Self::BOOL_SIZE // executed
+        + Self::BOOL_SIZE // is_increase
+        + Self::I64_SIZE; // created_at
 
     // UserSetupData size calculation
     pub const USER_SETUP_DATA_SIZE: usize = Self::BOOL_SIZE // has_committed_setup
@@ -180,6 +218,7 @@ impl SpendingLimitsAccount {
     pub const INIT_SPACE: usize = Self::DISCRIMINATOR_SIZE
         + Self::PUBKEY_SIZE // owner
         + Self::VEC_OVERHEAD + (Self::TIME_PERIOD_LIMIT_SIZE * Self::MAX_PERIODS) // time_period_limits
+        + Self::VEC_OVERHEAD + (Self::PENDING_PROPOSAL_SIZE * Self::MAX_PROPOSALS) // pending_proposals
         + Self::USER_SETUP_DATA_SIZE // setup_data
         + Self::U8_SIZE // bump
         + Self::I64_SIZE // created_at

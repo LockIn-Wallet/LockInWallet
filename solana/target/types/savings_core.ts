@@ -83,6 +83,72 @@ export type SavingsCore = {
       ]
     },
     {
+      "name": "cancelLimitProposal",
+      "docs": [
+        "Cancel a pending proposal"
+      ],
+      "discriminator": [
+        201,
+        126,
+        142,
+        5,
+        126,
+        97,
+        232,
+        133
+      ],
+      "accounts": [
+        {
+          "name": "spendingLimitsAccount",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  112,
+                  101,
+                  110,
+                  100,
+                  105,
+                  110,
+                  103,
+                  95,
+                  108,
+                  105,
+                  109,
+                  105,
+                  116,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "user"
+              }
+            ]
+          }
+        },
+        {
+          "name": "user",
+          "writable": true,
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "proposalId",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        }
+      ]
+    },
+    {
       "name": "commitInitialSetup",
       "docs": [
         "Commit initial setup"
@@ -613,6 +679,72 @@ export type SavingsCore = {
       ]
     },
     {
+      "name": "executeLimitProposal",
+      "docs": [
+        "Execute a pending proposal"
+      ],
+      "discriminator": [
+        77,
+        88,
+        235,
+        59,
+        216,
+        111,
+        1,
+        133
+      ],
+      "accounts": [
+        {
+          "name": "spendingLimitsAccount",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  112,
+                  101,
+                  110,
+                  100,
+                  105,
+                  110,
+                  103,
+                  95,
+                  108,
+                  105,
+                  109,
+                  105,
+                  116,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "user"
+              }
+            ]
+          }
+        },
+        {
+          "name": "user",
+          "writable": true,
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "proposalId",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        }
+      ]
+    },
+    {
       "name": "getSolBalance",
       "docs": [
         "Get user's total SOL balance"
@@ -876,6 +1008,71 @@ export type SavingsCore = {
         }
       ],
       "args": []
+    },
+    {
+      "name": "proposeLimitChange",
+      "docs": [
+        "Propose a spending limit change"
+      ],
+      "discriminator": [
+        146,
+        253,
+        178,
+        82,
+        191,
+        64,
+        35,
+        251
+      ],
+      "accounts": [
+        {
+          "name": "spendingLimitsAccount",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  112,
+                  101,
+                  110,
+                  100,
+                  105,
+                  110,
+                  103,
+                  95,
+                  108,
+                  105,
+                  109,
+                  105,
+                  116,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "user"
+              }
+            ]
+          }
+        },
+        {
+          "name": "user",
+          "writable": true,
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "periodName",
+          "type": "string"
+        },
+        {
+          "name": "newLimit",
+          "type": "u64"
+        }
+      ]
     },
     {
       "name": "removeTimePeriodLimit",
@@ -1605,6 +1802,71 @@ export type SavingsCore = {
   ],
   "types": [
     {
+      "name": "pendingProposal",
+      "docs": [
+        "Pending proposal for spending limit changes (mirrors EVM proposal system)"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "proposalId",
+            "docs": [
+              "Unique identifier for this proposal"
+            ],
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "periodName",
+            "docs": [
+              "Period name being modified (\"Daily\", \"Weekly\", \"Monthly\", etc.)"
+            ],
+            "type": "string"
+          },
+          {
+            "name": "newLimit",
+            "docs": [
+              "New limit being proposed"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "executeAfter",
+            "docs": [
+              "Unix timestamp when this proposal can be executed"
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "executed",
+            "docs": [
+              "Whether this proposal has been executed"
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "isIncrease",
+            "docs": [
+              "Whether this is a limit increase (true) or decrease/removal (false)"
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "createdAt",
+            "docs": [
+              "When this proposal was created"
+            ],
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
       "name": "savingsAccount",
       "docs": [
         "Main savings account that stores user's deposit information",
@@ -1689,6 +1951,19 @@ export type SavingsCore = {
               "vec": {
                 "defined": {
                   "name": "timePeriodLimit"
+                }
+              }
+            }
+          },
+          {
+            "name": "pendingProposals",
+            "docs": [
+              "Pending proposals for limit changes (mirrors EVM proposal system)"
+            ],
+            "type": {
+              "vec": {
+                "defined": {
+                  "name": "pendingProposal"
                 }
               }
             }

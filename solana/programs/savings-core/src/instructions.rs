@@ -673,6 +673,7 @@ pub fn initialize_spending_limits(ctx: Context<InitializeSpendingLimits>) -> Res
 
     spending_limits_account.owner = user.key();
     spending_limits_account.time_period_limits = Vec::new();
+    spending_limits_account.pending_proposals = Vec::new();
     spending_limits_account.setup_data = UserSetupData::default();
     spending_limits_account.bump = ctx.bumps.spending_limits_account;
     spending_limits_account.created_at = clock.unix_timestamp;
@@ -929,6 +930,234 @@ pub fn withdraw_spl_with_limits(ctx: Context<WithdrawSplWithLimits>, amount: u64
         amount,
         mint.key()
     );
+
+    Ok(())
+}
+
+// ========== PROPOSAL MANAGEMENT INSTRUCTIONS ==========
+
+/// Propose a spending limit change
+#[derive(Accounts)]
+pub struct ProposeLimitChange<'info> {
+    #[account(
+        mut,
+        seeds = [b"spending_limits", user.key().as_ref()],
+        bump = spending_limits_account.bump,
+        constraint = spending_limits_account.owner == user.key() @ ErrorCode::UnauthorizedAccess
+    )]
+    pub spending_limits_account: Account<'info, SpendingLimitsAccount>,
+
+    #[account(mut)]
+    pub user: Signer<'info>,
+}
+
+/// Execute a pending proposal
+#[derive(Accounts)]
+pub struct ExecuteLimitProposal<'info> {
+    #[account(
+        mut,
+        seeds = [b"spending_limits", user.key().as_ref()],
+        bump = spending_limits_account.bump,
+        constraint = spending_limits_account.owner == user.key() @ ErrorCode::UnauthorizedAccess
+    )]
+    pub spending_limits_account: Account<'info, SpendingLimitsAccount>,
+
+    #[account(mut)]
+    pub user: Signer<'info>,
+}
+
+/// Cancel a pending proposal
+#[derive(Accounts)]
+pub struct CancelLimitProposal<'info> {
+    #[account(
+        mut,
+        seeds = [b"spending_limits", user.key().as_ref()],
+        bump = spending_limits_account.bump,
+        constraint = spending_limits_account.owner == user.key() @ ErrorCode::UnauthorizedAccess
+    )]
+    pub spending_limits_account: Account<'info, SpendingLimitsAccount>,
+
+    #[account(mut)]
+    pub user: Signer<'info>,
+}
+
+// ========== PROPOSAL MANAGEMENT INSTRUCTION IMPLEMENTATIONS ==========
+
+/// Propose a spending limit change instruction
+pub fn propose_limit_change(
+    ctx: Context<ProposeLimitChange>,
+    period_name: String,
+    new_limit: u64,
+) -> Result<()> {
+    require!(!period_name.is_empty() && period_name.len() <= SpendingLimitsAccount::MAX_NAME_LENGTH, ErrorCode::InvalidLimitParameters);
+    require!(new_limit > 0, ErrorCode::InvalidLimitParameters);
+
+    let spending_limits_account = &mut ctx.accounts.spending_limits_account;
+    let clock = Clock::get()?;
+
+    // Check if setup is committed (required for proposals)
+    require!(
+        spending_limits_account.setup_data.has_committed_setup,
+        ErrorCode::SetupNotCommitted
+    );
+
+    // Check if period exists
+    let mut period_exists = false;
+    for period in &spending_limits_account.time_period_limits {
+        if period.name == period_name && period.active {
+            period_exists = true;
+            break;
+        }
+    }
+    require!(period_exists, ErrorCode::InvalidLimitParameters);
+
+    // Check if we have room for more proposals
+    if spending_limits_account.pending_proposals.len() >= SpendingLimitsAccount::MAX_PROPOSALS {
+        return Err(ErrorCode::TokenLimitExceeded.into());
+    }
+
+    // Check if proposal already exists for this period
+    for proposal in &spending_limits_account.pending_proposals {
+        if proposal.period_name == period_name && !proposal.executed {
+            return Err(ErrorCode::InvalidLimitParameters.into());
+        }
+    }
+
+    // Generate unique proposal ID
+    let mut hasher_input = Vec::new();
+    hasher_input.extend_from_slice(ctx.accounts.user.key().as_ref());
+    hasher_input.extend_from_slice(period_name.as_bytes());
+    hasher_input.extend_from_slice(&new_limit.to_le_bytes());
+    hasher_input.extend_from_slice(&clock.unix_timestamp.to_le_bytes());
+
+    let proposal_id = anchor_lang::solana_program::keccak::hash(&hasher_input).to_bytes();
+
+    // Create proposal with timelock (24 hours in production, 30 seconds for development)
+    let timelock_duration = 24 * 60 * 60; // 24 hours
+    let execute_after = clock.unix_timestamp + timelock_duration;
+
+    // Determine if this is an increase
+    let current_limit = spending_limits_account.time_period_limits
+        .iter()
+        .find(|p| p.name == period_name && p.active)
+        .map(|p| p.limit)
+        .unwrap_or(0);
+    let is_increase = new_limit > current_limit;
+
+    let proposal = crate::state::PendingProposal {
+        proposal_id,
+        period_name: period_name.clone(),
+        new_limit,
+        execute_after,
+        executed: false,
+        is_increase,
+        created_at: clock.unix_timestamp,
+    };
+
+    spending_limits_account.pending_proposals.push(proposal);
+    spending_limits_account.updated_at = clock.unix_timestamp;
+
+    msg!(
+        "Proposed limit change for {}: {} -> {} (execute after: {})",
+        period_name,
+        current_limit,
+        new_limit,
+        execute_after
+    );
+
+    Ok(())
+}
+
+/// Execute a pending proposal instruction
+pub fn execute_limit_proposal(
+    ctx: Context<ExecuteLimitProposal>,
+    proposal_id: [u8; 32],
+) -> Result<()> {
+    let spending_limits_account = &mut ctx.accounts.spending_limits_account;
+    let clock = Clock::get()?;
+
+    // Find the proposal
+    let mut proposal_index = None;
+    for (index, proposal) in spending_limits_account.pending_proposals.iter().enumerate() {
+        if proposal.proposal_id == proposal_id {
+            proposal_index = Some(index);
+            break;
+        }
+    }
+
+    let proposal_index = proposal_index.ok_or(ErrorCode::InvalidLimitParameters)?;
+
+    // Get proposal details before mutable borrow
+    let (period_name, new_limit, executed, execute_after) = {
+        let proposal = &spending_limits_account.pending_proposals[proposal_index];
+        (
+            proposal.period_name.clone(),
+            proposal.new_limit,
+            proposal.executed,
+            proposal.execute_after,
+        )
+    };
+
+    // Check if already executed
+    require!(!executed, ErrorCode::InvalidLimitParameters);
+
+    // Check if timelock has passed
+    require!(
+        clock.unix_timestamp >= execute_after,
+        ErrorCode::InvalidLimitParameters
+    );
+
+    // Execute the proposal by updating the corresponding limit
+    for period in &mut spending_limits_account.time_period_limits {
+        if period.name == period_name && period.active {
+            period.limit = new_limit;
+            break;
+        }
+    }
+
+    // Mark proposal as executed
+    spending_limits_account.pending_proposals[proposal_index].executed = true;
+    spending_limits_account.updated_at = clock.unix_timestamp;
+
+    msg!(
+        "Executed proposal for {}: new limit {}",
+        period_name,
+        new_limit
+    );
+
+    Ok(())
+}
+
+/// Cancel a pending proposal instruction
+pub fn cancel_limit_proposal(
+    ctx: Context<CancelLimitProposal>,
+    proposal_id: [u8; 32],
+) -> Result<()> {
+    let spending_limits_account = &mut ctx.accounts.spending_limits_account;
+    let clock = Clock::get()?;
+
+    // Find and remove the proposal
+    let mut proposal_index = None;
+    for (index, proposal) in spending_limits_account.pending_proposals.iter().enumerate() {
+        if proposal.proposal_id == proposal_id {
+            proposal_index = Some(index);
+            break;
+        }
+    }
+
+    let proposal_index = proposal_index.ok_or(ErrorCode::InvalidLimitParameters)?;
+    let proposal = &spending_limits_account.pending_proposals[proposal_index];
+
+    // Check if already executed
+    require!(!proposal.executed, ErrorCode::InvalidLimitParameters);
+
+    let period_name = proposal.period_name.clone();
+
+    // Remove the proposal
+    spending_limits_account.pending_proposals.remove(proposal_index);
+    spending_limits_account.updated_at = clock.unix_timestamp;
+
+    msg!("Cancelled proposal for {}", period_name);
 
     Ok(())
 }

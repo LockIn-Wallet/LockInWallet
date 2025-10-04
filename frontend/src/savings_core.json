@@ -77,6 +77,72 @@
       ]
     },
     {
+      "name": "cancel_limit_proposal",
+      "docs": [
+        "Cancel a pending proposal"
+      ],
+      "discriminator": [
+        201,
+        126,
+        142,
+        5,
+        126,
+        97,
+        232,
+        133
+      ],
+      "accounts": [
+        {
+          "name": "spending_limits_account",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  112,
+                  101,
+                  110,
+                  100,
+                  105,
+                  110,
+                  103,
+                  95,
+                  108,
+                  105,
+                  109,
+                  105,
+                  116,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "user"
+              }
+            ]
+          }
+        },
+        {
+          "name": "user",
+          "writable": true,
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "proposal_id",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        }
+      ]
+    },
+    {
       "name": "commit_initial_setup",
       "docs": [
         "Commit initial setup"
@@ -607,6 +673,72 @@
       ]
     },
     {
+      "name": "execute_limit_proposal",
+      "docs": [
+        "Execute a pending proposal"
+      ],
+      "discriminator": [
+        77,
+        88,
+        235,
+        59,
+        216,
+        111,
+        1,
+        133
+      ],
+      "accounts": [
+        {
+          "name": "spending_limits_account",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  112,
+                  101,
+                  110,
+                  100,
+                  105,
+                  110,
+                  103,
+                  95,
+                  108,
+                  105,
+                  109,
+                  105,
+                  116,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "user"
+              }
+            ]
+          }
+        },
+        {
+          "name": "user",
+          "writable": true,
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "proposal_id",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        }
+      ]
+    },
+    {
       "name": "get_sol_balance",
       "docs": [
         "Get user's total SOL balance"
@@ -870,6 +1002,71 @@
         }
       ],
       "args": []
+    },
+    {
+      "name": "propose_limit_change",
+      "docs": [
+        "Propose a spending limit change"
+      ],
+      "discriminator": [
+        146,
+        253,
+        178,
+        82,
+        191,
+        64,
+        35,
+        251
+      ],
+      "accounts": [
+        {
+          "name": "spending_limits_account",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  112,
+                  101,
+                  110,
+                  100,
+                  105,
+                  110,
+                  103,
+                  95,
+                  108,
+                  105,
+                  109,
+                  105,
+                  116,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "user"
+              }
+            ]
+          }
+        },
+        {
+          "name": "user",
+          "writable": true,
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "period_name",
+          "type": "string"
+        },
+        {
+          "name": "new_limit",
+          "type": "u64"
+        }
+      ]
     },
     {
       "name": "remove_time_period_limit",
@@ -1649,6 +1846,71 @@
   ],
   "types": [
     {
+      "name": "PendingProposal",
+      "docs": [
+        "Pending proposal for spending limit changes (mirrors EVM proposal system)"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "proposal_id",
+            "docs": [
+              "Unique identifier for this proposal"
+            ],
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "period_name",
+            "docs": [
+              "Period name being modified (\"Daily\", \"Weekly\", \"Monthly\", etc.)"
+            ],
+            "type": "string"
+          },
+          {
+            "name": "new_limit",
+            "docs": [
+              "New limit being proposed"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "execute_after",
+            "docs": [
+              "Unix timestamp when this proposal can be executed"
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "executed",
+            "docs": [
+              "Whether this proposal has been executed"
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "is_increase",
+            "docs": [
+              "Whether this is a limit increase (true) or decrease/removal (false)"
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "created_at",
+            "docs": [
+              "When this proposal was created"
+            ],
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
       "name": "SavingsAccount",
       "docs": [
         "Main savings account that stores user's deposit information",
@@ -1728,6 +1990,15 @@
             ],
             "type": {
               "vec": "TimePeriodLimit"
+            }
+          },
+          {
+            "name": "pending_proposals",
+            "docs": [
+              "Pending proposals for limit changes (mirrors EVM proposal system)"
+            ],
+            "type": {
+              "vec": "PendingProposal"
             }
           },
           {

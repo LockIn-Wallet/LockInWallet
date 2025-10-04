@@ -125,4 +125,31 @@ pub mod savings_core {
     pub fn withdraw_spl_with_limits(ctx: Context<WithdrawSplWithLimits>, amount: u64) -> Result<()> {
         instructions::withdraw_spl_with_limits(ctx, amount)
     }
+
+    // ========== PROPOSAL MANAGEMENT INSTRUCTIONS ==========
+
+    /// Propose a spending limit change
+    pub fn propose_limit_change(
+        ctx: Context<ProposeLimitChange>,
+        period_name: String,
+        new_limit: u64,
+    ) -> Result<()> {
+        instructions::propose_limit_change(ctx, period_name, new_limit)
+    }
+
+    /// Execute a pending proposal
+    pub fn execute_limit_proposal(
+        ctx: Context<ExecuteLimitProposal>,
+        proposal_id: [u8; 32],
+    ) -> Result<()> {
+        instructions::execute_limit_proposal(ctx, proposal_id)
+    }
+
+    /// Cancel a pending proposal
+    pub fn cancel_limit_proposal(
+        ctx: Context<CancelLimitProposal>,
+        proposal_id: [u8; 32],
+    ) -> Result<()> {
+        instructions::cancel_limit_proposal(ctx, proposal_id)
+    }
 }

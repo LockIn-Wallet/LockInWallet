@@ -347,4 +347,21 @@ export class TransactionManager {
     }
     return null;
   }
+
+  // Proposal Management Methods (for unified interface)
+  async proposeLimitChange(periodName, newLimit) {
+    return await this.getCurrentAdapter().proposeLimitChange(periodName, newLimit);
+  }
+
+  async fetchPendingProposals(userAddress) {
+    return await this.getCurrentAdapter().fetchPendingProposals(userAddress);
+  }
+
+  async executeLimitProposal(proposalId) {
+    return await this.getCurrentAdapter().executeLimitProposal(proposalId);
+  }
+
+  async cancelLimitProposal(proposalId) {
+    return await this.getCurrentAdapter().cancelLimitProposal(proposalId);
+  }
 }
