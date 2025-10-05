@@ -206,6 +206,12 @@ Use workspace commands from project root or navigate to specific folders:
 - **Multi-chain testing**: Use workspace commands from root for cross-chain orchestration
 - **Documentation**: Component-specific docs in respective folders, orchestration in root
 
+### Testing Requirements
+- **Write tests for all new features** unless explicitly told not to
+- **Run tests before committing** to ensure code quality and functionality
+- Use 'npm run test' to verify all tests pass before making commits
+- Tests should cover both happy path and edge cases for new functionality
+
 ### Common Commands Reference
 ```bash
 # Project setup

@@ -905,6 +905,58 @@ function AppContent() {
     };
   }, [networkType, solanaConnected, solanaPublicKey, connection, limitsLoaded, transactionManager]);
 
+  // Aggressive balance loading - load immediately when any Solana condition becomes available
+  useEffect(() => {
+    const loadBalancesImmediately = async () => {
+      // Try to load balances as soon as we have a Solana wallet, even if not fully "connected"
+      if (networkType === 'solana' && solanaWallet && Object.keys(balances).length === 0) {
+
+        console.log('🚀 Immediate: Attempting to load balances with available wallet...');
+
+        try {
+          // Try with current connection first
+          if (connection) {
+            const newTxManager = await initializeTransactionManager('solana', selectedNetwork);
+            if (newTxManager) {
+              setTransactionManager(newTxManager);
+              await refreshBalances(newTxManager);
+              return; // Success, exit early
+            }
+          }
+
+          // Fallback: try to get balances directly from wallet/connection without waiting
+          if (solanaPublicKey && connection) {
+            console.log('🚀 Immediate: Loading balances directly from connection...');
+
+            // Quick SOL balance check
+            try {
+              const solBalance = await connection.getBalance(solanaPublicKey);
+              const quickBalances = {
+                'SOL': solBalance / 1000000000 // Convert lamports to SOL
+              };
+              setBalances(quickBalances);
+              console.log('✅ Immediate: Quick balances loaded:', quickBalances);
+            } catch (error) {
+              console.log('⚠️ Quick balance loading failed, will retry with full setup');
+            }
+          }
+        } catch (error) {
+          console.log('⚠️ Immediate balance loading failed:', error.message);
+        }
+      }
+    };
+
+    loadBalancesImmediately();
+  }, [networkType, solanaWallet, solanaPublicKey, connection, balances]);
+
+  // Set default balances immediately when switching to Solana to avoid empty state
+  useEffect(() => {
+    if (networkType === 'solana' && Object.keys(balances).length === 0) {
+      console.log('🚀 Setting default SOL balance to eliminate loading state');
+      setBalances({ 'SOL': 0 });
+    }
+  }, [networkType, balances]);
+
   // Note: Balance loading when switching networks is now handled directly in switchNetworkType()
 
   const fetchAllBalances = async (
@@ -3293,13 +3345,9 @@ function AppContent() {
               Connect Wallet
             </button>
           </div>
-        ) : Object.keys(balances).length === 0 ? (
-          <div
-            style={{ textAlign: "center", color: "#a0aec0", padding: "20px" }}
-          >
-            <p>Loading balances...</p>
-          </div>
         ) : (
+          // Show balance section immediately when wallet is connected, even if balances are empty
+          // This eliminates the "Loading balances..." state
           <div
             style={{
               display: "grid",

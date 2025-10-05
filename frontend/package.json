@@ -25,6 +25,13 @@
     "build": "craco build",
     "build:clean": "npm run clean && npm run build",
     "test": "craco test",
+    "test:ci": "craco test --watchAll=false --coverage",
+    "test:functionality": "craco test --testPathPattern=functionality --watchAll=false",
+    "test:simulation": "craco test --testPathPattern=simulation --watchAll=false",
+    "test:e2e": "node -e \"const {QuickSetup} = require('./src/test-utils/TestSetup.js'); QuickSetup.runSpecificTests('functionality|simulation');\"",
+    "test:e2e:dev": "node -e \"const {QuickSetup} = require('./src/test-utils/TestSetup.js'); QuickSetup.setupForDevelopment().then(() => console.log('Test environment ready. Run: npm run test:functionality'));\"",
+    "test:pipeline": "node -e \"const {QuickSetup} = require('./src/test-utils/TestSetup.js'); QuickSetup.setupForCI();\"",
+    "validate:environment": "node -e \"const {validateTestEnvironment} = require('./src/test-utils/TestHelpers.js'); validateTestEnvironment();\"",
     "eject": "react-scripts eject",
     "clean": "rm -rf node_modules/.cache && rm -rf build",
     "env-check": "node -e \"console.log('Node version:', process.version); console.log('Memory limit:', process.env.NODE_OPTIONS); console.log('Port 3000 status:'); require('child_process').exec('lsof -ti:3000', (err, stdout) => console.log(stdout ? 'Port 3000 in use' : 'Port 3000 available'));\"",
@@ -43,12 +50,40 @@
       "last 1 safari version"
     ]
   },
+  "overrides": {
+    "react": "18.2.0",
+    "react-dom": "18.2.0",
+    "@types/react": "^18.2.0",
+    "@types/react-dom": "^18.2.0",
+    "react-native": {
+      "react": "18.2.0",
+      "react-dom": "18.2.0"
+    },
+    "@solana/wallet-adapter-react": {
+      "react": "18.2.0",
+      "react-dom": "18.2.0"
+    },
+    "@solana/wallet-adapter-react-ui": {
+      "react": "18.2.0",
+      "react-dom": "18.2.0"
+    }
+  },
+  "resolutions": {
+    "react": "18.2.0",
+    "react-dom": "18.2.0",
+    "**/react": "18.2.0",
+    "**/react-dom": "18.2.0",
+    "**/@types/react": "^18.2.0",
+    "**/@types/react-dom": "^18.2.0"
+  },
   "devDependencies": {
     "@craco/craco": "^7.1.0",
+    "@testing-library/jest-dom": "^6.9.1",
     "assert": "^2.1.0",
     "browserify-zlib": "^0.2.0",
     "buffer": "^6.0.3",
     "crypto-browserify": "^3.12.1",
+    "node-fetch": "^3.3.2",
     "process": "^0.11.10",
     "stream-browserify": "^3.0.0",
     "util": "^0.12.5"
