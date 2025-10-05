@@ -22,6 +22,12 @@ pub struct SavingsAccount {
 
     /// Last update timestamp
     pub updated_at: i64,
+
+    /// Approved withdrawal destinations (addresses user can withdraw to)
+    pub withdrawal_destinations: Vec<WithdrawalDestination>,
+
+    /// Pending bypass requests for withdrawals exceeding spending limits
+    pub pending_bypass_requests: Vec<BypassRequest>,
 }
 
 /// Represents a balance for a specific SPL token
@@ -34,6 +40,53 @@ pub struct TokenBalance {
     pub amount: u64,
 }
 
+/// Represents an approved withdrawal destination address
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Debug, PartialEq)]
+pub struct WithdrawalDestination {
+    /// The destination address
+    pub address: Pubkey,
+
+    /// Optional title/label for this destination
+    pub title: String,
+
+    /// When this destination was added
+    pub added_at: i64,
+
+    /// Whether this destination is currently active
+    pub active: bool,
+}
+
+/// Represents a pending bypass request for withdrawals exceeding spending limits
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Debug, PartialEq)]
+pub struct BypassRequest {
+    /// Unique identifier for this request
+    pub request_id: [u8; 32],
+
+    /// Amount to withdraw (in lamports for SOL, token units for SPL)
+    pub amount: u64,
+
+    /// Token mint (use System Program ID for SOL)
+    pub token_mint: Pubkey,
+
+    /// Which spending period this request is bypassing
+    pub bypassing_period: String,
+
+    /// Destination address for the withdrawal
+    pub destination: Pubkey,
+
+    /// Unix timestamp when this request can be executed (24 hours after creation)
+    pub execute_after: i64,
+
+    /// Whether this request has been executed
+    pub executed: bool,
+
+    /// Whether this request has been cancelled
+    pub cancelled: bool,
+
+    /// When this request was created
+    pub created_at: i64,
+}
+
 impl SavingsAccount {
     /// Size calculation for account space allocation
     pub const DISCRIMINATOR_SIZE: usize = 8;
@@ -42,8 +95,31 @@ impl SavingsAccount {
     pub const U8_SIZE: usize = 1;
     pub const I64_SIZE: usize = 8;
     pub const VEC_OVERHEAD: usize = 4; // Vec length prefix
+    pub const STRING_OVERHEAD: usize = 4; // String length prefix
+    pub const BOOL_SIZE: usize = 1;
     pub const TOKEN_BALANCE_SIZE: usize = 32 + 8; // Pubkey + u64
     pub const MAX_TOKENS: usize = 10; // Support up to 10 different tokens initially
+    pub const MAX_WITHDRAWAL_DESTINATIONS: usize = 20; // Support up to 20 withdrawal destinations
+    pub const MAX_BYPASS_REQUESTS: usize = 10; // Support up to 10 pending bypass requests
+    pub const MAX_TITLE_LENGTH: usize = 64; // Max characters for destination title
+    pub const MAX_PERIOD_NAME_LENGTH: usize = 32; // Max characters for period name
+
+    // WithdrawalDestination size calculation
+    pub const WITHDRAWAL_DESTINATION_SIZE: usize = Self::PUBKEY_SIZE // address
+        + Self::STRING_OVERHEAD + Self::MAX_TITLE_LENGTH // title
+        + Self::I64_SIZE // added_at
+        + Self::BOOL_SIZE; // active
+
+    // BypassRequest size calculation
+    pub const BYPASS_REQUEST_SIZE: usize = 32 // request_id ([u8; 32])
+        + Self::U64_SIZE // amount
+        + Self::PUBKEY_SIZE // token_mint
+        + Self::STRING_OVERHEAD + Self::MAX_PERIOD_NAME_LENGTH // bypassing_period
+        + Self::PUBKEY_SIZE // destination
+        + Self::I64_SIZE // execute_after
+        + Self::BOOL_SIZE // executed
+        + Self::BOOL_SIZE // cancelled
+        + Self::I64_SIZE; // created_at
 
     pub const INIT_SPACE: usize = Self::DISCRIMINATOR_SIZE
         + Self::PUBKEY_SIZE // owner
@@ -51,7 +127,9 @@ impl SavingsAccount {
         + Self::VEC_OVERHEAD + (Self::TOKEN_BALANCE_SIZE * Self::MAX_TOKENS) // spl_balances
         + Self::U8_SIZE // bump
         + Self::I64_SIZE // created_at
-        + Self::I64_SIZE; // updated_at
+        + Self::I64_SIZE // updated_at
+        + Self::VEC_OVERHEAD + (Self::WITHDRAWAL_DESTINATION_SIZE * Self::MAX_WITHDRAWAL_DESTINATIONS) // withdrawal_destinations
+        + Self::VEC_OVERHEAD + (Self::BYPASS_REQUEST_SIZE * Self::MAX_BYPASS_REQUESTS); // pending_bypass_requests
 
     /// Update or add a token balance
     pub fn update_token_balance(&mut self, mint: Pubkey, amount: u64) -> Result<()> {
@@ -81,6 +159,124 @@ impl SavingsAccount {
             }
         }
         0
+    }
+
+    /// Add a new withdrawal destination
+    pub fn add_withdrawal_destination(&mut self, address: Pubkey, title: String, current_time: i64) -> Result<()> {
+        require!(!title.is_empty() && title.len() <= Self::MAX_TITLE_LENGTH, crate::error::ErrorCode::InvalidParameters);
+        require!(self.withdrawal_destinations.len() < Self::MAX_WITHDRAWAL_DESTINATIONS, crate::error::ErrorCode::TooManyDestinations);
+
+        // Check if destination already exists
+        for dest in &self.withdrawal_destinations {
+            if dest.address == address && dest.active {
+                return Err(crate::error::ErrorCode::DestinationAlreadyExists.into());
+            }
+        }
+
+        // Check if user is trying to add their own address (not allowed for security)
+        require!(address != self.owner, crate::error::ErrorCode::CannotSetOwnAddress);
+
+        self.withdrawal_destinations.push(WithdrawalDestination {
+            address,
+            title,
+            added_at: current_time,
+            active: true,
+        });
+
+        Ok(())
+    }
+
+    /// Remove a withdrawal destination
+    pub fn remove_withdrawal_destination(&mut self, address: Pubkey) -> Result<()> {
+        for dest in &mut self.withdrawal_destinations {
+            if dest.address == address && dest.active {
+                dest.active = false;
+                return Ok(());
+            }
+        }
+        Err(crate::error::ErrorCode::DestinationNotFound.into())
+    }
+
+    /// Check if a destination is approved
+    pub fn is_destination_approved(&self, address: Pubkey) -> bool {
+        // Owner can always withdraw to self
+        if address == self.owner {
+            return true;
+        }
+
+        for dest in &self.withdrawal_destinations {
+            if dest.address == address && dest.active {
+                return true;
+            }
+        }
+        false
+    }
+
+    /// Add a new bypass request
+    pub fn add_bypass_request(
+        &mut self,
+        request_id: [u8; 32],
+        amount: u64,
+        token_mint: Pubkey,
+        bypassing_period: String,
+        destination: Pubkey,
+        current_time: i64,
+    ) -> Result<()> {
+        require!(self.pending_bypass_requests.len() < Self::MAX_BYPASS_REQUESTS, crate::error::ErrorCode::TooManyBypassRequests);
+        require!(amount > 0, crate::error::ErrorCode::InvalidParameters);
+        require!(!bypassing_period.is_empty() && bypassing_period.len() <= Self::MAX_PERIOD_NAME_LENGTH, crate::error::ErrorCode::InvalidParameters);
+
+        // Check if destination is approved
+        require!(self.is_destination_approved(destination), crate::error::ErrorCode::DestinationNotApproved);
+
+        // 24-hour timelock (86400 seconds)
+        let execute_after = current_time + 86400;
+
+        self.pending_bypass_requests.push(BypassRequest {
+            request_id,
+            amount,
+            token_mint,
+            bypassing_period,
+            destination,
+            execute_after,
+            executed: false,
+            cancelled: false,
+            created_at: current_time,
+        });
+
+        Ok(())
+    }
+
+    /// Execute a bypass request
+    pub fn execute_bypass_request(&mut self, request_id: [u8; 32], current_time: i64) -> Result<BypassRequest> {
+        for request in &mut self.pending_bypass_requests {
+            if request.request_id == request_id && !request.executed && !request.cancelled {
+                require!(current_time >= request.execute_after, crate::error::ErrorCode::RequestStillInTimelock);
+                request.executed = true;
+                return Ok(request.clone());
+            }
+        }
+        Err(crate::error::ErrorCode::RequestNotFound.into())
+    }
+
+    /// Cancel a bypass request
+    pub fn cancel_bypass_request(&mut self, request_id: [u8; 32]) -> Result<()> {
+        for request in &mut self.pending_bypass_requests {
+            if request.request_id == request_id && !request.executed && !request.cancelled {
+                request.cancelled = true;
+                return Ok(());
+            }
+        }
+        Err(crate::error::ErrorCode::RequestNotFound.into())
+    }
+
+    /// Get active bypass requests
+    pub fn get_active_bypass_requests(&self) -> Vec<BypassRequest> {
+        self.pending_bypass_requests
+            .iter()
+            .filter(|r| !r.executed && !r.cancelled)
+            .cloned()
+            .collect()
     }
 }
 

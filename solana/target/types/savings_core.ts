@@ -83,6 +83,63 @@ export type SavingsCore = {
       ]
     },
     {
+      "name": "addWithdrawalDestination",
+      "docs": [
+        "Add a withdrawal destination"
+      ],
+      "discriminator": [
+        22,
+        253,
+        18,
+        184,
+        234,
+        85,
+        147,
+        84
+      ],
+      "accounts": [
+        {
+          "name": "savingsAccount",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  97,
+                  118,
+                  105,
+                  110,
+                  103,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "user"
+              }
+            ]
+          }
+        },
+        {
+          "name": "user",
+          "writable": true,
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "address",
+          "type": "pubkey"
+        },
+        {
+          "name": "title",
+          "type": "string"
+        }
+      ]
+    },
+    {
       "name": "cancelLimitProposal",
       "docs": [
         "Cancel a pending proposal"
@@ -139,6 +196,64 @@ export type SavingsCore = {
       "args": [
         {
           "name": "proposalId",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "cancelWithdrawalBypass",
+      "docs": [
+        "Cancel withdrawal bypass request"
+      ],
+      "discriminator": [
+        67,
+        241,
+        187,
+        146,
+        79,
+        62,
+        136,
+        181
+      ],
+      "accounts": [
+        {
+          "name": "savingsAccount",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  97,
+                  118,
+                  105,
+                  110,
+                  103,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "user"
+              }
+            ]
+          }
+        },
+        {
+          "name": "user",
+          "writable": true,
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "requestId",
           "type": {
             "array": [
               "u8",
@@ -745,6 +860,154 @@ export type SavingsCore = {
       ]
     },
     {
+      "name": "executeSplWithdrawalBypass",
+      "docs": [
+        "Execute SPL withdrawal bypass"
+      ],
+      "discriminator": [
+        241,
+        42,
+        36,
+        134,
+        236,
+        241,
+        142,
+        40
+      ],
+      "accounts": [
+        {
+          "name": "savingsAccount",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  97,
+                  118,
+                  105,
+                  110,
+                  103,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "user"
+              }
+            ]
+          }
+        },
+        {
+          "name": "user",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "mint",
+          "docs": [
+            "Token mint"
+          ]
+        },
+        {
+          "name": "savingsTokenAccount",
+          "docs": [
+            "User's token account for sending"
+          ],
+          "writable": true
+        },
+        {
+          "name": "destinationTokenAccount",
+          "docs": [
+            "Destination token account for receiving"
+          ],
+          "writable": true
+        },
+        {
+          "name": "tokenProgram",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": [
+        {
+          "name": "requestId",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "executeWithdrawalBypass",
+      "docs": [
+        "Execute withdrawal bypass (SOL)"
+      ],
+      "discriminator": [
+        179,
+        43,
+        138,
+        230,
+        25,
+        62,
+        50,
+        189
+      ],
+      "accounts": [
+        {
+          "name": "savingsAccount",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  97,
+                  118,
+                  105,
+                  110,
+                  103,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "user"
+              }
+            ]
+          }
+        },
+        {
+          "name": "user",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "destination",
+          "writable": true
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "requestId",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        }
+      ]
+    },
+    {
       "name": "getSolBalance",
       "docs": [
         "Get user's total SOL balance"
@@ -1136,6 +1399,124 @@ export type SavingsCore = {
       ]
     },
     {
+      "name": "removeWithdrawalDestination",
+      "docs": [
+        "Remove a withdrawal destination"
+      ],
+      "discriminator": [
+        60,
+        84,
+        70,
+        83,
+        98,
+        9,
+        151,
+        106
+      ],
+      "accounts": [
+        {
+          "name": "savingsAccount",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  97,
+                  118,
+                  105,
+                  110,
+                  103,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "user"
+              }
+            ]
+          }
+        },
+        {
+          "name": "user",
+          "writable": true,
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "address",
+          "type": "pubkey"
+        }
+      ]
+    },
+    {
+      "name": "requestWithdrawalBypass",
+      "docs": [
+        "Request withdrawal bypass for amounts exceeding spending limits"
+      ],
+      "discriminator": [
+        179,
+        63,
+        197,
+        165,
+        24,
+        134,
+        204,
+        54
+      ],
+      "accounts": [
+        {
+          "name": "savingsAccount",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  97,
+                  118,
+                  105,
+                  110,
+                  103,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "user"
+              }
+            ]
+          }
+        },
+        {
+          "name": "user",
+          "writable": true,
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        },
+        {
+          "name": "tokenMint",
+          "type": "pubkey"
+        },
+        {
+          "name": "bypassingPeriod",
+          "type": "string"
+        },
+        {
+          "name": "destination",
+          "type": "pubkey"
+        }
+      ]
+    },
+    {
       "name": "setCommonPeriodLimits",
       "docs": [
         "Set common period limits (Daily, Weekly, Monthly)"
@@ -1254,6 +1635,67 @@ export type SavingsCore = {
           "name": "user",
           "writable": true,
           "signer": true
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "withdrawSolToDestination",
+      "docs": [
+        "Withdraw SOL to destination"
+      ],
+      "discriminator": [
+        170,
+        140,
+        47,
+        249,
+        105,
+        179,
+        11,
+        204
+      ],
+      "accounts": [
+        {
+          "name": "savingsAccount",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  97,
+                  118,
+                  105,
+                  110,
+                  103,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "user"
+              }
+            ]
+          }
+        },
+        {
+          "name": "user",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "destination",
+          "writable": true
         },
         {
           "name": "systemProgram",
@@ -1506,6 +1948,83 @@ export type SavingsCore = {
           "docs": [
             "The mint of the SPL token being withdrawn"
           ]
+        },
+        {
+          "name": "tokenProgram",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "withdrawSplToDestination",
+      "docs": [
+        "Withdraw SPL tokens to destination"
+      ],
+      "discriminator": [
+        30,
+        228,
+        247,
+        163,
+        185,
+        59,
+        123,
+        128
+      ],
+      "accounts": [
+        {
+          "name": "savingsAccount",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  97,
+                  118,
+                  105,
+                  110,
+                  103,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "user"
+              }
+            ]
+          }
+        },
+        {
+          "name": "user",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "mint",
+          "docs": [
+            "Token mint"
+          ]
+        },
+        {
+          "name": "savingsTokenAccount",
+          "docs": [
+            "User's token account for sending"
+          ],
+          "writable": true
+        },
+        {
+          "name": "destinationTokenAccount",
+          "docs": [
+            "Destination token account for receiving"
+          ],
+          "writable": true
         },
         {
           "name": "tokenProgram",
@@ -1798,9 +2317,133 @@ export type SavingsCore = {
       "code": 6010,
       "name": "periodLimitNotFound",
       "msg": "Period limit not found"
+    },
+    {
+      "code": 6011,
+      "name": "invalidParameters",
+      "msg": "Invalid parameters provided"
+    },
+    {
+      "code": 6012,
+      "name": "tooManyDestinations",
+      "msg": "Too many withdrawal destinations (max 20 allowed)"
+    },
+    {
+      "code": 6013,
+      "name": "destinationAlreadyExists",
+      "msg": "Destination address already exists"
+    },
+    {
+      "code": 6014,
+      "name": "cannotSetOwnAddress",
+      "msg": "Cannot set own address as withdrawal destination"
+    },
+    {
+      "code": 6015,
+      "name": "destinationNotFound",
+      "msg": "Withdrawal destination not found"
+    },
+    {
+      "code": 6016,
+      "name": "destinationNotApproved",
+      "msg": "Destination is not approved for withdrawals"
+    },
+    {
+      "code": 6017,
+      "name": "tooManyBypassRequests",
+      "msg": "Too many bypass requests (max 10 allowed)"
+    },
+    {
+      "code": 6018,
+      "name": "requestStillInTimelock",
+      "msg": "Request is still in timelock period"
+    },
+    {
+      "code": 6019,
+      "name": "requestNotFound",
+      "msg": "Bypass request not found"
     }
   ],
   "types": [
+    {
+      "name": "bypassRequest",
+      "docs": [
+        "Represents a pending bypass request for withdrawals exceeding spending limits"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "requestId",
+            "docs": [
+              "Unique identifier for this request"
+            ],
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "amount",
+            "docs": [
+              "Amount to withdraw (in lamports for SOL, token units for SPL)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "tokenMint",
+            "docs": [
+              "Token mint (use System Program ID for SOL)"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "bypassingPeriod",
+            "docs": [
+              "Which spending period this request is bypassing"
+            ],
+            "type": "string"
+          },
+          {
+            "name": "destination",
+            "docs": [
+              "Destination address for the withdrawal"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "executeAfter",
+            "docs": [
+              "Unix timestamp when this request can be executed (24 hours after creation)"
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "executed",
+            "docs": [
+              "Whether this request has been executed"
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "cancelled",
+            "docs": [
+              "Whether this request has been cancelled"
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "createdAt",
+            "docs": [
+              "When this request was created"
+            ],
+            "type": "i64"
+          }
+        ]
+      }
+    },
     {
       "name": "pendingProposal",
       "docs": [
@@ -1922,6 +2565,32 @@ export type SavingsCore = {
               "Last update timestamp"
             ],
             "type": "i64"
+          },
+          {
+            "name": "withdrawalDestinations",
+            "docs": [
+              "Approved withdrawal destinations (addresses user can withdraw to)"
+            ],
+            "type": {
+              "vec": {
+                "defined": {
+                  "name": "withdrawalDestination"
+                }
+              }
+            }
+          },
+          {
+            "name": "pendingBypassRequests",
+            "docs": [
+              "Pending bypass requests for withdrawals exceeding spending limits"
+            ],
+            "type": {
+              "vec": {
+                "defined": {
+                  "name": "bypassRequest"
+                }
+              }
+            }
           }
         ]
       }
@@ -2123,6 +2792,45 @@ export type SavingsCore = {
               "Amount increased in current 7-day period"
             ],
             "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "withdrawalDestination",
+      "docs": [
+        "Represents an approved withdrawal destination address"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "address",
+            "docs": [
+              "The destination address"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "title",
+            "docs": [
+              "Optional title/label for this destination"
+            ],
+            "type": "string"
+          },
+          {
+            "name": "addedAt",
+            "docs": [
+              "When this destination was added"
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "active",
+            "docs": [
+              "Whether this destination is currently active"
+            ],
+            "type": "bool"
           }
         ]
       }

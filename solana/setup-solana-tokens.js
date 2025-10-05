@@ -131,16 +131,36 @@ async function setupTokens() {
     const appJsPath = path.join(__dirname, '../frontend/src/App.js');
     let appJsContent = fs.readFileSync(appJsPath, 'utf8');
 
-    // Replace the USDT mint address in the Solana localhost configuration
-    const oldMintRegex = /mint: "[\w\d]+".*?\/\/ Test USDT mint address/;
-    const newMintLine = `mint: "${usdtMint.toString()}", // Test USDT mint address`;
+    // Replace the USDT mint address in both places
+    const withdrawalMintRegex = /const tokenMint = "[\w\d]+"; \/\/ USDT mint/;
+    const withdrawalMintLine = `const tokenMint = "${usdtMint.toString()}"; // USDT mint`;
 
-    if (oldMintRegex.test(appJsContent)) {
-      appJsContent = appJsContent.replace(oldMintRegex, newMintLine);
+    const networkConfigMintRegex = /mint: "[\w\d]+", \/\/ Test USDT mint address/;
+    const networkConfigMintLine = `mint: "${usdtMint.toString()}", // Test USDT mint address`;
+
+    let updated = false;
+
+    if (withdrawalMintRegex.test(appJsContent)) {
+      appJsContent = appJsContent.replace(withdrawalMintRegex, withdrawalMintLine);
+      updated = true;
+      console.log(`✅ Updated withdrawal function mint address: ${usdtMint.toString()}`);
+    } else {
+      console.log('⚠️  Could not find withdrawal mint address pattern in App.js');
+    }
+
+    if (networkConfigMintRegex.test(appJsContent)) {
+      appJsContent = appJsContent.replace(networkConfigMintRegex, networkConfigMintLine);
+      updated = true;
+      console.log(`✅ Updated network config mint address: ${usdtMint.toString()}`);
+    } else {
+      console.log('⚠️  Could not find network config mint address pattern in App.js');
+    }
+
+    if (updated) {
       fs.writeFileSync(appJsPath, appJsContent);
       console.log(`✅ Frontend App.js updated with new mint address: ${usdtMint.toString()}`);
     } else {
-      console.log('⚠️  Could not find USDT mint address pattern in App.js to update');
+      console.log('⚠️  No mint address patterns found to update in App.js');
     }
 
     // Check user SOL balance

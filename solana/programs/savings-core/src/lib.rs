@@ -152,4 +152,76 @@ pub mod savings_core {
     ) -> Result<()> {
         instructions::cancel_limit_proposal(ctx, proposal_id)
     }
+
+    // ========== WITHDRAWAL DESTINATION INSTRUCTIONS ==========
+
+    /// Add a withdrawal destination
+    pub fn add_withdrawal_destination(
+        ctx: Context<AddWithdrawalDestination>,
+        address: Pubkey,
+        title: String,
+    ) -> Result<()> {
+        instructions::add_withdrawal_destination(ctx, address, title)
+    }
+
+    /// Remove a withdrawal destination
+    pub fn remove_withdrawal_destination(
+        ctx: Context<RemoveWithdrawalDestination>,
+        address: Pubkey,
+    ) -> Result<()> {
+        instructions::remove_withdrawal_destination(ctx, address)
+    }
+
+    /// Withdraw SOL to destination
+    pub fn withdraw_sol_to_destination(
+        ctx: Context<WithdrawToDestination>,
+        amount: u64,
+    ) -> Result<()> {
+        instructions::withdraw_sol_to_destination(ctx, amount)
+    }
+
+    /// Withdraw SPL tokens to destination
+    pub fn withdraw_spl_to_destination(
+        ctx: Context<WithdrawSplToDestination>,
+        amount: u64,
+    ) -> Result<()> {
+        instructions::withdraw_spl_to_destination(ctx, amount)
+    }
+
+    // ========== WITHDRAWAL BYPASS INSTRUCTIONS ==========
+
+    /// Request withdrawal bypass for amounts exceeding spending limits
+    pub fn request_withdrawal_bypass(
+        ctx: Context<RequestWithdrawalBypass>,
+        amount: u64,
+        token_mint: Pubkey,
+        bypassing_period: String,
+        destination: Pubkey,
+    ) -> Result<()> {
+        instructions::request_withdrawal_bypass(ctx, amount, token_mint, bypassing_period, destination)
+    }
+
+    /// Execute withdrawal bypass (SOL)
+    pub fn execute_withdrawal_bypass(
+        ctx: Context<ExecuteWithdrawalBypass>,
+        request_id: [u8; 32],
+    ) -> Result<()> {
+        instructions::execute_withdrawal_bypass(ctx, request_id)
+    }
+
+    /// Execute SPL withdrawal bypass
+    pub fn execute_spl_withdrawal_bypass(
+        ctx: Context<ExecuteSplWithdrawalBypass>,
+        request_id: [u8; 32],
+    ) -> Result<()> {
+        instructions::execute_spl_withdrawal_bypass(ctx, request_id)
+    }
+
+    /// Cancel withdrawal bypass request
+    pub fn cancel_withdrawal_bypass(
+        ctx: Context<CancelWithdrawalBypass>,
+        request_id: [u8; 32],
+    ) -> Result<()> {
+        instructions::cancel_withdrawal_bypass(ctx, request_id)
+    }
 }

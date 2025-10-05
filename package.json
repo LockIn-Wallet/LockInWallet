@@ -23,10 +23,10 @@
     "solana:deploy:dev": "cd solana && anchor deploy --provider.cluster devnet",
     "solana:deploy:prod": "cd solana && anchor deploy --provider.cluster mainnet",
     "solana:upgrade": "cd solana && anchor upgrade --provider.cluster localnet",
-    "solana:update-frontend": "node scripts/update-solana-addresses.js",
+    "solana:update-frontend": "cd solana && npm run update-frontend",
     "solana:setup": "npm run solana:build && npm run solana:deploy && npm run solana:update-frontend",
-    "solana:deploy-reliable": "./scripts/deploy-solana.sh",
-    "solana:upgrade-reliable": "./scripts/deploy-solana.sh --upgrade"
+    "solana:deploy-reliable": "cd solana && npm run deploy-reliable",
+    "solana:upgrade-reliable": "cd solana && npm run upgrade-reliable"
   },
   "keywords": [],
   "author": "",

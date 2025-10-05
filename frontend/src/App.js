@@ -159,7 +159,7 @@ const NETWORKS = {
           recommended: true,
         },
         USDT: {
-          mint: "8HzX7N298cgEvd16KGGruJXrPsnbcURLbN1E1Puv4G1m", // Test USDT mint address
+          mint: "HQQPp5Vh6WHdfHrcr41VrdTPVPzrvbSsUde4gGFLLpJM", // Test USDT mint address
           symbol: "USDT",
           name: "Test USDT",
           decimals: 6,
@@ -1575,28 +1575,52 @@ function AppContent() {
   };
 
   const removeLimitPeriod = async (periodName) => {
-    if (!savingsContract) {
-      alert("Please connect your wallet first");
+    // Network-aware connection check
+    if (networkType === 'solana' && (!transactionManager || !solanaConnected)) {
+      alert("Please connect your Solana wallet first");
+      return;
+    }
+    if (networkType === 'evm' && !savingsContract) {
+      alert("Please connect your MetaMask wallet first");
       return;
     }
 
     try {
-      if (isSetupCommitted) {
-        const tx = await savingsContract.proposeLimitRemoval(periodName);
-        await tx.wait();
+      if (networkType === 'solana') {
+        // Solana removal logic
+        console.log('🗑️ Solana: Removing limit for', periodName);
 
-        // localStorage removed - proposals now tracked on-chain
-
-        alert(
-          `✅ Removal proposal submitted for ${periodName}! It will be executable after review.`
-        );
-        await fetchPendingLimitProposals();
+        if (isSetupCommitted) {
+          // After setup is committed, removal requires a proposal
+          // For now, we'll inform the user that this feature is coming soon
+          alert("🚧 Solana limit removal proposals are coming soon!\n\nFor now, you can:\n• Edit limits (proposals work)\n• Remove limits only before setup is committed\n\nRemoval proposals will be implemented in the next update.");
+          return;
+        } else {
+          // Direct removal before setup is committed
+          const adapter = transactionManager.getCurrentAdapter();
+          const txHash = await adapter.removeTimePeriodLimit(periodName);
+          console.log("Solana limit removed:", txHash);
+          alert(`✅ ${periodName} limit removed successfully!`);
+        }
       } else {
-        const tx = await savingsContract.removeTimePeriodLimit(periodName);
-        await tx.wait();
-        alert(`${periodName} limit removed successfully!`);
+        // EVM removal logic (existing)
+        console.log('🗑️ EVM: Removing limit for', periodName);
+
+        if (isSetupCommitted) {
+          const tx = await savingsContract.proposeLimitRemoval(periodName);
+          await tx.wait();
+          alert(
+            `✅ Removal proposal submitted for ${periodName}! It will be executable after review.`
+          );
+          await fetchPendingLimitProposals();
+        } else {
+          const tx = await savingsContract.removeTimePeriodLimit(periodName);
+          await tx.wait();
+          alert(`✅ ${periodName} limit removed successfully!`);
+        }
       }
 
+      // Refresh data for both networks
       await fetchSpendingLimits();
     } catch (error) {
       console.error("Error removing limit:", error);
@@ -1745,21 +1769,57 @@ function AppContent() {
   };
 
   const withdrawFunds = async () => {
-    if (savingsContract) {
-      // Check if user is on the correct network
-      if (!isCorrectNetwork()) {
-        const currentNetwork = getCurrentNetwork(selectedNetwork);
-        alert(`Please switch to ${currentNetwork.name} to make withdrawals`);
-        return;
-      }
+    // Network-aware connection check
+    if (networkType === 'solana' && (!transactionManager || !solanaConnected)) {
+      alert("Please connect your Solana wallet first");
+      return;
+    }
+    if (networkType === 'evm' && !savingsContract) {
+      alert("Please connect your MetaMask wallet first");
+      return;
+    }
 
-      try {
-        if (
-          !withdrawalAmount ||
-          isNaN(withdrawalAmount) ||
-          parseFloat(withdrawalAmount) <= 0
-        ) {
-          alert("Please enter a valid withdrawal amount");
+    // Validate withdrawal amount
+    if (
+      !withdrawalAmount ||
+      isNaN(withdrawalAmount) ||
+      parseFloat(withdrawalAmount) <= 0
+    ) {
+      alert("Please enter a valid withdrawal amount");
+      return;
+    }
+
+    try {
+      if (networkType === 'solana') {
+        // Solana withdrawal logic
+        console.log('💸 Solana: Withdrawing', withdrawalAmount, selectedToken);
+
+        const adapter = transactionManager.getCurrentAdapter();
+        const amountValue = parseFloat(withdrawalAmount);
+
+        let txHash;
+        if (selectedToken === 'SOL') {
+          // Withdraw SOL (native token)
+          const amountLamports = Math.floor(amountValue * Math.pow(10, 9)); // Convert to lamports
+          txHash = await adapter.withdrawSol(amountLamports);
+          console.log("Solana SOL withdrawal:", txHash);
+        } else {
+          // Withdraw SPL token (e.g., USDT)
+          // Convert to token's base units (USDT has 6 decimals)
+          const amountTokenUnits = Math.floor(amountValue * Math.pow(10, 6));
+          txHash = await adapter.withdrawSpl(amountTokenUnits);
+          console.log("Solana SPL withdrawal:", txHash);
+        }
+
+        alert(`✅ Withdrawal of ${withdrawalAmount} ${selectedToken} successful!`);
+      } else {
+        // EVM withdrawal logic (existing)
+        console.log('💸 EVM: Withdrawing', withdrawalAmount, selectedToken);
+
+        // Check if user is on the correct network
+        if (!isCorrectNetwork()) {
+          const currentNetwork = getCurrentNetwork(selectedNetwork);
+          alert(`Please switch to ${currentNetwork.name} to make withdrawals`);
           return;
         }
 
@@ -1768,22 +1828,31 @@ function AppContent() {
         const amount = ethers.parseUnits(withdrawalAmount, usdtToken.decimals);
         const tx = await savingsContract.withdraw(amount, usdtToken.address);
         await tx.wait();
-        alert(`Withdrawal of ${withdrawalAmount} USDT successful!`);
+        alert(`✅ Withdrawal of ${withdrawalAmount} USDT successful!`);
+      }
 
-        // Clear form and refresh balances and spending limits
-        setDepositAmount("");
-        await refreshBalances();
-        await fetchSpendingLimits();
-      } catch (error) {
-        console.error("Withdrawal error:", error);
-        if (error.message.includes("Exceeds")) {
-          // Extract which limit was exceeded from error message
-          alert(`Withdrawal blocked: ${error.message}`);
-        } else if (error.message.includes("Insufficient balance")) {
-          alert("Insufficient balance for this withdrawal");
-        } else {
-          alert("Failed to withdraw. Please try again.");
-        }
+      // Clear form and refresh balances and spending limits for both networks
+      setWithdrawalAmount("");
+
+      // For Solana, add a small delay to ensure account state is updated
+      if (networkType === 'solana') {
+        console.log('⏳ Waiting for Solana account state to update...');
+        await new Promise(resolve => setTimeout(resolve, 1000)); // 1 second delay
+      }
+
+      await refreshBalances();
+      await fetchSpendingLimits();
+    } catch (error) {
+      console.error("Withdrawal error:", error);
+      if (error.message.includes("Exceeds")) {
+        // Extract which limit was exceeded from error message
+        alert(`Withdrawal blocked: ${error.message}`);
+      } else if (error.message.includes("Insufficient balance")) {
+        alert("Insufficient balance for this withdrawal");
+      } else if (error.message.includes("Insufficient SOL balance")) {
+        alert("Insufficient SOL balance for this withdrawal");
+      } else {
+        alert(`Failed to withdraw. Please try again. Error: ${error.message}`);
       }
     }
   };
@@ -2150,33 +2219,58 @@ function AppContent() {
     contract = savingsContract,
     userAddr = null
   ) => {
-    // Only run for EVM network
-    if (networkType !== 'evm') {
-      console.log(`⏭️ Skipping fetchWithdrawalAddresses for ${networkType} network`);
-      return;
-    }
-
     const currentUserAddress = userAddr || userAddress;
-    if (!contract || !currentUserAddress) return;
 
     try {
-      const addressData = await contract.getUserWithdrawalAddresses();
-      const [titles, destinations, timestamps] = addressData;
+      if (networkType === 'solana') {
+        // Fetch Solana withdrawal destinations
+        if (!transactionManager) {
+          console.log(`⏭️ Skipping fetchWithdrawalAddresses for Solana - no transaction manager`);
+          setWithdrawalAddresses([]);
+          return;
+        }
 
-      const addresses = [];
-      for (let i = 0; i < titles.length; i++) {
-        addresses.push({
-          title: titles[i],
-          destination: destinations[i],
-          addedTimestamp: Number(timestamps[i]),
-          addedDate: new Date(Number(timestamps[i]) * 1000).toLocaleDateString(),
-        });
+        const adapter = transactionManager.getCurrentAdapter();
+        // For Solana, use the Solana wallet address, not the EVM address
+        const solanaUserAddress = userAddr || solanaPublicKey?.toString();
+        const addresses = await adapter.fetchWithdrawalAddresses(solanaUserAddress);
+
+        // Transform to match EVM format
+        const formattedAddresses = addresses.map(addr => ({
+          title: addr.title,
+          destination: addr.destination,
+          addedTimestamp: addr.addedAt,
+          addedDate: new Date(addr.addedAt * 1000).toLocaleDateString(),
+        }));
+
+        setWithdrawalAddresses(formattedAddresses);
+        console.log(`📋 Loaded ${formattedAddresses.length} Solana withdrawal addresses for ${solanaUserAddress}`);
+      } else {
+        // Fetch EVM withdrawal addresses
+        if (!contract || !currentUserAddress) {
+          console.log(`⏭️ Skipping fetchWithdrawalAddresses for EVM - missing contract or user`);
+          setWithdrawalAddresses([]);
+          return;
+        }
+
+        const addressData = await contract.getUserWithdrawalAddresses();
+        const [titles, destinations, timestamps] = addressData;
+
+        const addresses = [];
+        for (let i = 0; i < titles.length; i++) {
+          addresses.push({
+            title: titles[i],
+            destination: destinations[i],
+            addedTimestamp: Number(timestamps[i]),
+            addedDate: new Date(Number(timestamps[i]) * 1000).toLocaleDateString(),
+          });
+        }
+
+        setWithdrawalAddresses(addresses);
+        console.log(`📋 Loaded ${addresses.length} EVM withdrawal addresses for ${currentUserAddress}`);
       }
-
-      setWithdrawalAddresses(addresses);
-      console.log(`Loaded ${addresses.length} withdrawal addresses for ${currentUserAddress}`);
     } catch (error) {
-      console.error("Error fetching withdrawal addresses:", error);
+      console.error(`❌ Error fetching ${networkType} withdrawal addresses:`, error);
       setWithdrawalAddresses([]);
     }
   };
@@ -2185,74 +2279,150 @@ function AppContent() {
     contract = savingsContract,
     userAddr = null
   ) => {
-    // Only run for EVM network
-    if (networkType !== 'evm') {
-      console.log(`⏭️ Skipping fetchPendingWithdrawalRequests for ${networkType} network`);
-      return;
-    }
-
     const currentUserAddress = userAddr || userAddress;
-    if (!contract || !currentUserAddress) return;
 
     try {
-      const requestData = await contract.getUserPendingWithdrawalRequests();
-      const [requestIds, titles, destinations, executeAfters] = requestData;
+      if (networkType === 'solana') {
+        // Fetch Solana bypass requests (which are withdrawal requests exceeding limits)
+        if (!transactionManager) {
+          console.log(`⏭️ Skipping fetchPendingWithdrawalRequests for Solana - no transaction manager`);
+          setPendingWithdrawalRequests([]);
+          return;
+        }
 
-      const requests = [];
-      for (let i = 0; i < requestIds.length; i++) {
-        requests.push({
-          requestId: requestIds[i],
-          title: titles[i],
-          destination: destinations[i],
-          executeAfter: Number(executeAfters[i]),
-          submittedDate: new Date().toLocaleDateString(), // Approximate
-        });
+        const adapter = transactionManager.getCurrentAdapter();
+        const bypassRequests = await adapter.fetchPendingBypassRequests(currentUserAddress);
+
+        // Transform to match EVM format
+        const formattedRequests = bypassRequests.map(req => ({
+          requestId: req.requestId,
+          title: `${req.bypassingPeriod} Bypass`, // Use bypassing period as title
+          destination: req.destination,
+          executeAfter: req.executeAfter,
+          submittedDate: new Date(req.createdAt * 1000).toLocaleDateString(),
+          amount: req.amount,
+          tokenMint: req.tokenMint,
+          bypassingPeriod: req.bypassingPeriod
+        }));
+
+        setPendingWithdrawalRequests(formattedRequests);
+        console.log(`📋 Loaded ${formattedRequests.length} Solana pending withdrawal requests for ${currentUserAddress}`);
+      } else {
+        // Fetch EVM withdrawal requests
+        if (!contract || !currentUserAddress) {
+          console.log(`⏭️ Skipping fetchPendingWithdrawalRequests for EVM - missing contract or user`);
+          setPendingWithdrawalRequests([]);
+          return;
+        }
+
+        const requestData = await contract.getUserPendingWithdrawalRequests();
+        const [requestIds, titles, destinations, executeAfters] = requestData;
+
+        const requests = [];
+        for (let i = 0; i < requestIds.length; i++) {
+          requests.push({
+            requestId: requestIds[i],
+            title: titles[i],
+            destination: destinations[i],
+            executeAfter: Number(executeAfters[i]),
+            submittedDate: new Date().toLocaleDateString(), // Approximate
+          });
+        }
+
+        setPendingWithdrawalRequests(requests);
+        console.log(`📋 Loaded ${requests.length} EVM pending withdrawal requests for ${currentUserAddress}`);
       }
-
-      setPendingWithdrawalRequests(requests);
-      console.log(`Loaded ${requests.length} pending withdrawal requests for ${currentUserAddress}`);
     } catch (error) {
-      console.error("Error fetching pending withdrawal requests:", error);
+      console.error(`❌ Error fetching ${networkType} pending withdrawal requests:`, error);
       setPendingWithdrawalRequests([]);
     }
   };
 
   const requestWithdrawalAddress = async () => {
-    if (!savingsContract || !newWithdrawalTitle || !newWithdrawalAddress) {
-      alert("Please fill in all fields");
+    // Network-aware validation
+    if (networkType === 'solana' && (!transactionManager || !newWithdrawalTitle || !newWithdrawalAddress)) {
+      alert("Please fill in all fields and connect your Solana wallet");
+      return;
+    }
+    if (networkType === 'evm' && (!savingsContract || !newWithdrawalTitle || !newWithdrawalAddress)) {
+      alert("Please fill in all fields and connect your MetaMask wallet");
       return;
     }
 
     try {
-      // Validate address format
-      if (!ethers.isAddress(newWithdrawalAddress)) {
-        alert("Please enter a valid Ethereum address");
-        return;
+      if (networkType === 'solana') {
+        // Solana address addition logic
+        // Basic Solana address validation (44 characters, base58)
+        if (newWithdrawalAddress.length !== 44) {
+          alert("Please enter a valid Solana address (44 characters)");
+          return;
+        }
+
+        const adapter = transactionManager.getCurrentAdapter();
+        const txHash = await adapter.addWithdrawalDestination(newWithdrawalAddress, newWithdrawalTitle);
+
+        alert(
+          `✅ Solana withdrawal address added successfully!\n\n` +
+          `Title: ${newWithdrawalTitle}\n` +
+          `Address: ${newWithdrawalAddress}\n` +
+          `Transaction: ${txHash}\n\n` +
+          `This address is now approved for withdrawals.`
+        );
+      } else {
+        // EVM address request logic (existing - requires timelock)
+        // Validate address format
+        if (!ethers.isAddress(newWithdrawalAddress)) {
+          alert("Please enter a valid Ethereum address");
+          return;
+        }
+
+        const tx = await savingsContract.requestWithdrawalAddress(
+          newWithdrawalTitle,
+          newWithdrawalAddress
+        );
+        await tx.wait();
+
+        alert(
+          `✅ EVM withdrawal address request submitted successfully!\n\n` +
+          `Title: ${newWithdrawalTitle}\n` +
+          `Address: ${newWithdrawalAddress}\n` +
+          `Executable after: 24 hours\n\n` +
+          `You can execute this request from the "Pending Withdrawal Requests" section once the waiting period is over.`
+        );
       }
-
-      const tx = await savingsContract.requestWithdrawalAddress(
-        newWithdrawalTitle,
-        newWithdrawalAddress
-      );
-      await tx.wait();
-
-      alert(`✅ Withdrawal address request submitted successfully!\nTitle: ${newWithdrawalTitle}\nAddress: ${newWithdrawalAddress}\nExecutable after: 24 hours`);
 
       // Clear form
       setNewWithdrawalTitle("");
       setNewWithdrawalAddress("");
       setShowWithdrawalAddressForm(false);
 
-      // Refresh data
-      await fetchPendingWithdrawalRequests();
-    } catch (error) {
-      console.error("Error requesting withdrawal address:", error);
-      if (error.message.includes("Address already exists")) {
-        alert("This address is already in your withdrawal addresses");
-      } else if (error.message.includes("Cannot set own address")) {
-        alert("You cannot add your own wallet address as a withdrawal destination");
+      // Refresh data for both networks
+      if (networkType === 'solana') {
+        await fetchWithdrawalAddresses();
       } else {
-        alert(`Failed to request withdrawal address: ${error.message}`);
+        await fetchPendingWithdrawalRequests();
+      }
+    } catch (error) {
+      console.error(`Error requesting ${networkType} withdrawal address:`, error);
+
+      // Network-aware error handling
+      if (networkType === 'solana') {
+        if (error.message.includes("already exists")) {
+          alert("This Solana address is already in your withdrawal destinations");
+        } else if (error.message.includes("own address")) {
+          alert("You cannot add your own Solana wallet address as a withdrawal destination");
+        } else {
+          alert(`Failed to add Solana withdrawal address: ${error.message}`);
+        }
+      } else {
+        // EVM error handling
+        if (error.message.includes("Address already exists")) {
+          alert("This address is already in your withdrawal addresses");
+        } else if (error.message.includes("Cannot set own address")) {
+          alert("You cannot add your own wallet address as a withdrawal destination");
+        } else {
+          alert(`Failed to request withdrawal address: ${error.message}`);
+        }
       }
     }
   };
@@ -2311,21 +2481,68 @@ function AppContent() {
   };
 
   const withdrawToDestination = async () => {
-    if (savingsContract && selectedToken && withdrawalAmount) {
-      // Check if user is on the correct network
-      if (!isCorrectNetwork()) {
-        const currentNetwork = getCurrentNetwork(selectedNetwork);
-        alert(`Please switch to ${currentNetwork.name} to make withdrawals`);
-        return;
-      }
+    // Network-aware connection check
+    if (networkType === 'solana' && (!transactionManager || !solanaConnected)) {
+      alert("Please connect your Solana wallet first");
+      return;
+    }
+    if (networkType === 'evm' && (!savingsContract || !selectedToken || !withdrawalAmount)) {
+      alert("Please connect your MetaMask wallet first");
+      return;
+    }
 
-      try {
-        if (
-          !withdrawalAmount ||
-          isNaN(withdrawalAmount) ||
-          parseFloat(withdrawalAmount) <= 0
-        ) {
-          alert("Please enter a valid withdrawal amount");
+    // Validate inputs
+    if (!withdrawalAmount || isNaN(withdrawalAmount) || parseFloat(withdrawalAmount) <= 0) {
+      alert("Please enter a valid withdrawal amount");
+      return;
+    }
+
+    try {
+      if (networkType === 'solana') {
+        // Solana withdrawal to destination logic
+        console.log('💸 Solana: Withdrawing to destination', withdrawalAmount, selectedToken, selectedWithdrawalDestination);
+
+        const adapter = transactionManager.getCurrentAdapter();
+        const amountValue = parseFloat(withdrawalAmount);
+        let destinationAddress = selectedWithdrawalDestination;
+
+        // Handle "self" destination - use user's wallet address
+        if (selectedWithdrawalDestination === "self") {
+          if (!solanaPublicKey) {
+            throw new Error('Solana wallet not connected');
+          }
+          destinationAddress = solanaPublicKey.toString();
+        }
+
+        let txHash;
+        if (selectedToken === 'SOL') {
+          // Withdraw SOL to destination
+          const amountLamports = Math.floor(amountValue * Math.pow(10, 9)); // Convert to lamports
+          txHash = await adapter.withdrawSolToDestination(amountLamports, destinationAddress);
+          console.log("Solana SOL withdrawal to destination:", txHash);
+        } else {
+          // Withdraw SPL token to destination
+          // Get the token mint address - for now we only support USDT
+          const tokenMint = "HQQPp5Vh6WHdfHrcr41VrdTPVPzrvbSsUde4gGFLLpJM"; // USDT mint
+
+          // Convert to token's base units (USDT has 6 decimals)
+          const amountTokenUnits = Math.floor(amountValue * Math.pow(10, 6));
+          txHash = await adapter.withdrawSplToDestination(amountTokenUnits, tokenMint, destinationAddress);
+          console.log("Solana SPL withdrawal to destination:", txHash);
+        }
+
+        alert(`✅ Withdrawal of ${withdrawalAmount} ${selectedToken} to destination successful!`);
+      } else {
+        // EVM withdrawal to destination logic (existing)
+        if (!savingsContract || !selectedToken || !withdrawalAmount) {
+          alert("Missing required data for EVM withdrawal");
+          return;
+        }
+
+        // Check if user is on the correct network
+        if (!isCorrectNetwork()) {
+          const currentNetwork = getCurrentNetwork(selectedNetwork);
+          alert(`Please switch to ${currentNetwork.name} to make withdrawals`);
           return;
         }
 
@@ -2368,13 +2585,43 @@ function AppContent() {
         alert(`Withdrawal of ${withdrawalAmount} ${tokenSymbol} successful!`);
 
         // Clear form and refresh balances and spending limits
-        setDepositAmount("");
+        setWithdrawalAmount("");
         await refreshBalances();
         await fetchSpendingLimits();
-      } catch (error) {
-        console.error("Withdrawal error:", error);
+      }
+
+      // Clear form and refresh data for both networks
+      setWithdrawalAmount("");
+
+      // For Solana, add a small delay to ensure account state is updated
+      if (networkType === 'solana') {
+        console.log('⏳ Waiting for Solana account state to update...');
+        await new Promise(resolve => setTimeout(resolve, 1000)); // 1 second delay
+      }
+
+      await refreshBalances();
+      if (networkType === 'evm') {
+        await fetchSpendingLimits();
+      }
+      if (networkType === 'solana') {
+        await fetchPendingBypassRequests();
+        await fetchWithdrawalAddresses();
+      }
+    } catch (error) {
+      console.error("Withdrawal error:", error);
+
+      // Network-aware error handling
+      if (networkType === 'solana') {
+        if (error.message.includes("Destination not approved")) {
+          alert("Selected withdrawal destination is not approved for Solana");
+        } else if (error.message.includes("Insufficient")) {
+          alert("Insufficient balance for this withdrawal");
+        } else {
+          alert(`Solana withdrawal failed: ${error.message}`);
+        }
+      } else {
+        // EVM error handling
         if (error.message.includes("Exceeds")) {
-          // Extract which limit was exceeded from error message
           alert(`Withdrawal blocked: ${error.message}`);
         } else if (error.message.includes("Insufficient balance")) {
           alert("Insufficient balance for this withdrawal");
@@ -2389,8 +2636,13 @@ function AppContent() {
 
   // Function to request bypass for withdrawal
   const requestBypassForWithdrawal = async () => {
-    if (!savingsContract || !withdrawalAmount || !exceedingPeriod) {
-      alert("Invalid withdrawal request");
+    // Network-aware validation
+    if (networkType === 'solana' && (!transactionManager || !solanaConnected || !withdrawalAmount || !exceedingPeriod)) {
+      alert("Invalid withdrawal request - please connect Solana wallet and enter withdrawal details");
+      return;
+    }
+    if (networkType === 'evm' && (!savingsContract || !withdrawalAmount || !exceedingPeriod)) {
+      alert("Invalid withdrawal request - please connect MetaMask and enter withdrawal details");
       return;
     }
 
@@ -2404,52 +2656,121 @@ function AppContent() {
     if (!confirmed) return;
 
     try {
-      const currentNetwork = getCurrentNetwork(selectedNetwork);
-      let tokenAddress;
-      let decimals;
+      if (networkType === 'solana') {
+        // Solana bypass request logic
+        console.log('🔒 Solana: Requesting bypass for', withdrawalAmount, selectedToken, exceedingPeriod);
 
-      // Determine token details
-      if (selectedToken === "ETH") {
-        tokenAddress = ETH_ADDRESS;
-        decimals = 18;
-      } else if (currentNetwork.tokens[selectedToken]) {
-        const token = currentNetwork.tokens[selectedToken];
-        tokenAddress = token.address;
-        decimals = token.decimals;
+        const adapter = transactionManager.getCurrentAdapter();
+        let tokenAddress;
+        let destination = selectedWithdrawalDestination;
+
+        // Handle "self" destination
+        if (selectedWithdrawalDestination === "self") {
+          if (!solanaPublicKey) {
+            throw new Error('Solana wallet not connected');
+          }
+          destination = solanaPublicKey.toString();
+        }
+
+        // Determine token address
+        if (selectedToken === 'SOL') {
+          tokenAddress = 'So11111111111111111111111111111111111111112'; // SOL mint (System Program ID)
+        } else {
+          // Get current USDT or other SPL token address from network config
+          const currentNetwork = getCurrentNetwork(selectedNetwork);
+          const token = currentNetwork.tokens[selectedToken];
+          if (token) {
+            tokenAddress = token.address;
+          } else {
+            alert("Please select a valid token");
+            return;
+          }
+        }
+
+        const txHash = await adapter.requestWithdrawalBypass(
+          withdrawalAmount,
+          tokenAddress,
+          exceedingPeriod,
+          destination
+        );
+
+        alert(
+          `✅ Solana bypass request submitted successfully!\n\n` +
+          `Amount: ${withdrawalAmount} ${selectedToken}\n` +
+          `Period: ${exceedingPeriod}\n` +
+          `Destination: ${destination.slice(0, 8)}...${destination.slice(-4)}\n` +
+          `Executable after: 24 hours\n\n` +
+          `Transaction: ${txHash}\n\n` +
+          `You can execute this request from the "Pending Bypass Requests" section once the waiting period is over.`
+        );
       } else {
-        alert("Please select a valid token");
-        return;
+        // EVM bypass request logic (existing)
+        const currentNetwork = getCurrentNetwork(selectedNetwork);
+        let tokenAddress;
+        let decimals;
+
+        // Determine token details
+        if (selectedToken === "ETH") {
+          tokenAddress = ETH_ADDRESS;
+          decimals = 18;
+        } else if (currentNetwork.tokens[selectedToken]) {
+          const token = currentNetwork.tokens[selectedToken];
+          tokenAddress = token.address;
+          decimals = token.decimals;
+        } else {
+          alert("Please select a valid token");
+          return;
+        }
+
+        const amount = ethers.parseUnits(withdrawalAmount, decimals);
+
+        const tx = await savingsContract.requestLimitBypass(
+          amount,
+          exceedingPeriod,
+          tokenAddress
+        );
+        await tx.wait();
+
+        alert(
+          `✅ EVM bypass request submitted successfully!\n\n` +
+          `Amount: ${withdrawalAmount} ${selectedToken}\n` +
+          `Period: ${exceedingPeriod}\n` +
+          `Executable after: 24 hours\n\n` +
+          `You can execute this request from the "Pending Bypass Requests" section once the waiting period is over.`
+        );
       }
 
-      const amount = ethers.parseUnits(withdrawalAmount, decimals);
-
-      const tx = await savingsContract.requestLimitBypass(
-        amount,
-        exceedingPeriod,
-        tokenAddress
-      );
-      await tx.wait();
-
-      alert(
-        `✅ Bypass request submitted successfully!\n\n` +
-        `Amount: ${withdrawalAmount} ${selectedToken}\n` +
-        `Period: ${exceedingPeriod}\n` +
-        `Executable after: 24 hours\n\n` +
-        `You can execute this request from the "Pending Bypass Requests" section once the waiting period is over.`
-      );
-
-      // Clear form and refresh data
+      // Clear form and refresh data for both networks
       setWithdrawalAmount("");
-      await fetchPendingBypassRequests();
-      await fetchSpendingLimits();
+      if (networkType === 'evm') {
+        await fetchPendingBypassRequests();
+        await fetchSpendingLimits();
+      }
+      if (networkType === 'solana') {
+        await transactionManager.getCurrentAdapter().fetchPendingBypassRequests();
+        await fetchSpendingLimits();
+      }
     } catch (error) {
       console.error("Error requesting bypass:", error);
-      if (error.message.includes("Insufficient balance")) {
-        alert("Insufficient balance for this withdrawal");
-      } else if (error.message.includes("Amount within limits")) {
-        alert("This amount is within your spending limits - use instant withdrawal instead");
+
+      // Network-aware error handling
+      if (networkType === 'solana') {
+        if (error.message.includes("Destination not approved")) {
+          alert("Selected withdrawal destination is not approved for Solana");
+        } else if (error.message.includes("Insufficient")) {
+          alert("Insufficient balance for this withdrawal");
+        } else {
+          alert(`Solana bypass request failed: ${error.message}`);
+        }
       } else {
-        alert(`Failed to request bypass: ${error.message}`);
+        // EVM error handling
+        if (error.message.includes("Insufficient balance")) {
+          alert("Insufficient balance for this withdrawal");
+        } else if (error.message.includes("Amount within limits")) {
+          alert("This amount is within your spending limits - use instant withdrawal instead");
+        } else {
+          alert(`Failed to request bypass: ${error.message}`);
+        }
       }
     }
   };

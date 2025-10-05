@@ -28,8 +28,8 @@ fi
 
 # Configuration
 ANCHOR_PATH="/opt/homebrew/bin/anchor"
-SOLANA_DIR="./solana"
-SCRIPTS_DIR="$(dirname "$0")"
+SOLANA_DIR="."
+SCRIPTS_DIR="."
 
 # Colors for output
 RED='\033[0;31m'
@@ -100,7 +100,7 @@ check_validator() {
 sync_program_id() {
     log_info "Ensuring program ID consistency for both programs..."
 
-    cd "$SOLANA_DIR"
+# Already in solana directory, no need to cd
 
     # Set up proper Solana environment with Agave CLI 2.1.15
     export PATH="/Users/andriy/.local/share/solana/install/active_release/bin:/opt/homebrew/bin:$PATH"
@@ -162,14 +162,14 @@ sync_program_id() {
         exit 1
     fi
 
-    cd ..
+# No need to cd back
 }
 
 # Clean and build the program
 build_program() {
     log_info "Cleaning and building Solana program..."
 
-    cd "$SOLANA_DIR"
+# Already in solana directory, no need to cd
 
     # Set up proper Solana environment with Agave CLI 2.1.15
     export PATH="/Users/andriy/.local/share/solana/install/active_release/bin:/opt/homebrew/bin:$PATH"
@@ -208,8 +208,9 @@ build_program() {
 
     log_info "Building... (this may take a few minutes and appear silent)"
 
-    # Use homebrew anchor directly
-    if $ANCHOR_PATH build; then
+    # Use homebrew anchor directly - show errors
+    echo "🔍 Running: $ANCHOR_PATH build"
+    if $ANCHOR_PATH build 2>&1; then
         log_info "✅ Program built successfully"
 
         # Copy binaries to expected location for deployment
@@ -241,7 +242,7 @@ build_program() {
         exit 1
     fi
 
-    cd ..
+# No need to cd back
 }
 
 # Check if program exists on chain
@@ -260,7 +261,7 @@ check_program_exists() {
 
 # Deploy or upgrade the program
 deploy_program() {
-    cd "$SOLANA_DIR"
+# Already in solana directory, no need to cd
 
     # Set up proper Solana environment with Agave CLI 2.1.15
     export PATH="/Users/andriy/.local/share/solana/install/active_release/bin:/opt/homebrew/bin:$PATH"
@@ -315,27 +316,27 @@ deploy_program() {
         fi
     fi
 
-    cd ..
+# No need to cd back
 }
 
 # Extract discriminators from IDL and update frontend
 update_discriminators() {
     log_info "Extracting instruction discriminators from IDL..."
 
-    cd "$SOLANA_DIR"
+# Already in solana directory, no need to cd
 
     IDL_FILE="target/idl/savings_core.json"
     ADAPTER_FILE="../frontend/src/adapters/SolanaAdapter.js"
 
     if [ ! -f "$IDL_FILE" ]; then
         log_error "IDL file not found: $IDL_FILE"
-        cd ..
+    # No need to cd back
         return 1
     fi
 
     if [ ! -f "$ADAPTER_FILE" ]; then
         log_error "SolanaAdapter file not found: $ADAPTER_FILE"
-        cd ..
+    # No need to cd back
         return 1
     fi
 
@@ -413,22 +414,22 @@ EOF
         log_info "✅ Discriminators extracted and updated in frontend"
     else
         log_error "Failed to extract discriminators"
-        cd ..
+    # No need to cd back
         return 1
     fi
 
     # Clean up temporary script
     rm -f temp_extract_discriminators.js
 
-    cd ..
+# No need to cd back
 }
 
 # Update frontend with new addresses
 update_frontend() {
     log_info "Updating frontend with program addresses..."
 
-    if [ -f "$SCRIPTS_DIR/update-solana-addresses.js" ]; then
-        if node "$SCRIPTS_DIR/update-solana-addresses.js"; then
+    if [ -f "update-solana-addresses.js" ]; then
+        if node "update-solana-addresses.js"; then
             log_info "✅ Frontend addresses updated"
         else
             log_warning "Failed to update frontend addresses automatically"
@@ -451,13 +452,13 @@ setup_test_tokens() {
     # Set up proper Solana environment with Agave CLI 2.1.15
     export PATH="/Users/andriy/.local/share/solana/install/active_release/bin:/opt/homebrew/bin:$PATH"
 
-    if [ -f "scripts/setup-solana-tokens.js" ]; then
+    if [ -f "setup-solana-tokens.js" ]; then
         log_info "Running token setup script..."
-        if node scripts/setup-solana-tokens.js; then
+        if node setup-solana-tokens.js; then
             log_info "✅ Test tokens setup completed"
         else
             log_warning "Token setup failed, but deployment continues"
-            log_warning "You can run 'node scripts/setup-solana-tokens.js' manually later"
+            log_warning "You can run 'node setup-solana-tokens.js' manually later"
         fi
     else
         log_warning "Token setup script not found, skipping token setup"
@@ -470,7 +471,7 @@ setup_test_tokens() {
 verify_program_id() {
     log_info "Verifying program ID consistency..."
 
-    cd "$SOLANA_DIR"
+# Already in solana directory, no need to cd
 
     # Set up proper Solana environment
     export PATH="/Users/andriy/.local/share/solana/install/active_release/bin:/opt/homebrew/bin:$PATH"
@@ -481,7 +482,7 @@ verify_program_id() {
         log_info "Program ID from keypair: $PROGRAM_ID"
     else
         log_error "Program keypair not found"
-        cd ..
+    # No need to cd back
         return 1
     fi
 
@@ -497,12 +498,12 @@ verify_program_id() {
             log_error "❌ lib.rs program ID mismatch!"
             log_error "  Keypair: $PROGRAM_ID"
             log_error "  lib.rs:  $DECLARED_ID"
-            cd ..
+        # No need to cd back
             return 1
         fi
     else
         log_error "lib.rs not found"
-        cd ..
+    # No need to cd back
         return 1
     fi
 
@@ -517,12 +518,12 @@ verify_program_id() {
             log_error "❌ Anchor.toml program ID mismatch!"
             log_error "  Keypair:     $PROGRAM_ID"
             log_error "  Anchor.toml: $ANCHOR_ID"
-            cd ..
+        # No need to cd back
             return 1
         fi
     else
         log_error "Anchor.toml not found"
-        cd ..
+    # No need to cd back
         return 1
     fi
 
@@ -537,12 +538,12 @@ verify_program_id() {
             log_info "✅ Deployed program ID matches expected ID"
         else
             log_error "❌ Deployed program info doesn't match expected ID"
-            cd ..
+        # No need to cd back
             return 1
         fi
     else
         log_error "❌ Program not found on validator"
-        cd ..
+    # No need to cd back
         return 1
     fi
 
@@ -558,14 +559,14 @@ verify_program_id() {
             log_error "❌ Frontend program ID mismatch!"
             log_error "  Keypair:  $PROGRAM_ID"
             log_error "  Frontend: $FRONTEND_ID"
-            cd ..
+        # No need to cd back
             return 1
         fi
     else
         log_warning "Frontend addresses file not found, will be created by update script"
     fi
 
-    cd ..
+# No need to cd back
     log_info "🎉 All program ID consistency checks passed!"
     return 0
 }

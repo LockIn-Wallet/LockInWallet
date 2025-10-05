@@ -6,8 +6,8 @@ async function updateSolanaAddresses() {
 
   try {
     // Read savings-core program ID from IDL
-    const savingsIdlPath = path.join(__dirname, '../solana/target/idl/savings_core.json');
-    const proxyIdlPath = path.join(__dirname, '../solana/target/idl/deposit_proxy.json');
+    const savingsIdlPath = path.join(__dirname, './target/idl/savings_core.json');
+    const proxyIdlPath = path.join(__dirname, './target/idl/deposit_proxy.json');
 
     if (!fs.existsSync(savingsIdlPath)) {
       console.log("⚠️  Savings core IDL not found. Run 'anchor build' first.");
@@ -227,7 +227,8 @@ async function updateSolanaAddresses() {
 
     console.log("");
     console.log("🎉 Frontend update completed successfully!");
-    console.log("📍 Program ID:", programId);
+    console.log("📍 Savings Program ID:", savingsProgramId);
+    console.log("📍 Deposit Proxy Program ID:", proxyProgramId);
     console.log("🌐 Network:", network);
     console.log("📁 Files updated:");
     console.log("  - solanaAddresses.json");

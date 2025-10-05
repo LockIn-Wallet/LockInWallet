@@ -8,11 +8,16 @@
     "build": "anchor build",
     "deploy": "anchor deploy",
     "deploy:devnet": "anchor deploy --provider.cluster devnet",
-    "deploy:mainnet": "anchor deploy --provider.cluster mainnet"
+    "deploy:mainnet": "anchor deploy --provider.cluster mainnet",
+    "deploy-reliable": "./deploy-solana.sh",
+    "upgrade-reliable": "./deploy-solana.sh --upgrade",
+    "setup-tokens": "node setup-solana-tokens.js",
+    "update-frontend": "node update-solana-addresses.js"
   },
   "dependencies": {
     "@coral-xyz/anchor": "0.31.1",
-    "@solana/web3.js": "^1.87.6"
+    "@solana/web3.js": "^1.87.6",
+    "@solana/spl-token": "^0.4.14"
   },
   "devDependencies": {
     "@types/mocha": "^9.1.0",

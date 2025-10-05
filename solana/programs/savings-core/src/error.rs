@@ -36,4 +36,33 @@ pub enum ErrorCode {
 
     #[msg("Period limit not found")]
     PeriodLimitNotFound,
+
+    // Withdrawal destinations related errors
+    #[msg("Invalid parameters provided")]
+    InvalidParameters,
+
+    #[msg("Too many withdrawal destinations (max 20 allowed)")]
+    TooManyDestinations,
+
+    #[msg("Destination address already exists")]
+    DestinationAlreadyExists,
+
+    #[msg("Cannot set own address as withdrawal destination")]
+    CannotSetOwnAddress,
+
+    #[msg("Withdrawal destination not found")]
+    DestinationNotFound,
+
+    #[msg("Destination is not approved for withdrawals")]
+    DestinationNotApproved,
+
+    // Bypass requests related errors
+    #[msg("Too many bypass requests (max 10 allowed)")]
+    TooManyBypassRequests,
+
+    #[msg("Request is still in timelock period")]
+    RequestStillInTimelock,
+
+    #[msg("Bypass request not found")]
+    RequestNotFound,
 }

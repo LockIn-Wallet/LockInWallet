@@ -1161,3 +1161,441 @@ pub fn cancel_limit_proposal(
 
     Ok(())
 }
+
+// ========== WITHDRAWAL DESTINATION INSTRUCTIONS ==========
+
+/// Add a withdrawal destination
+#[derive(Accounts)]
+pub struct AddWithdrawalDestination<'info> {
+    #[account(mut, seeds = [b"savings", user.key().as_ref()], bump)]
+    pub savings_account: Account<'info, SavingsAccount>,
+
+    #[account(mut)]
+    pub user: Signer<'info>,
+}
+
+/// Remove a withdrawal destination
+#[derive(Accounts)]
+pub struct RemoveWithdrawalDestination<'info> {
+    #[account(mut, seeds = [b"savings", user.key().as_ref()], bump)]
+    pub savings_account: Account<'info, SavingsAccount>,
+
+    #[account(mut)]
+    pub user: Signer<'info>,
+}
+
+/// Withdraw to destination (extends existing withdraw functionality)
+#[derive(Accounts)]
+pub struct WithdrawToDestination<'info> {
+    #[account(mut, seeds = [b"savings", user.key().as_ref()], bump)]
+    pub savings_account: Account<'info, SavingsAccount>,
+
+    #[account(mut)]
+    pub user: Signer<'info>,
+
+    /// CHECK: This is the destination address that will receive the funds
+    #[account(mut)]
+    pub destination: UncheckedAccount<'info>,
+
+    pub system_program: Program<'info, System>,
+}
+
+/// Withdraw SPL tokens to destination
+#[derive(Accounts)]
+pub struct WithdrawSplToDestination<'info> {
+    #[account(
+        mut,
+        seeds = [b"savings", user.key().as_ref()],
+        bump = savings_account.bump,
+        constraint = savings_account.owner == user.key() @ ErrorCode::UnauthorizedAccess
+    )]
+    pub savings_account: Account<'info, SavingsAccount>,
+
+    #[account(mut)]
+    pub user: Signer<'info>,
+
+    /// Token mint
+    pub mint: Account<'info, Mint>,
+
+    /// User's token account for sending
+    #[account(mut)]
+    pub savings_token_account: Account<'info, TokenAccount>,
+
+    /// Destination token account for receiving
+    #[account(mut)]
+    pub destination_token_account: Account<'info, TokenAccount>,
+
+    pub token_program: Program<'info, Token>,
+}
+
+// ========== BYPASS REQUEST INSTRUCTIONS ==========
+
+/// Request withdrawal bypass for amounts exceeding spending limits
+#[derive(Accounts)]
+pub struct RequestWithdrawalBypass<'info> {
+    #[account(mut, seeds = [b"savings", user.key().as_ref()], bump)]
+    pub savings_account: Account<'info, SavingsAccount>,
+
+    #[account(mut)]
+    pub user: Signer<'info>,
+}
+
+/// Execute a withdrawal bypass after timelock period
+#[derive(Accounts)]
+pub struct ExecuteWithdrawalBypass<'info> {
+    #[account(mut, seeds = [b"savings", user.key().as_ref()], bump)]
+    pub savings_account: Account<'info, SavingsAccount>,
+
+    #[account(mut)]
+    pub user: Signer<'info>,
+
+    /// CHECK: This is the destination address that will receive the funds
+    #[account(mut)]
+    pub destination: UncheckedAccount<'info>,
+
+    pub system_program: Program<'info, System>,
+}
+
+/// Execute SPL token withdrawal bypass
+#[derive(Accounts)]
+pub struct ExecuteSplWithdrawalBypass<'info> {
+    #[account(mut, seeds = [b"savings", user.key().as_ref()], bump)]
+    pub savings_account: Account<'info, SavingsAccount>,
+
+    #[account(mut)]
+    pub user: Signer<'info>,
+
+    /// Token mint
+    pub mint: Account<'info, Mint>,
+
+    /// User's token account for sending
+    #[account(mut)]
+    pub savings_token_account: Account<'info, TokenAccount>,
+
+    /// Destination token account for receiving
+    #[account(mut)]
+    pub destination_token_account: Account<'info, TokenAccount>,
+
+    pub token_program: Program<'info, Token>,
+}
+
+/// Cancel a withdrawal bypass request
+#[derive(Accounts)]
+pub struct CancelWithdrawalBypass<'info> {
+    #[account(mut, seeds = [b"savings", user.key().as_ref()], bump)]
+    pub savings_account: Account<'info, SavingsAccount>,
+
+    #[account(mut)]
+    pub user: Signer<'info>,
+}
+
+// ========== INSTRUCTION IMPLEMENTATIONS ==========
+
+/// Add a withdrawal destination instruction
+pub fn add_withdrawal_destination(
+    ctx: Context<AddWithdrawalDestination>,
+    address: Pubkey,
+    title: String,
+) -> Result<()> {
+    let savings_account = &mut ctx.accounts.savings_account;
+    let clock = Clock::get()?;
+
+    savings_account.add_withdrawal_destination(address, title, clock.unix_timestamp)?;
+    savings_account.updated_at = clock.unix_timestamp;
+
+    msg!("Added withdrawal destination: {}", address);
+    Ok(())
+}
+
+/// Remove a withdrawal destination instruction
+pub fn remove_withdrawal_destination(
+    ctx: Context<RemoveWithdrawalDestination>,
+    address: Pubkey,
+) -> Result<()> {
+    let savings_account = &mut ctx.accounts.savings_account;
+    let clock = Clock::get()?;
+
+    savings_account.remove_withdrawal_destination(address)?;
+    savings_account.updated_at = clock.unix_timestamp;
+
+    msg!("Removed withdrawal destination: {}", address);
+    Ok(())
+}
+
+/// Withdraw SOL to destination instruction
+pub fn withdraw_sol_to_destination(
+    ctx: Context<WithdrawToDestination>,
+    amount: u64,
+) -> Result<()> {
+    let savings_account = &mut ctx.accounts.savings_account;
+    let user = &mut ctx.accounts.user;
+    let destination = &mut ctx.accounts.destination;
+
+    // Verify destination is approved
+    require!(
+        savings_account.is_destination_approved(destination.key()),
+        ErrorCode::DestinationNotApproved
+    );
+
+    // Check balance
+    require!(savings_account.sol_balance >= amount, ErrorCode::InsufficientBalance);
+
+    // Transfer SOL from user to destination
+    let transfer_instruction = anchor_lang::system_program::Transfer {
+        from: user.to_account_info(),
+        to: destination.to_account_info(),
+    };
+
+    anchor_lang::system_program::transfer(
+        CpiContext::new(
+            ctx.accounts.system_program.to_account_info(),
+            transfer_instruction,
+        ),
+        amount,
+    )?;
+
+    // Update balance
+    savings_account.sol_balance = savings_account.sol_balance
+        .checked_sub(amount)
+        .ok_or(ErrorCode::ArithmeticOverflow)?;
+
+    let clock = Clock::get()?;
+    savings_account.updated_at = clock.unix_timestamp;
+
+    msg!("Withdrew {} SOL to {}", amount, destination.key());
+    Ok(())
+}
+
+/// Withdraw SPL tokens to destination instruction
+pub fn withdraw_spl_to_destination(
+    ctx: Context<WithdrawSplToDestination>,
+    amount: u64,
+) -> Result<()> {
+    let savings_account = &mut ctx.accounts.savings_account;
+    let mint = &ctx.accounts.mint;
+
+    // Verify destination token account is approved (check the owner)
+    require!(
+        savings_account.is_destination_approved(ctx.accounts.destination_token_account.owner),
+        ErrorCode::DestinationNotApproved
+    );
+
+    // Check balance
+    let current_balance = savings_account.get_token_balance(mint.key());
+    require!(current_balance >= amount, ErrorCode::InsufficientBalance);
+
+    // Create seeds for signing
+    let user_key = savings_account.owner;
+    let seeds = &[b"savings", user_key.as_ref(), &[savings_account.bump]];
+    let signer = &[&seeds[..]];
+
+    // Transfer SPL tokens from savings account to destination
+    let cpi_accounts = Transfer {
+        from: ctx.accounts.savings_token_account.to_account_info(),
+        to: ctx.accounts.destination_token_account.to_account_info(),
+        authority: savings_account.to_account_info(),
+    };
+    let cpi_program = ctx.accounts.token_program.to_account_info();
+    let cpi_ctx = CpiContext::new_with_signer(cpi_program, cpi_accounts, signer);
+    token::transfer(cpi_ctx, amount)?;
+
+    // Update balance in savings account
+    msg!("Before balance update - splBalances length: {}", savings_account.spl_balances.len());
+    let mut balance_updated = false;
+    for (i, token_balance) in savings_account.spl_balances.iter_mut().enumerate() {
+        msg!("Checking balance entry {}: mint={}, amount={}", i, token_balance.mint, token_balance.amount);
+        if token_balance.mint == mint.key() {
+            let old_amount = token_balance.amount;
+            token_balance.amount = token_balance.amount
+                .checked_sub(amount)
+                .ok_or(ErrorCode::ArithmeticOverflow)?;
+            msg!("Updated balance for mint {}: {} -> {}", mint.key(), old_amount, token_balance.amount);
+            balance_updated = true;
+            break;
+        }
+    }
+    if !balance_updated {
+        msg!("Warning: No balance entry found for mint {} to update", mint.key());
+    }
+
+    let clock = Clock::get()?;
+    savings_account.updated_at = clock.unix_timestamp;
+
+    msg!("Withdrew {} tokens to destination", amount);
+    Ok(())
+}
+
+/// Request withdrawal bypass instruction
+pub fn request_withdrawal_bypass(
+    ctx: Context<RequestWithdrawalBypass>,
+    amount: u64,
+    token_mint: Pubkey,
+    bypassing_period: String,
+    destination: Pubkey,
+) -> Result<()> {
+    let savings_account = &mut ctx.accounts.savings_account;
+    let clock = Clock::get()?;
+    let user_key = ctx.accounts.user.key();
+
+    // Generate unique request ID
+    let request_id = hash_request_id(user_key, amount, clock.unix_timestamp);
+
+    savings_account.add_bypass_request(
+        request_id,
+        amount,
+        token_mint,
+        bypassing_period.clone(),
+        destination,
+        clock.unix_timestamp,
+    )?;
+
+    savings_account.updated_at = clock.unix_timestamp;
+
+    msg!(
+        "Requested withdrawal bypass: {} tokens, period: {}",
+        amount,
+        bypassing_period
+    );
+    Ok(())
+}
+
+/// Execute withdrawal bypass (SOL) instruction
+pub fn execute_withdrawal_bypass(
+    ctx: Context<ExecuteWithdrawalBypass>,
+    request_id: [u8; 32],
+) -> Result<()> {
+    let savings_account = &mut ctx.accounts.savings_account;
+    let user = &mut ctx.accounts.user;
+    let destination = &mut ctx.accounts.destination;
+    let clock = Clock::get()?;
+
+    // Execute the bypass request
+    let request = savings_account.execute_bypass_request(request_id, clock.unix_timestamp)?;
+
+    // Verify this is a SOL withdrawal (token_mint should be system program)
+    require!(
+        request.token_mint == anchor_lang::system_program::ID,
+        ErrorCode::InvalidParameters
+    );
+
+    // Verify destination matches
+    require!(request.destination == destination.key(), ErrorCode::InvalidParameters);
+
+    // Check balance
+    require!(
+        savings_account.sol_balance >= request.amount,
+        ErrorCode::InsufficientBalance
+    );
+
+    // Transfer SOL
+    let transfer_instruction = anchor_lang::system_program::Transfer {
+        from: user.to_account_info(),
+        to: destination.to_account_info(),
+    };
+
+    anchor_lang::system_program::transfer(
+        CpiContext::new(
+            ctx.accounts.system_program.to_account_info(),
+            transfer_instruction,
+        ),
+        request.amount,
+    )?;
+
+    // Update balance
+    savings_account.sol_balance = savings_account.sol_balance
+        .checked_sub(request.amount)
+        .ok_or(ErrorCode::ArithmeticOverflow)?;
+
+    savings_account.updated_at = clock.unix_timestamp;
+
+    msg!(
+        "Executed bypass withdrawal: {} SOL to {}",
+        request.amount,
+        destination.key()
+    );
+    Ok(())
+}
+
+/// Execute SPL withdrawal bypass instruction
+pub fn execute_spl_withdrawal_bypass(
+    ctx: Context<ExecuteSplWithdrawalBypass>,
+    request_id: [u8; 32],
+) -> Result<()> {
+    let savings_account = &mut ctx.accounts.savings_account;
+    let mint = &ctx.accounts.mint;
+    let clock = Clock::get()?;
+
+    // Execute the bypass request
+    let request = savings_account.execute_bypass_request(request_id, clock.unix_timestamp)?;
+
+    // Verify this is for the correct token
+    require!(request.token_mint == mint.key(), ErrorCode::InvalidParameters);
+
+    // Verify destination matches
+    require!(
+        request.destination == ctx.accounts.destination_token_account.owner,
+        ErrorCode::InvalidParameters
+    );
+
+    // Check balance
+    let current_balance = savings_account.get_token_balance(mint.key());
+    require!(current_balance >= request.amount, ErrorCode::InsufficientBalance);
+
+    // Transfer SPL tokens
+    let transfer_instruction = Transfer {
+        from: ctx.accounts.savings_token_account.to_account_info(),
+        to: ctx.accounts.destination_token_account.to_account_info(),
+        authority: ctx.accounts.user.to_account_info(),
+    };
+
+    token::transfer(
+        CpiContext::new(
+            ctx.accounts.token_program.to_account_info(),
+            transfer_instruction,
+        ),
+        request.amount,
+    )?;
+
+    // Update balance
+    for token_balance in &mut savings_account.spl_balances {
+        if token_balance.mint == mint.key() {
+            token_balance.amount = token_balance.amount
+                .checked_sub(request.amount)
+                .ok_or(ErrorCode::ArithmeticOverflow)?;
+            break;
+        }
+    }
+
+    savings_account.updated_at = clock.unix_timestamp;
+
+    msg!("Executed SPL bypass withdrawal: {} tokens", request.amount);
+    Ok(())
+}
+
+/// Cancel withdrawal bypass instruction
+pub fn cancel_withdrawal_bypass(
+    ctx: Context<CancelWithdrawalBypass>,
+    request_id: [u8; 32],
+) -> Result<()> {
+    let savings_account = &mut ctx.accounts.savings_account;
+    let clock = Clock::get()?;
+
+    savings_account.cancel_bypass_request(request_id)?;
+    savings_account.updated_at = clock.unix_timestamp;
+
+    msg!("Cancelled withdrawal bypass request");
+    Ok(())
+}
+
+/// Helper function to generate a unique request ID
+fn hash_request_id(user: Pubkey, amount: u64, timestamp: i64) -> [u8; 32] {
+    use anchor_lang::solana_program::hash::{hash, Hash};
+
+    let mut data = Vec::new();
+    data.extend_from_slice(&user.to_bytes());
+    data.extend_from_slice(&amount.to_le_bytes());
+    data.extend_from_slice(&timestamp.to_le_bytes());
+
+    let hash_result: Hash = hash(&data);
+    hash_result.to_bytes()
+}
