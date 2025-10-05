@@ -49,7 +49,7 @@ savings-wallet/
 - **Anchor Framework**: Rust-based smart contract development
 - **PDA Architecture**: Program-derived addresses for deterministic accounts
 - **Cross-Program Invocations**: Modular program interactions
-- **Documentation**: Existing Solana-specific documentation in `solana/` folder
+- **Documentation**: See `solana/CLAUDE.md` for detailed Solana development guide
 
 ### Frontend (`frontend/`)
 - **Framework**: Create React App with multi-blockchain support
@@ -59,25 +59,13 @@ savings-wallet/
 
 ## Core Features
 
-The multi-blockchain savings system implements identical functionality across both chains:
+Multi-blockchain savings system with identical functionality across EVM and Solana:
+- **Multi-token support** (ETH/SOL, ERC20/SPL)
+- **Time-based spending limits** with proposals system
+- **Emergency bypass** and multi-signature approvals
+- **Deterministic addresses** for seamless exchange integration
 
-### Shared Features (EVM + Solana)
-- **Multi-token support**: Native tokens (ETH/SOL) and standards (ERC20/SPL)
-- **Time-based spending limits**: Daily/Weekly/Monthly periods with custom durations
-- **Two-phase proposal system**: 24-72 hour timelock for security
-- **Emergency bypass system**: Urgent withdrawals with timelock protection
-- **Multi-signature approval system**: Emergency and administrative functions
-- **Deterministic addresses**: Permanent deposit addresses for exchange integration
-
-### EVM-Specific Features
-- **Module upgradeability**: Individual modules can be upgraded without affecting others
-- **UUPS proxy pattern**: Upgradeable contracts preserving user data
-- **Contract size optimization**: Modular architecture stays under deployment limits
-
-### Solana-Specific Features
-- **Program Derived Addresses (PDAs)**: Deterministic account generation
-- **Cross-program invocations**: Modular program interactions
-- **Anchor framework**: Type-safe Rust development environment
+For detailed feature documentation, see component-specific folders.
 
 ## Development Commands
 
@@ -99,8 +87,8 @@ npm run dev:full
 **Option 2: Individual Chain Development**
 ```bash
 # Ethereum development
-npm run eth:node        # Start EVM chain
-npm run eth:deploy-modular    # Deploy EVM contracts
+npm run node --workspace=ethereum        # Start EVM chain
+npm run deploy-modular --workspace=ethereum    # Deploy EVM contracts
 cd frontend && npm start      # Start frontend
 
 # Solana development
@@ -118,7 +106,7 @@ cd ethereum && npm run node
 npm run solana:localnet
 
 # Terminal 3: Deploy contracts and start frontend
-npm run eth:deploy-modular    # Deploy EVM contracts
+npm run deploy-modular --workspace=ethereum    # Deploy EVM contracts
 npm run solana:deploy-reliable    # Deploy Solana programs
 npm run frontend:start       # Start React app with dual blockchain support
 ```
@@ -126,90 +114,11 @@ npm run frontend:start       # Start React app with dual blockchain support
 ### EVM Smart Contract Development
 For detailed EVM development, see **`ethereum/CLAUDE.md`**
 
-**Quick EVM Commands:**
-```bash
-# Using workspace commands (from project root)
-npm run eth:compile            # Compile contracts
-npm run eth:test              # Run tests
-npm run eth:node             # Start local blockchain
-npm run eth:deploy-modular   # Deploy all contracts + modules
+### Solana Smart Contract Development
+For detailed Solana development, see **`solana/CLAUDE.md`**
 
-# Working directly in ethereum/ folder
-cd ethereum
-npm run compile              # Compile contracts
-npm run deploy-modular       # Deploy with module system
-npm run upgrade-module <ModuleName> <CoreAddress>  # Upgrade specific module
-```
-
-### Solana Smart Contract Development (Anchor)
-
-#### ⚡ **RECOMMENDED: Reliable Deployment (IMPORTANT!)**
-```bash
-# 🎯 ONE-COMMAND DEPLOYMENT (handles everything automatically)
-npm run solana:deploy-reliable
-
-# This script automatically:
-# - Checks prerequisites (Anchor CLI, etc.)
-# - Starts local validator if needed
-# - Builds the program (bypassing version conflicts)
-# - Deploys to local validator
-# - Updates frontend addresses
-# - Provides deployment summary
-```
-
-#### **Individual Commands (Advanced Users)**
-```bash
-# Start local Solana validator
-npm run solana:localnet
-
-# Build Solana programs (may have version conflicts)
-npm run solana:build
-
-# Test Solana programs
-npm run solana:test
-
-# Deploy to local Solana validator
-npm run solana:deploy
-
-# Deploy to devnet
-npm run solana:deploy:dev
-
-# Deploy to mainnet
-npm run solana:deploy:prod
-
-# Complete setup (build + deploy + update frontend)
-npm run solana:setup
-
-# Update frontend with Solana program addresses
-npm run solana:update-frontend
-```
-
-#### **✅ WORKING CONFIGURATION (Updated)**
-**Required Versions for Successful Build/Deploy:**
-- **Solana CLI**: 2.1.15+ (Agave) - `sh -c "$(curl -sSfL https://release.anza.xyz/v2.1.15/install)"`
-- **Anchor CLI**: 0.31.1 (homebrew) - `brew install anchor-cli`
-- **Rust**: 1.85.0+ (we use 1.90.0) - `rustup update`
-
-**Deployment:**
-```bash
-npm run solana:deploy-reliable  # Still recommended for automation
-# OR manual deployment:
-cd solana && anchor build && anchor deploy --provider.cluster localnet
-```
-
-### Frontend Development (Multi-Blockchain)
-```bash
-# Using workspace commands (from project root)
-npm run frontend:start    # Start React development server
-npm run frontend:build    # Build for production
-npm run frontend:test     # Run tests
-
-# Working directly in frontend/ folder
-cd frontend
-npm start                # Start development server (connects to both EVM and Solana)
-npm run build           # Build for production
-npm test                # Run tests
-```
+### Frontend Development
+For detailed frontend development, see documentation in **`frontend/`** folder
 
 ## Workspace Management
 
@@ -229,9 +138,9 @@ npm install --workspace=frontend
 ### Running Commands Across Workspaces
 ```bash
 # Ethereum commands
-npm run eth:compile
-npm run eth:deploy-modular
-npm run eth:test
+npm run compile --workspace=ethereum
+npm run deploy-modular --workspace=ethereum
+npm run test --workspace=ethereum
 
 # Solana commands
 npm run solana:deploy-reliable
@@ -250,26 +159,10 @@ npm run deploy:full   # Deploy to both chains
 
 ## Technical Architecture Overview
 
-### EVM Architecture
-For detailed technical information about the Ethereum implementation, see **`ethereum/CLAUDE.md`**:
-- Modular smart contract design with UUPS proxy pattern
-- 4 specialized modules (TimePeriodLimits, ProposalSystem, BypassSystem, ApprovalSystem)
-- Module upgradeability and storage preservation
-- Hardhat development environment with automated ABI sync
-
-### Solana Architecture
-For detailed technical information about the Solana implementation:
-- Anchor framework with Rust smart contracts
-- Program Derived Addresses (PDAs) for deterministic accounts
-- Cross-program invocations for modular functionality
-- Existing documentation in `solana/` folder
-
-### Frontend Architecture
-- **Multi-blockchain support**: Single React app with blockchain adapters
-- **EVM Integration**: ethers.js v6 for Ethereum connectivity
-- **Solana Integration**: @solana/web3.js for Solana connectivity
-- **Network Switching**: Dynamic switching between blockchain backends
-- **Shared UI**: Identical interface for both blockchain implementations
+See individual component documentation:
+- **EVM Architecture**: Detailed in **`ethereum/CLAUDE.md`**
+- **Solana Architecture**: Detailed in **`solana/CLAUDE.md`**
+- **Frontend Architecture**: Documented in **`frontend/`** folder
 
 ## Deployment Process
 
@@ -289,54 +182,29 @@ npm run frontend:start     # Start React app
 **Option 2: Step-by-Step Setup**
 ```bash
 # Terminal 1: Start EVM chain
-npm run eth:node
+npm run node --workspace=ethereum
 
 # Terminal 2: Start Solana chain
 npm run solana:localnet
 
 # Terminal 3: Deploy and start frontend
-npm run eth:deploy-modular
+npm run deploy-modular --workspace=ethereum
 npm run solana:deploy-reliable
 npm run frontend:start
 ```
 
 ### Development Workflow
 
-**For EVM development:**
-```bash
-cd ethereum               # Work in ethereum folder
-npm run compile          # Compile contracts
-npm run deploy-modular   # Deploy with modules
-npm run test            # Run tests
-```
-
-**For Solana development:**
-```bash
-cd solana                # Work in solana folder
-npm run deploy-reliable  # Deploy programs
-anchor test             # Run tests
-```
-
-**For frontend development:**
-```bash
-cd frontend             # Work in frontend folder
-npm start              # Start dev server
-npm test               # Run tests
-```
+Use workspace commands from project root or navigate to specific folders:
+- **EVM**: See **`ethereum/CLAUDE.md`** for detailed workflow
+- **Solana**: See **`solana/CLAUDE.md`** for detailed workflow
+- **Frontend**: See **`frontend/`** folder for detailed workflow
 
 ## Best Practices
 
-### Development Workflow
-- **Chain-specific development**: Use `cd ethereum` or `cd solana` for focused development
-- **Multi-chain testing**: Use workspace commands from root to test both chains
-- **Incremental deployment**: Deploy to one chain first, test, then deploy to the other
-- **Frontend compatibility**: Ensure frontend changes work with both blockchain backends
-
-### Project Organization
-- **EVM-specific files**: Keep all Ethereum development in `ethereum/` folder
-- **Solana-specific files**: Keep all Solana development in `solana/` folder
-- **Shared resources**: Frontend and project-wide configuration stay in root
-- **Documentation**: Chain-specific docs in respective folders, overview in root
+- **Chain-specific development**: Use component folders (`ethereum/`, `solana/`, `frontend/`) for focused work
+- **Multi-chain testing**: Use workspace commands from root for cross-chain orchestration
+- **Documentation**: Component-specific docs in respective folders, orchestration in root
 
 ### Common Commands Reference
 ```bash
@@ -349,7 +217,7 @@ npm run deploy:full        # Deploy to both chains
 npm run dev:full           # Start chains + frontend
 
 # Individual chain development
-npm run eth:*              # Ethereum commands
+npm run * --workspace=ethereum    # Ethereum commands
 npm run solana:*           # Solana commands
 npm run frontend:*         # Frontend commands
 
@@ -363,7 +231,7 @@ cd frontend && npm run *   # Work directly in frontend folder
 
 - **Root CLAUDE.md**: This file - multi-chain overview and workspace management
 - **ethereum/CLAUDE.md**: Detailed EVM development guide (contracts, deployment, modules)
-- **solana/**: Existing Solana-specific documentation and deployment guides
+- **solana/CLAUDE.md**: Detailed Solana development guide (programs, deployment, Anchor)
 - **frontend/**: React app documentation for multi-blockchain UI
 
 ## Migration Notes

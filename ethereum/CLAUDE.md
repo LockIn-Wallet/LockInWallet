@@ -91,11 +91,10 @@ npm run validate-deployment
 ### Alternative Commands (from project root)
 ```bash
 # EVM commands using workspace management
-npm run eth:compile
-npm run eth:test
-npm run eth:node
-npm run eth:deploy-modular
-npm run eth:update-frontend
+npm run compile --workspace=ethereum            # Compile contracts
+npm run test --workspace=ethereum              # Run tests
+npm run node --workspace=ethereum             # Start local blockchain
+npm run deploy-modular --workspace=ethereum   # Deploy all contracts + modules
 ```
 
 ## Key Technical Details
@@ -120,6 +119,20 @@ npm run eth:update-frontend
 - **Network**: EVM localhost development (port 8545)
 - **Module Config**: Module addresses stored in `../frontend/src/moduleAddresses.json`
 
+### Frontend Development Commands (Multi-Blockchain)
+```bash
+# Using workspace commands (from project root)
+npm run frontend:start    # Start React development server
+npm run frontend:build    # Build for production
+npm run frontend:test     # Run tests
+
+# Working directly in frontend/ folder
+cd frontend
+npm start                # Start development server (connects to both EVM and Solana)
+npm run build           # Build for production
+npm test                # Run tests
+```
+
 ### Token Support
 - **ETH**: Native token (address: `0x0000000000000000000000000000000000000000`)
 - **ERC20**: Any ERC20 token (tested with MockUSDT using 6 decimals)
@@ -137,6 +150,36 @@ npm run eth:update-frontend
 3. **For Core changes**: `npm run deploy-modular`
 4. **For Module changes**: `npm run upgrade-module <ModuleName> <CoreAddress>`
 5. Frontend automatically updated with new ABIs
+
+## Development Workflow
+
+### For EVM Development (Detailed Workflow)
+```bash
+cd ethereum               # Work in ethereum folder
+npm run compile          # Compile contracts
+npm run deploy-modular   # Deploy with modules
+npm run test            # Run tests
+
+# Alternative: From project root using workspace commands
+npm run compile --workspace=ethereum          # Compile contracts
+npm run test --workspace=ethereum            # Run tests
+npm run node --workspace=ethereum           # Start local blockchain
+npm run deploy-modular --workspace=ethereum # Deploy all contracts + modules
+```
+
+### Multi-Chain Development Integration
+```bash
+# Terminal 1: Start EVM blockchain (from ethereum/ folder)
+npm run node
+
+# Terminal 2: Start Solana blockchain (from project root)
+npm run solana:localnet
+
+# Terminal 3: Deploy contracts and start frontend (from project root)
+npm run deploy-modular --workspace=ethereum    # Deploy EVM contracts
+npm run solana:deploy-reliable                 # Deploy Solana programs
+npm run frontend:start                         # Start React app with dual blockchain support
+```
 
 ## Understanding the Modular System
 
@@ -294,3 +337,10 @@ cd ../frontend && npm start  # Terminal 3
 - Always use DRY principle
 - Never have inline imports
 - As a code practice never hardcode any numbers or addresses that could otherwise be generated with our deployment script
+
+## Cross-References
+
+- **Root Project Overview**: See **`../CLAUDE.md`** for multi-blockchain orchestration and workspace management
+- **Solana Development**: See **`../solana/`** folder for Solana-specific development
+- **Frontend Development**: See **`../frontend/`** folder for React app development
+- **Multi-Chain Commands**: Use workspace commands from project root (see **`../CLAUDE.md`**)
