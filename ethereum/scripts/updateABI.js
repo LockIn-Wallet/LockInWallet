@@ -4,7 +4,7 @@ const { exec } = require("child_process");
 
 // Paths
 const artifactsPath = path.join(__dirname, "../artifacts/contracts/Lock.sol/Savings.json");
-const abiOutputPath = path.join(__dirname, "../frontend/src/SavingsABI.json");
+const abiOutputPath = path.join(__dirname, "../../frontend/src/SavingsABI.json");
 
 // Function to compile contracts
 function compileContracts() {

@@ -32,7 +32,7 @@ async function main() {
 
   // 3. Update frontend addresses
   console.log("🔄 Updating frontend addresses...");
-  const frontendPath = path.join(__dirname, "../frontend/src/App.js");
+  const frontendPath = path.join(__dirname, "../../frontend/src/App.js");
 
   try {
     let frontendContent = fs.readFileSync(frontendPath, "utf8");
@@ -67,19 +67,19 @@ async function main() {
   try {
     // Copy Savings ABI
     const savingsArtifact = require("../artifacts/contracts/Lock.sol/Savings.json");
-    const frontendSavingsABIPath = path.join(__dirname, "../frontend/src/SavingsABI.json");
+    const frontendSavingsABIPath = path.join(__dirname, "../../frontend/src/SavingsABI.json");
     fs.writeFileSync(frontendSavingsABIPath, JSON.stringify(savingsArtifact.abi, null, 2));
     console.log("✅ Savings ABI updated");
 
     // Copy MockUSDT ABI
     const usdtArtifact = require("../artifacts/contracts/MockUSDT.sol/MockUSDT.json");
-    const frontendUSDTABIPath = path.join(__dirname, "../frontend/src/MockUSDT_ABI.json");
+    const frontendUSDTABIPath = path.join(__dirname, "../../frontend/src/MockUSDT_ABI.json");
     fs.writeFileSync(frontendUSDTABIPath, JSON.stringify(usdtArtifact.abi, null, 2));
     console.log("✅ MockUSDT ABI updated");
 
     // Copy UserProxy ABI
     const userProxyArtifact = require("../artifacts/contracts/UserProxy.sol/UserProxy.json");
-    const frontendUserProxyABIPath = path.join(__dirname, "../frontend/src/UserProxyABI.json");
+    const frontendUserProxyABIPath = path.join(__dirname, "../../frontend/src/UserProxyABI.json");
     fs.writeFileSync(frontendUserProxyABIPath, JSON.stringify(userProxyArtifact.abi, null, 2));
     console.log("✅ UserProxy ABI updated\n");
   } catch (error) {

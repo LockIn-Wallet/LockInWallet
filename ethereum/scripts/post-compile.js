@@ -9,7 +9,7 @@ async function updateABIs() {
   console.log("🔄 Auto-updating frontend ABIs after compilation...");
 
   try {
-    const frontendABIDir = path.join(__dirname, "../frontend/src");
+    const frontendABIDir = path.join(__dirname, "../../frontend/src");
 
     // Ensure frontend ABI directory exists
     if (!fs.existsSync(frontendABIDir)) {

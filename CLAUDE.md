@@ -4,119 +4,141 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is a savings wallet DApp that allows users to deposit ETH and ERC20 tokens with built-in spending controls and multi-approval mechanisms. The project consists of upgradeable smart contracts and a React frontend interface.
+This is a **multi-blockchain savings wallet DApp** that supports both **Ethereum/EVM** and **Solana** networks. Users can deposit tokens with built-in spending controls, multi-approval mechanisms, and time-based limits across both blockchain ecosystems.
+
+## Project Structure
+
+```
+savings-wallet/
+├── ethereum/                   # Ethereum/EVM smart contracts and tooling
+│   ├── contracts/             # Solidity smart contracts (modular architecture)
+│   ├── scripts/              # Hardhat deployment and utility scripts
+│   ├── test/                 # Hardhat test suites
+│   ├── hardhat.config.ts     # Hardhat configuration
+│   ├── package.json          # EVM-specific dependencies
+│   └── CLAUDE.md            # EVM-specific development guide
+├── solana/                    # Solana programs and tooling
+│   ├── programs/             # Anchor/Rust programs
+│   ├── tests/               # Anchor test suites
+│   ├── Anchor.toml          # Anchor configuration
+│   ├── package.json         # Solana-specific dependencies
+│   └── [deployment scripts] # Solana-specific scripts
+├── frontend/                  # Multi-blockchain React frontend
+│   ├── src/                 # React components and blockchain adapters
+│   ├── package.json         # Frontend dependencies
+│   └── [React app files]   # Standard Create React App structure
+├── package.json              # Workspace management and multi-chain commands
+└── CLAUDE.md                 # This file - multi-chain overview
+```
 
 ## Architecture
 
-### Smart Contract Layer (Hardhat + TypeScript)
-- **Modular Architecture**: Contract split into multiple modules to stay under size limits
-- **Core Contract**: `contracts/SavingsCore.sol` - Main coordinator using UUPS proxy pattern
-- **Shared Interfaces**: `contracts/SavingsInterfaces.sol` - Common data structures and interfaces
-- **Modules**:
-  - `TimePeriodLimitsModule.sol` - Spending limits with time periods (Daily/Weekly/Monthly/Custom)
-  - `ProposalSystemModule.sol` - Two-phase proposal system with timelock security
-  - `BypassSystemModule.sol` - Emergency bypass system for urgent withdrawals
-  - `ApprovalSystemModule.sol` - Multi-signature approval system
-- **User Proxies**: `contracts/UserProxy.sol` - Deterministic deposit addresses for users
-- **Test Token**: `contracts/MockUSDT.sol` - Mock USDT token for testing (6 decimals)
-- **Deployment**: Uses modular deployment with module registration and automated ABI sync
+### Multi-Blockchain Design
+- **Ethereum Layer**: UUPS upgradeable smart contracts with modular architecture
+- **Solana Layer**: Anchor programs with Program Derived Addresses (PDAs)
+- **Unified Frontend**: Single React app supporting both blockchains
+- **Shared Features**: Identical functionality across both chains (spending limits, bypass system, proposals)
 
-### Frontend (React + ethers.js)
-- **Framework**: Create React App with ethers.js v6 for blockchain interaction
-- **Location**: `frontend/` directory with standard React structure
-- **Integration**: Connects to deployed contracts via hardcoded addresses
+### Ethereum Smart Contracts (`ethereum/`)
+- **Modular Architecture**: Core contract + 4 specialized modules
+- **UUPS Proxy Pattern**: Upgradeable contracts preserving user data
+- **Module System**: TimePeriodLimits, ProposalSystem, BypassSystem, ApprovalSystem
+- **Documentation**: See `ethereum/CLAUDE.md` for detailed EVM development guide
+
+### Solana Programs (`solana/`)
+- **Anchor Framework**: Rust-based smart contract development
+- **PDA Architecture**: Program-derived addresses for deterministic accounts
+- **Cross-Program Invocations**: Modular program interactions
+- **Documentation**: Existing Solana-specific documentation in `solana/` folder
+
+### Frontend (`frontend/`)
+- **Framework**: Create React App with multi-blockchain support
+- **Blockchain Adapters**: Separate adapters for EVM (ethers.js) and Solana (@solana/web3.js)
+- **Unified Interface**: Single UI supporting both blockchain backends
+- **Network Switching**: Dynamic switching between EVM and Solana networks
 
 ## Core Features
 
-The modular savings system implements:
-- **Multi-token support** (ETH and ERC20 tokens) with token-specific balances
-- **Time-based spending limits** with Daily/Weekly/Monthly periods and custom durations
-- **Two-phase proposal system** with 24-72 hour timelock for security
-- **Emergency bypass system** for urgent withdrawals with timelock protection
-- **Multi-signature approval system** for emergency and administrative functions
-- **Deterministic user proxies** for permanent deposit addresses from exchanges
-- **Module upgradeability** - Individual modules can be upgraded without affecting others
-- **Contract size optimization** - Modular architecture stays under deployment limits
+The multi-blockchain savings system implements identical functionality across both chains:
+
+### Shared Features (EVM + Solana)
+- **Multi-token support**: Native tokens (ETH/SOL) and standards (ERC20/SPL)
+- **Time-based spending limits**: Daily/Weekly/Monthly periods with custom durations
+- **Two-phase proposal system**: 24-72 hour timelock for security
+- **Emergency bypass system**: Urgent withdrawals with timelock protection
+- **Multi-signature approval system**: Emergency and administrative functions
+- **Deterministic addresses**: Permanent deposit addresses for exchange integration
+
+### EVM-Specific Features
+- **Module upgradeability**: Individual modules can be upgraded without affecting others
+- **UUPS proxy pattern**: Upgradeable contracts preserving user data
+- **Contract size optimization**: Modular architecture stays under deployment limits
+
+### Solana-Specific Features
+- **Program Derived Addresses (PDAs)**: Deterministic account generation
+- **Cross-program invocations**: Modular program interactions
+- **Anchor framework**: Type-safe Rust development environment
 
 ## Development Commands
 
 ### ⚡ Multi-Blockchain Development Startup
 
-**For complete multi-blockchain development, start both chains:**
-
+**Option 1: Workspace Commands (RECOMMENDED)**
 ```bash
-# Terminal 1: Start EVM blockchain (Hardhat)
-npx hardhat node
+# Start both blockchains
+npm run dev:multi
+
+# Deploy to both chains and start frontend
+npm run deploy:full
+npm run frontend:start
+
+# Or start everything at once
+npm run dev:full
+```
+
+**Option 2: Individual Chain Development**
+```bash
+# Ethereum development
+npm run eth:node        # Start EVM chain
+npm run eth:deploy-modular    # Deploy EVM contracts
+cd frontend && npm start      # Start frontend
+
+# Solana development
+npm run solana:localnet       # Start Solana validator
+npm run solana:deploy-reliable    # Deploy Solana programs
+cd frontend && npm start          # Start frontend
+```
+
+**Option 3: Manual Setup (Advanced)**
+```bash
+# Terminal 1: Start EVM blockchain
+cd ethereum && npm run node
 
 # Terminal 2: Start Solana blockchain
 npm run solana:localnet
 
-# Terminal 3: Start frontend (connects to both chains)
-cd frontend && npm start
-```
-
-**Quick Setup (EVM + Solana + Frontend):**
-```bash
-# Terminal 1: EVM Chain
-npx hardhat node
-
-# Terminal 2: Solana Chain
-npm run solana:localnet
-
 # Terminal 3: Deploy contracts and start frontend
-npx hardhat run scripts/deploy-modular.js --network localhost  # Deploy EVM contracts
-npm run solana:deploy-reliable                                 # 🎯 RELIABLE Solana deployment
-cd frontend && npm start                                       # Start React app with dual blockchain support
+npm run eth:deploy-modular    # Deploy EVM contracts
+npm run solana:deploy-reliable    # Deploy Solana programs
+npm run frontend:start       # Start React app with dual blockchain support
 ```
 
-### EVM Smart Contract Development (Hardhat)
+### EVM Smart Contract Development
+For detailed EVM development, see **`ethereum/CLAUDE.md`**
+
+**Quick EVM Commands:**
 ```bash
-# Install dependencies
-npm install
+# Using workspace commands (from project root)
+npm run eth:compile            # Compile contracts
+npm run eth:test              # Run tests
+npm run eth:node             # Start local blockchain
+npm run eth:deploy-modular   # Deploy all contracts + modules
 
-# Compile contracts
-npx hardhat compile
-
-# Run tests
-npx hardhat test
-
-# Start local EVM blockchain
-npx hardhat node
-
-# AUTOMATED MODULAR WORKFLOW (RECOMMENDED):
-
-# 1. Modular Development Cycle
-npx hardhat compile                                        # Auto-updates frontend ABIs
-npx hardhat run scripts/deploy-modular.js --network localhost  # Modular deploy + validation
-cd frontend && npm start                                  # Everything ready!
-
-# MODULAR DEPLOYMENT OPTIONS:
-
-# Option 1: Modular Deploy (RECOMMENDED)
-# - Deploys SavingsCore + all 4 modules
-# - Registers modules and sets up interactions
-# - Includes validation and ABI updates
-npx hardhat run scripts/deploy-modular.js --network localhost
-
-# Option 2: Individual Module Upgrade
-# - Upgrades specific module while preserving data
-# - Updates module registration automatically
-npx hardhat run scripts/upgrade-module.js --network localhost <ModuleName> <CoreAddress>
-# Example: npx hardhat run scripts/upgrade-module.js --network localhost TimePeriodLimitsModule 0x1234...
-
-# Option 3: Legacy Deploy (for compatibility)
-# - Uses older deployment method
-# - May be needed for specific scenarios
-npx hardhat run scripts/deploy-upgrade.js --network localhost
-
-# Option 4: Validation only
-npx hardhat run scripts/validate-deployment.js --network localhost
-
-# AVAILABLE MODULES FOR UPGRADE:
-# - TimePeriodLimitsModule
-# - ProposalSystemModule
-# - BypassSystemModule
-# - ApprovalSystemModule
+# Working directly in ethereum/ folder
+cd ethereum
+npm run compile              # Compile contracts
+npm run deploy-modular       # Deploy with module system
+npm run upgrade-module <ModuleName> <CoreAddress>  # Upgrade specific module
 ```
 
 ### Solana Smart Contract Development (Anchor)
@@ -177,293 +199,177 @@ cd solana && anchor build && anchor deploy --provider.cluster localnet
 
 ### Frontend Development (Multi-Blockchain)
 ```bash
-# Navigate to frontend
+# Using workspace commands (from project root)
+npm run frontend:start    # Start React development server
+npm run frontend:build    # Build for production
+npm run frontend:test     # Run tests
+
+# Working directly in frontend/ folder
 cd frontend
-
-# Install dependencies
-npm install
-
-# Start development server (connects to both EVM and Solana)
-npm start
-
-# Build for production
-npm run build
-
-# Run tests
-npm test
-
-# Alternative start commands
-npm run start:quiet    # Start without source maps (cleaner output)
-npm run start:clean    # Clean cache and start
+npm start                # Start development server (connects to both EVM and Solana)
+npm run build           # Build for production
+npm test                # Run tests
 ```
 
-## Key Technical Details
+## Workspace Management
 
-### Contract Architecture
-- **Modular Design**: SavingsCore coordinates 4 specialized modules via delegated calls
-- **Core Contract**: `Initializable`, `UUPSUpgradeable`, `OwnableUpgradeable`
-- **Module Authorization**: Each module has `onlyCore` modifier for security isolation
-- **Shared Storage**: All modules access storage through SavingsCore
-- **Module Registration**: Dynamic module registration with keccak256 identifiers:
-  - `TIME_PERIOD_LIMITS` → TimePeriodLimitsModule
-  - `PROPOSAL_SYSTEM` → ProposalSystemModule
-  - `BYPASS_SYSTEM` → BypassSystemModule
-  - `APPROVAL_SYSTEM` → ApprovalSystemModule
-- **Security**: Includes reentrancy protection, authorization checks, and timelock mechanisms
-- **Events**: Comprehensive event emission across all modules for transparency
+This project uses **npm workspaces** to manage the multi-blockchain architecture:
 
-### Frontend Integration (Multi-Blockchain)
+### Installing Dependencies
+```bash
+# Install all workspace dependencies
+npm run install:all
 
-**EVM Integration:**
-- **Contract Address**: SavingsCore address hardcoded in `frontend/src/App.js`
-- **Main ABI**: Stored in `frontend/src/SavingsABI.json` (SavingsCore ABI)
-- **Module ABIs**: Individual module ABIs available in `frontend/src/`
-- **Network**: EVM localhost development (port 8545)
-- **Module Config**: Module addresses stored in `frontend/src/moduleAddresses.json`
+# Install for specific workspace
+npm install --workspace=ethereum
+npm install --workspace=solana
+npm install --workspace=frontend
+```
 
-**Solana Integration:**
-- **Program Addresses**: Stored in `frontend/src/solanaAddresses.json`
-- **Current Program ID**: `HPETsRTsHi8ez2dBbzSHRE2KDfHFYuvYK4Bg6f8K1tB6` (Oct 2024)
-- **Network**: Solana localhost validator (port 8899)
-- **Wallet Support**: Phantom, Solflare, and other Solana wallets
-- **RPC Endpoint**: `http://127.0.0.1:8899` for local development
+### Running Commands Across Workspaces
+```bash
+# Ethereum commands
+npm run eth:compile
+npm run eth:deploy-modular
+npm run eth:test
 
-**Frontend Network Switching:**
-- **Blockchain Selector**: Switch between EVM and Solana networks
-- **Network Types**: Each blockchain supports multiple networks (localhost, testnet, mainnet)
-- **Wallet Integration**: MetaMask for EVM, Phantom/Solflare for Solana
-- **Frontend Port**: React development server runs on port 3000
+# Solana commands
+npm run solana:deploy-reliable
+npm run solana:build
+npm run solana:test
 
-### Token Support
+# Frontend commands
+npm run frontend:start
+npm run frontend:build
 
-**EVM Tokens:**
-- **ETH**: Native token (address: `0x0000000000000000000000000000000000000000`)
-- **ERC20**: Any ERC20 token (tested with MockUSDT using 6 decimals)
+# Multi-chain commands
+npm run dev:multi     # Start both blockchains
+npm run dev:full      # Start everything (chains + frontend)
+npm run deploy:full   # Deploy to both chains
+```
 
-**Solana Tokens:**
-- **SOL**: Native token
-- **SPL Tokens**: Solana Program Library tokens
+## Technical Architecture Overview
+
+### EVM Architecture
+For detailed technical information about the Ethereum implementation, see **`ethereum/CLAUDE.md`**:
+- Modular smart contract design with UUPS proxy pattern
+- 4 specialized modules (TimePeriodLimits, ProposalSystem, BypassSystem, ApprovalSystem)
+- Module upgradeability and storage preservation
+- Hardhat development environment with automated ABI sync
+
+### Solana Architecture
+For detailed technical information about the Solana implementation:
+- Anchor framework with Rust smart contracts
+- Program Derived Addresses (PDAs) for deterministic accounts
+- Cross-program invocations for modular functionality
+- Existing documentation in `solana/` folder
+
+### Frontend Architecture
+- **Multi-blockchain support**: Single React app with blockchain adapters
+- **EVM Integration**: ethers.js v6 for Ethereum connectivity
+- **Solana Integration**: @solana/web3.js for Solana connectivity
+- **Network Switching**: Dynamic switching between blockchain backends
+- **Shared UI**: Identical interface for both blockchain implementations
 
 ## Deployment Process
 
-### Initial Setup (First Time) - Multi-Blockchain
+### Initial Setup (Multi-Blockchain)
 
-**Complete Multi-Blockchain Setup:**
-1. **Terminal 1**: Start EVM chain: `npx hardhat node`
-2. **Terminal 2**: Start Solana chain: `npm run solana:localnet`
-3. **Terminal 3**: Deploy EVM contracts: `npx hardhat run scripts/deploy-modular.js --network localhost`
-4. **Terminal 3**: Setup Solana programs: `npm run solana:deploy-reliable` **⚡ RECOMMENDED**
-5. **Terminal 3**: Start frontend: `cd frontend && npm start`
-
-**EVM-Only Setup (Legacy):**
-1. Start local Hardhat node: `npx hardhat node`
-2. Deploy modular contracts: `npx hardhat run scripts/deploy-modular.js --network localhost`
-3. Start frontend: `cd frontend && npm start`
-
-**Solana-Only Setup:**
-1. Start Solana validator: `npm run solana:localnet`
-2. Setup Solana programs: `npm run solana:deploy-reliable` **⚡ RECOMMENDED**
-3. Start frontend: `cd frontend && npm start`
-
-### Contract Updates (After Initial Setup)
-
-**EVM Contract Updates:**
-1. Make changes to any contract in `contracts/`
-2. Compile: `npx hardhat compile` (auto-updates ABIs)
-3. **For Core changes**: `npx hardhat run scripts/deploy-modular.js --network localhost`
-4. **For Module changes**: `npx hardhat run scripts/upgrade-module.js --network localhost <ModuleName> <CoreAddress>`
-5. Frontend automatically updated with new ABIs
-
-**Solana Program Updates:**
-1. Make changes to programs in `solana/programs/`
-2. Build and deploy: `npm run solana:setup`
-3. Frontend automatically updated with new program addresses
-
-## Understanding the Modular System
-
-### Modular Architecture Benefits
-**Why we switched from monolithic to modular:**
-- **Contract Size Limits**: Ethereum has ~24KB deployment limit, our contract was too large
-- **Independent Upgrades**: Upgrade individual modules without affecting others
-- **Specialized Functionality**: Each module focuses on one responsibility
-- **Reduced Gas Costs**: Only deploy/upgrade what needs to change
-
-### Module System Design
-```
-SavingsCore (Proxy)
-├── TimePeriodLimitsModule    → Daily/Weekly/Monthly spending limits
-├── ProposalSystemModule      → Two-phase proposals with timelock
-├── BypassSystemModule        → Emergency withdrawal bypass
-└── ApprovalSystemModule      → Multi-signature approvals
-```
-
-### Module Registration Process
-```solidity
-// Modules are registered with keccak256 identifiers:
-bytes32 moduleId = keccak256(abi.encodePacked("TIME_PERIOD_LIMITS"));
-savingsCore.registerModule(moduleId, moduleAddress);
-```
-
-### UUPS Proxy Pattern
-This project uses OpenZeppelin's **UUPS (Universal Upgradeable Proxy Standard)** pattern:
-
-- **SavingsCore Proxy**: Permanent address that users and frontend interact with
-- **Module Implementations**: Can be updated independently without changing core
-- **Shared Storage**: All modules access storage through SavingsCore
-- **Storage**: Always stored in the proxy, preserved across upgrades
-
-### Module vs Core Upgrades
-**SavingsCore Upgrades:**
-- Use UUPS proxy upgrade pattern
-- Preserve all user data and module registrations
-- Require careful storage layout management
-
-**Module Upgrades:**
-- Deploy new module implementation
-- Update registration in SavingsCore
-- Old module automatically deregistered
-- Module-specific data preserved in SavingsCore storage
-
-### Upgrade Safety
-✅ **Safe Operations (Core & Modules)**:
-- Adding new functions
-- Adding new state variables (at end of struct)
-- Modifying function logic
-- Adding events
-- Adding new modules
-
-✅ **Safe Module Operations**:
-- Complete module replacement
-- New module implementations
-- Updated module logic
-
-⚠️ **Dangerous Operations**:
-- Reordering state variables in SavingsCore
-- Changing variable types in shared storage
-- Removing state variables from SavingsCore
-- Changing inheritance order in SavingsCore
-
-### Data Preservation
-When using proper upgrade scripts:
-- ✅ User balances preserved (stored in SavingsCore)
-- ✅ Spending limits preserved (stored in SavingsCore)
-- ✅ SavingsCore proxy address preserved
-- ✅ User proxy contracts preserved
-- ✅ Module registrations updated automatically
-- ✅ Module-specific data preserved across module upgrades
-
-## Configuration Files
-
-- **hardhat.config.ts**: Hardhat configuration with localhost network
-- **tsconfig.json**: TypeScript configuration for Node.js compatibility
-- **frontend/package.json**: React app dependencies including ethers v6
-
-## Testing Strategy
-
-- **Smart Contracts**: Hardhat test suite needs updating for modular architecture
-- **Module Testing**: Each module can be tested independently
-- **Integration Testing**: Full system testing through SavingsCore
-- **Frontend**: Create React App test runner (minimal tests currently)
-- **Validation Scripts**: Automated deployment validation in `scripts/validate-deployment.js`
-
-## Troubleshooting
-
-### Common ABI/Contract Issues
-
-#### **"could not decode result data" Error**
+**Option 1: Quick Setup**
 ```bash
-# Quick fixes (in order):
-1. Clear browser cache (Ctrl+Shift+R / Cmd+Shift+R)
-2. Check MetaMask network (should be localhost:8545, Chain ID: 31337)
-3. Restart Hardhat node and redeploy:
-   npx hardhat node
-   npx hardhat run scripts/deploy-modular.js --network localhost
-4. Force recompile: npx hardhat clean && npx hardhat compile
+# Install all dependencies
+npm run install:all
+
+# Start both blockchains and deploy
+npm run dev:multi          # Start EVM + Solana chains
+npm run deploy:full        # Deploy to both chains
+npm run frontend:start     # Start React app
 ```
 
-#### **Module Registration Issues**
+**Option 2: Step-by-Step Setup**
 ```bash
-# Validate deployment and module registration:
-npx hardhat run scripts/validate-deployment.js --network localhost
+# Terminal 1: Start EVM chain
+npm run eth:node
 
-# Check specific module status:
-npx hardhat run scripts/debug-contract.js --network localhost
-```
+# Terminal 2: Start Solana chain
+npm run solana:localnet
 
-#### **ABI Sync Issues**
-```bash
-# Force update all ABIs:
-npx hardhat compile --force
-
-# Verify ABI compatibility:
-npx hardhat run scripts/test-frontend-connection.js --network localhost
-```
-
-### Nuclear Reset (Last Resort)
-```bash
-# Stop all terminals, then:
-npx hardhat clean
-npx hardhat compile
-npx hardhat node  # Terminal 1
-npx hardhat run scripts/deploy-modular.js --network localhost  # Terminal 2
-cd frontend && npm start  # Terminal 3
-# Clear browser cache completely
-```
-
-## Important Notes
-
-### ✅ **WORKING: Solana Deployment (Updated Oct 2024)**
-
-**SUCCESSFUL CONFIGURATION:**
-- **Solana CLI**: 2.1.15 (Agave) ✅
-- **Anchor CLI**: 0.31.1 (homebrew) ✅
-- **Rust**: 1.90.0 ✅
-
-**Deployment Commands:**
-```bash
-# Option 1: Automated (recommended)
+# Terminal 3: Deploy and start frontend
+npm run eth:deploy-modular
 npm run solana:deploy-reliable
-
-# Option 2: Manual step-by-step
-cd solana
-export PATH="/Users/andriy/.local/share/solana/install/active_release/bin:$PATH"
-anchor build
-anchor deploy --provider.cluster localnet
+npm run frontend:start
 ```
 
-**If You Get Build Errors:**
-- ❌ `"build-sbf not found"` → **Upgrade to Agave CLI 2.1.15+**
-- ❌ `"Bumps trait not satisfied"` → **Already fixed in current code**
-- ❌ `"init-if-needed feature missing"` → **Already fixed in Cargo.toml**
+### Development Workflow
 
-**Migration from Old Setup:**
+**For EVM development:**
 ```bash
-# Install Agave CLI (replaces deprecated solana-install)
-sh -c "$(curl -sSfL https://release.anza.xyz/v2.1.15/install)"
-rustup update  # Ensure Rust 1.85.0+
+cd ethereum               # Work in ethereum folder
+npm run compile          # Compile contracts
+npm run deploy-modular   # Deploy with modules
+npm run test            # Run tests
 ```
 
-### **Modular Architecture Notes**
-- **SavingsCore** is the main contract - frontend always interacts with this address
-- **Modules** are registered dynamically and can be upgraded individually
-- **Module addresses** change on upgrade, but SavingsCore address stays constant
-- **Module interactions** are handled automatically through core delegation
+**For Solana development:**
+```bash
+cd solana                # Work in solana folder
+npm run deploy-reliable  # Deploy programs
+anchor test             # Run tests
+```
 
-### **Development Best Practices**
-- Always use `deploy-modular.js` for full system deployment
-- Use `upgrade-module.js` for individual module updates
-- ABIs are auto-updated on compilation - never edit manually
-- Validation scripts catch issues early - always check output
-- MockUSDT uses 6 decimals to match real USDT
-- Frontend expects MetaMask for wallet connection
+**For frontend development:**
+```bash
+cd frontend             # Work in frontend folder
+npm start              # Start dev server
+npm test               # Run tests
+```
 
-### **Data Preservation**
-- **SavingsCore upgrades**: Preserve all user data (use UUPS pattern)
-- **Module upgrades**: Preserve module-specific data and registrations
-- **Fresh deployments**: Only use for initial setup (DATA LOSS)
-- **User proxies**: Permanent addresses tied to user wallets
+## Best Practices
 
-### **Best Coding Practices**
-- always use DRY principle
-- never have inline imports
-- as a code practive never hardcode any numbericals or addresses that could otherwise be genreated with our deployment script
+### Development Workflow
+- **Chain-specific development**: Use `cd ethereum` or `cd solana` for focused development
+- **Multi-chain testing**: Use workspace commands from root to test both chains
+- **Incremental deployment**: Deploy to one chain first, test, then deploy to the other
+- **Frontend compatibility**: Ensure frontend changes work with both blockchain backends
+
+### Project Organization
+- **EVM-specific files**: Keep all Ethereum development in `ethereum/` folder
+- **Solana-specific files**: Keep all Solana development in `solana/` folder
+- **Shared resources**: Frontend and project-wide configuration stay in root
+- **Documentation**: Chain-specific docs in respective folders, overview in root
+
+### Common Commands Reference
+```bash
+# Project setup
+npm run install:all        # Install all workspace dependencies
+
+# Multi-chain development
+npm run dev:multi          # Start both chains
+npm run deploy:full        # Deploy to both chains
+npm run dev:full           # Start chains + frontend
+
+# Individual chain development
+npm run eth:*              # Ethereum commands
+npm run solana:*           # Solana commands
+npm run frontend:*         # Frontend commands
+
+# Direct workspace development
+cd ethereum && npm run *   # Work directly in ethereum folder
+cd solana && npm run *     # Work directly in solana folder
+cd frontend && npm run *   # Work directly in frontend folder
+```
+
+## Documentation
+
+- **Root CLAUDE.md**: This file - multi-chain overview and workspace management
+- **ethereum/CLAUDE.md**: Detailed EVM development guide (contracts, deployment, modules)
+- **solana/**: Existing Solana-specific documentation and deployment guides
+- **frontend/**: React app documentation for multi-blockchain UI
+
+## Migration Notes
+
+This project has been refactored into a workspace structure:
+- **Before**: All EVM files in root, mixed with Solana and frontend
+- **After**: Clean separation with `ethereum/`, `solana/`, `frontend/` folders
+- **Benefits**: Independent development, clearer dependencies, scalable architecture
+- **Backward compatibility**: Root workspace commands maintain familiar workflow

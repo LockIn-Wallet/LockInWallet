@@ -5,7 +5,7 @@ const path = require("path");
 // Auto-detect existing proxy address from frontend
 function getExistingProxyAddress() {
   try {
-    const frontendPath = path.join(__dirname, "../frontend/src/App.js");
+    const frontendPath = path.join(__dirname, "../../frontend/src/App.js");
     const frontendContent = fs.readFileSync(frontendPath, "utf8");
     const match = frontendContent.match(/savingsContract: "([^"]+)"/);
     if (match && match[1] !== "0x0000000000000000000000000000000000000000") {
@@ -188,7 +188,7 @@ async function main() {
     } else {
       // For upgrades, try to get the existing USDT address from frontend config
       try {
-        const frontendPath = path.join(__dirname, "../frontend/src/App.js");
+        const frontendPath = path.join(__dirname, "../../frontend/src/App.js");
         const frontendContent = fs.readFileSync(frontendPath, "utf8");
         const usdtMatch = frontendContent.match(/address: "([^"]+)",\s*symbol: "USDT"/);
         if (usdtMatch) {
@@ -204,7 +204,7 @@ async function main() {
 
     // Update frontend addresses
     console.log("\n🔄 Updating frontend addresses...");
-    const frontendPath = path.join(__dirname, "../frontend/src/App.js");
+    const frontendPath = path.join(__dirname, "../../frontend/src/App.js");
 
     try {
       let frontendContent = fs.readFileSync(frontendPath, "utf8");
@@ -268,7 +268,7 @@ async function main() {
         deployedAt: new Date().toISOString()
       };
 
-      const moduleConfigPath = path.join(__dirname, "../frontend/src/moduleAddresses.json");
+      const moduleConfigPath = path.join(__dirname, "../../frontend/src/moduleAddresses.json");
       fs.writeFileSync(moduleConfigPath, JSON.stringify(moduleConfig, null, 2));
       console.log("✅ Module addresses config created");
 
@@ -282,42 +282,42 @@ async function main() {
     try {
       // Copy SavingsCore ABI
       const savingsCoreArtifact = require("../artifacts/contracts/SavingsCore.sol/SavingsCore.json");
-      const frontendSavingsABIPath = path.join(__dirname, "../frontend/src/SavingsABI.json");
+      const frontendSavingsABIPath = path.join(__dirname, "../../frontend/src/SavingsABI.json");
       fs.writeFileSync(frontendSavingsABIPath, JSON.stringify(savingsCoreArtifact.abi, null, 2));
       console.log("✅ SavingsCore ABI updated");
 
       // Copy module ABIs
       const timePeriodLimitsArtifact = require("../artifacts/contracts/TimePeriodLimitsModule.sol/TimePeriodLimitsModule.json");
-      const frontendTimePeriodLimitsABIPath = path.join(__dirname, "../frontend/src/TimePeriodLimitsModuleABI.json");
+      const frontendTimePeriodLimitsABIPath = path.join(__dirname, "../../frontend/src/TimePeriodLimitsModuleABI.json");
       fs.writeFileSync(frontendTimePeriodLimitsABIPath, JSON.stringify(timePeriodLimitsArtifact.abi, null, 2));
       console.log("✅ TimePeriodLimitsModule ABI updated");
 
       const proposalSystemArtifact = require("../artifacts/contracts/ProposalSystemModule.sol/ProposalSystemModule.json");
-      const frontendProposalSystemABIPath = path.join(__dirname, "../frontend/src/ProposalSystemModuleABI.json");
+      const frontendProposalSystemABIPath = path.join(__dirname, "../../frontend/src/ProposalSystemModuleABI.json");
       fs.writeFileSync(frontendProposalSystemABIPath, JSON.stringify(proposalSystemArtifact.abi, null, 2));
       console.log("✅ ProposalSystemModule ABI updated");
 
       const bypassSystemArtifact = require("../artifacts/contracts/BypassSystemModule.sol/BypassSystemModule.json");
-      const frontendBypassSystemABIPath = path.join(__dirname, "../frontend/src/BypassSystemModuleABI.json");
+      const frontendBypassSystemABIPath = path.join(__dirname, "../../frontend/src/BypassSystemModuleABI.json");
       fs.writeFileSync(frontendBypassSystemABIPath, JSON.stringify(bypassSystemArtifact.abi, null, 2));
       console.log("✅ BypassSystemModule ABI updated");
 
       const approvalSystemArtifact = require("../artifacts/contracts/ApprovalSystemModule.sol/ApprovalSystemModule.json");
-      const frontendApprovalSystemABIPath = path.join(__dirname, "../frontend/src/ApprovalSystemModuleABI.json");
+      const frontendApprovalSystemABIPath = path.join(__dirname, "../../frontend/src/ApprovalSystemModuleABI.json");
       fs.writeFileSync(frontendApprovalSystemABIPath, JSON.stringify(approvalSystemArtifact.abi, null, 2));
       console.log("✅ ApprovalSystemModule ABI updated");
 
       // Copy MockUSDT ABI
       if (usdtAddress) {
         const usdtArtifact = require("../artifacts/contracts/MockUSDT.sol/MockUSDT.json");
-        const frontendUSDTABIPath = path.join(__dirname, "../frontend/src/MockUSDT_ABI.json");
+        const frontendUSDTABIPath = path.join(__dirname, "../../frontend/src/MockUSDT_ABI.json");
         fs.writeFileSync(frontendUSDTABIPath, JSON.stringify(usdtArtifact.abi, null, 2));
         console.log("✅ MockUSDT ABI updated");
       }
 
       // Copy UserProxy ABI
       const userProxyArtifact = require("../artifacts/contracts/UserProxy.sol/UserProxy.json");
-      const frontendUserProxyABIPath = path.join(__dirname, "../frontend/src/UserProxyABI.json");
+      const frontendUserProxyABIPath = path.join(__dirname, "../../frontend/src/UserProxyABI.json");
       fs.writeFileSync(frontendUserProxyABIPath, JSON.stringify(userProxyArtifact.abi, null, 2));
       console.log("✅ UserProxy ABI updated");
 

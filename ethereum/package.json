@@ -1,0 +1,61 @@
+{
+  "name": "savings-wallet-ethereum",
+  "version": "1.0.0",
+  "description": "Ethereum/EVM smart contracts for the savings wallet DApp",
+  "main": "index.js",
+  "scripts": {
+    "test": "hardhat test",
+    "compile": "hardhat compile",
+    "dev": "node scripts/dev.js",
+    "node": "hardhat node --hostname 0.0.0.0",
+    "deploy-all": "hardhat run scripts/deploy-all.js --network localhost",
+    "deploy-usdt": "hardhat run scripts/deployMockUSDT.js --network localhost",
+    "deploy-savings": "hardhat run scripts/deploy-upgradable.ts --network localhost",
+    "deploy-modular": "hardhat run scripts/deploy-modular.js --network localhost",
+    "deploy:dev": "DEV_MODE=true hardhat run scripts/deploy-upgrade.js --network localhost",
+    "deploy:prod": "hardhat run scripts/deploy-upgrade.js --network localhost",
+    "update-frontend": "node scripts/update-frontend-addresses.js",
+    "transfer-usdt": "hardhat run scripts/transferUSDT.js --network localhost --",
+    "upgrade-module": "hardhat run scripts/upgrade-module.js --network localhost",
+    "validate-deployment": "hardhat run scripts/validate-deployment.js --network localhost",
+    "gas-estimation": "node scripts/gas-estimation.js",
+    "clean": "hardhat clean"
+  },
+  "keywords": [
+    "ethereum",
+    "hardhat",
+    "smart-contracts",
+    "defi",
+    "savings"
+  ],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@nomicfoundation/hardhat-chai-matchers": "^2.0.0",
+    "@nomicfoundation/hardhat-ethers": "^3.0.0",
+    "@nomicfoundation/hardhat-ignition-ethers": "^0.15.0",
+    "@nomicfoundation/hardhat-network-helpers": "^1.0.0",
+    "@nomicfoundation/hardhat-toolbox": "^5.0.0",
+    "@nomicfoundation/hardhat-verify": "^2.0.0",
+    "@openzeppelin/hardhat-upgrades": "^3.9.0",
+    "@typechain/ethers-v6": "^0.5.0",
+    "@typechain/hardhat": "^9.0.0",
+    "@types/chai": "^4.2.0",
+    "@types/mocha": ">=9.1.0",
+    "@types/node": "^22.14.0",
+    "chai": "^4.2.0",
+    "hardhat": "^2.22.19",
+    "hardhat-gas-reporter": "^1.0.8",
+    "solidity-coverage": "^0.8.1",
+    "ts-node": "^10.9.2",
+    "typechain": "^8.3.0",
+    "typescript": "^5.8.3",
+    "vm-browserify": "^1.1.2"
+  },
+  "dependencies": {
+    "@openzeppelin/contracts": "^5.4.0",
+    "@openzeppelin/contracts-upgradeable": "^5.3.0",
+    "ethers": "^6.13.5",
+    "hardhat-ignition": "^0.0.1"
+  }
+}

@@ -1,20 +1,20 @@
 node_modules
 .env
 
-# Hardhat files
-/cache
-/artifacts
+# Hardhat files (in ethereum folder)
+ethereum/cache/
+ethereum/artifacts/
 
-# TypeChain files
-/typechain
-/typechain-types
+# TypeChain files (in ethereum folder)
+ethereum/typechain/
+ethereum/typechain-types/
 
-# solidity-coverage files
-/coverage
-/coverage.json
+# solidity-coverage files (in ethereum folder)
+ethereum/coverage/
+ethereum/coverage.json
 
 # Hardhat Ignition default folder for deployments against a local node
-ignition/deployments/chain-31337
+ethereum/ignition/deployments/chain-31337
 
 # Solana local validator files
 test-ledger/

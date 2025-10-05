@@ -154,21 +154,21 @@ class GasEstimator {
     try {
       // Load SavingsCore ABI and address
       const savingsABI = JSON.parse(
-        fs.readFileSync(path.join(__dirname, "../frontend/src/SavingsABI.json"), "utf8")
+        fs.readFileSync(path.join(__dirname, "../../frontend/src/SavingsABI.json"), "utf8")
       );
 
       // Try to get deployed address from frontend config or deployment artifacts
       let savingsAddress;
       try {
         this.moduleAddresses = JSON.parse(
-          fs.readFileSync(path.join(__dirname, "../frontend/src/moduleAddresses.json"), "utf8")
+          fs.readFileSync(path.join(__dirname, "../../frontend/src/moduleAddresses.json"), "utf8")
         );
         savingsAddress = this.moduleAddresses.core;
       } catch {
         try {
           // Fallback: check frontend addresses.json
           const frontendAddresses = JSON.parse(
-            fs.readFileSync(path.join(__dirname, "../frontend/src/addresses.json"), "utf8")
+            fs.readFileSync(path.join(__dirname, "../../frontend/src/addresses.json"), "utf8")
           );
           savingsAddress = frontendAddresses.savings;
         } catch {

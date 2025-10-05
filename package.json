@@ -1,22 +1,18 @@
 {
   "name": "savings-wallet",
   "version": "1.0.0",
-  "description": "",
+  "description": "Multi-blockchain savings wallet DApp with EVM and Solana support",
   "main": "index.js",
+  "workspaces": ["ethereum", "solana", "frontend"],
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "dev": "node scripts/dev.js",
-    "node": "npx hardhat node --hostname 0.0.0.0",
-    "deploy-all": "npx hardhat run scripts/deploy-all.js --network localhost",
-    "deploy-usdt": "npx hardhat run scripts/deployMockUSDT.js --network localhost",
-    "deploy-savings": "npx hardhat run scripts/deploy-upgradable.ts --network localhost",
-    "deploy:dev": "DEV_MODE=true npx hardhat run scripts/deploy-upgrade.js --network localhost",
-    "deploy:prod": "npx hardhat run scripts/deploy-upgrade.js --network localhost",
-    "update-frontend": "node scripts/update-frontend-addresses.js",
-    "transfer-usdt": "npx hardhat run scripts/transferUSDT.js --network localhost --",
+    "test": "echo \"Use workspace-specific test commands: cd ethereum && npm test, or cd solana && npm test\"",
+
+    "install:all": "npm install && npm install --workspace=ethereum && npm install --workspace=solana && npm install --workspace=frontend",
+
+
     "solana:localnet": "solana-test-validator --reset --quiet",
-    "solana:localnet:setup": "npm run solana:localnet & sleep 10 && node scripts/setup-solana-tokens.js",
-    "solana:setup-tokens": "node scripts/setup-solana-tokens.js",
+    "solana:localnet:setup": "npm run solana:localnet & sleep 10 && node solana/setup-solana-tokens.js",
+    "solana:setup-tokens": "node solana/setup-solana-tokens.js",
     "solana:build": "cd solana && anchor build",
     "solana:test": "cd solana && anchor test",
     "solana:deploy": "cd solana && anchor deploy --provider.cluster localnet",
@@ -26,26 +22,26 @@
     "solana:update-frontend": "cd solana && npm run update-frontend",
     "solana:setup": "npm run solana:build && npm run solana:deploy && npm run solana:update-frontend",
     "solana:deploy-reliable": "cd solana && npm run deploy-reliable",
-    "solana:upgrade-reliable": "cd solana && npm run upgrade-reliable"
+    "solana:upgrade-reliable": "cd solana && npm run upgrade-reliable",
+
+    "frontend:start": "npm start --workspace=frontend",
+    "frontend:build": "npm run build --workspace=frontend",
+    "frontend:test": "npm test --workspace=frontend",
+
+    "dev:multi": "concurrently \"npm run node --workspace=ethereum\" \"npm run solana:localnet\"",
+    "dev:full": "concurrently \"npm run node --workspace=ethereum\" \"npm run solana:localnet\" \"npm run frontend:start\"",
+
+    "deploy:full": "npm run deploy-modular --workspace=ethereum && npm run solana:deploy-reliable"
   },
-  "keywords": [],
+  "keywords": ["blockchain", "defi", "savings", "ethereum", "solana", "multi-chain"],
   "author": "",
   "license": "ISC",
   "devDependencies": {
-    "@nomicfoundation/hardhat-toolbox": "^5.0.0",
-    "@openzeppelin/hardhat-upgrades": "^3.9.0",
-    "@types/node": "^22.14.0",
-    "hardhat": "^2.22.19",
-    "ts-node": "^10.9.2",
-    "typescript": "^5.8.3",
-    "vm-browserify": "^1.1.2"
+    "concurrently": "^7.6.0"
   },
   "dependencies": {
     "@coral-xyz/anchor": "^0.29.0",
-    "@openzeppelin/contracts-upgradeable": "^5.3.0",
     "@solana/spl-token": "^0.4.14",
-    "@solana/web3.js": "^1.87.6",
-    "ethers": "^6.13.5",
-    "hardhat-ignition": "^0.0.1"
+    "@solana/web3.js": "^1.87.6"
   }
 }

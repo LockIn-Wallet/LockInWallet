@@ -2,7 +2,7 @@ const fs = require("fs");
 const path = require("path");
 
 async function updateFrontendAddresses(savingsAddress, usdtAddress) {
-  const frontendPath = path.join(__dirname, "../frontend/src/App.js");
+  const frontendPath = path.join(__dirname, "../../frontend/src/App.js");
 
   try {
     // Read current frontend file

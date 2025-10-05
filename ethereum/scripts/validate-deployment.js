@@ -11,7 +11,7 @@ async function validateDeployment() {
 
   try {
     // Read frontend configuration
-    const frontendPath = path.join(__dirname, "../frontend/src/App.js");
+    const frontendPath = path.join(__dirname, "../../frontend/src/App.js");
     const frontendContent = fs.readFileSync(frontendPath, "utf8");
 
     // Extract contract addresses from frontend
@@ -37,7 +37,7 @@ async function validateDeployment() {
 
     // Load the ABI and test key functions
     const savingsABI = JSON.parse(fs.readFileSync(
-      path.join(__dirname, "../frontend/src/SavingsABI.json"),
+      path.join(__dirname, "../../frontend/src/SavingsABI.json"),
       "utf8"
     ));
 

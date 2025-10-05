@@ -99,7 +99,7 @@ async function main() {
     // Update module addresses config file for frontend
     console.log("\n📋 Updating module addresses config...");
     try {
-      const moduleConfigPath = path.join(__dirname, "../frontend/src/moduleAddresses.json");
+      const moduleConfigPath = path.join(__dirname, "../../frontend/src/moduleAddresses.json");
 
       let moduleConfig;
       if (fs.existsSync(moduleConfigPath)) {
@@ -132,13 +132,13 @@ async function main() {
       // Update the specific module ABI
       const artifactPath = `../artifacts/contracts/${moduleName}.sol/${moduleName}.json`;
       const moduleArtifact = require(artifactPath);
-      const frontendABIPath = path.join(__dirname, `../frontend/src/${moduleName}ABI.json`);
+      const frontendABIPath = path.join(__dirname, `../../frontend/src/${moduleName}ABI.json`);
       fs.writeFileSync(frontendABIPath, JSON.stringify(moduleArtifact.abi, null, 2));
       console.log(`✅ ${moduleName} ABI updated`);
 
       // Also update SavingsCore ABI in case core contract interface changed
       const savingsCoreArtifact = require("../artifacts/contracts/SavingsCore.sol/SavingsCore.json");
-      const frontendSavingsABIPath = path.join(__dirname, "../frontend/src/SavingsABI.json");
+      const frontendSavingsABIPath = path.join(__dirname, "../../frontend/src/SavingsABI.json");
       fs.writeFileSync(frontendSavingsABIPath, JSON.stringify(savingsCoreArtifact.abi, null, 2));
       console.log("✅ SavingsCore ABI updated");
 
