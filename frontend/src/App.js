@@ -853,6 +853,58 @@ function AppContent() {
     }
   }, [networkType, selectedNetwork, solanaConnected, solanaPublicKey, connection]);
 
+  // Additional useEffect to handle page reload initialization with retry logic
+  useEffect(() => {
+    let retryTimeout;
+
+    const retryInitialization = async () => {
+      console.log('🔄 Retry initialization triggered for Solana on page reload');
+
+      // Check if we should initialize Solana but haven't loaded data yet
+      if (networkType === 'solana' &&
+          solanaConnected &&
+          solanaPublicKey &&
+          connection &&
+          !limitsLoaded &&
+          !transactionManager) {
+
+        console.log('🔄 Retrying Solana initialization (data not loaded on page reload)');
+
+        try {
+          const newTxManager = await initializeTransactionManager('solana', selectedNetwork);
+          if (newTxManager) {
+            console.log('🔄 Retry: Solana TransactionManager initialized, loading data...');
+            setTransactionManager(newTxManager);
+
+            await refreshBalances(newTxManager);
+            const userAddress = await newTxManager.getAddress();
+            await checkSolanaProxyStatus(newTxManager, userAddress);
+
+            console.log('📋 Retry: Loading Solana spending limits...');
+            await fetchSpendingLimitsWithTxManager(newTxManager);
+            console.log('✅ Retry: Solana spending limits loading completed');
+
+            await fetchPendingLimitProposals(null, newTxManager);
+            console.log('✅ Retry: Solana initialization retry successful');
+          }
+        } catch (error) {
+          console.error('❌ Retry initialization failed:', error);
+        }
+      }
+    };
+
+    // Set up retry after a short delay to allow all state to settle
+    if (networkType === 'solana' && solanaConnected && !limitsLoaded) {
+      retryTimeout = setTimeout(retryInitialization, 1000);
+    }
+
+    return () => {
+      if (retryTimeout) {
+        clearTimeout(retryTimeout);
+      }
+    };
+  }, [networkType, solanaConnected, solanaPublicKey, connection, limitsLoaded, transactionManager]);
+
   // Note: Balance loading when switching networks is now handled directly in switchNetworkType()
 
   const fetchAllBalances = async (
