@@ -2092,6 +2092,64 @@ function AppContent() {
 
         setSpendingLimits(fetchedLimits);
         setLimitsLoaded(true);
+
+        // Also fetch bypass requests since txManager is working
+        console.log('🔄 Fetching bypass requests after successful spending limits load...');
+        try {
+          const adapter = txManager.getCurrentAdapter();
+          const solanaUserAddress = solanaPublicKey?.toString();
+          if (solanaUserAddress) {
+            const bypassRequests = await adapter.fetchPendingBypassRequests(solanaUserAddress);
+
+            console.log('🔍 DEBUG: Raw bypass requests from adapter:', bypassRequests);
+
+            // Transform to match EVM format
+            const formattedRequests = bypassRequests.map(req => {
+              // Format amount properly - convert from token base units to decimal
+              let formattedAmount = req.amount;
+              try {
+                // The Solana program stores all amounts with 9 decimals (SOL standard)
+                formattedAmount = (Number(req.amount) / Math.pow(10, 9)).toString();
+                console.log(`🔍 Amount conversion: ${req.amount} -> ${formattedAmount}`);
+              } catch (error) {
+                console.warn('Error formatting amount:', error);
+              }
+
+              return {
+                requestId: req.requestId,
+                title: `${req.bypassingPeriod} Bypass`,
+                destination: req.destination,
+                executeAfter: req.executeAfter,
+                submittedDate: (() => {
+                  try {
+                    // Handle different timestamp formats
+                    let timestamp = req.createdAt;
+                    // If timestamp is too large, it might be in milliseconds already
+                    if (timestamp > 10000000000) {
+                      timestamp = timestamp / 1000;
+                    }
+                    const date = new Date(timestamp * 1000);
+                    console.log(`🔍 Date conversion: ${req.createdAt} -> ${date.toLocaleDateString()}`);
+                    return date.toLocaleDateString();
+                  } catch (error) {
+                    console.warn('Error formatting date:', error);
+                    return 'Unknown date';
+                  }
+                })(),
+                amount: formattedAmount,
+                tokenMint: req.tokenMint,
+                bypassingPeriod: req.bypassingPeriod,
+                canExecute: req.canExecute,
+                status: req.status
+              };
+            });
+
+            setPendingBypassRequests(formattedRequests);
+            console.log(`📋 Loaded ${formattedRequests.length} Solana bypass requests for ${solanaUserAddress}`);
+          }
+        } catch (error) {
+          console.error('❌ Error fetching bypass requests after spending limits:', error);
+        }
         setIsSetupCommitted(spendingData.isSetupCommitted);
 
         console.log("✅ Solana spending limits state updated!");
@@ -2283,30 +2341,10 @@ function AppContent() {
 
     try {
       if (networkType === 'solana') {
-        // Fetch Solana bypass requests (which are withdrawal requests exceeding limits)
-        if (!transactionManager) {
-          console.log(`⏭️ Skipping fetchPendingWithdrawalRequests for Solana - no transaction manager`);
-          setPendingWithdrawalRequests([]);
-          return;
-        }
-
-        const adapter = transactionManager.getCurrentAdapter();
-        const bypassRequests = await adapter.fetchPendingBypassRequests(currentUserAddress);
-
-        // Transform to match EVM format
-        const formattedRequests = bypassRequests.map(req => ({
-          requestId: req.requestId,
-          title: `${req.bypassingPeriod} Bypass`, // Use bypassing period as title
-          destination: req.destination,
-          executeAfter: req.executeAfter,
-          submittedDate: new Date(req.createdAt * 1000).toLocaleDateString(),
-          amount: req.amount,
-          tokenMint: req.tokenMint,
-          bypassingPeriod: req.bypassingPeriod
-        }));
-
-        setPendingWithdrawalRequests(formattedRequests);
-        console.log(`📋 Loaded ${formattedRequests.length} Solana pending withdrawal requests for ${currentUserAddress}`);
+        // Solana doesn't have separate withdrawal requests - all handled via bypass system
+        console.log(`⏭️ Skipping fetchPendingWithdrawalRequests for Solana - handled via bypass system`);
+        setPendingWithdrawalRequests([]);
+        return;
       } else {
         // Fetch EVM withdrawal requests
         if (!contract || !currentUserAddress) {
@@ -2522,11 +2560,19 @@ function AppContent() {
           console.log("Solana SOL withdrawal to destination:", txHash);
         } else {
           // Withdraw SPL token to destination
-          // Get the token mint address - for now we only support USDT
-          const tokenMint = "HQQPp5Vh6WHdfHrcr41VrdTPVPzrvbSsUde4gGFLLpJM"; // USDT mint
+          // Get the token mint address from network configuration
+          const currentNetwork = getCurrentNetwork(selectedNetwork);
+          const token = currentNetwork.tokens[selectedToken];
+          if (!token) {
+            alert("Please select a valid token");
+            return;
+          }
 
-          // Convert to token's base units (USDT has 6 decimals)
-          const amountTokenUnits = Math.floor(amountValue * Math.pow(10, 6));
+          const tokenMint = token.mint || token.address; // Use mint for Solana, address for EVM
+          const decimals = token.decimals;
+
+          // Convert to token's base units
+          const amountTokenUnits = Math.floor(amountValue * Math.pow(10, decimals));
           txHash = await adapter.withdrawSplToDestination(amountTokenUnits, tokenMint, destinationAddress);
           console.log("Solana SPL withdrawal to destination:", txHash);
         }
@@ -2558,11 +2604,13 @@ function AppContent() {
           tokenSymbol = "ETH";
         } else if (currentNetwork.tokens[selectedToken]) {
           const token = currentNetwork.tokens[selectedToken];
-          if (token.address === "0x0000000000000000000000000000000000000000") {
+          // Check availability based on network type
+          const networkTokenAddress = token.mint || token.address;
+          if (!networkTokenAddress || (token.address === "0x0000000000000000000000000000000000000000")) {
             alert(`${token.symbol} is not available on ${currentNetwork.name}`);
             return;
           }
-          tokenAddress = token.address;
+          tokenAddress = networkTokenAddress;
           decimals = token.decimals;
           tokenSymbol = token.symbol;
         } else {
@@ -2677,15 +2725,37 @@ function AppContent() {
           tokenAddress = 'So11111111111111111111111111111111111111112'; // SOL mint (System Program ID)
         } else {
           // Get current USDT or other SPL token address from network config
-          const currentNetwork = getCurrentNetwork(selectedNetwork);
+          const currentNetwork = getCurrentNetwork(networkType, selectedNetwork);
+          console.log('🔍 DEBUG: Network selection:', {
+            selectedNetwork,
+            currentNetwork: currentNetwork.name,
+            networkType,
+            tokenConfig: currentNetwork.tokens[selectedToken]
+          });
+
           const token = currentNetwork.tokens[selectedToken];
           if (token) {
-            tokenAddress = token.address;
+            // For Solana, use mint address; for EVM, use address
+            tokenAddress = token.mint || token.address;
+            console.log('🔍 DEBUG: Token resolution:', {
+              tokenMint: token.mint,
+              tokenAddress: token.address,
+              finalTokenAddress: tokenAddress
+            });
           } else {
             alert("Please select a valid token");
             return;
           }
         }
+
+        console.log('🔍 DEBUG: Requesting bypass with params:', {
+          amount: withdrawalAmount,
+          tokenAddress,
+          period: exceedingPeriod,
+          destination,
+          selectedToken,
+          networkType
+        });
 
         const txHash = await adapter.requestWithdrawalBypass(
           withdrawalAmount,
@@ -2715,7 +2785,7 @@ function AppContent() {
           decimals = 18;
         } else if (currentNetwork.tokens[selectedToken]) {
           const token = currentNetwork.tokens[selectedToken];
-          tokenAddress = token.address;
+          tokenAddress = token.mint || token.address; // Use mint for Solana, address for EVM
           decimals = token.decimals;
         } else {
           alert("Please select a valid token");
@@ -2747,7 +2817,7 @@ function AppContent() {
         await fetchSpendingLimits();
       }
       if (networkType === 'solana') {
-        await transactionManager.getCurrentAdapter().fetchPendingBypassRequests();
+        await fetchPendingBypassRequests();
         await fetchSpendingLimits();
       }
     } catch (error) {
@@ -2779,18 +2849,71 @@ function AppContent() {
     contract = savingsContract,
     userAddr = null
   ) => {
-    // Only run for EVM network
-    if (networkType !== 'evm') {
-      console.log(`⏭️ Skipping fetchPendingBypassRequests for ${networkType} network`);
-      return;
-    }
-
     const currentUserAddress = userAddr || userAddress;
-    const currentContract = contract || savingsContract;
-
-    if (!currentUserAddress || !currentContract) return;
 
     try {
+      if (networkType === 'solana') {
+        // Fetch Solana bypass requests
+        if (!transactionManager) {
+          console.log(`⏭️ Skipping fetchPendingBypassRequests for Solana - no transaction manager`);
+          setPendingBypassRequests([]);
+          return;
+        }
+
+        const adapter = transactionManager.getCurrentAdapter();
+        // For Solana, use the Solana wallet address, not EVM address
+        const solanaUserAddress = userAddr || solanaPublicKey?.toString();
+        const bypassRequests = await adapter.fetchPendingBypassRequests(solanaUserAddress);
+
+        // Transform to match EVM format
+        const formattedRequests = bypassRequests.map(req => {
+          // Format amount properly - convert from token base units to decimal
+          let formattedAmount = req.amount;
+          try {
+            // The Solana program stores all amounts with 9 decimals (SOL standard)
+            formattedAmount = (Number(req.amount) / Math.pow(10, 9)).toString();
+            console.log(`🔍 Amount conversion: ${req.amount} -> ${formattedAmount}`);
+          } catch (error) {
+            console.warn('Error formatting amount:', error);
+          }
+
+          return {
+            requestId: req.requestId,
+            title: `${req.bypassingPeriod} Bypass`, // Use bypassing period as title
+            destination: req.destination,
+            executeAfter: req.executeAfter,
+            submittedDate: (() => {
+              try {
+                // Handle different timestamp formats
+                let timestamp = req.createdAt;
+                // If timestamp is too large, it might be in milliseconds already
+                if (timestamp > 10000000000) {
+                  timestamp = timestamp / 1000;
+                }
+                const date = new Date(timestamp * 1000);
+                console.log(`🔍 Date conversion: ${req.createdAt} -> ${date.toLocaleDateString()}`);
+                return date.toLocaleDateString();
+              } catch (error) {
+                console.warn('Error formatting date:', error);
+                return 'Unknown date';
+              }
+            })(),
+            amount: formattedAmount,
+            tokenMint: req.tokenMint,
+            bypassingPeriod: req.bypassingPeriod,
+            canExecute: req.canExecute,
+            status: req.status
+          };
+        });
+
+        setPendingBypassRequests(formattedRequests);
+        console.log(`📋 Loaded ${formattedRequests.length} Solana bypass requests for ${solanaUserAddress}`);
+        return;
+      }
+
+      // EVM bypass requests
+      const currentContract = contract || savingsContract;
+      if (!currentUserAddress || !currentContract) return;
       console.log("🔍 Fetching bypass requests for:", currentUserAddress);
 
       // Get active bypass requests directly from contract
@@ -4660,25 +4783,19 @@ function AppContent() {
                           <span
                             style={{ color: "#9ae6b4", fontWeight: "bold" }}
                           >
-                            {request.skipPeriod}
+                            {request.bypassingPeriod}
                           </span>
                         </div>
                         <div
                           style={{
                             display: "flex",
-                            justifyContent: "space-between",
+                            justifyContent: "flex-end",
                             fontSize: "0.8em",
                             color: "#a0aec0",
                           }}
                         >
                           <span>
-                            Request ID: {request.requestId.slice(0, 10)}...
-                          </span>
-                          <span>
-                            Submitted:{" "}
-                            {new Date(
-                              request.timestamp * 1000
-                            ).toLocaleString()}
+                            Submitted: {request.submittedDate}
                           </span>
                         </div>
                       </div>
