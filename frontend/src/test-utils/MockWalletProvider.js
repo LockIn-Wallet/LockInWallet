@@ -1,6 +1,18 @@
 const { EventEmitter } = require('events');
 const { PublicKey, Keypair, Transaction, VersionedTransaction } = require('@solana/web3.js');
 const { WalletReadyState } = require('@solana/wallet-adapter-base');
+const crypto = require('crypto');
+
+/**
+ * Generate deterministic keypair from a seed string
+ * This ensures test wallets are consistent across test runs
+ */
+function createDeterministicKeypair(seedString) {
+  // Create a consistent 32-byte seed from the string
+  const seed = crypto.createHash('sha256').update(seedString).digest();
+  // Convert Buffer to Uint8Array for Keypair.fromSeed()
+  return Keypair.fromSeed(new Uint8Array(seed));
+}
 
 /**
  * MockWalletProvider - A mock wallet adapter for testing Solana functionality
@@ -16,8 +28,9 @@ class MockWalletProvider extends EventEmitter {
   constructor(options = {}) {
     super();
 
-    // Generate a test keypair or use provided one
-    this._keypair = options.keypair || Keypair.generate();
+    // Generate a deterministic test keypair based on test scenario
+    const testScenario = options.testScenario || 'default';
+    this._keypair = options.keypair || createDeterministicKeypair(`test-wallet-${testScenario}`);
     this._connected = false;
     this._connecting = false;
     this._publicKey = this._keypair.publicKey;
@@ -191,14 +204,12 @@ class MockWalletProvider extends EventEmitter {
 
       // User with specific test balance scenario
       richUser: new MockWalletProvider({
-        testScenario: 'richUser',
-        keypair: Keypair.generate()
+        testScenario: 'richUser'
       }),
 
       // User with limited permissions
       restrictedUser: new MockWalletProvider({
-        testScenario: 'restrictedUser',
-        keypair: Keypair.generate()
+        testScenario: 'restrictedUser'
       }),
 
       // User that fails to connect

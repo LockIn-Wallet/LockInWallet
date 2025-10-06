@@ -247,3 +247,204 @@ This project has been refactored into a workspace structure:
 - **After**: Clean separation with `ethereum/`, `solana/`, `frontend/` folders
 - **Benefits**: Independent development, clearer dependencies, scalable architecture
 - **Backward compatibility**: Root workspace commands maintain familiar workflow
+
+## 🧪 Testing Framework
+
+The project includes a comprehensive E2E testing framework that validates multi-blockchain functionality without UI dependencies. Tests focus on adapter methods, business logic, and blockchain state changes across both Ethereum and Solana networks.
+
+### Test Architecture
+
+#### Frontend Tests (`frontend/src/__tests__/`)
+- **Functionality Tests** (`functionality/`): Direct adapter method testing, wallet integration, blockchain state validation
+- **Simulation Tests** (`simulation/`): Transaction execution testing, error handling, performance analysis
+- **Test Utils** (`test-utils/`): Mock wallet providers, test environment setup, helper utilities
+
+#### Key Testing Principles
+- **Test functionality, not UI**: Focus on adapter methods and business logic
+- **Use adapter methods directly**: Avoid DOM manipulation and UI dependencies
+- **Validate blockchain state changes**: Ensure transactions produce expected outcomes
+- **Test both success and failure scenarios**: Comprehensive error handling validation
+
+### Test Environment Setup
+
+#### Prerequisites
+```bash
+# Ensure Solana validator is running
+solana-test-validator --bpf-program HNi2JKTNeHvz2ENckdVBW1ncfkJUYppuYeBwNhWjkK7d ./target/deploy/savings_core.so
+
+# For Ethereum tests (if applicable)
+npm run eth:node  # Start local Hardhat node
+```
+
+#### Test Configuration
+The test framework automatically:
+- **Validates local Solana validator** is running and accessible
+- **Creates mock wallet instances** with deterministic key pairs
+- **Funds test accounts** with SOL for transaction execution
+- **Sets up network configurations** for both EVM and Solana adapters
+- **Manages test cleanup** to prevent state leakage between tests
+
+### Mock Wallet System
+
+#### MockWalletProvider Features
+- **Deterministic key generation**: Consistent addresses across test runs
+- **Connection simulation**: Realistic wallet connection/disconnection flows
+- **Failure mode testing**: Simulates connection failures, signing rejections
+- **Multi-scenario support**: Different test scenarios (default, rich user, restricted user)
+
+#### Usage Patterns
+```javascript
+// Basic mock wallet setup
+const mockWallet = createMockWalletContext('default');
+await mockWallet.connect();
+
+// Test with failure scenarios
+const failingWallet = createMockWalletContext('failedSigning');
+// Will simulate signing failures for error testing
+```
+
+### Running Tests
+
+#### Quick Test Commands
+```bash
+# Run all tests
+npm test
+
+# Run specific test suites
+npm run test:functionality    # Adapter functionality tests
+npm run test:simulation      # Transaction simulation tests
+
+# Run with CI configuration
+npm run test:ci              # Non-interactive, with coverage
+
+# Run specific test patterns
+npm test -- --testPathPattern=SolanaAdapter
+npm test -- --testNamePattern="deposit"
+```
+
+#### Test Environment Validation
+```bash
+# Validate test environment setup
+npm run validate:environment
+
+# Check if all prerequisites are running
+# - Local Solana validator status
+# - Program deployment verification
+# - Network connectivity
+```
+
+### Test Structure Examples
+
+#### Functionality Testing Pattern
+```javascript
+describe('SolanaAdapter Functionality', () => {
+  let functionalityTest;
+
+  beforeEach(async () => {
+    functionalityTest = new BaseFunctionalityTest();
+    await functionalityTest.beforeEach('default');
+  });
+
+  test('should deposit SOL successfully', async () => {
+    const depositAmount = 0.1; // 0.1 SOL
+
+    // Test adapter method directly
+    const result = await functionalityTest.testAdapterMethod(
+      'deposit',
+      ['SOL', depositAmount, 9]
+    );
+
+    // Validate transaction success
+    expect(result).toBeDefined();
+    expect(typeof result).toBe('string'); // Transaction signature
+  });
+});
+```
+
+#### Error Scenario Testing
+```javascript
+test('should handle invalid deposit amounts', async () => {
+  await functionalityTest.testErrorScenario(
+    async (testEnv) => {
+      return await testEnv.solanaAdapter.deposit('SOL', -1, 9);
+    },
+    'amount' // Expected error keyword
+  );
+});
+```
+
+### Troubleshooting Tests
+
+#### Common Test Failures
+
+**"Wallet not connected" errors:**
+- **Cause**: Mock wallet not properly initialized or connected
+- **Solution**: Ensure `MockWalletProvider` has live getter properties, not static values
+- **Debug**: Check `wallet.connected` and `wallet.publicKey` status in test setup
+
+**"Cannot read properties of undefined (reading 'tokens')" errors:**
+- **Cause**: Missing network configuration in SolanaAdapter constructor
+- **Solution**: Provide complete `networkConfig` with `tokens` object structure
+- **Example**: Network config must include SOL and SPL token definitions
+
+**"Program not found" or PDA derivation errors:**
+- **Cause**: Solana programs not deployed to local validator
+- **Solution**: Ensure programs are built and deployed before running tests
+- **Command**: `npm run solana:deploy-reliable`
+
+**ES6 import/export errors in Jest:**
+- **Cause**: Jest expects CommonJS module syntax
+- **Solution**: Use `require()` and `module.exports` instead of `import`/`export`
+- **Note**: Test files must use CommonJS syntax even if source uses ES6
+
+#### Debug Commands
+```bash
+# Run tests with detailed output
+npm test -- --verbose
+
+# Run single test with full error details
+npm test -- --testNamePattern="specific test name" --verbose
+
+# Check test environment
+npm run validate:environment
+
+# View test coverage
+npm run test:ci
+```
+
+### Test Performance
+
+#### Timing Considerations
+- **Individual tests**: 30-90 seconds (includes blockchain operations)
+- **Full test suite**: 5-10 minutes (depending on test coverage)
+- **Network operations**: Account for validator response times
+- **State cleanup**: Proper cleanup prevents test interference
+
+#### Optimization Tips
+- **Parallel execution**: Jest runs tests concurrently when possible
+- **Focused testing**: Use pattern matching to run subset of tests during development
+- **Mock reuse**: Efficient wallet and connection reuse within test suites
+- **Timeout configuration**: Adequate timeouts for blockchain operations
+
+### Test Maintenance
+
+#### Adding New Tests
+1. **Create test files** in appropriate `__tests__` subdirectory
+2. **Use BaseFunctionalityTest** for consistent test setup
+3. **Follow naming conventions**: `*.test.js` for Jest discovery
+4. **Include both success and failure scenarios**
+5. **Document complex test scenarios** with inline comments
+
+#### Updating Mock Configurations
+- **Network configurations**: Update token lists and program IDs as needed
+- **Mock wallet scenarios**: Add new failure modes for edge case testing
+- **Test data**: Keep test amounts and addresses consistent with funding levels
+
+#### Best Practices
+- **Deterministic tests**: Tests should produce same results on every run
+- **Isolated tests**: No dependencies between test cases
+- **Comprehensive coverage**: Test both happy path and error conditions
+- **Clear assertions**: Specific, meaningful test expectations
+- **Proper cleanup**: Always clean up test state in `afterEach` hooks
+
+This testing framework ensures reliable validation of multi-blockchain functionality while maintaining fast development cycles and comprehensive error coverage.

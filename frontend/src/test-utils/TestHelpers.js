@@ -55,8 +55,11 @@ const setupTestEnvironment = async (testScenario = 'default') => {
   console.log('🧪 Setting up test environment:', testScenario);
 
   // Create mock wallet
-  const mockWallet = createMockWalletContext(testScenario);
-  await mockWallet.connect();
+  const mockWalletContext = createMockWalletContext(testScenario);
+  await mockWalletContext.connect();
+
+  // Get the actual wallet adapter (has live getters)
+  const mockWallet = mockWalletContext.wallet;
 
   // Create connection
   const connection = createTestConnection();
@@ -64,19 +67,38 @@ const setupTestEnvironment = async (testScenario = 'default') => {
   // Create test provider - use mock wallet directly for provider
   const provider = new AnchorProvider(
     connection,
-    mockWallet.getKeypair(),
+    mockWalletContext.getKeypair(),
     { commitment: 'confirmed' }
   );
 
-  // Create Solana adapter with test configuration
-  const solanaAdapter = new SolanaAdapter();
+  // Create test network configuration matching production structure
+  const testNetworkConfig = {
+    network: 'devnet', // Use devnet for testing
+    name: "Test Solana Network",
+    rpcUrl: TEST_CONFIG.RPC_ENDPOINT,
+    programId: "HNi2JKTNeHvz2ENckdVBW1ncfkJUYppuYeBwNhWjkK7d",
+    tokens: {
+      SOL: {
+        address: "native",
+        mint: "So11111111111111111111111111111111111111112", // SOL mint address
+        symbol: "SOL",
+        name: "Solana",
+        decimals: 9,
+        recommended: true,
+      },
+      USDT: {
+        mint: "HQQPp5Vh6WHdfHrcr41VrdTPVPzrvbSsUde4gGFLLpJM",
+        symbol: "USDT",
+        name: "Test USDT",
+        decimals: 6,
+        recommended: true,
+      },
+    },
+  };
 
-  // Override adapter connection and wallet for testing
-  solanaAdapter.connection = connection;
-  solanaAdapter.wallet = mockWallet;
+  // Create Solana adapter with proper configuration (use actual wallet adapter)
+  const solanaAdapter = new SolanaAdapter(testNetworkConfig, mockWallet, connection);
 
-  // Ensure adapter recognizes wallet as connected
-  await solanaAdapter.connect();
 
   console.log('✅ Test environment ready:', {
     publicKey: mockWallet.publicKey?.toString(),
@@ -87,9 +109,9 @@ const setupTestEnvironment = async (testScenario = 'default') => {
   return {
     connection,
     provider,
-    mockWallet,
+    mockWallet: mockWalletContext, // Return the context for other test utilities
     solanaAdapter,
-    testKeypair: mockWallet.getKeypair()
+    testKeypair: mockWalletContext.getKeypair()
   };
 };
 
