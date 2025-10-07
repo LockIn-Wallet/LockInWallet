@@ -451,21 +451,241 @@ function AppContent() {
     step3Complete: false, // Setup committed/locked
   });
 
+  // Reusable WithdrawalAddressSelector component
+  const WithdrawalAddressSelector = ({
+    mode = "selection", // "selection" or "management"
+    selectedDestination,
+    onDestinationChange,
+    showAddButton = true,
+    title = "Withdraw To:",
+  }) => {
+    return (
+      <div style={{ marginBottom: "15px" }}>
+        <label
+          style={{
+            display: "block",
+            fontSize: "0.9em",
+            color: "#e2e8f0",
+            marginBottom: "8px",
+          }}
+        >
+          {title}
+        </label>
+
+        {/* My Wallet Option */}
+        <div style={{ marginBottom: "8px" }}>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "flex-start",
+              cursor: mode === "selection" ? "pointer" : "default",
+              padding: "8px",
+              borderRadius: "4px",
+              backgroundColor:
+                mode === "selection" && selectedDestination === "self"
+                  ? "#2d3748"
+                  : mode === "management"
+                  ? "#1a365d"
+                  : "transparent",
+              border:
+                mode === "management"
+                  ? "1px solid #2b77ad"
+                  : "1px solid #4a5568",
+            }}
+            onClick={() =>
+              mode === "selection" &&
+              onDestinationChange &&
+              onDestinationChange("self")
+            }
+          >
+            {mode === "selection" && (
+              <input
+                type="radio"
+                name="withdrawalDestination"
+                value="self"
+                checked={selectedDestination === "self"}
+                onChange={(e) =>
+                  onDestinationChange && onDestinationChange(e.target.value)
+                }
+                style={{ marginRight: "8px", marginTop: "2px" }}
+              />
+            )}
+            <span
+              style={{
+                color: mode === "management" ? "#9ae6b4" : "white",
+                fontSize: "0.9em",
+              }}
+            >
+              🏠 My Wallet (
+              {getCurrentUserAddress()
+                ? `${getCurrentUserAddress().slice(
+                    0,
+                    6
+                  )}...${getCurrentUserAddress().slice(-4)}`
+                : ""}
+              )
+            </span>
+          </div>
+        </div>
+
+        {/* Withdrawal Addresses */}
+        {withdrawalAddresses.map((addr, index) => (
+          <div key={index} style={{ marginBottom: "8px" }}>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "flex-start",
+                border: "1px solid #4a5568",
+                borderRadius: "4px",
+                backgroundColor:
+                  mode === "selection" &&
+                  selectedDestination === addr.destination
+                    ? "#2d3748"
+                    : "transparent",
+                cursor: mode === "selection" ? "pointer" : "default",
+              }}
+              onClick={() =>
+                mode === "selection" &&
+                onDestinationChange &&
+                onDestinationChange(addr.destination)
+              }
+            >
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "flex-start",
+                  padding: "8px",
+                  flex: 1,
+                }}
+              >
+                {mode === "selection" && (
+                  <input
+                    type="radio"
+                    name="withdrawalDestination"
+                    value={addr.destination}
+                    checked={selectedDestination === addr.destination}
+                    onChange={(e) =>
+                      onDestinationChange && onDestinationChange(e.target.value)
+                    }
+                    style={{ marginRight: "8px", marginTop: "2px" }}
+                  />
+                )}
+                <div>
+                  <div style={{ color: "white", fontWeight: "bold" }}>
+                    📍 {addr.title}
+                  </div>
+                  <div
+                    style={{
+                      fontSize: "0.8em",
+                      color: "#a0aec0",
+                      fontFamily: "monospace",
+                    }}
+                  >
+                    {addr.destination.length > 50
+                      ? `${addr.destination.slice(
+                          0,
+                          25
+                        )}...${addr.destination.slice(-15)}`
+                      : addr.destination}
+                  </div>
+                  <div style={{ fontSize: "0.7em", color: "#718096" }}>
+                    Added: {addr.addedDate}
+                  </div>
+                </div>
+              </div>
+              {mode === "management" && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    removeWithdrawalAddress(addr.destination);
+                  }}
+                  style={{
+                    marginRight: "8px",
+                    marginTop: "8px",
+                    padding: "4px 8px",
+                    borderRadius: "4px",
+                    border: "1px solid #e53e3e",
+                    backgroundColor: "transparent",
+                    color: "#e53e3e",
+                    cursor: "pointer",
+                    fontSize: "0.7em",
+                  }}
+                >
+                  🗑️ Remove
+                </button>
+              )}
+            </div>
+          </div>
+        ))}
+
+        {/* Add Address Button for Management Mode */}
+        {mode === "management" && showAddButton && (
+          <div style={{ marginTop: "10px" }}>
+            <button
+              onClick={() =>
+                setShowWithdrawalAddressForm(!showWithdrawalAddressForm)
+              }
+              style={{
+                padding: "8px 16px",
+                borderRadius: "4px",
+                border: "1px solid #4a5568",
+                backgroundColor: "#2d3748",
+                backgroundImage: "none",
+                color: "#a0aec0",
+                cursor: "pointer",
+                fontSize: "0.85em",
+                fontWeight: "normal",
+                opacity: 0.7,
+                transition: "all 0.2s ease",
+              }}
+              onMouseEnter={(e) => {
+                e.target.style.opacity = "1";
+                e.target.style.color = "#e2e8f0";
+                e.target.style.borderColor = "#718096";
+              }}
+              onMouseLeave={(e) => {
+                e.target.style.opacity = "0.7";
+                e.target.style.color = "#a0aec0";
+                e.target.style.borderColor = "#4a5568";
+              }}
+            >
+              ➕ Add Withdrawal Address
+            </button>
+          </div>
+        )}
+      </div>
+    );
+  };
+
   // Helper functions for step management
   const validateStep1 = () => {
-    // Step 1 is complete if at least one spending limit is set
-    const hasLimits = spendingLimits.some(
+    // Step 1 is complete if user has entered any spending limit values or custom period
+
+    // Check if user entered numbers in any of the spending limit cards
+    const hasLimitInput = Object.values(limitEdits).some(
+      (edit) => edit.value && parseFloat(edit.value) > 0
+    );
+
+    // Check if user is creating/has created a custom period
+    const hasCustomPeriodInput =
+      customPeriodName.trim() ||
+      (customPeriodLimit && parseFloat(customPeriodLimit) > 0);
+
+    // Check if any existing limits are active (original logic)
+    const hasActiveLimits = spendingLimits.some(
       (limit) => limit.isActive && parseFloat(limit.limit) > 0
     );
-    return hasLimits;
+
+    return hasLimitInput || hasCustomPeriodInput || hasActiveLimits;
   };
 
   const validateStep2 = () => {
     // Step 2 is complete if user added at least one custom withdrawal address (not just "My Wallet")
     // My Wallet is automatically added, so we need more than just that
-    const hasCustomAddresses = withdrawalAddresses.some(addr =>
-      addr.title !== "My Wallet" &&
-      addr.destination !== getCurrentUserAddress()
+    const hasCustomAddresses = withdrawalAddresses.some(
+      (addr) =>
+        addr.title !== "My Wallet" &&
+        addr.destination !== getCurrentUserAddress()
     );
     return hasCustomAddresses;
   };
@@ -1100,7 +1320,7 @@ function AppContent() {
   // Update step validation when relevant data changes
   useEffect(() => {
     updateStepValidation();
-  }, [spendingLimits, withdrawalAddresses, isSetupCommitted]);
+  }, [spendingLimits, withdrawalAddresses, isSetupCommitted, limitEdits, customPeriodName, customPeriodLimit]);
 
   // Auto-advance steps when setup is not committed and during guided flow
   useEffect(() => {
@@ -1688,17 +1908,18 @@ function AppContent() {
     }
 
     try {
-      // Extract active limits from limitEdits
-      const daily = limitEdits.Daily.isActive
+      // Extract limits from limitEdits - check for any valid input
+      const daily = limitEdits.Daily.value
         ? parseFloat(limitEdits.Daily.value)
         : 0;
-      const weekly = limitEdits.Weekly.isActive
+      const weekly = limitEdits.Weekly.value
         ? parseFloat(limitEdits.Weekly.value)
         : 0;
-      const monthly = limitEdits.Monthly.isActive
+      const monthly = limitEdits.Monthly.value
         ? parseFloat(limitEdits.Monthly.value)
         : 0;
 
+      // Check if user has entered any spending limit values
       if (daily === 0 && weekly === 0 && monthly === 0) {
         alert("Please set at least one spending limit");
         return;
@@ -4024,406 +4245,409 @@ function AppContent() {
         </div>
       ) : (
         <div>
-          {/* Combined Deposit Section */}
-          <div
-            style={{
-              marginBottom: "20px",
-              padding: "15px",
-              border: !isSetupCommitted
-                ? "2px dashed #4a5568"
-                : "2px solid #333",
-              borderRadius: "5px",
-              backgroundColor: "#2d3748",
-              color: "white",
-              opacity: !isSetupCommitted ? 0.6 : 1,
-              position: "relative",
-            }}
-          >
-            {/* Inactive Overlay for Setup Mode */}
-            {!isSetupCommitted && (
-              <div
-                style={{
-                  position: "absolute",
-                  top: "10px",
-                  right: "10px",
-                  padding: "4px 8px",
-                  backgroundColor: "#744210",
-                  border: "1px solid #d69e2e",
-                  borderRadius: "4px",
-                  fontSize: "0.75em",
-                  fontWeight: "600",
-                  color: "#f6ad55",
-                }}
-              >
-                Inactive until locked-in
-              </div>
-            )}
-
-            <h3 style={{ color: "white" }}>
-              💰 Deposit from{" "}
-              {networkType === "solana"
-                ? solanaPublicKey
-                  ? `${solanaPublicKey
-                      .toString()
-                      .slice(0, 6)}...${solanaPublicKey.toString().slice(-4)}`
-                  : "Connected Wallet"
-                : userAddress
-                ? `${userAddress.slice(0, 6)}...${userAddress.slice(-4)}`
-                : "Connected Wallet"}
-            </h3>
-
-            {/* Direct Deposit from Connected Wallet */}
-            <div style={{ marginBottom: "20px" }}>
-              <h4 style={{ color: "#9ae6b4", margin: "0 0 10px 0" }}>
-                📱 From Currently Connected Wallet
-              </h4>
-              <p
-                style={{
-                  fontSize: "0.9em",
-                  color: "#cbd5e0",
-                  marginBottom: "15px",
-                }}
-              >
-                Recommended: Use stablecoins (USDT, USDC, DAI) for consistent
-                value
-              </p>
-
-              <div
-                style={{
-                  display: "flex",
-                  gap: "10px",
-                  marginBottom: "15px",
-                  flexWrap: "wrap",
-                }}
-              >
-                <select
-                  value={selectedToken}
-                  onChange={(e) => setSelectedToken(e.target.value)}
-                  style={{
-                    padding: "8px",
-                    borderRadius: "4px",
-                    border: "1px solid #4a5568",
-                    backgroundColor: "#4a5568",
-                    color: "white",
-                    flex: "1",
-                    minWidth: "150px",
-                  }}
-                >
-                  <option value="">Select Token</option>
-
-                  {/* Recommended Stablecoins Section */}
-                  <optgroup label="🌟 Recommended Stablecoins">
-                    {Object.entries(getCurrentNetwork(selectedNetwork).tokens)
-                      .filter(
-                        ([_, token]) =>
-                          token.recommended &&
-                          token.address !==
-                            "0x0000000000000000000000000000000000000000"
-                      )
-                      .map(([key, token]) => (
-                        <option key={key} value={key}>
-                          {token.symbol} - {token.name}
-                        </option>
-                      ))}
-                  </optgroup>
-
-                  {/* Other Tokens Section */}
-                  <optgroup label="Other Tokens">
-                    <option value="ETH">ETH - Ethereum</option>
-                    {Object.entries(getCurrentNetwork(selectedNetwork).tokens)
-                      .filter(
-                        ([_, token]) =>
-                          !token.recommended ||
-                          token.address ===
-                            "0x0000000000000000000000000000000000000000"
-                      )
-                      .map(([key, token]) => (
-                        <option
-                          key={key}
-                          value={key}
-                          disabled={
-                            token.address ===
-                            "0x0000000000000000000000000000000000000000"
-                          }
-                        >
-                          {token.symbol} - {token.name}{" "}
-                          {token.address ===
-                          "0x0000000000000000000000000000000000000000"
-                            ? "(Not Available)"
-                            : ""}
-                        </option>
-                      ))}
-                  </optgroup>
-                </select>
-
-                <input
-                  type="text"
-                  placeholder={`Amount ${
-                    selectedToken ? `(${selectedToken})` : ""
-                  }`}
-                  value={depositAmount}
-                  onChange={(e) => setDepositAmount(e.target.value)}
-                  style={{
-                    padding: "8px",
-                    borderRadius: "4px",
-                    border: "1px solid #4a5568",
-                    backgroundColor: "#4a5568",
-                    color: "white",
-                    flex: "2",
-                    minWidth: "200px",
-                  }}
-                />
-
-                <button
-                  onClick={deposit}
-                  disabled={isDepositing}
-                  style={{
-                    padding: "8px 16px",
-                    borderRadius: "4px",
-                    border: "none",
-                    backgroundColor: isDepositing
-                      ? "#6b7280"
-                      : selectedToken &&
-                        getCurrentNetwork(selectedNetwork).tokens[selectedToken]
-                          ?.recommended
-                      ? "#28a745"
-                      : "#3182ce",
-                    color: "white",
-                    cursor: isDepositing ? "not-allowed" : "pointer",
-                    minWidth: "100px",
-                    fontWeight: "bold",
-                    opacity: isDepositing ? 0.7 : 1,
-                  }}
-                >
-                  {isDepositing ? "⏳ Processing..." : "💰 Deposit Now"}
-                </button>
-              </div>
-            </div>
-
-            {/* Direct Deposit from Exchange/Other Wallet */}
-            <div>
-              <h4 style={{ color: "#9ae6b4", margin: "0 0 10px 0" }}>
-                🏦 Direct Deposit from Exchange
-              </h4>
-              <p
-                style={{
-                  fontSize: "0.9em",
-                  color: "#cbd5e0",
-                  marginBottom: "15px",
-                }}
-              >
-                Get your personal deposit address to receive funds directly from
-                exchanges
-              </p>
-
-              {/* Conditional rendering based on proxy status */}
-              {!isProxyDeployed && !isDeploying && (
+          {/* Combined Deposit Section - Hidden during onboarding */}
+          {isSetupCommitted && (
+            <div
+              style={{
+                marginBottom: "20px",
+                padding: "15px",
+                border: !isSetupCommitted
+                  ? "2px dashed #4a5568"
+                  : "2px solid #333",
+                borderRadius: "5px",
+                backgroundColor: "#2d3748",
+                color: "white",
+                opacity: !isSetupCommitted ? 0.6 : 1,
+                position: "relative",
+              }}
+            >
+              {/* Inactive Overlay for Setup Mode */}
+              {!isSetupCommitted && (
                 <div
                   style={{
-                    padding: "15px",
-                    backgroundColor: "#1a202c",
+                    position: "absolute",
+                    top: "10px",
+                    right: "10px",
+                    padding: "4px 8px",
+                    backgroundColor: "#744210",
+                    border: "1px solid #d69e2e",
                     borderRadius: "4px",
-                    border: "1px solid #4a5568",
-                    textAlign: "center",
+                    fontSize: "0.75em",
+                    fontWeight: "600",
+                    color: "#f6ad55",
                   }}
                 >
-                  <div style={{ marginBottom: "15px" }}>
-                    <div style={{ fontSize: "2em", marginBottom: "10px" }}>
-                      🔒
-                    </div>
-                    <h5 style={{ color: "#e2e8f0", margin: "0 0 8px 0" }}>
-                      Permanent Deposit Address Not Generated
-                    </h5>
-                    <p
-                      style={{
-                        color: "#a0aec0",
-                        fontSize: "0.9em",
-                        margin: "0 0 10px 0",
-                      }}
-                    >
-                      Generate your unique{" "}
-                      <strong style={{ color: "#9ae6b4" }}>
-                        permanent deposit address
-                      </strong>{" "}
-                      to receive funds directly from exchanges
-                    </p>
-                  </div>
+                  Inactive until locked-in
+                </div>
+              )}
+
+              <h3 style={{ color: "white" }}>
+                💰 Deposit from{" "}
+                {networkType === "solana"
+                  ? solanaPublicKey
+                    ? `${solanaPublicKey
+                        .toString()
+                        .slice(0, 6)}...${solanaPublicKey.toString().slice(-4)}`
+                    : "Connected Wallet"
+                  : userAddress
+                  ? `${userAddress.slice(0, 6)}...${userAddress.slice(-4)}`
+                  : "Connected Wallet"}
+              </h3>
+
+              {/* Direct Deposit from Connected Wallet */}
+              <div style={{ marginBottom: "20px" }}>
+                <h4 style={{ color: "#9ae6b4", margin: "0 0 10px 0" }}>
+                  📱 From Currently Connected Wallet
+                </h4>
+                <p
+                  style={{
+                    fontSize: "0.9em",
+                    color: "#cbd5e0",
+                    marginBottom: "15px",
+                  }}
+                >
+                  Recommended: Use stablecoins (USDT, USDC, DAI) for consistent
+                  value
+                </p>
+
+                <div
+                  style={{
+                    display: "flex",
+                    gap: "10px",
+                    marginBottom: "15px",
+                    flexWrap: "wrap",
+                  }}
+                >
+                  <select
+                    value={selectedToken}
+                    onChange={(e) => setSelectedToken(e.target.value)}
+                    style={{
+                      padding: "8px",
+                      borderRadius: "4px",
+                      border: "1px solid #4a5568",
+                      backgroundColor: "#4a5568",
+                      color: "white",
+                      flex: "1",
+                      minWidth: "150px",
+                    }}
+                  >
+                    <option value="">Select Token</option>
+
+                    {/* Recommended Stablecoins Section */}
+                    <optgroup label="🌟 Recommended Stablecoins">
+                      {Object.entries(getCurrentNetwork(selectedNetwork).tokens)
+                        .filter(
+                          ([_, token]) =>
+                            token.recommended &&
+                            token.address !==
+                              "0x0000000000000000000000000000000000000000"
+                        )
+                        .map(([key, token]) => (
+                          <option key={key} value={key}>
+                            {token.symbol} - {token.name}
+                          </option>
+                        ))}
+                    </optgroup>
+
+                    {/* Other Tokens Section */}
+                    <optgroup label="Other Tokens">
+                      <option value="ETH">ETH - Ethereum</option>
+                      {Object.entries(getCurrentNetwork(selectedNetwork).tokens)
+                        .filter(
+                          ([_, token]) =>
+                            !token.recommended ||
+                            token.address ===
+                              "0x0000000000000000000000000000000000000000"
+                        )
+                        .map(([key, token]) => (
+                          <option
+                            key={key}
+                            value={key}
+                            disabled={
+                              token.address ===
+                              "0x0000000000000000000000000000000000000000"
+                            }
+                          >
+                            {token.symbol} - {token.name}{" "}
+                            {token.address ===
+                            "0x0000000000000000000000000000000000000000"
+                              ? "(Not Available)"
+                              : ""}
+                          </option>
+                        ))}
+                    </optgroup>
+                  </select>
+
+                  <input
+                    type="text"
+                    placeholder={`Amount ${
+                      selectedToken ? `(${selectedToken})` : ""
+                    }`}
+                    value={depositAmount}
+                    onChange={(e) => setDepositAmount(e.target.value)}
+                    style={{
+                      padding: "8px",
+                      borderRadius: "4px",
+                      border: "1px solid #4a5568",
+                      backgroundColor: "#4a5568",
+                      color: "white",
+                      flex: "2",
+                      minWidth: "200px",
+                    }}
+                  />
 
                   <button
-                    onClick={deployProxy}
+                    onClick={deposit}
+                    disabled={isDepositing}
                     style={{
-                      padding: "12px 24px",
-                      borderRadius: "6px",
+                      padding: "8px 16px",
+                      borderRadius: "4px",
                       border: "none",
-                      backgroundColor: "#3182ce",
+                      backgroundColor: isDepositing
+                        ? "#6b7280"
+                        : selectedToken &&
+                          getCurrentNetwork(selectedNetwork).tokens[
+                            selectedToken
+                          ]?.recommended
+                        ? "#28a745"
+                        : "#3182ce",
                       color: "white",
-                      cursor: "pointer",
-                      fontSize: "1em",
+                      cursor: isDepositing ? "not-allowed" : "pointer",
+                      minWidth: "100px",
                       fontWeight: "bold",
+                      opacity: isDepositing ? 0.7 : 1,
                     }}
                   >
-                    🎯 Generate Permanent Deposit Address
+                    {isDepositing ? "⏳ Processing..." : "💰 Deposit Now"}
                   </button>
-
-                  <div
-                    style={{
-                      marginTop: "15px",
-                      fontSize: "0.8em",
-                      color: "#718096",
-                    }}
-                  >
-                    <p style={{ margin: "5px 0" }}>
-                      ✨ One-time setup • Gas fee required
-                    </p>
-                    <p style={{ margin: "5px 0" }}>
-                      🎯 Direct exchange withdrawals • Permanent address you can
-                      always use
-                    </p>
-                  </div>
                 </div>
-              )}
+              </div>
 
-              {/* Deploying state */}
-              {isDeploying && (
-                <div
+              {/* Direct Deposit from Exchange/Other Wallet */}
+              <div>
+                <h4 style={{ color: "#9ae6b4", margin: "0 0 10px 0" }}>
+                  🏦 Direct Deposit from Exchange
+                </h4>
+                <p
                   style={{
-                    padding: "15px",
-                    backgroundColor: "#1a202c",
-                    borderRadius: "4px",
-                    border: "1px solid #4a5568",
-                    textAlign: "center",
+                    fontSize: "0.9em",
+                    color: "#cbd5e0",
+                    marginBottom: "15px",
                   }}
                 >
-                  <div style={{ marginBottom: "15px" }}>
-                    <div style={{ fontSize: "2em", marginBottom: "10px" }}>
-                      ⏳
-                    </div>
-                    <h5 style={{ color: "#e2e8f0", margin: "0 0 8px 0" }}>
-                      Generating Deposit Address...
-                    </h5>
-                    <p
-                      style={{
-                        color: "#a0aec0",
-                        fontSize: "0.9em",
-                        margin: "0",
-                      }}
-                    >
-                      Please confirm the transaction in MetaMask and wait for
-                      deployment
-                    </p>
-                  </div>
+                  Get your personal deposit address to receive funds directly
+                  from exchanges
+                </p>
 
+                {/* Conditional rendering based on proxy status */}
+                {!isProxyDeployed && !isDeploying && (
                   <div
                     style={{
-                      padding: "12px 24px",
-                      borderRadius: "6px",
-                      backgroundColor: "#4a5568",
-                      color: "#a0aec0",
-                      fontSize: "1em",
-                    }}
-                  >
-                    🔄 Deploying Contract...
-                  </div>
-                </div>
-              )}
-
-              {/* Generated state */}
-              {isProxyDeployed && proxyAddress && (
-                <div
-                  style={{
-                    padding: "15px",
-                    backgroundColor: "#1a202c",
-                    borderRadius: "4px",
-                    border: "1px solid #48bb78",
-                  }}
-                >
-                  <div style={{ marginBottom: "15px", textAlign: "center" }}>
-                    <div style={{ fontSize: "2em", marginBottom: "10px" }}>
-                      ✅
-                    </div>
-                    <h5 style={{ color: "#9ae6b4", margin: "0 0 8px 0" }}>
-                      Your Permanent Deposit Address
-                    </h5>
-                    <p
-                      style={{
-                        color: "#e2e8f0",
-                        fontSize: "0.9em",
-                        margin: "0 0 8px 0",
-                      }}
-                    >
-                      Use this permanent address to receive funds directly from
-                      exchanges or other wallets
-                    </p>
-                    <p
-                      style={{
-                        color: "#9ae6b4",
-                        fontSize: "0.8em",
-                        margin: "0",
-                        fontWeight: "bold",
-                      }}
-                    >
-                      🔗 Fully on-chain address tied to your wallet - no
-                      intermediaries involved
-                    </p>
-                  </div>
-
-                  <div
-                    style={{
-                      display: "flex",
-                      gap: "10px",
-                      alignItems: "center",
-                      marginBottom: "15px",
-                    }}
-                  >
-                    <strong style={{ color: "white", minWidth: "120px" }}>
-                      Your Deposit Address:
-                    </strong>
-                    <code
-                      style={{
-                        backgroundColor: "#4a5568",
-                        color: "#9ae6b4",
-                        padding: "8px",
-                        borderRadius: "4px",
-                        fontSize: "0.9em",
-                        wordBreak: "break-all",
-                        flex: 1,
-                      }}
-                    >
-                      {proxyAddress}
-                    </code>
-                    <button
-                      onClick={() => {
-                        navigator.clipboard.writeText(proxyAddress);
-                        alert("Deposit address copied to clipboard!");
-                      }}
-                      style={{
-                        padding: "6px 12px",
-                        borderRadius: "4px",
-                        border: "none",
-                        backgroundColor: "#48bb78",
-                        color: "white",
-                        cursor: "pointer",
-                        fontSize: "0.8em",
-                      }}
-                    >
-                      📋 Copy
-                    </button>
-                  </div>
-
-                  <div
-                    style={{
-                      fontSize: "0.8em",
-                      color: "#9ae6b4",
+                      padding: "15px",
+                      backgroundColor: "#1a202c",
+                      borderRadius: "4px",
+                      border: "1px solid #4a5568",
                       textAlign: "center",
                     }}
                   >
-                    ⚠️ When pasting this address ensure it matches exactly
-                    (malware extensions may alter it).
+                    <div style={{ marginBottom: "15px" }}>
+                      <div style={{ fontSize: "2em", marginBottom: "10px" }}>
+                        🔒
+                      </div>
+                      <h5 style={{ color: "#e2e8f0", margin: "0 0 8px 0" }}>
+                        Permanent Deposit Address Not Generated
+                      </h5>
+                      <p
+                        style={{
+                          color: "#a0aec0",
+                          fontSize: "0.9em",
+                          margin: "0 0 10px 0",
+                        }}
+                      >
+                        Generate your unique{" "}
+                        <strong style={{ color: "#9ae6b4" }}>
+                          permanent deposit address
+                        </strong>{" "}
+                        to receive funds directly from exchanges
+                      </p>
+                    </div>
+
+                    <button
+                      onClick={deployProxy}
+                      style={{
+                        padding: "12px 24px",
+                        borderRadius: "6px",
+                        border: "none",
+                        backgroundColor: "#3182ce",
+                        color: "white",
+                        cursor: "pointer",
+                        fontSize: "1em",
+                        fontWeight: "bold",
+                      }}
+                    >
+                      🎯 Generate Permanent Deposit Address
+                    </button>
+
+                    <div
+                      style={{
+                        marginTop: "15px",
+                        fontSize: "0.8em",
+                        color: "#718096",
+                      }}
+                    >
+                      <p style={{ margin: "5px 0" }}>
+                        ✨ One-time setup • Gas fee required
+                      </p>
+                      <p style={{ margin: "5px 0" }}>
+                        🎯 Direct exchange withdrawals • Permanent address you
+                        can always use
+                      </p>
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
+
+                {/* Deploying state */}
+                {isDeploying && (
+                  <div
+                    style={{
+                      padding: "15px",
+                      backgroundColor: "#1a202c",
+                      borderRadius: "4px",
+                      border: "1px solid #4a5568",
+                      textAlign: "center",
+                    }}
+                  >
+                    <div style={{ marginBottom: "15px" }}>
+                      <div style={{ fontSize: "2em", marginBottom: "10px" }}>
+                        ⏳
+                      </div>
+                      <h5 style={{ color: "#e2e8f0", margin: "0 0 8px 0" }}>
+                        Generating Deposit Address...
+                      </h5>
+                      <p
+                        style={{
+                          color: "#a0aec0",
+                          fontSize: "0.9em",
+                          margin: "0",
+                        }}
+                      >
+                        Please confirm the transaction in MetaMask and wait for
+                        deployment
+                      </p>
+                    </div>
+
+                    <div
+                      style={{
+                        padding: "12px 24px",
+                        borderRadius: "6px",
+                        backgroundColor: "#4a5568",
+                        color: "#a0aec0",
+                        fontSize: "1em",
+                      }}
+                    >
+                      🔄 Deploying Contract...
+                    </div>
+                  </div>
+                )}
+
+                {/* Generated state */}
+                {isProxyDeployed && proxyAddress && (
+                  <div
+                    style={{
+                      padding: "15px",
+                      backgroundColor: "#1a202c",
+                      borderRadius: "4px",
+                      border: "1px solid #48bb78",
+                    }}
+                  >
+                    <div style={{ marginBottom: "15px", textAlign: "center" }}>
+                      <div style={{ fontSize: "2em", marginBottom: "10px" }}>
+                        ✅
+                      </div>
+                      <h5 style={{ color: "#9ae6b4", margin: "0 0 8px 0" }}>
+                        Your Permanent Deposit Address
+                      </h5>
+                      <p
+                        style={{
+                          color: "#e2e8f0",
+                          fontSize: "0.9em",
+                          margin: "0 0 8px 0",
+                        }}
+                      >
+                        Use this permanent address to receive funds directly
+                        from exchanges or other wallets
+                      </p>
+                      <p
+                        style={{
+                          color: "#9ae6b4",
+                          fontSize: "0.8em",
+                          margin: "0",
+                          fontWeight: "bold",
+                        }}
+                      >
+                        🔗 Fully on-chain address tied to your wallet - no
+                        intermediaries involved
+                      </p>
+                    </div>
+
+                    <div
+                      style={{
+                        display: "flex",
+                        gap: "10px",
+                        alignItems: "center",
+                        marginBottom: "15px",
+                      }}
+                    >
+                      <strong style={{ color: "white", minWidth: "120px" }}>
+                        Your Deposit Address:
+                      </strong>
+                      <code
+                        style={{
+                          backgroundColor: "#4a5568",
+                          color: "#9ae6b4",
+                          padding: "8px",
+                          borderRadius: "4px",
+                          fontSize: "0.9em",
+                          wordBreak: "break-all",
+                          flex: 1,
+                        }}
+                      >
+                        {proxyAddress}
+                      </code>
+                      <button
+                        onClick={() => {
+                          navigator.clipboard.writeText(proxyAddress);
+                          alert("Deposit address copied to clipboard!");
+                        }}
+                        style={{
+                          padding: "6px 12px",
+                          borderRadius: "4px",
+                          border: "none",
+                          backgroundColor: "#48bb78",
+                          color: "white",
+                          cursor: "pointer",
+                          fontSize: "0.8em",
+                        }}
+                      >
+                        📋 Copy
+                      </button>
+                    </div>
+
+                    <div
+                      style={{
+                        fontSize: "0.8em",
+                        color: "#9ae6b4",
+                        textAlign: "center",
+                      }}
+                    >
+                      ⚠️ When pasting this address ensure it matches exactly
+                      (malware extensions may alter it).
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Step 1: Spending Limits Setup */}
           <div
@@ -5401,19 +5625,17 @@ function AppContent() {
               style={{
                 marginBottom: "20px",
                 padding: "20px",
-                border:
-                  !isSetupCommitted && currentStep === 2
-                    ? "3px solid #d69e2e" // Highlighted border for active step
-                    : "2px solid #333",
+                border: !isSetupCommitted
+                  ? "3px solid #d69e2e" // Always active during setup
+                  : "2px solid #333",
                 borderRadius: "8px",
                 backgroundColor: "#2d3748",
                 color: "white",
-                boxShadow:
-                  !isSetupCommitted && currentStep === 2
-                    ? "0 0 0 1px rgba(214, 158, 46, 0.3)"
-                    : "none",
+                boxShadow: !isSetupCommitted
+                  ? "0 0 0 1px rgba(214, 158, 46, 0.3)" // Always active during setup
+                  : "none",
                 position: "relative",
-                opacity: !isSetupCommitted && currentStep < 2 ? 0.6 : 1,
+                opacity: 1, // Always fully visible
               }}
             >
               {/* Step Header */}
@@ -5432,10 +5654,7 @@ function AppContent() {
                 >
                   <h3
                     style={{
-                      color:
-                        !isSetupCommitted && currentStep === 2
-                          ? "#f6ad55"
-                          : "white",
+                      color: !isSetupCommitted ? "#f6ad55" : "white", // Always active during setup
                       margin: 0,
                       fontSize: "1.3em",
                       fontWeight: "600",
@@ -5443,37 +5662,7 @@ function AppContent() {
                   >
                     🔑 Step 2: Add Withdrawal Addresses
                   </h3>
-                  {!isSetupCommitted && (
-                    <div
-                      style={{
-                        fontSize: "0.8em",
-                        color: stepValidation.step2Complete
-                          ? "#9ae6b4"
-                          : currentStep >= 2
-                          ? "#f6ad55"
-                          : "#718096",
-                        backgroundColor: stepValidation.step2Complete
-                          ? "#1a365d"
-                          : currentStep >= 2
-                          ? "#744210"
-                          : "#4a5568",
-                        padding: "4px 8px",
-                        borderRadius: "4px",
-                        fontWeight: "600",
-                        border: stepValidation.step2Complete
-                          ? "1px solid #2b77ad"
-                          : currentStep >= 2
-                          ? "1px solid #d69e2e"
-                          : "1px solid #718096",
-                      }}
-                    >
-                      {stepValidation.step2Complete
-                        ? "✅ Complete"
-                        : currentStep >= 2
-                        ? "In Progress"
-                        : "Locked"}
-                    </div>
-                  )}
+{/* Status label removed - Step 2 always active */}
                 </div>
 
                 {!isSetupCommitted &&
@@ -5538,138 +5727,12 @@ function AppContent() {
               )}
 
               {/* Step 2 Address Management Component */}
-              {!isSetupCommitted && currentStep >= 2 && (
-                <div style={{ marginBottom: "15px" }}>
-                  <label
-                    style={{
-                      display: "block",
-                      fontSize: "0.9em",
-                      color: "#e2e8f0",
-                      marginBottom: "8px",
-                    }}
-                  >
-                    Your Withdrawal Addresses:
-                  </label>
-
-                  {/* My Wallet - Always Available */}
-                  <div style={{ marginBottom: "8px" }}>
-                    <div
-                      style={{
-                        display: "flex",
-                        alignItems: "flex-start",
-                        padding: "8px",
-                        borderRadius: "4px",
-                        backgroundColor: "#1a365d",
-                        border: "1px solid #2b77ad",
-                      }}
-                    >
-                      <span style={{ color: "#9ae6b4", fontSize: "0.9em" }}>
-                        🏠 My Wallet (
-                        {getCurrentUserAddress()
-                          ? `${getCurrentUserAddress().slice(
-                              0,
-                              6
-                            )}...${getCurrentUserAddress().slice(-4)}`
-                          : ""}
-                        ) ✅ Always Available
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Additional Withdrawal Addresses */}
-                  {withdrawalAddresses.map((addr, index) => (
-                    <div key={index} style={{ marginBottom: "8px" }}>
-                      <div
-                        style={{
-                          display: "flex",
-                          alignItems: "flex-start",
-                          border: "1px solid #4a5568",
-                          borderRadius: "4px",
-                          backgroundColor: "#2d3748",
-                        }}
-                      >
-                        <div
-                          style={{
-                            display: "flex",
-                            alignItems: "flex-start",
-                            padding: "8px",
-                            flex: 1,
-                          }}
-                        >
-                          <div>
-                            <div style={{ color: "white", fontWeight: "bold" }}>
-                              📍 {addr.title}
-                            </div>
-                            <div
-                              style={{
-                                fontSize: "0.8em",
-                                color: "#a0aec0",
-                                fontFamily: "monospace",
-                              }}
-                            >
-                              {addr.destination}
-                            </div>
-                            <div
-                              style={{ fontSize: "0.7em", color: "#718096" }}
-                            >
-                              Added: {addr.addedDate}
-                            </div>
-                          </div>
-                        </div>
-                        <button
-                          onClick={() =>
-                            removeWithdrawalAddress(addr.destination)
-                          }
-                          style={{
-                            marginRight: "8px",
-                            padding: "4px 8px",
-                            borderRadius: "4px",
-                            border: "1px solid #e53e3e",
-                            backgroundColor: "transparent",
-                            color: "#e53e3e",
-                            cursor: "pointer",
-                            fontSize: "0.7em",
-                          }}
-                        >
-                          🗑️ Remove
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-
-                  {/* Add Address Button Below the List */}
-                  <div style={{ marginTop: "10px" }}>
-                    <button
-                      onClick={() =>
-                        setShowWithdrawalAddressForm(!showWithdrawalAddressForm)
-                      }
-                      style={{
-                        padding: "8px 16px",
-                        borderRadius: "4px",
-                        border: "1px solid #4a5568",
-                        backgroundColor: "#2d3748",
-                        backgroundImage: "none",
-                        color: "#a0aec0",
-                        cursor: "pointer",
-                        fontSize: "0.85em",
-                        fontWeight: "normal",
-                        opacity: 0.7,
-                        transition: "all 0.2s ease",
-                      }}
-                      onMouseEnter={(e) => {
-                        e.target.style.opacity = "1";
-                        e.target.style.color = "#e2e8f0";
-                        e.target.style.borderColor = "#718096";
-                      }}
-                      onMouseLeave={(e) => {
-                        e.target.style.opacity = "0.7";
-                        e.target.style.color = "#a0aec0";
-                        e.target.style.borderColor = "#4a5568";
-                      }}
-                    >
-                      ➕ Add Withdrawal Address
-                    </button>
-                  </div>
+              {!isSetupCommitted && (
+                <div>
+                  <WithdrawalAddressSelector
+                    mode="management"
+                    title="Your Withdrawal Addresses:"
+                  />
 
                   {/* Add New Withdrawal Address Form */}
                   {showWithdrawalAddressForm && (
@@ -5861,81 +5924,147 @@ function AppContent() {
               )}
             </div>
 
-          {/* Lock-In Section - Separate from Step Wizard */}
-          <div
-            style={{
-              marginBottom: "20px",
-              padding: "20px",
-              border: stepValidation.step1Complete
-                ? "2px solid #48bb78"
-                : "2px dashed #4a5568",
-              borderRadius: "8px",
-              backgroundColor: "#2d3748",
-              color: "white",
-            }}
-          >
-            <h3 style={{ color: "#48bb78", margin: "0 0 15px 0", fontSize: "1.4em", fontWeight: "600" }}>
-              🔒 Lock In Your Wallet
-                  </h3>
+            {/* Step 3: Lock In Your Wallet */}
+            <div
+              style={{
+                marginBottom: "20px",
+                padding: "20px",
+                border:
+                  !isSetupCommitted && currentStep === 3
+                    ? "3px solid #d69e2e" // Highlighted border for active step
+                    : stepValidation.step1Complete
+                    ? "2px solid #48bb78"
+                    : "2px solid #333",
+                borderRadius: "8px",
+                backgroundColor: "#2d3748",
+                color: "white",
+                boxShadow:
+                  !isSetupCommitted && currentStep === 3
+                    ? "0 0 0 1px rgba(214, 158, 46, 0.3)"
+                    : "none",
+              }}
+            >
+              <h3
+                style={{
+                  color: "#48bb78",
+                  margin: "0 0 15px 0",
+                  fontSize: "1.4em",
+                  fontWeight: "600",
+                }}
+              >
+                🧩 Step 3: Lock In Your Wallet
+              </h3>
 
-            <p style={{ fontSize: "0.9em", color: "#cbd5e0", marginBottom: "15px", lineHeight: "1.5" }}>
-              {isSetupCommitted
-                ? "Your wallet is locked and all security features are active."
-                : "Ready to activate your wallet security? This will enable all spending limits and withdrawal controls."}
-            </p>
+              <p
+                style={{
+                  fontSize: "0.9em",
+                  color: "#cbd5e0",
+                  marginBottom: "15px",
+                  lineHeight: "1.5",
+                }}
+              >
+                {isSetupCommitted
+                  ? "Your wallet is locked and all security features are active."
+                  : "Ready to activate your wallet security? This will enable all spending limits and withdrawal controls."}
+              </p>
 
-            {!isSetupCommitted ? (
-              <div>
-                <div style={{ backgroundColor: "#1a1a1a", border: "1px solid #ed8936", borderRadius: "6px", padding: "12px", marginBottom: "15px" }}>
-                  <h5 style={{ color: stepValidation.step1Complete ? "#9ae6b4" : "#ed8936", margin: "0 0 10px 0" }}>
-                    📝 Prerequisites
-                  </h5>
-                  <div style={{ fontSize: "0.85em", color: "#a0aec0" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: "8px", color: stepValidation.step1Complete ? "#9ae6b4" : "#fc8181" }}>
-                      {stepValidation.step1Complete ? "✅" : "❌"}
-                      Set at least one spending limit
-                    </div>
-                  </div>
-                </div>
-
-                <div style={{ textAlign: "center" }}>
-                  <button
-                    onClick={commitSetup}
-                    disabled={!stepValidation.step1Complete}
+              {!isSetupCommitted ? (
+                <div>
+                  <div
                     style={{
-                      padding: "15px 30px",
-                      borderRadius: "8px",
-                      border: "none",
-                      backgroundColor: stepValidation.step1Complete ? "#48bb78" : "#4a5568",
-                      color: "white",
-                      cursor: stepValidation.step1Complete ? "pointer" : "not-allowed",
-                      fontSize: "1.1em",
-                      fontWeight: "bold",
-                      transition: "all 0.2s ease",
-                      opacity: stepValidation.step1Complete ? 1 : 0.5,
-                      boxShadow: stepValidation.step1Complete ? "0 4px 12px rgba(72, 187, 120, 0.4)" : "none",
+                      backgroundColor: "#1a1a1a",
+                      border: "1px solid #ed8936",
+                      borderRadius: "6px",
+                      padding: "12px",
+                      marginBottom: "15px",
                     }}
                   >
-                    🔒 Lock In My Wallet
-                  </button>
+                    <h5
+                      style={{
+                        color: stepValidation.step1Complete
+                          ? "#9ae6b4"
+                          : "#ed8936",
+                        margin: "0 0 10px 0",
+                      }}
+                    >
+                      📝 Prerequisites
+                    </h5>
+                    <div style={{ fontSize: "0.85em", color: "#a0aec0" }}>
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "8px",
+                          color: stepValidation.step1Complete
+                            ? "#9ae6b4"
+                            : "#fc8181",
+                        }}
+                      >
+                        {stepValidation.step1Complete ? "✅" : "❌"}
+                        Set at least one spending limit
+                      </div>
+                    </div>
+                  </div>
 
-                  {!stepValidation.step1Complete && (
-                    <p style={{ fontSize: "0.8em", color: "#fc8181", marginTop: "10px", fontStyle: "italic" }}>
-                      Set spending limits first to enable lock-in
-                    </p>
-                  )}
+                  <div style={{ textAlign: "center" }}>
+                    <button
+                      onClick={commitSetup}
+                      disabled={!stepValidation.step1Complete}
+                      style={{
+                        padding: "15px 30px",
+                        borderRadius: "8px",
+                        border: "none",
+                        backgroundColor: stepValidation.step1Complete
+                          ? "#48bb78"
+                          : "#4a5568",
+                        color: "white",
+                        cursor: stepValidation.step1Complete
+                          ? "pointer"
+                          : "not-allowed",
+                        fontSize: "1.1em",
+                        fontWeight: "bold",
+                        transition: "all 0.2s ease",
+                        opacity: stepValidation.step1Complete ? 1 : 0.5,
+                        boxShadow: stepValidation.step1Complete
+                          ? "0 4px 12px rgba(72, 187, 120, 0.4)"
+                          : "none",
+                      }}
+                    >
+                      🔒 Lock In My Wallet
+                    </button>
+                  </div>
                 </div>
-              </div>
-            ) : (
-              <div style={{ padding: "20px", backgroundColor: "#1a365d", borderRadius: "8px", border: "2px solid #48bb78", textAlign: "center" }}>
-                <div style={{ fontSize: "3em", marginBottom: "10px" }}>🛡️</div>
-                <h3 style={{ color: "#9ae6b4", margin: "0 0 10px 0" }}>Wallet Secured</h3>
-                <p style={{ color: "#e2e8f0", margin: 0, fontSize: "0.9em", lineHeight: "1.5" }}>
-                  Your spending limits are active and withdrawal controls are enforced. All security features are now protecting your funds.
-                </p>
-              </div>
-            )}
-          </div>
+              ) : (
+                <div
+                  style={{
+                    padding: "20px",
+                    backgroundColor: "#1a365d",
+                    borderRadius: "8px",
+                    border: "2px solid #48bb78",
+                    textAlign: "center",
+                  }}
+                >
+                  <div style={{ fontSize: "3em", marginBottom: "10px" }}>
+                    🛡️
+                  </div>
+                  <h3 style={{ color: "#9ae6b4", margin: "0 0 10px 0" }}>
+                    Wallet Secured
+                  </h3>
+                  <p
+                    style={{
+                      color: "#e2e8f0",
+                      margin: 0,
+                      fontSize: "0.9em",
+                      lineHeight: "1.5",
+                    }}
+                  >
+                    Your spending limits are active and withdrawal controls are
+                    enforced. All security features are now protecting your
+                    funds.
+                  </p>
+                </div>
+              )}
+            </div>
 
             {/* Enhanced Withdrawal Section - Hidden during setup mode */}
             {isSetupCommitted && (
@@ -6087,168 +6216,13 @@ function AppContent() {
                 </div>
 
                 {/* Destination Selection as Radio Buttons */}
-                <div style={{ marginBottom: "15px" }}>
-                  <label
-                    style={{
-                      display: "block",
-                      fontSize: "0.9em",
-                      color: "#e2e8f0",
-                      marginBottom: "8px",
-                    }}
-                  >
-                    Withdraw To:
-                  </label>
-
-                  {/* My Wallet Option */}
-                  <div style={{ marginBottom: "8px" }}>
-                    <label
-                      style={{
-                        display: "flex",
-                        alignItems: "flex-start",
-                        cursor: "pointer",
-                        padding: "8px",
-                        borderRadius: "4px",
-                        backgroundColor:
-                          selectedWithdrawalDestination === "self"
-                            ? "#2d3748"
-                            : "transparent",
-                        border: "1px solid #4a5568",
-                      }}
-                    >
-                      <input
-                        type="radio"
-                        name="withdrawalDestination"
-                        value="self"
-                        checked={selectedWithdrawalDestination === "self"}
-                        onChange={(e) =>
-                          setSelectedWithdrawalDestination(e.target.value)
-                        }
-                        style={{ marginRight: "8px", marginTop: "2px" }}
-                      />
-                      <span style={{ color: "white" }}>
-                        🏠 My Wallet (
-                        {getCurrentUserAddress()
-                          ? `${getCurrentUserAddress().slice(
-                              0,
-                              6
-                            )}...${getCurrentUserAddress().slice(-4)}`
-                          : ""}
-                        )
-                      </span>
-                    </label>
-                  </div>
-
-                  {/* Withdrawal Addresses as Radio Buttons */}
-                  {withdrawalAddresses.map((addr, index) => (
-                    <div key={index} style={{ marginBottom: "8px" }}>
-                      <div
-                        style={{
-                          display: "flex",
-                          alignItems: "flex-start",
-                          border: "1px solid #4a5568",
-                          borderRadius: "4px",
-                          backgroundColor:
-                            selectedWithdrawalDestination === addr.destination
-                              ? "#2d3748"
-                              : "transparent",
-                        }}
-                      >
-                        <label
-                          style={{
-                            display: "flex",
-                            alignItems: "flex-start",
-                            cursor: "pointer",
-                            padding: "8px",
-                            flex: 1,
-                          }}
-                        >
-                          <input
-                            type="radio"
-                            name="withdrawalDestination"
-                            value={addr.destination}
-                            checked={
-                              selectedWithdrawalDestination === addr.destination
-                            }
-                            onChange={(e) =>
-                              setSelectedWithdrawalDestination(e.target.value)
-                            }
-                            style={{ marginRight: "8px", marginTop: "2px" }}
-                          />
-                          <div>
-                            <div style={{ color: "white", fontWeight: "bold" }}>
-                              📍 {addr.title}
-                            </div>
-                            <div
-                              style={{
-                                fontSize: "0.8em",
-                                color: "#a0aec0",
-                                fontFamily: "monospace",
-                              }}
-                            >
-                              {addr.destination}
-                            </div>
-                            <div
-                              style={{ fontSize: "0.7em", color: "#718096" }}
-                            >
-                              Added: {addr.addedDate}
-                            </div>
-                          </div>
-                        </label>
-                        <button
-                          onClick={() =>
-                            removeWithdrawalAddress(addr.destination)
-                          }
-                          style={{
-                            marginRight: "8px",
-                            padding: "4px 8px",
-                            borderRadius: "4px",
-                            border: "1px solid #e53e3e",
-                            backgroundColor: "transparent",
-                            color: "#e53e3e",
-                            cursor: "pointer",
-                            fontSize: "0.7em",
-                          }}
-                        >
-                          🗑️ Remove
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-
-                  {/* Add Address Button Below the List */}
-                  <div style={{ marginTop: "10px" }}>
-                    <button
-                      onClick={() =>
-                        setShowWithdrawalAddressForm(!showWithdrawalAddressForm)
-                      }
-                      style={{
-                        padding: "8px 16px",
-                        borderRadius: "4px",
-                        border: "1px solid #4a5568",
-                        backgroundColor: "#2d3748",
-                        backgroundImage: "none",
-                        color: "#a0aec0",
-                        cursor: "pointer",
-                        fontSize: "0.85em",
-                        fontWeight: "normal",
-                        opacity: 0.7,
-                        transition: "all 0.2s ease",
-                      }}
-                      onMouseEnter={(e) => {
-                        e.target.style.opacity = "1";
-                        e.target.style.color = "#e2e8f0";
-                        e.target.style.borderColor = "#718096";
-                      }}
-                      onMouseLeave={(e) => {
-                        e.target.style.opacity = "0.7";
-                        e.target.style.color = "#a0aec0";
-                        e.target.style.borderColor = "#4a5568";
-                      }}
-                    >
-                      ➕ Add Withdrawal Address
-                    </button>
-                  </div>
-                </div>
+                <WithdrawalAddressSelector
+                  mode="selection"
+                  selectedDestination={selectedWithdrawalDestination}
+                  onDestinationChange={setSelectedWithdrawalDestination}
+                  showAddButton={false}
+                  title="Withdraw To:"
+                />
 
                 {/* Dynamic Withdrawal Buttons */}
                 <div style={{ display: "flex", gap: "10px", width: "100%" }}>
