@@ -25,7 +25,7 @@ const INSTRUCTION_DISCRIMINATORS = {
   WithdrawSol: [145, 131, 74, 136, 65, 137, 42, 38],
   WithdrawSpl: [181, 154, 94, 86, 62, 115, 6, 186],
 
-  // Deposit Proxy Program (auto-generated on 2025-10-05)
+  // Deposit Proxy Program (auto-generated on 2025-10-07)
   InitializeProxy: [245, 74, 175, 136, 0, 146, 100, 224],
   ForwardSolDeposit: [29, 156, 48, 213, 90, 128, 229, 58],
   ForwardSplDeposit: [131, 71, 27, 250, 233, 24, 75, 240]
@@ -40,8 +40,8 @@ export class SolanaAdapter extends BlockchainAdapter {
     this.wallet = wallet;
     this.connection = connection;
     this.userAddress = null;
-    this.PROGRAM_ID = new PublicKey("HNi2JKTNeHvz2ENckdVBW1ncfkJUYppuYeBwNhWjkK7d"); // Updated 2025-10-05
-    this.DEPOSIT_PROXY_PROGRAM_ID = new PublicKey("4Tr7zEp7p5YtvXNAK98UnEUUpYP9q87sgKBJjfgfNtr4"); // Updated 2025-10-05
+    this.PROGRAM_ID = new PublicKey("HNi2JKTNeHvz2ENckdVBW1ncfkJUYppuYeBwNhWjkK7d"); // Updated 2025-10-07
+    this.DEPOSIT_PROXY_PROGRAM_ID = new PublicKey("4Tr7zEp7p5YtvXNAK98UnEUUpYP9q87sgKBJjfgfNtr4"); // Updated 2025-10-07
 
     if (this.wallet?.connected && this.wallet?.publicKey) {
       this.userAddress = this.wallet.publicKey.toString();
@@ -1219,6 +1219,7 @@ export class SolanaAdapter extends BlockchainAdapter {
       'AddWithdrawalDestination': [22, 253, 18, 184, 234, 85, 147, 84],
       'CancelLimitProposal': [201, 126, 142, 5, 126, 97, 232, 133],
       'CancelWithdrawalBypass': [67, 241, 187, 146, 79, 62, 136, 181],
+      'CancelWithdrawalDestinationRequest': [233, 183, 160, 123, 7, 15, 61, 197],
       'CommitInitialSetup': [248, 193, 240, 26, 1, 132, 74, 226],
       'DepositSol': [108, 81, 78, 117, 125, 155, 56, 200],
       'DepositSolSelf': [253, 113, 121, 194, 75, 233, 114, 223],
@@ -1227,6 +1228,7 @@ export class SolanaAdapter extends BlockchainAdapter {
       'ExecuteLimitProposal': [77, 88, 235, 59, 216, 111, 1, 133],
       'ExecuteSplWithdrawalBypass': [241, 42, 36, 134, 236, 241, 142, 40],
       'ExecuteWithdrawalBypass': [179, 43, 138, 230, 25, 62, 50, 189],
+      'ExecuteWithdrawalDestinationRequest': [117, 222, 85, 202, 28, 30, 24, 66],
       'GetSolBalance': [177, 197, 179, 97, 50, 111, 178, 70],
       'GetSpendingLimits': [23, 121, 238, 204, 69, 213, 157, 147],
       'GetSplBalance': [92, 135, 40, 171, 133, 246, 90, 120],
@@ -1236,6 +1238,7 @@ export class SolanaAdapter extends BlockchainAdapter {
       'RemoveTimePeriodLimit': [213, 185, 190, 218, 206, 221, 93, 152],
       'RemoveWithdrawalDestination': [60, 84, 70, 83, 98, 9, 151, 106],
       'RequestWithdrawalBypass': [179, 63, 197, 165, 24, 134, 204, 54],
+      'RequestWithdrawalDestinationAddition': [249, 50, 136, 94, 75, 10, 162, 98],
       'SetCommonPeriodLimits': [200, 130, 17, 128, 169, 59, 33, 89],
       'WithdrawSol': [145, 131, 74, 136, 65, 137, 42, 38],
       'WithdrawSolToDestination': [170, 140, 47, 249, 105, 179, 11, 204],
@@ -2272,12 +2275,23 @@ export class SolanaAdapter extends BlockchainAdapter {
   }
 
   /**
-   * Add a new withdrawal destination
+   * Add a new withdrawal destination (now uses timelock pattern)
    * @param {string} address - Destination address
    * @param {string} title - Title/label for the destination
    * @returns {string} Transaction hash
    */
   async addWithdrawalDestination(address, title) {
+    // Updated to use new timelock pattern (matches EVM behavior)
+    return this.requestWithdrawalDestinationAddition(address, title);
+  }
+
+  /**
+   * Request withdrawal destination addition (with timelock)
+   * @param {string} address - Destination address
+   * @param {string} title - Title/label for the destination
+   * @returns {string} Transaction hash
+   */
+  async requestWithdrawalDestinationAddition(address, title) {
     if (!this.wallet?.publicKey) {
       throw new Error('Wallet not connected');
     }
@@ -2300,7 +2314,7 @@ export class SolanaAdapter extends BlockchainAdapter {
     }
 
     // Create instruction data
-    const discriminator = Buffer.from(this._generateDiscriminator('AddWithdrawalDestination'));
+    const discriminator = Buffer.from(this._generateDiscriminator('RequestWithdrawalDestinationAddition'));
 
     // Encode address (32 bytes)
     const addressBytes = destinationPubkey.toBuffer();
@@ -2324,7 +2338,78 @@ export class SolanaAdapter extends BlockchainAdapter {
     const transaction = new Transaction().add(instruction);
     const txHash = await this.wallet.sendTransaction(transaction, this.connection);
 
-    console.log(`✅ Added withdrawal destination: ${address} - ${title} (tx: ${txHash})`);
+    console.log(`✅ Requested withdrawal destination addition: ${address} - ${title} (tx: ${txHash})`);
+    console.log(`⏰ Will be executable after 24 hours`);
+    return txHash;
+  }
+
+  /**
+   * Execute a pending withdrawal destination request
+   * @param {string} requestId - The request ID (hex string)
+   * @returns {string} Transaction hash
+   */
+  async executeWithdrawalDestinationRequest(requestId) {
+    if (!this.wallet?.publicKey) {
+      throw new Error('Wallet not connected');
+    }
+
+    const userPubkey = this.wallet.publicKey;
+    const [savingsAccount] = await this.getSavingsAccountPDA(userPubkey);
+
+    // Create instruction data
+    const discriminator = Buffer.from(this._generateDiscriminator('ExecuteWithdrawalDestinationRequest'));
+    // Convert hex request ID to buffer
+    const requestIdBuffer = Buffer.from(requestId, 'hex');
+    const data = Buffer.concat([discriminator, requestIdBuffer]);
+
+    const instruction = new TransactionInstruction({
+      keys: [
+        { pubkey: savingsAccount, isSigner: false, isWritable: true },
+        { pubkey: userPubkey, isSigner: true, isWritable: true }
+      ],
+      programId: this.PROGRAM_ID,
+      data
+    });
+
+    const transaction = new Transaction().add(instruction);
+    const txHash = await this.wallet.sendTransaction(transaction, this.connection);
+
+    console.log(`✅ Executed withdrawal destination request: ${requestId} (tx: ${txHash})`);
+    return txHash;
+  }
+
+  /**
+   * Cancel a pending withdrawal destination request
+   * @param {string} requestId - The request ID (hex string)
+   * @returns {string} Transaction hash
+   */
+  async cancelWithdrawalDestinationRequest(requestId) {
+    if (!this.wallet?.publicKey) {
+      throw new Error('Wallet not connected');
+    }
+
+    const userPubkey = this.wallet.publicKey;
+    const [savingsAccount] = await this.getSavingsAccountPDA(userPubkey);
+
+    // Create instruction data
+    const discriminator = Buffer.from(this._generateDiscriminator('CancelWithdrawalDestinationRequest'));
+    // Convert hex request ID to buffer
+    const requestIdBuffer = Buffer.from(requestId, 'hex');
+    const data = Buffer.concat([discriminator, requestIdBuffer]);
+
+    const instruction = new TransactionInstruction({
+      keys: [
+        { pubkey: savingsAccount, isSigner: false, isWritable: true },
+        { pubkey: userPubkey, isSigner: true, isWritable: true }
+      ],
+      programId: this.PROGRAM_ID,
+      data
+    });
+
+    const transaction = new Transaction().add(instruction);
+    const txHash = await this.wallet.sendTransaction(transaction, this.connection);
+
+    console.log(`✅ Cancelled withdrawal destination request: ${requestId} (tx: ${txHash})`);
     return txHash;
   }
 

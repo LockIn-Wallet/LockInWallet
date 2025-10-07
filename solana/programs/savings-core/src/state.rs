@@ -26,6 +26,9 @@ pub struct SavingsAccount {
     /// Approved withdrawal destinations (addresses user can withdraw to)
     pub withdrawal_destinations: Vec<WithdrawalDestination>,
 
+    /// Pending withdrawal destination requests (addresses pending approval with timelock)
+    pub pending_withdrawal_destination_requests: Vec<PendingWithdrawalDestinationRequest>,
+
     /// Pending bypass requests for withdrawals exceeding spending limits
     pub pending_bypass_requests: Vec<BypassRequest>,
 }
@@ -87,6 +90,31 @@ pub struct BypassRequest {
     pub created_at: i64,
 }
 
+/// Represents a pending withdrawal destination request (similar to EVM timelock system)
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Debug, PartialEq)]
+pub struct PendingWithdrawalDestinationRequest {
+    /// Unique identifier for this request
+    pub request_id: [u8; 32],
+
+    /// The destination address to be added
+    pub address: Pubkey,
+
+    /// Title/label for this destination
+    pub title: String,
+
+    /// Unix timestamp when this request can be executed (24 hours after creation)
+    pub execute_after: i64,
+
+    /// Whether this request has been executed
+    pub executed: bool,
+
+    /// Whether this request has been cancelled
+    pub cancelled: bool,
+
+    /// When this request was created
+    pub created_at: i64,
+}
+
 impl SavingsAccount {
     /// Size calculation for account space allocation
     pub const DISCRIMINATOR_SIZE: usize = 8;
@@ -100,6 +128,7 @@ impl SavingsAccount {
     pub const TOKEN_BALANCE_SIZE: usize = 32 + 8; // Pubkey + u64
     pub const MAX_TOKENS: usize = 10; // Support up to 10 different tokens initially
     pub const MAX_WITHDRAWAL_DESTINATIONS: usize = 20; // Support up to 20 withdrawal destinations
+    pub const MAX_PENDING_WITHDRAWAL_DESTINATION_REQUESTS: usize = 5; // Support up to 5 pending destination requests
     pub const MAX_BYPASS_REQUESTS: usize = 10; // Support up to 10 pending bypass requests
     pub const MAX_TITLE_LENGTH: usize = 64; // Max characters for destination title
     pub const MAX_PERIOD_NAME_LENGTH: usize = 32; // Max characters for period name
@@ -109,6 +138,15 @@ impl SavingsAccount {
         + Self::STRING_OVERHEAD + Self::MAX_TITLE_LENGTH // title
         + Self::I64_SIZE // added_at
         + Self::BOOL_SIZE; // active
+
+    // PendingWithdrawalDestinationRequest size calculation
+    pub const PENDING_WITHDRAWAL_DESTINATION_REQUEST_SIZE: usize = 32 // request_id ([u8; 32])
+        + Self::PUBKEY_SIZE // address
+        + Self::STRING_OVERHEAD + Self::MAX_TITLE_LENGTH // title
+        + Self::I64_SIZE // execute_after
+        + Self::BOOL_SIZE // executed
+        + Self::BOOL_SIZE // cancelled
+        + Self::I64_SIZE; // created_at
 
     // BypassRequest size calculation
     pub const BYPASS_REQUEST_SIZE: usize = 32 // request_id ([u8; 32])
@@ -129,6 +167,7 @@ impl SavingsAccount {
         + Self::I64_SIZE // created_at
         + Self::I64_SIZE // updated_at
         + Self::VEC_OVERHEAD + (Self::WITHDRAWAL_DESTINATION_SIZE * Self::MAX_WITHDRAWAL_DESTINATIONS) // withdrawal_destinations
+        + Self::VEC_OVERHEAD + (Self::PENDING_WITHDRAWAL_DESTINATION_REQUEST_SIZE * Self::MAX_PENDING_WITHDRAWAL_DESTINATION_REQUESTS) // pending_withdrawal_destination_requests
         + Self::VEC_OVERHEAD + (Self::BYPASS_REQUEST_SIZE * Self::MAX_BYPASS_REQUESTS); // pending_bypass_requests
 
     /// Update or add a token balance
@@ -210,6 +249,97 @@ impl SavingsAccount {
             }
         }
         false
+    }
+
+    /// Add a new pending withdrawal destination request (with timelock)
+    pub fn add_pending_withdrawal_destination_request(
+        &mut self,
+        request_id: [u8; 32],
+        address: Pubkey,
+        title: String,
+        current_time: i64,
+    ) -> Result<()> {
+        require!(!title.is_empty() && title.len() <= Self::MAX_TITLE_LENGTH, crate::error::ErrorCode::InvalidParameters);
+        require!(self.pending_withdrawal_destination_requests.len() < Self::MAX_PENDING_WITHDRAWAL_DESTINATION_REQUESTS, crate::error::ErrorCode::TooManyDestinations);
+
+        // Check if destination already exists or is already pending
+        for dest in &self.withdrawal_destinations {
+            if dest.address == address && dest.active {
+                return Err(crate::error::ErrorCode::DestinationAlreadyExists.into());
+            }
+        }
+        for pending in &self.pending_withdrawal_destination_requests {
+            if pending.address == address && !pending.executed && !pending.cancelled {
+                return Err(crate::error::ErrorCode::DestinationAlreadyExists.into());
+            }
+        }
+
+        // Check if user is trying to add their own address (not allowed for security)
+        require!(address != self.owner, crate::error::ErrorCode::CannotSetOwnAddress);
+
+        // 24-hour timelock (86400 seconds)
+        let execute_after = current_time + 86400;
+
+        self.pending_withdrawal_destination_requests.push(PendingWithdrawalDestinationRequest {
+            request_id,
+            address,
+            title,
+            execute_after,
+            executed: false,
+            cancelled: false,
+            created_at: current_time,
+        });
+
+        Ok(())
+    }
+
+    /// Execute a pending withdrawal destination request
+    pub fn execute_pending_withdrawal_destination_request(
+        &mut self,
+        request_id: [u8; 32],
+        current_time: i64,
+    ) -> Result<PendingWithdrawalDestinationRequest> {
+        // First find the request and extract the data we need
+        let mut found_request: Option<PendingWithdrawalDestinationRequest> = None;
+
+        for request in &mut self.pending_withdrawal_destination_requests {
+            if request.request_id == request_id && !request.executed && !request.cancelled {
+                require!(current_time >= request.execute_after, crate::error::ErrorCode::RequestStillInTimelock);
+
+                // Mark as executed and copy the request data
+                request.executed = true;
+                found_request = Some(request.clone());
+                break;
+            }
+        }
+
+        if let Some(request) = found_request {
+            // Now add the destination to the approved list (no longer borrowing the requests array)
+            self.add_withdrawal_destination(request.address, request.title.clone(), current_time)?;
+            Ok(request)
+        } else {
+            Err(crate::error::ErrorCode::RequestNotFound.into())
+        }
+    }
+
+    /// Cancel a pending withdrawal destination request
+    pub fn cancel_pending_withdrawal_destination_request(&mut self, request_id: [u8; 32]) -> Result<()> {
+        for request in &mut self.pending_withdrawal_destination_requests {
+            if request.request_id == request_id && !request.executed && !request.cancelled {
+                request.cancelled = true;
+                return Ok(());
+            }
+        }
+        Err(crate::error::ErrorCode::RequestNotFound.into())
+    }
+
+    /// Get active pending withdrawal destination requests
+    pub fn get_active_pending_withdrawal_destination_requests(&self) -> Vec<PendingWithdrawalDestinationRequest> {
+        self.pending_withdrawal_destination_requests
+            .iter()
+            .filter(|r| !r.executed && !r.cancelled)
+            .cloned()
+            .collect()
     }
 
     /// Add a new bypass request

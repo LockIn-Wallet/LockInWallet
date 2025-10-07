@@ -159,7 +159,7 @@ const NETWORKS = {
           recommended: true,
         },
         USDT: {
-          mint: "HQQPp5Vh6WHdfHrcr41VrdTPVPzrvbSsUde4gGFLLpJM", // Test USDT mint address
+          mint: "466PmPufjY74BviPfFXjtSokhSNzuT2iK3vYZEaDndyq", // Test USDT mint address
           symbol: "USDT",
           name: "Test USDT",
           decimals: 6,

@@ -258,6 +258,104 @@ cd ../frontend && npm start  # Start frontend
 - **Fresh deployments**: Only use for initial setup or testing (DATA LOSS)
 - **PDA accounts**: Deterministic addresses tied to user wallets
 
+### **⚠️ CRITICAL: Account Structure Changes to Avoid**
+
+Solana programs are designed to be upgradeable, but certain changes will break existing accounts and cause irreversible data corruption. **Always review account structure changes carefully before deployment.**
+
+#### **❌ BREAKING CHANGES (Will Corrupt Existing Data)**
+These changes will make existing accounts unreadable and cause data loss:
+
+- **❌ Removing existing fields** from structs
+  ```rust
+  // BEFORE (existing accounts have this structure)
+  pub struct UserAccount {
+      pub owner: Pubkey,
+      pub balance: u64,
+      pub created_at: i64,  // ❌ DON'T REMOVE THIS
+  }
+
+  // AFTER (breaks existing accounts)
+  pub struct UserAccount {
+      pub owner: Pubkey,
+      pub balance: u64,
+      // ❌ REMOVED created_at - existing accounts can't be read!
+  }
+  ```
+
+- **❌ Changing field types incompatibly**
+  ```rust
+  // BEFORE
+  pub balance: u64,
+
+  // AFTER
+  pub balance: String,  // ❌ BREAKS: u64 → String is incompatible
+  ```
+
+- **❌ Reordering fields in structs**
+  ```rust
+  // BEFORE
+  pub struct UserAccount {
+      pub owner: Pubkey,     // Field 1
+      pub balance: u64,      // Field 2
+  }
+
+  // AFTER
+  pub struct UserAccount {
+      pub balance: u64,      // ❌ Now field 1 (was field 2)
+      pub owner: Pubkey,     // ❌ Now field 2 (was field 1)
+  }
+  ```
+
+- **❌ Changing account discriminators** (changing struct names, instruction names, or anchor attributes)
+
+#### **✅ SAFE UPGRADES (Will NOT Break Existing Data)**
+These changes are safe and preserve existing account data:
+
+- **✅ Adding new fields to the END of structs**
+  ```rust
+  // BEFORE (existing accounts work)
+  pub struct UserAccount {
+      pub owner: Pubkey,
+      pub balance: u64,
+  }
+
+  // AFTER (safe upgrade)
+  pub struct UserAccount {
+      pub owner: Pubkey,
+      pub balance: u64,
+      pub withdrawal_destinations: Vec<WithdrawalDestination>, // ✅ Safe to add
+      pub pending_requests: Vec<PendingRequest>,               // ✅ Safe to add
+  }
+  ```
+
+- **✅ Adding new account types** (entirely new structs)
+- **✅ Adding new instruction handlers**
+- **✅ Adding optional fields** with default values
+- **✅ Changing derived traits** that don't affect serialization
+- **✅ Adding new enum variants** (at the end)
+
+#### **🛡️ Best Practices for Safe Upgrades**
+
+1. **Always add new fields at the END** of existing structs
+2. **Use Vec\<T\> for expandable data** instead of fixed arrays
+3. **Test upgrades on localnet first** with existing account data
+4. **Never remove or reorder existing fields** - only add new ones
+5. **Use proper versioning** if you need incompatible changes:
+   ```rust
+   pub struct UserAccountV2 {  // Create new struct instead of modifying existing
+       // New incompatible structure
+   }
+   ```
+
+6. **Validate account data** in upgrade instructions to handle missing fields gracefully
+
+#### **🚨 Recovery from Breaking Changes**
+
+If you accidentally deploy breaking changes:
+- **Localnet**: Use `--force-reset` flag to reset validator state (DATA LOSS)
+- **Devnet/Mainnet**: Breaking changes are **irreversible** - accounts are permanently corrupted
+- **Prevention**: Always test upgrades on localnet with real account data first
+
 ### **Best Coding Practices**
 - Always use DRY principle
 - Never have inline imports

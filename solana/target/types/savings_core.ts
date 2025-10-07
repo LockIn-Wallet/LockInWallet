@@ -264,6 +264,64 @@ export type SavingsCore = {
       ]
     },
     {
+      "name": "cancelWithdrawalDestinationRequest",
+      "docs": [
+        "Cancel a pending withdrawal destination request"
+      ],
+      "discriminator": [
+        233,
+        183,
+        160,
+        123,
+        7,
+        15,
+        61,
+        197
+      ],
+      "accounts": [
+        {
+          "name": "savingsAccount",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  97,
+                  118,
+                  105,
+                  110,
+                  103,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "user"
+              }
+            ]
+          }
+        },
+        {
+          "name": "user",
+          "writable": true,
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "requestId",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        }
+      ]
+    },
+    {
       "name": "commitInitialSetup",
       "docs": [
         "Commit initial setup"
@@ -1008,6 +1066,64 @@ export type SavingsCore = {
       ]
     },
     {
+      "name": "executeWithdrawalDestinationRequest",
+      "docs": [
+        "Execute a pending withdrawal destination request"
+      ],
+      "discriminator": [
+        117,
+        222,
+        85,
+        202,
+        28,
+        30,
+        24,
+        66
+      ],
+      "accounts": [
+        {
+          "name": "savingsAccount",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  97,
+                  118,
+                  105,
+                  110,
+                  103,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "user"
+              }
+            ]
+          }
+        },
+        {
+          "name": "user",
+          "writable": true,
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "requestId",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        }
+      ]
+    },
+    {
       "name": "getSolBalance",
       "docs": [
         "Get user's total SOL balance"
@@ -1513,6 +1629,63 @@ export type SavingsCore = {
         {
           "name": "destination",
           "type": "pubkey"
+        }
+      ]
+    },
+    {
+      "name": "requestWithdrawalDestinationAddition",
+      "docs": [
+        "Request withdrawal destination addition (with timelock)"
+      ],
+      "discriminator": [
+        249,
+        50,
+        136,
+        94,
+        75,
+        10,
+        162,
+        98
+      ],
+      "accounts": [
+        {
+          "name": "savingsAccount",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  97,
+                  118,
+                  105,
+                  110,
+                  103,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "user"
+              }
+            ]
+          }
+        },
+        {
+          "name": "user",
+          "writable": true,
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "address",
+          "type": "pubkey"
+        },
+        {
+          "name": "title",
+          "type": "string"
         }
       ]
     },
@@ -2510,6 +2683,71 @@ export type SavingsCore = {
       }
     },
     {
+      "name": "pendingWithdrawalDestinationRequest",
+      "docs": [
+        "Represents a pending withdrawal destination request (similar to EVM timelock system)"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "requestId",
+            "docs": [
+              "Unique identifier for this request"
+            ],
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "address",
+            "docs": [
+              "The destination address to be added"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "title",
+            "docs": [
+              "Title/label for this destination"
+            ],
+            "type": "string"
+          },
+          {
+            "name": "executeAfter",
+            "docs": [
+              "Unix timestamp when this request can be executed (24 hours after creation)"
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "executed",
+            "docs": [
+              "Whether this request has been executed"
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "cancelled",
+            "docs": [
+              "Whether this request has been cancelled"
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "createdAt",
+            "docs": [
+              "When this request was created"
+            ],
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
       "name": "savingsAccount",
       "docs": [
         "Main savings account that stores user's deposit information",
@@ -2575,6 +2813,19 @@ export type SavingsCore = {
               "vec": {
                 "defined": {
                   "name": "withdrawalDestination"
+                }
+              }
+            }
+          },
+          {
+            "name": "pendingWithdrawalDestinationRequests",
+            "docs": [
+              "Pending withdrawal destination requests (addresses pending approval with timelock)"
+            ],
+            "type": {
+              "vec": {
+                "defined": {
+                  "name": "pendingWithdrawalDestinationRequest"
                 }
               }
             }

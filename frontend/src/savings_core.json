@@ -258,6 +258,64 @@
       ]
     },
     {
+      "name": "cancel_withdrawal_destination_request",
+      "docs": [
+        "Cancel a pending withdrawal destination request"
+      ],
+      "discriminator": [
+        233,
+        183,
+        160,
+        123,
+        7,
+        15,
+        61,
+        197
+      ],
+      "accounts": [
+        {
+          "name": "savings_account",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  97,
+                  118,
+                  105,
+                  110,
+                  103,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "user"
+              }
+            ]
+          }
+        },
+        {
+          "name": "user",
+          "writable": true,
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "request_id",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        }
+      ]
+    },
+    {
       "name": "commit_initial_setup",
       "docs": [
         "Commit initial setup"
@@ -1002,6 +1060,64 @@
       ]
     },
     {
+      "name": "execute_withdrawal_destination_request",
+      "docs": [
+        "Execute a pending withdrawal destination request"
+      ],
+      "discriminator": [
+        117,
+        222,
+        85,
+        202,
+        28,
+        30,
+        24,
+        66
+      ],
+      "accounts": [
+        {
+          "name": "savings_account",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  97,
+                  118,
+                  105,
+                  110,
+                  103,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "user"
+              }
+            ]
+          }
+        },
+        {
+          "name": "user",
+          "writable": true,
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "request_id",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        }
+      ]
+    },
+    {
       "name": "get_sol_balance",
       "docs": [
         "Get user's total SOL balance"
@@ -1507,6 +1623,63 @@
         {
           "name": "destination",
           "type": "pubkey"
+        }
+      ]
+    },
+    {
+      "name": "request_withdrawal_destination_addition",
+      "docs": [
+        "Request withdrawal destination addition (with timelock)"
+      ],
+      "discriminator": [
+        249,
+        50,
+        136,
+        94,
+        75,
+        10,
+        162,
+        98
+      ],
+      "accounts": [
+        {
+          "name": "savings_account",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  97,
+                  118,
+                  105,
+                  110,
+                  103,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "user"
+              }
+            ]
+          }
+        },
+        {
+          "name": "user",
+          "writable": true,
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "address",
+          "type": "pubkey"
+        },
+        {
+          "name": "title",
+          "type": "string"
         }
       ]
     },
@@ -2299,6 +2472,15 @@
             }
           },
           {
+            "name": "pending_withdrawal_destination_requests",
+            "docs": [
+              "Pending withdrawal destination requests (addresses pending approval with timelock)"
+            ],
+            "type": {
+              "vec": "PendingWithdrawalDestinationRequest"
+            }
+          },
+          {
             "name": "pending_bypass_requests",
             "docs": [
               "Pending bypass requests for withdrawals exceeding spending limits"
@@ -2572,6 +2754,71 @@
       }
     },
     {
+      "name": "PendingWithdrawalDestinationRequest",
+      "docs": [
+        "Represents a pending withdrawal destination request (similar to EVM timelock system)"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "request_id",
+            "docs": [
+              "Unique identifier for this request"
+            ],
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "address",
+            "docs": [
+              "The destination address to be added"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "title",
+            "docs": [
+              "Title/label for this destination"
+            ],
+            "type": "string"
+          },
+          {
+            "name": "execute_after",
+            "docs": [
+              "Unix timestamp when this request can be executed (24 hours after creation)"
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "executed",
+            "docs": [
+              "Whether this request has been executed"
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "cancelled",
+            "docs": [
+              "Whether this request has been cancelled"
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "created_at",
+            "docs": [
+              "When this request was created"
+            ],
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
       "name": "SavingsAccount",
       "docs": [
         "Main savings account that stores user's deposit information",
@@ -2631,6 +2878,15 @@
             ],
             "type": {
               "vec": "WithdrawalDestination"
+            }
+          },
+          {
+            "name": "pending_withdrawal_destination_requests",
+            "docs": [
+              "Pending withdrawal destination requests (addresses pending approval with timelock)"
+            ],
+            "type": {
+              "vec": "PendingWithdrawalDestinationRequest"
             }
           },
           {

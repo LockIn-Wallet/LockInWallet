@@ -1184,6 +1184,36 @@ pub struct RemoveWithdrawalDestination<'info> {
     pub user: Signer<'info>,
 }
 
+/// Request withdrawal destination addition (with timelock)
+#[derive(Accounts)]
+pub struct RequestWithdrawalDestinationAddition<'info> {
+    #[account(mut, seeds = [b"savings", user.key().as_ref()], bump)]
+    pub savings_account: Account<'info, SavingsAccount>,
+
+    #[account(mut)]
+    pub user: Signer<'info>,
+}
+
+/// Execute a pending withdrawal destination request
+#[derive(Accounts)]
+pub struct ExecuteWithdrawalDestinationRequest<'info> {
+    #[account(mut, seeds = [b"savings", user.key().as_ref()], bump)]
+    pub savings_account: Account<'info, SavingsAccount>,
+
+    #[account(mut)]
+    pub user: Signer<'info>,
+}
+
+/// Cancel a pending withdrawal destination request
+#[derive(Accounts)]
+pub struct CancelWithdrawalDestinationRequest<'info> {
+    #[account(mut, seeds = [b"savings", user.key().as_ref()], bump)]
+    pub savings_account: Account<'info, SavingsAccount>,
+
+    #[account(mut)]
+    pub user: Signer<'info>,
+}
+
 /// Withdraw to destination (extends existing withdraw functionality)
 #[derive(Accounts)]
 pub struct WithdrawToDestination<'info> {
@@ -1319,6 +1349,79 @@ pub fn remove_withdrawal_destination(
     savings_account.updated_at = clock.unix_timestamp;
 
     msg!("Removed withdrawal destination: {}", address);
+    Ok(())
+}
+
+/// Request withdrawal destination addition instruction (with timelock)
+pub fn request_withdrawal_destination_addition(
+    ctx: Context<RequestWithdrawalDestinationAddition>,
+    address: Pubkey,
+    title: String,
+) -> Result<()> {
+    let savings_account = &mut ctx.accounts.savings_account;
+    let user = &ctx.accounts.user;
+    let clock = Clock::get()?;
+
+    // Generate unique request ID
+    let mut hasher_input = Vec::new();
+    hasher_input.extend_from_slice(user.key().as_ref());
+    hasher_input.extend_from_slice(address.as_ref());
+    hasher_input.extend_from_slice(title.as_bytes());
+    hasher_input.extend_from_slice(&clock.unix_timestamp.to_le_bytes());
+
+    let request_id = anchor_lang::solana_program::keccak::hash(&hasher_input).to_bytes();
+
+    savings_account.add_pending_withdrawal_destination_request(
+        request_id,
+        address,
+        title.clone(),
+        clock.unix_timestamp,
+    )?;
+    savings_account.updated_at = clock.unix_timestamp;
+
+    msg!(
+        "Requested withdrawal destination addition: {} with title '{}' (execute after: {})",
+        address,
+        title,
+        clock.unix_timestamp + 86400
+    );
+    Ok(())
+}
+
+/// Execute a pending withdrawal destination request instruction
+pub fn execute_withdrawal_destination_request(
+    ctx: Context<ExecuteWithdrawalDestinationRequest>,
+    request_id: [u8; 32],
+) -> Result<()> {
+    let savings_account = &mut ctx.accounts.savings_account;
+    let clock = Clock::get()?;
+
+    let executed_request = savings_account.execute_pending_withdrawal_destination_request(
+        request_id,
+        clock.unix_timestamp,
+    )?;
+    savings_account.updated_at = clock.unix_timestamp;
+
+    msg!(
+        "Executed withdrawal destination request: {} with title '{}'",
+        executed_request.address,
+        executed_request.title
+    );
+    Ok(())
+}
+
+/// Cancel a pending withdrawal destination request instruction
+pub fn cancel_withdrawal_destination_request(
+    ctx: Context<CancelWithdrawalDestinationRequest>,
+    request_id: [u8; 32],
+) -> Result<()> {
+    let savings_account = &mut ctx.accounts.savings_account;
+    let clock = Clock::get()?;
+
+    savings_account.cancel_pending_withdrawal_destination_request(request_id)?;
+    savings_account.updated_at = clock.unix_timestamp;
+
+    msg!("Cancelled withdrawal destination request");
     Ok(())
 }
 

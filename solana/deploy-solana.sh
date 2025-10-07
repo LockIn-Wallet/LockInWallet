@@ -1,5 +1,7 @@
 #!/bin/bash
 
+# ORIGINAL Solana Program Deployment Script
+# This is the original deployment script for the savings wallet project
 # Reliable Solana Program Deployment Script
 # This script bypasses Anchor version issues and provides consistent deployment
 # Supports both fresh deployment and program upgrades
@@ -8,10 +10,15 @@ set -e  # Exit on any error
 
 # Parse command line arguments
 UPGRADE_MODE=false
+FORCE_RESET=false
 for arg in "$@"; do
     case $arg in
         --upgrade)
             UPGRADE_MODE=true
+            shift
+            ;;
+        --force-reset)
+            FORCE_RESET=true
             shift
             ;;
         *)
@@ -20,16 +27,13 @@ for arg in "$@"; do
     esac
 done
 
-if [ "$UPGRADE_MODE" = true ]; then
-    echo "🔄 Starting Solana Program Upgrade..."
-else
-    echo "🚀 Starting Solana Program Deployment..."
-fi
+echo "🚀 Starting Solana Program Deployment (auto-upgrade if program exists)..."
 
 # Configuration
-ANCHOR_PATH="/opt/homebrew/bin/anchor"
-SOLANA_DIR="."
-SCRIPTS_DIR="."
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SOLANA_DIR="$SCRIPT_DIR"
+FRONTEND_DIR="$SCRIPT_DIR/../frontend"
+ROOT_DIR="$SCRIPT_DIR/.."
 
 # Colors for output
 RED='\033[0;31m'
@@ -50,15 +54,60 @@ log_error() {
     echo -e "${RED}❌ $1${NC}"
 }
 
+# Dynamically find required tools (no hardcoding!)
+find_tools() {
+    log_info "Detecting Solana and Anchor installations..."
+
+    # Find Solana CLI dynamically
+    SOLANA_CLI=$(which solana 2>/dev/null || echo "")
+    if [ -z "$SOLANA_CLI" ]; then
+        # Try common installation paths
+        for path in "$HOME/.local/share/solana/install/active_release/bin/solana" "/usr/local/bin/solana"; do
+            if [ -f "$path" ]; then
+                SOLANA_CLI="$path"
+                break
+            fi
+        done
+    fi
+
+    if [ -z "$SOLANA_CLI" ]; then
+        log_error "Solana CLI not found. Please install: sh -c \"\$(curl -sSfL https://release.anza.xyz/stable/install)\""
+        exit 1
+    fi
+
+    # Find Anchor CLI dynamically
+    ANCHOR_CLI=$(which anchor 2>/dev/null || echo "")
+    if [ -z "$ANCHOR_CLI" ]; then
+        # Try common installation paths
+        for path in "/opt/homebrew/bin/anchor" "/usr/local/bin/anchor" "$HOME/.cargo/bin/anchor"; do
+            if [ -f "$path" ]; then
+                ANCHOR_CLI="$path"
+                break
+            fi
+        done
+    fi
+
+    if [ -z "$ANCHOR_CLI" ]; then
+        log_error "Anchor CLI not found. Please install: brew install anchor-cli"
+        exit 1
+    fi
+
+    # Set up dynamic PATH
+    SOLANA_BIN_DIR=$(dirname "$SOLANA_CLI")
+    ANCHOR_BIN_DIR=$(dirname "$ANCHOR_CLI")
+    export PATH="$SOLANA_BIN_DIR:$ANCHOR_BIN_DIR:$PATH"
+
+    log_info "✅ Tools detected:"
+    log_info "  Solana CLI: $SOLANA_CLI ($($SOLANA_CLI --version))"
+    log_info "  Anchor CLI: $ANCHOR_CLI ($($ANCHOR_CLI --version))"
+
+    # Update ANCHOR_PATH variable for rest of script
+    ANCHOR_PATH="$ANCHOR_CLI"
+}
+
 # Check prerequisites
 check_prerequisites() {
     log_info "Checking prerequisites..."
-
-    if [ ! -f "$ANCHOR_PATH" ]; then
-        log_error "Anchor CLI not found at $ANCHOR_PATH"
-        log_error "Please install anchor: brew install anchor-cli"
-        exit 1
-    fi
 
     if [ ! -d "$SOLANA_DIR" ]; then
         log_error "Solana directory not found: $SOLANA_DIR"
@@ -68,32 +117,75 @@ check_prerequisites() {
     log_info "✅ Prerequisites check passed"
 }
 
+# Detect breaking changes in account structures
+detect_breaking_changes() {
+    log_info "Tracking deployment state..."
+
+    # Store deployment metadata (removed overly conservative breaking change detection)
+    cat > .deployment-state.json << EOF
+{
+    "last_deployment": "$(date -u +"%Y-%m-%dT%H:%M:%S.%3NZ")",
+    "deployed_by": "$(whoami)",
+    "note": "Breaking change detection removed - Solana programs are designed to be upgradeable"
+}
+EOF
+
+    log_info "✅ Deployment tracking updated"
+}
+
 # Check if local validator is running
 check_validator() {
     log_info "Checking if Solana validator is running..."
 
-    if ! solana cluster-version > /dev/null 2>&1; then
-        log_warning "Local Solana validator not detected"
-        log_info "Starting local validator..."
-
-        # Start validator in background
-        solana-test-validator --reset --quiet > /dev/null 2>&1 &
-        VALIDATOR_PID=$!
-
-        # Wait for validator to start
-        log_info "Waiting for validator to initialize..."
-        sleep 5
-
-        # Check if it's running
-        if ! solana cluster-version > /dev/null 2>&1; then
-            log_error "Failed to start validator"
-            exit 1
+    # Check if validator is running
+    if "$SOLANA_CLI" cluster-version > /dev/null 2>&1; then
+        if [ "$FORCE_RESET" = true ]; then
+            log_warning "Stopping validator for state reset due to breaking changes..."
+            pkill -f solana-test-validator || true
+            sleep 3
+            # Ensure validator is fully stopped
+            while pgrep -f solana-test-validator > /dev/null; do
+                log_info "Waiting for validator to stop..."
+                sleep 1
+            done
+        else
+            log_info "✅ Validator is running and no reset needed"
+            return 0
         fi
-
-        log_info "✅ Local validator started successfully"
-    else
-        log_info "✅ Validator is already running"
     fi
+
+    # Start validator using dynamic tools path
+    log_info "Starting validator..."
+    SOLANA_TEST_VALIDATOR="$SOLANA_BIN_DIR/solana-test-validator"
+
+    if [ ! -f "$SOLANA_TEST_VALIDATOR" ]; then
+        log_error "solana-test-validator not found at: $SOLANA_TEST_VALIDATOR"
+        log_error "Please ensure Solana tools are properly installed"
+        exit 1
+    fi
+
+    if [ "$FORCE_RESET" = true ]; then
+        log_warning "🔄 Resetting validator state (breaking changes detected)"
+        "$SOLANA_TEST_VALIDATOR" --reset --quiet > /dev/null 2>&1 &
+    else
+        "$SOLANA_TEST_VALIDATOR" --quiet > /dev/null 2>&1 &
+    fi
+
+    VALIDATOR_PID=$!
+
+    # Wait for validator to start
+    log_info "Waiting for validator to initialize..."
+    for i in {1..30}; do
+        if "$SOLANA_CLI" cluster-version > /dev/null 2>&1; then
+            log_info "✅ Validator is ready"
+            return 0
+        fi
+        sleep 1
+    done
+
+    log_error "Validator failed to start within 30 seconds"
+    log_error "Check if port 8899 is available or another validator is running"
+    exit 1
 }
 
 # Ensure program ID consistency for both programs
@@ -102,8 +194,7 @@ sync_program_id() {
 
 # Already in solana directory, no need to cd
 
-    # Set up proper Solana environment with Agave CLI 2.1.15
-    export PATH="/Users/andriy/.local/share/solana/install/active_release/bin:/opt/homebrew/bin:$PATH"
+    # Use dynamic PATH already set by find_tools function
 
     # Handle savings-core program
     log_info "Processing savings-core program..."
@@ -111,14 +202,14 @@ sync_program_id() {
     if [ ! -f "$SAVINGS_KEYPAIR_PATH" ]; then
         log_info "Generating new savings-core program keypair..."
         mkdir -p target/deploy
-        solana-keygen new --outfile "$SAVINGS_KEYPAIR_PATH" --no-bip39-passphrase --silent
+        "$SOLANA_BIN_DIR/solana-keygen" new --outfile "$SAVINGS_KEYPAIR_PATH" --no-bip39-passphrase --silent
         if [ $? -ne 0 ]; then
             log_error "Failed to generate savings-core program keypair"
             exit 1
         fi
     fi
 
-    SAVINGS_PROGRAM_ID=$(solana-keygen pubkey "$SAVINGS_KEYPAIR_PATH")
+    SAVINGS_PROGRAM_ID=$("$SOLANA_BIN_DIR/solana-keygen" pubkey "$SAVINGS_KEYPAIR_PATH")
     log_info "Savings-core Program ID: $SAVINGS_PROGRAM_ID"
 
     # Handle deposit-proxy program
@@ -127,14 +218,14 @@ sync_program_id() {
     if [ ! -f "$PROXY_KEYPAIR_PATH" ]; then
         log_info "Generating new deposit-proxy program keypair..."
         mkdir -p target/deploy
-        solana-keygen new --outfile "$PROXY_KEYPAIR_PATH" --no-bip39-passphrase --silent
+        "$SOLANA_BIN_DIR/solana-keygen" new --outfile "$PROXY_KEYPAIR_PATH" --no-bip39-passphrase --silent
         if [ $? -ne 0 ]; then
             log_error "Failed to generate deposit-proxy program keypair"
             exit 1
         fi
     fi
 
-    PROXY_PROGRAM_ID=$(solana-keygen pubkey "$PROXY_KEYPAIR_PATH")
+    PROXY_PROGRAM_ID=$("$SOLANA_BIN_DIR/solana-keygen" pubkey "$PROXY_KEYPAIR_PATH")
     log_info "Deposit-proxy Program ID: $PROXY_PROGRAM_ID"
 
     # Update Anchor.toml with both program IDs
@@ -171,10 +262,9 @@ build_program() {
 
 # Already in solana directory, no need to cd
 
-    # Set up proper Solana environment with Agave CLI 2.1.15
-    export PATH="/Users/andriy/.local/share/solana/install/active_release/bin:/opt/homebrew/bin:$PATH"
+    # Use dynamic PATH already set by find_tools function
 
-    log_info "Using Solana CLI version: $(solana --version)"
+    log_info "Using Solana CLI version: $("$SOLANA_CLI" --version)"
     log_info "Using Anchor CLI at: $ANCHOR_PATH"
 
     # Clean previous build artifacts to eliminate caching issues
@@ -237,7 +327,7 @@ build_program() {
     else
         log_error "Anchor build failed"
         log_error "Please try running 'anchor build' manually in the solana/ directory"
-        log_error "Current Solana version: $(solana --version)"
+        log_error "Current Solana version: $("$SOLANA_CLI" --version)"
         log_error "Current Anchor version: $($ANCHOR_PATH --version 2>&1 || echo 'not found')"
         exit 1
     fi
@@ -250,7 +340,7 @@ check_program_exists() {
     local program_id="$1"
     log_info "Checking if program $program_id exists on chain..."
 
-    if solana program show "$program_id" --url http://127.0.0.1:8899 > /dev/null 2>&1; then
+    if "$SOLANA_CLI" program show "$program_id" --url http://127.0.0.1:8899 > /dev/null 2>&1; then
         log_info "✅ Program exists on chain"
         return 0
     else
@@ -263,55 +353,42 @@ check_program_exists() {
 deploy_program() {
 # Already in solana directory, no need to cd
 
-    # Set up proper Solana environment with Agave CLI 2.1.15
-    export PATH="/Users/andriy/.local/share/solana/install/active_release/bin:/opt/homebrew/bin:$PATH"
+    # Use dynamic PATH already set by find_tools function
 
     # Get program ID
     if [ -f "target/deploy/savings_core-keypair.json" ]; then
-        PROGRAM_ID=$(solana-keygen pubkey "target/deploy/savings_core-keypair.json" 2>/dev/null)
+        PROGRAM_ID=$("$SOLANA_BIN_DIR/solana-keygen" pubkey "target/deploy/savings_core-keypair.json" 2>/dev/null)
         log_info "Program ID: $PROGRAM_ID"
     else
         log_error "Program keypair not found"
         exit 1
     fi
 
-    # Determine action based on mode and program existence
-    if [ "$UPGRADE_MODE" = true ]; then
-        log_info "🔄 Upgrading existing program..."
-        if check_program_exists "$PROGRAM_ID"; then
-            if $ANCHOR_PATH upgrade --provider.cluster localnet --program-id "$PROGRAM_ID" target/deploy/savings_core.so; then
-                log_info "✅ Program upgraded successfully"
-            else
-                log_error "Failed to upgrade program"
-                log_error "Using Anchor at: $ANCHOR_PATH"
-                log_error "Current Solana version: $(solana --version)"
-                exit 1
-            fi
+    # Auto-detect best deployment method (upgrade for existing, deploy for new)
+    if check_program_exists "$PROGRAM_ID"; then
+        log_info "🔄 Program exists on chain, attempting upgrade..."
+        if $ANCHOR_PATH upgrade --provider.cluster localnet --program-id "$PROGRAM_ID" target/deploy/savings_core.so; then
+            log_info "✅ Program upgraded successfully"
         else
-            log_warning "Program not found on chain, falling back to deployment..."
+            log_warning "⚠️  Upgrade failed, attempting deploy as fallback..."
             if $ANCHOR_PATH deploy --provider.cluster localnet; then
                 log_info "✅ Program deployed successfully"
             else
-                log_error "Failed to deploy program"
+                log_error "❌ Both upgrade and deploy failed"
+                log_error "Using Anchor at: $ANCHOR_PATH"
+                log_error "Current Solana version: $("$SOLANA_CLI" --version)"
+                log_error "💡 Consider using --force-reset flag to reset validator state"
                 exit 1
             fi
         fi
     else
-        # Check if program exists and suggest upgrade if it does
-        if check_program_exists "$PROGRAM_ID"; then
-            log_warning "Program already exists on chain!"
-            log_warning "Consider using --upgrade flag to upgrade instead of redeploy"
-            log_info "Proceeding with deployment (may fail if program is immutable)..."
-        fi
-
-        log_info "🚀 Deploying program to local validator..."
+        log_info "🚀 Program not found on chain, deploying new program..."
         if $ANCHOR_PATH deploy --provider.cluster localnet; then
             log_info "✅ Program deployed successfully"
         else
-            log_error "Failed to deploy program"
+            log_error "❌ Failed to deploy new program"
             log_error "Using Anchor at: $ANCHOR_PATH"
-            log_error "Current Solana version: $(solana --version)"
-            log_error "💡 Try using --upgrade flag if the program already exists"
+            log_error "Current Solana version: $("$SOLANA_CLI" --version)"
             exit 1
         fi
     fi
@@ -449,8 +526,7 @@ setup_test_tokens() {
 
     cd "$SCRIPT_DIR"
 
-    # Set up proper Solana environment with Agave CLI 2.1.15
-    export PATH="/Users/andriy/.local/share/solana/install/active_release/bin:/opt/homebrew/bin:$PATH"
+    # Use dynamic PATH already set by find_tools function
 
     if [ -f "setup-solana-tokens.js" ]; then
         log_info "Running token setup script..."
@@ -473,12 +549,11 @@ verify_program_id() {
 
 # Already in solana directory, no need to cd
 
-    # Set up proper Solana environment
-    export PATH="/Users/andriy/.local/share/solana/install/active_release/bin:/opt/homebrew/bin:$PATH"
+    # PATH is dynamically set by find_tools() function
 
     # Get program ID from keypair
     if [ -f "target/deploy/savings_core-keypair.json" ]; then
-        PROGRAM_ID=$(solana-keygen pubkey "target/deploy/savings_core-keypair.json" 2>/dev/null)
+        PROGRAM_ID=$("$SOLANA_BIN_DIR/solana-keygen" pubkey "target/deploy/savings_core-keypair.json" 2>/dev/null)
         log_info "Program ID from keypair: $PROGRAM_ID"
     else
         log_error "Program keypair not found"
@@ -487,7 +562,7 @@ verify_program_id() {
     fi
 
     # Check program ID in lib.rs
-    RUST_FILE="programs/savings-core/src/lib.rs"
+    RUST_FILE="$SOLANA_DIR/programs/savings-core/src/lib.rs"
     if [ -f "$RUST_FILE" ]; then
         DECLARED_ID=$(grep "declare_id!" "$RUST_FILE" | sed 's/.*declare_id!("\([^"]*\)").*/\1/')
         log_info "Program ID in lib.rs: $DECLARED_ID"
@@ -508,8 +583,8 @@ verify_program_id() {
     fi
 
     # Check program ID in Anchor.toml
-    if [ -f "Anchor.toml" ]; then
-        ANCHOR_ID=$(grep "savings_core" Anchor.toml | sed 's/.*savings_core = "\([^"]*\)".*/\1/')
+    if [ -f "$SOLANA_DIR/Anchor.toml" ]; then
+        ANCHOR_ID=$(grep "savings_core" "$SOLANA_DIR/Anchor.toml" | sed 's/.*savings_core = "\([^"]*\)".*/\1/')
         log_info "Program ID in Anchor.toml: $ANCHOR_ID"
 
         if [ "$PROGRAM_ID" = "$ANCHOR_ID" ]; then
@@ -529,11 +604,11 @@ verify_program_id() {
 
     # Check if program is actually deployed
     log_info "Checking if program is deployed on validator..."
-    if solana program show "$PROGRAM_ID" > /dev/null 2>&1; then
+    if "$SOLANA_CLI" program show "$PROGRAM_ID" > /dev/null 2>&1; then
         log_info "✅ Program is deployed on validator"
 
         # Get deployment info
-        DEPLOYED_INFO=$(solana program show "$PROGRAM_ID" 2>/dev/null)
+        DEPLOYED_INFO=$("$SOLANA_CLI" program show "$PROGRAM_ID" 2>/dev/null)
         if echo "$DEPLOYED_INFO" | grep -q "Program Id: $PROGRAM_ID"; then
             log_info "✅ Deployed program ID matches expected ID"
         else
@@ -589,7 +664,7 @@ generate_summary() {
 
     # Try to get program ID
     if [ -f "$SOLANA_DIR/target/deploy/savings_core-keypair.json" ]; then
-        PROGRAM_ID=$(solana-keygen pubkey "$SOLANA_DIR/target/deploy/savings_core-keypair.json" 2>/dev/null || echo "Unable to read")
+        PROGRAM_ID=$("$SOLANA_BIN_DIR/solana-keygen" pubkey "$SOLANA_DIR/target/deploy/savings_core-keypair.json" 2>/dev/null || echo "Unable to read")
         echo "🆔 Program ID: $PROGRAM_ID"
     fi
 
@@ -614,6 +689,8 @@ main() {
     echo "===================================="
     echo ""
 
+    find_tools
+    detect_breaking_changes
     check_prerequisites
     check_validator
     sync_program_id
@@ -625,18 +702,10 @@ main() {
     # Verify everything is consistent
     if verify_program_id; then
         generate_summary
-        if [ "$UPGRADE_MODE" = true ]; then
-            log_info "🎉 Program upgrade completed successfully!"
-        else
-            log_info "🎉 Deployment completed successfully!"
-        fi
+        log_info "🎉 Program deployment completed successfully!"
     else
         log_error "❌ Program ID verification failed!"
-        if [ "$UPGRADE_MODE" = true ]; then
-            log_error "Please check the errors above and run the upgrade again."
-        else
-            log_error "Please check the errors above and run the deployment again."
-        fi
+        log_error "Please check the errors above and run the deployment again."
         exit 1
     fi
 

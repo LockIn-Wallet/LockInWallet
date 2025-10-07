@@ -172,6 +172,31 @@ pub mod savings_core {
         instructions::remove_withdrawal_destination(ctx, address)
     }
 
+    /// Request withdrawal destination addition (with timelock)
+    pub fn request_withdrawal_destination_addition(
+        ctx: Context<RequestWithdrawalDestinationAddition>,
+        address: Pubkey,
+        title: String,
+    ) -> Result<()> {
+        instructions::request_withdrawal_destination_addition(ctx, address, title)
+    }
+
+    /// Execute a pending withdrawal destination request
+    pub fn execute_withdrawal_destination_request(
+        ctx: Context<ExecuteWithdrawalDestinationRequest>,
+        request_id: [u8; 32],
+    ) -> Result<()> {
+        instructions::execute_withdrawal_destination_request(ctx, request_id)
+    }
+
+    /// Cancel a pending withdrawal destination request
+    pub fn cancel_withdrawal_destination_request(
+        ctx: Context<CancelWithdrawalDestinationRequest>,
+        request_id: [u8; 32],
+    ) -> Result<()> {
+        instructions::cancel_withdrawal_destination_request(ctx, request_id)
+    }
+
     /// Withdraw SOL to destination
     pub fn withdraw_sol_to_destination(
         ctx: Context<WithdrawToDestination>,
