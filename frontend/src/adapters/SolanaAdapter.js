@@ -2279,6 +2279,7 @@ export class SolanaAdapter extends BlockchainAdapter {
 
       // Parse withdrawal destinations from account data
       const data = accountInfo.data;
+
       let offset = 8; // Skip discriminator
       offset += 32; // Skip owner
       offset += 8; // Skip sol_balance
@@ -2293,6 +2294,11 @@ export class SolanaAdapter extends BlockchainAdapter {
       offset += 8; // Skip updated_at
 
       // Read withdrawal_destinations vector
+      if (offset + 4 > data.length) {
+        console.log('📭 Account data too small for withdrawal destinations');
+        return [];
+      }
+
       const destinationsLength = new DataView(data.buffer, data.byteOffset + offset, 4).getUint32(0, true);
       offset += 4;
 
@@ -2304,17 +2310,34 @@ export class SolanaAdapter extends BlockchainAdapter {
         offset += 32;
 
         // Read title string
+        if (offset + 4 > data.length) {
+          console.error(`Cannot read title length for destination ${i + 1}`);
+          break;
+        }
         const titleLength = new DataView(data.buffer, data.byteOffset + offset, 4).getUint32(0, true);
         offset += 4;
+
+        if (offset + titleLength > data.length) {
+          console.error(`Cannot read title bytes for destination ${i + 1}`);
+          break;
+        }
         const titleBytes = data.slice(offset, offset + titleLength);
         const title = new TextDecoder().decode(titleBytes);
         offset += titleLength;
 
         // Read added_at (i64)
+        if (offset + 8 > data.length) {
+          console.error(`Cannot read added_at for destination ${i + 1}`);
+          break;
+        }
         const addedAt = new DataView(data.buffer, data.byteOffset + offset, 8).getBigInt64(0, true);
         offset += 8;
 
         // Read active (bool)
+        if (offset + 1 > data.length) {
+          console.error(`Cannot read active status for destination ${i + 1}`);
+          break;
+        }
         const active = data[offset] !== 0;
         offset += 1;
 
@@ -2337,14 +2360,38 @@ export class SolanaAdapter extends BlockchainAdapter {
   }
 
   /**
-   * Add a new withdrawal destination (now uses timelock pattern)
+   * Add a new withdrawal destination (conditional logic based on contract lock status)
    * @param {string} address - Destination address
    * @param {string} title - Title/label for the destination
    * @returns {string} Transaction hash
    */
   async addWithdrawalDestination(address, title) {
-    // Updated to use new timelock pattern (matches EVM behavior)
-    return this.requestWithdrawalDestinationAddition(address, title);
+    if (!this.wallet?.publicKey) {
+      throw new Error('Wallet not connected');
+    }
+
+    try {
+      // Check if contract is locked by getting spending limits data
+      const spendingData = await this.getSpendingLimits();
+      const isContractLocked = spendingData.isSetupCommitted;
+
+      console.log(`📊 Contract lock status: ${isContractLocked ? 'LOCKED' : 'UNLOCKED'}`);
+
+      if (isContractLocked) {
+        // Contract is locked - use timelock pattern for security
+        console.log('🔒 Contract is locked, using timelock request...');
+        return this.requestWithdrawalDestinationAddition(address, title);
+      } else {
+        // Contract is unlocked - add directly without timelock
+        console.log('🔓 Contract is unlocked, adding directly...');
+        return this.addWithdrawalDestinationDirect(address, title);
+      }
+    } catch (error) {
+      console.error('❌ Error checking contract lock status:', error);
+      // Fallback to timelock pattern for safety
+      console.log('⚠️ Falling back to timelock pattern for safety');
+      return this.requestWithdrawalDestinationAddition(address, title);
+    }
   }
 
   /**
@@ -2450,6 +2497,83 @@ export class SolanaAdapter extends BlockchainAdapter {
 
     console.log(`✅ Requested withdrawal destination addition: ${address} - ${title} (tx: ${txHash})`);
     console.log(`⏰ Will be executable after 24 hours`);
+    return txHash;
+  }
+
+  /**
+   * Add withdrawal destination directly (without timelock - for unlocked contracts)
+   * @param {string} address - Destination address
+   * @param {string} title - Title/label for the destination
+   * @returns {string} Transaction hash
+   */
+  async addWithdrawalDestinationDirect(address, title) {
+    if (!this.wallet?.publicKey) {
+      throw new Error('Wallet not connected');
+    }
+
+    const userPubkey = this.wallet.publicKey;
+    const [savingsAccount] = await this.getSavingsAccountPDA(userPubkey);
+    const destinationPubkey = new PublicKey(address);
+
+    // Validate inputs
+    if (!title || title.length === 0) {
+      throw new Error('Destination title cannot be empty');
+    }
+
+    if (title.length > 64) {
+      throw new Error('Destination title too long (max 64 characters)');
+    }
+
+    if (destinationPubkey.equals(userPubkey)) {
+      throw new Error('Cannot add your own address as a withdrawal destination');
+    }
+
+    // Create instruction data for direct addition
+    const discriminator = Buffer.from(this._generateDiscriminator('AddWithdrawalDestination'));
+
+    // Encode address (32 bytes)
+    const addressBytes = destinationPubkey.toBuffer();
+
+    // Encode title string
+    const titleBytes = Buffer.from(title, 'utf8');
+    const titleLength = Buffer.alloc(4);
+    titleLength.writeUInt32LE(titleBytes.length, 0);
+
+    const data = Buffer.concat([discriminator, addressBytes, titleLength, titleBytes]);
+
+    const instruction = new TransactionInstruction({
+      keys: [
+        { pubkey: savingsAccount, isSigner: false, isWritable: true },
+        { pubkey: userPubkey, isSigner: true, isWritable: true }
+      ],
+      programId: this.PROGRAM_ID,
+      data
+    });
+
+    // Check if savings account exists, if not initialize it first
+    const savingsAccountInfo = await this.connection.getAccountInfo(savingsAccount);
+    const transaction = new Transaction();
+
+    if (!savingsAccountInfo) {
+      console.log('Savings account not found, adding initialize instruction...');
+      const initInstruction = await this.createInitializeInstruction(userPubkey);
+      transaction.add(initInstruction);
+    }
+
+    transaction.add(instruction);
+    transaction.feePayer = this.wallet.publicKey;
+
+    const { blockhash } = await this.connection.getRecentBlockhash();
+    transaction.recentBlockhash = blockhash;
+
+    const txHash = await this.wallet.sendTransaction(transaction, this.connection);
+
+    // Wait for transaction confirmation before returning
+    console.log('⏳ Waiting for transaction confirmation...');
+    await this.connection.confirmTransaction(txHash, 'confirmed');
+
+    console.log(`✅ Added withdrawal destination directly: ${address} - ${title} (tx: ${txHash})`);
+    console.log(`🎯 Address is immediately available (contract unlocked)`);
     return txHash;
   }
 

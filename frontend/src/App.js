@@ -2555,15 +2555,14 @@ function AppContent() {
         }
 
         const adapter = transactionManager.getCurrentAdapter();
-        const txHash = await adapter.requestWithdrawalDestinationAddition(newWithdrawalAddress, newWithdrawalTitle);
+        const txHash = await adapter.addWithdrawalDestination(newWithdrawalAddress, newWithdrawalTitle);
 
         alert(
-          `✅ Solana withdrawal address request submitted successfully!\n\n` +
+          `✅ Solana withdrawal address processed successfully!\n\n` +
           `Title: ${newWithdrawalTitle}\n` +
           `Address: ${newWithdrawalAddress}\n` +
-          `Transaction: ${txHash}\n` +
-          `Executable after: 24 hours\n\n` +
-          `You can execute this request from the "Pending Withdrawal Requests" section once the waiting period is over.`
+          `Transaction: ${txHash}\n\n` +
+          `The address has been processed based on your contract lock status. Check the withdrawal destinations or pending requests sections.`
         );
       } else {
         // EVM address request logic (existing - requires timelock)
@@ -2595,6 +2594,10 @@ function AppContent() {
 
       // Refresh data for both networks
       if (networkType === 'solana') {
+        // Add a small delay to ensure transaction is fully processed
+        console.log('⏳ Waiting for account data to update...');
+        await new Promise(resolve => setTimeout(resolve, 1000)); // 1 second delay
+
         await fetchWithdrawalAddresses();
         await fetchPendingWithdrawalRequests(); // Fetch pending requests for Solana timelock
       } else {
