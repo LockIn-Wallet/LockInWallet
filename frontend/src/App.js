@@ -159,7 +159,7 @@ const NETWORKS = {
           recommended: true,
         },
         USDT: {
-          mint: "466PmPufjY74BviPfFXjtSokhSNzuT2iK3vYZEaDndyq", // Test USDT mint address
+          mint: "CyGLZzacTQBHJ77qaSuDrVekhJEkuiGM66ToWJkWxR8v", // Test USDT mint address
           symbol: "USDT",
           name: "Test USDT",
           decimals: 6,
@@ -832,9 +832,15 @@ function AppContent() {
 
           // Load pending proposals for Solana
           console.log('📋 Loading Solana pending proposals...');
-
           await fetchPendingLimitProposals(null, newTxManager);
           console.log('✅ Solana pending proposals loading completed');
+
+          // Load withdrawal addresses and pending requests for Solana
+          console.log('📋 Loading Solana withdrawal data...');
+          await fetchWithdrawalAddresses();
+          await fetchPendingWithdrawalRequests(null, null, newTxManager);
+          await fetchPendingBypassRequests();
+          console.log('✅ Solana withdrawal data loading completed');
         }
       } else if (networkType === 'solana') {
         console.log('❌ Solana wallet not ready yet:', {
@@ -885,6 +891,12 @@ function AppContent() {
             console.log('✅ Retry: Solana spending limits loading completed');
 
             await fetchPendingLimitProposals(null, newTxManager);
+
+            // Load withdrawal data in retry initialization
+            console.log('📋 Retry: Loading Solana withdrawal data...');
+            await fetchWithdrawalAddresses();
+            await fetchPendingWithdrawalRequests(null, null, newTxManager);
+            await fetchPendingBypassRequests();
             console.log('✅ Retry: Solana initialization retry successful');
           }
         } catch (error) {
@@ -1973,16 +1985,10 @@ function AppContent() {
     }
 
     try {
-      // First, save any configured spending limits
-      const daily = limitEdits.Daily.value
-        ? parseFloat(limitEdits.Daily.value)
-        : 0;
-      const weekly = limitEdits.Weekly.value
-        ? parseFloat(limitEdits.Weekly.value)
-        : 0;
-      const monthly = limitEdits.Monthly.value
-        ? parseFloat(limitEdits.Monthly.value)
-        : 0;
+      // Extract configured limits
+      const daily = limitEdits.Daily.value ? parseFloat(limitEdits.Daily.value) : 0;
+      const weekly = limitEdits.Weekly.value ? parseFloat(limitEdits.Weekly.value) : 0;
+      const monthly = limitEdits.Monthly.value ? parseFloat(limitEdits.Monthly.value) : 0;
 
       // Validate limit ordering if any limits are set
       if (daily > 0 || weekly > 0 || monthly > 0) {
@@ -1998,48 +2004,34 @@ function AppContent() {
           alert("Daily limit × 30 cannot exceed monthly limit");
           return;
         }
-
-        if (networkType === 'solana') {
-          // Solana implementation
-          const dailyLimit = daily > 0 ? daily : null;
-          const weeklyLimit = weekly > 0 ? weekly : null;
-          const monthlyLimit = monthly > 0 ? monthly : null;
-
-          const txHash = await transactionManager.setCommonPeriodLimits(
-            dailyLimit,
-            weeklyLimit,
-            monthlyLimit
-          );
-          console.log("Solana spending limits saved before setup commit:", txHash);
-        } else {
-          // EVM implementation (existing logic)
-          const dailyLimitWei =
-            daily > 0 ? ethers.parseUnits(daily.toString(), 6) : 0;
-          const weeklyLimitWei =
-            weekly > 0 ? ethers.parseUnits(weekly.toString(), 6) : 0;
-          const monthlyLimitWei =
-            monthly > 0 ? ethers.parseUnits(monthly.toString(), 6) : 0;
-
-          const limitsTx = await savingsContract.setCommonPeriodLimits(
-            dailyLimitWei,
-            weeklyLimitWei,
-            monthlyLimitWei
-          );
-          await limitsTx.wait();
-          console.log("EVM spending limits saved successfully before setup commit");
-        }
       }
 
-      // Now commit the setup
+      // Prepare limits for the batched transaction
+      const dailyLimit = daily > 0 ? daily : null;
+      const weeklyLimit = weekly > 0 ? weekly : null;
+      const monthlyLimit = monthly > 0 ? monthly : null;
+
+      // Commit setup with limits in a single batched transaction
       if (networkType === 'solana') {
-        const txHash = await transactionManager.commitInitialSetup();
-        console.log("Solana setup committed:", txHash);
+        console.log("Committing Solana setup with limits in batched transaction...");
+        const txHash = await transactionManager.commitSetupWithLimits(
+          dailyLimit,
+          weeklyLimit,
+          monthlyLimit
+        );
+        console.log("Solana setup committed with batched transaction:", txHash);
         alert(
           "Setup locked in successfully! Your spending limits are now active."
         );
       } else {
-        const tx = await savingsContract.commitInitialSetup();
-        await tx.wait();
+        // EVM fallback (will handle limits + commit separately if needed)
+        console.log("Committing EVM setup...");
+        const txHash = await transactionManager.commitSetupWithLimits(
+          dailyLimit,
+          weeklyLimit,
+          monthlyLimit
+        );
+        console.log("EVM setup committed:", txHash);
         alert(
           "Setup locked in successfully! You are now in secured mode with timelock protection."
         );
@@ -2201,8 +2193,16 @@ function AppContent() {
         console.log('🔄 Fetching bypass requests after successful spending limits load...');
         try {
           const adapter = txManager.getCurrentAdapter();
-          const solanaUserAddress = solanaPublicKey?.toString();
-          if (solanaUserAddress) {
+          let solanaUserAddress;
+          if (adapter && adapter.wallet?.publicKey) {
+            solanaUserAddress = adapter.wallet.publicKey.toString();
+          } else {
+            solanaUserAddress = solanaPublicKey?.toString();
+          }
+
+          console.log(`🔍 [Init Bypass Requests] Using Solana address: ${solanaUserAddress}`);
+
+          if (solanaUserAddress && !solanaUserAddress.startsWith('0x') && solanaUserAddress.length === 44) {
             const bypassRequests = await adapter.fetchPendingBypassRequests(solanaUserAddress);
 
             console.log('🔍 DEBUG: Raw bypass requests from adapter:', bypassRequests);
@@ -2393,8 +2393,26 @@ function AppContent() {
         }
 
         const adapter = transactionManager.getCurrentAdapter();
-        // For Solana, use the Solana wallet address, not the EVM address
-        const solanaUserAddress = userAddr || solanaPublicKey?.toString();
+        // For Solana, get the address directly from the Solana adapter to ensure we get the Solana address
+        let solanaUserAddress = userAddr;
+        if (!solanaUserAddress) {
+          if (adapter && adapter.wallet?.publicKey) {
+            solanaUserAddress = adapter.wallet.publicKey.toString();
+          } else {
+            solanaUserAddress = solanaPublicKey?.toString();
+          }
+        }
+
+        console.log(`🔍 [Withdrawal Addresses] Using Solana address: ${solanaUserAddress}`);
+
+        // Double-check we have a valid Solana address before proceeding
+        if (solanaUserAddress && (solanaUserAddress.startsWith('0x') || solanaUserAddress.length !== 44)) {
+          console.error(`❌ [Withdrawal Addresses] Invalid Solana address format detected: ${solanaUserAddress}`);
+          console.log('📭 Skipping fetchWithdrawalAddresses - wrong address format');
+          setWithdrawalAddresses([]);
+          return;
+        }
+
         const addresses = await adapter.fetchWithdrawalAddresses(solanaUserAddress);
 
         // Transform to match EVM format
@@ -2439,15 +2457,51 @@ function AppContent() {
 
   const fetchPendingWithdrawalRequests = async (
     contract = savingsContract,
-    userAddr = null
+    userAddr = null,
+    txManager = transactionManager
   ) => {
-    const currentUserAddress = userAddr || userAddress;
+    let currentUserAddress = userAddr || getCurrentUserAddress();
 
     try {
       if (networkType === 'solana') {
-        // Solana doesn't have separate withdrawal requests - all handled via bypass system
-        console.log(`⏭️ Skipping fetchPendingWithdrawalRequests for Solana - handled via bypass system`);
-        setPendingWithdrawalRequests([]);
+        // Fetch Solana withdrawal destination requests
+        if (!txManager) {
+          console.log(`⏭️ Skipping fetchPendingWithdrawalRequests for Solana - missing adapter`);
+          setPendingWithdrawalRequests([]);
+          return;
+        }
+
+        // Check if we have a valid user address
+        if (!currentUserAddress) {
+          console.log(`⏭️ Skipping fetchPendingWithdrawalRequests for Solana - no user address available`);
+          setPendingWithdrawalRequests([]);
+          return;
+        }
+
+        console.log(`🔍 [Withdrawal Requests] Using Solana address: ${currentUserAddress}`);
+
+        // Double-check we have a valid Solana address before proceeding
+        if (currentUserAddress && (currentUserAddress.startsWith('0x') || currentUserAddress.length !== 44)) {
+          console.error(`❌ Invalid Solana address format detected: ${currentUserAddress}`);
+          console.log('📭 Skipping fetchPendingWithdrawalRequests - wrong address format');
+          setPendingWithdrawalRequests([]);
+          return;
+        }
+
+        const solanaAdapter = txManager.getCurrentAdapter();
+        const requests = await solanaAdapter.getPendingWithdrawalDestinationRequests(currentUserAddress);
+
+        // Format Solana requests to match EVM format
+        const formattedRequests = requests.map(request => ({
+          requestId: request.requestId,
+          title: request.title,
+          destination: request.address,
+          executeAfter: request.executeAfter,
+          submittedDate: new Date(request.createdAt * 1000).toLocaleDateString(),
+        }));
+
+        setPendingWithdrawalRequests(formattedRequests);
+        console.log(`📋 Loaded ${formattedRequests.length} Solana pending withdrawal destination requests for ${currentUserAddress}`);
         return;
       } else {
         // Fetch EVM withdrawal requests
@@ -2493,7 +2547,7 @@ function AppContent() {
 
     try {
       if (networkType === 'solana') {
-        // Solana address addition logic
+        // Solana address request logic (with timelock, same as EVM)
         // Basic Solana address validation (44 characters, base58)
         if (newWithdrawalAddress.length !== 44) {
           alert("Please enter a valid Solana address (44 characters)");
@@ -2501,14 +2555,15 @@ function AppContent() {
         }
 
         const adapter = transactionManager.getCurrentAdapter();
-        const txHash = await adapter.addWithdrawalDestination(newWithdrawalAddress, newWithdrawalTitle);
+        const txHash = await adapter.requestWithdrawalDestinationAddition(newWithdrawalAddress, newWithdrawalTitle);
 
         alert(
-          `✅ Solana withdrawal address added successfully!\n\n` +
+          `✅ Solana withdrawal address request submitted successfully!\n\n` +
           `Title: ${newWithdrawalTitle}\n` +
           `Address: ${newWithdrawalAddress}\n` +
-          `Transaction: ${txHash}\n\n` +
-          `This address is now approved for withdrawals.`
+          `Transaction: ${txHash}\n` +
+          `Executable after: 24 hours\n\n` +
+          `You can execute this request from the "Pending Withdrawal Requests" section once the waiting period is over.`
         );
       } else {
         // EVM address request logic (existing - requires timelock)
@@ -2541,6 +2596,7 @@ function AppContent() {
       // Refresh data for both networks
       if (networkType === 'solana') {
         await fetchWithdrawalAddresses();
+        await fetchPendingWithdrawalRequests(); // Fetch pending requests for Solana timelock
       } else {
         await fetchPendingWithdrawalRequests();
       }
@@ -2965,8 +3021,26 @@ function AppContent() {
         }
 
         const adapter = transactionManager.getCurrentAdapter();
-        // For Solana, use the Solana wallet address, not EVM address
-        const solanaUserAddress = userAddr || solanaPublicKey?.toString();
+        // For Solana, get the address directly from the Solana adapter to ensure we get the Solana address
+        let solanaUserAddress = userAddr;
+        if (!solanaUserAddress) {
+          if (adapter && adapter.wallet?.publicKey) {
+            solanaUserAddress = adapter.wallet.publicKey.toString();
+          } else {
+            solanaUserAddress = solanaPublicKey?.toString();
+          }
+        }
+
+        console.log(`🔍 [Bypass Requests] Using Solana address: ${solanaUserAddress}`);
+
+        // Double-check we have a valid Solana address before proceeding
+        if (solanaUserAddress && (solanaUserAddress.startsWith('0x') || solanaUserAddress.length !== 44)) {
+          console.error(`❌ [Bypass Requests] Invalid Solana address format detected: ${solanaUserAddress}`);
+          console.log('📭 Skipping fetchPendingBypassRequests - wrong address format');
+          setPendingBypassRequests([]);
+          return;
+        }
+
         const bypassRequests = await adapter.fetchPendingBypassRequests(solanaUserAddress);
 
         // Transform to match EVM format
@@ -5045,7 +5119,7 @@ function AppContent() {
                     style={{ marginRight: "8px", marginTop: "2px" }}
                   />
                   <span style={{ color: "white" }}>
-                    🏠 My Wallet ({userAddress ? `${userAddress.slice(0, 6)}...${userAddress.slice(-4)}` : ""})
+                    🏠 My Wallet ({getCurrentUserAddress() ? `${getCurrentUserAddress().slice(0, 6)}...${getCurrentUserAddress().slice(-4)}` : ""})
                   </span>
                 </label>
               </div>

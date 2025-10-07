@@ -1,14 +1,14 @@
 {
   "savingsCore": {
-    "programId": "HNi2JKTNeHvz2ENckdVBW1ncfkJUYppuYeBwNhWjkK7d",
+    "programId": "b7DwCc8gcNd5hfUit1ezJXGXxd2pjga6BTz2vB6e62y",
     "name": "Savings Core Program"
   },
   "depositProxy": {
-    "programId": "4Tr7zEp7p5YtvXNAK98UnEUUpYP9q87sgKBJjfgfNtr4",
+    "programId": "9YoBL7APteanq755GyDLpMLUwXaidEAojpophJcoX5W4",
     "name": "Deposit Proxy Program"
   },
   "network": "localnet",
   "endpoint": "http://127.0.0.1:8899",
-  "deployedAt": "2025-10-07T13:07:08.627Z",
+  "deployedAt": "2025-10-07T18:26:14.074Z",
   "accounts": {}
 }

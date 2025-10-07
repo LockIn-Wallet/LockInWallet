@@ -276,6 +276,38 @@ export class TransactionManager {
     }
   }
 
+  async commitSetupWithLimits(dailyLimit = null, weeklyLimit = null, monthlyLimit = null) {
+    try {
+      const adapter = this.getCurrentAdapter();
+
+      if (!(await adapter.isConnected())) {
+        throw new Error('Wallet not connected');
+      }
+
+      // Check if adapter supports the batched method (Solana only for now)
+      if (typeof adapter.commitSetupWithLimits === 'function') {
+        const result = await adapter.commitSetupWithLimits(dailyLimit, weeklyLimit, monthlyLimit);
+        console.log(`${this.networkType} setup committed with limits in batched transaction:`, result);
+        return result;
+      } else {
+        // Fallback for adapters that don't support batching (like EVM)
+        // First set limits if any are provided
+        if (dailyLimit !== null || weeklyLimit !== null || monthlyLimit !== null) {
+          await this.setCommonPeriodLimits(dailyLimit, weeklyLimit, monthlyLimit);
+        }
+
+        // Then commit setup
+        const result = await adapter.commitInitialSetup();
+        console.log(`${this.networkType} setup committed (fallback method):`, result);
+        return result;
+      }
+
+    } catch (error) {
+      console.error(`${this.networkType} setup commit with limits error:`, error);
+      throw error;
+    }
+  }
+
   // Utility Methods
   formatAmount(amount, decimals) {
     return this.getCurrentAdapter().formatAmount(amount, decimals);

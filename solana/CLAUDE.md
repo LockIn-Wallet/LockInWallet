@@ -65,6 +65,20 @@ npm run update-frontend
 
 **Note**: For all deployment, use `npm run deploy-reliable` which handles the correct build process.
 
+#### **Force Reset Deployment**
+When the user mentions "force reset", they mean deploying with the `--force-reset` argument:
+```bash
+./deploy-solana.sh --force-reset
+```
+
+**When to use --force-reset:**
+- When hitting business logic limits (e.g., "Too many withdrawal destinations - max 20 allowed")
+- When account state needs to be completely cleared
+- When testing after breaking changes to account structures
+- When validator state becomes corrupted
+
+**⚠️ WARNING**: `--force-reset` completely resets the validator state and **destroys all existing account data**. Only use for development/testing.
+
 #### **✅ WORKING CONFIGURATION (Updated)**
 **Required Versions for Successful Build/Deploy:**
 - **Solana CLI**: 2.1.15+ (Agave) - `sh -c "$(curl -sSfL https://release.anza.xyz/v2.1.15/install)"`
@@ -352,9 +366,11 @@ These changes are safe and preserve existing account data:
 #### **🚨 Recovery from Breaking Changes**
 
 If you accidentally deploy breaking changes:
-- **Localnet**: Use `--force-reset` flag to reset validator state (DATA LOSS)
+- **Localnet**: Use `./deploy-solana.sh --force-reset` to reset validator state (DATA LOSS) - see **Force Reset Deployment** section above
 - **Devnet/Mainnet**: Breaking changes are **irreversible** - accounts are permanently corrupted
 - **Prevention**: Always test upgrades on localnet with real account data first
+
+**When user says "force reset"**: Use `./deploy-solana.sh --force-reset` - see deployment section for details.
 
 ### **Best Coding Practices**
 - Always use DRY principle

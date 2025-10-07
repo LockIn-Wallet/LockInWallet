@@ -9,6 +9,7 @@ import {
 import {
   getOrCreateAssociatedTokenAccount,
   getAssociatedTokenAddress,
+  createAssociatedTokenAccountInstruction,
   TOKEN_PROGRAM_ID,
   ASSOCIATED_TOKEN_PROGRAM_ID
 } from '@solana/spl-token';
@@ -40,8 +41,8 @@ export class SolanaAdapter extends BlockchainAdapter {
     this.wallet = wallet;
     this.connection = connection;
     this.userAddress = null;
-    this.PROGRAM_ID = new PublicKey("HNi2JKTNeHvz2ENckdVBW1ncfkJUYppuYeBwNhWjkK7d"); // Updated 2025-10-07
-    this.DEPOSIT_PROXY_PROGRAM_ID = new PublicKey("4Tr7zEp7p5YtvXNAK98UnEUUpYP9q87sgKBJjfgfNtr4"); // Updated 2025-10-07
+    this.PROGRAM_ID = new PublicKey("b7DwCc8gcNd5hfUit1ezJXGXxd2pjga6BTz2vB6e62y"); // Updated 2025-10-07
+    this.DEPOSIT_PROXY_PROGRAM_ID = new PublicKey("9YoBL7APteanq755GyDLpMLUwXaidEAojpophJcoX5W4"); // Updated 2025-10-07
 
     if (this.wallet?.connected && this.wallet?.publicKey) {
       this.userAddress = this.wallet.publicKey.toString();
@@ -387,27 +388,31 @@ export class SolanaAdapter extends BlockchainAdapter {
         // Check if user has any tokens first
         console.log('Checking if user has tokens for mint:', mintPubkey.toString());
 
-        let userTokenAccount;
-        try {
-          userTokenAccount = await getOrCreateAssociatedTokenAccount(
-            this.connection,
-            this.wallet,
-            mintPubkey,
-            userPubkey
-          );
+        // Get user's associated token account address
+        const userTokenAccountAddress = await getAssociatedTokenAddress(
+          mintPubkey,
+          userPubkey
+        );
 
-          // Check if user actually has tokens
-          if (userTokenAccount.amount === 0n) {
-            throw new Error(`No ${tokenAddress.slice(0,8)}... tokens in wallet. Please get some tokens first to deposit.`);
-          }
-
-          console.log('User token account found with balance:', userTokenAccount.amount.toString());
-        } catch (error) {
-          if (error.message.includes('TokenAccountNotFoundError') || error.name === 'TokenAccountNotFoundError') {
-            throw new Error(`No ${tokenAddress.slice(0,8)}... token account found. Please get some tokens first to deposit.`);
-          }
-          throw error;
+        // Check if user token account exists and has balance
+        const userTokenAccountInfo = await this.connection.getAccountInfo(userTokenAccountAddress);
+        if (!userTokenAccountInfo) {
+          throw new Error(`No ${tokenAddress.slice(0,8)}... token account found. Please get some tokens first to deposit.`);
         }
+
+        // Parse token account data to check balance
+        const tokenBalance = await this.connection.getTokenAccountBalance(userTokenAccountAddress);
+        if (tokenBalance.value.uiAmount === 0) {
+          throw new Error(`No ${tokenAddress.slice(0,8)}... tokens in wallet. Please get some tokens first to deposit.`);
+        }
+
+        console.log('User token account found with balance:', tokenBalance.value.uiAmount);
+
+        // Create userTokenAccount object to match expected interface
+        const userTokenAccount = {
+          address: userTokenAccountAddress,
+          amount: BigInt(tokenBalance.value.amount)
+        };
 
         // Get savings token account address
         const savingsTokenAccount = await getAssociatedTokenAddress(
@@ -422,140 +427,17 @@ export class SolanaAdapter extends BlockchainAdapter {
           mint: mintPubkey.toString()
         });
 
-        // Create transaction - but handle initialization separately for reliability
+        // Create single transaction with batched instructions for better UX (single approval)
+        const transaction = new Transaction();
         const savingsAccountInfo = await this.connection.getAccountInfo(savingsAccount);
 
         if (!savingsAccountInfo) {
-          console.log('Savings account not found, initializing first...');
-          try {
-            const initTransaction = new Transaction();
-            const initInstruction = await this.createInitializeInstruction(userPubkey);
-            initTransaction.add(initInstruction);
-
-            const { blockhash: initBlockhash } = await this.connection.getRecentBlockhash();
-            initTransaction.recentBlockhash = initBlockhash;
-            initTransaction.feePayer = userPubkey;
-
-            console.log('Sending initialization transaction...');
-            console.log('Init transaction details:', {
-              instructions: initTransaction.instructions.length,
-              feePayer: initTransaction.feePayer?.toString(),
-              blockhash: initTransaction.recentBlockhash,
-              accounts: initTransaction.instructions[0].keys.map(k => ({
-                pubkey: k.pubkey.toString(),
-                signer: k.isSigner,
-                writable: k.isWritable
-              })),
-              programId: initTransaction.instructions[0].programId.toString(),
-              dataLength: initTransaction.instructions[0].data.length,
-              dataHex: initTransaction.instructions[0].data.toString('hex')
-            });
-
-            // Check network compatibility first
-            console.log('Checking network compatibility...');
-            console.log('Frontend connection:', {
-              endpoint: this.connection._rpcEndpoint,
-              commitment: this.connection.commitment
-            });
-
-            // Check if Phantom is on the right network
-            console.log('Wallet object details:', {
-              connected: this.wallet.connected,
-              publicKey: this.wallet.publicKey?.toString(),
-              sendTransaction: typeof this.wallet.sendTransaction,
-              wallet: this.wallet.wallet || 'unknown'
-            });
-
-            // Try to get Phantom network info
-            try {
-              if (window.solana) {
-                console.log('Phantom available, checking network...');
-                const network = await window.solana.getNetwork?.();
-                console.log('Phantom network:', network);
-              }
-            } catch (netError) {
-              console.log('Could not get Phantom network info:', netError.message);
-            }
-
-            // CRITICAL FIX: Try using the wallet's connection instead of our connection
-            console.log('🔧 Trying different connection approach...');
-
-            // Option 1: Use wallet's connection if available
-            let connectionToUse = this.connection;
-            if (this.wallet.connection) {
-              console.log('Using wallet connection instead of frontend connection');
-              connectionToUse = this.wallet.connection;
-            }
-
-            // Check connection health
-            try {
-              const version = await this.connection.getVersion();
-              console.log('RPC connection working, version:', version);
-            } catch (rpcError) {
-              console.error('RPC connection failed:', rpcError);
-              throw new Error('Cannot connect to Solana RPC: ' + rpcError.message);
-            }
-
-            // Check account balance to ensure connection works
-            try {
-              const balance = await this.connection.getBalance(userPubkey);
-              console.log('User balance:', balance / LAMPORTS_PER_SOL, 'SOL');
-            } catch (balanceError) {
-              console.error('Cannot get balance:', balanceError);
-            }
-
-            // STEP 1: Simulate transaction to debug any issues
-            console.log('🧪 Simulating initialization transaction...');
-            try {
-              const simulation = await this.connection.simulateTransaction(initTransaction);
-              console.log('✅ Simulation result:', simulation);
-
-              if (simulation.value.err) {
-                console.error('❌ Simulation failed:', simulation.value.err);
-                console.error('📋 Simulation logs:', simulation.value.logs);
-                throw new Error(`Transaction simulation failed: ${JSON.stringify(simulation.value.err)}`);
-              } else {
-                console.log('✅ Simulation successful!');
-                console.log('📋 Simulation logs:', simulation.value.logs);
-              }
-            } catch (simError) {
-              console.error('❌ Could not simulate transaction:', simError);
-              throw new Error('Failed to simulate transaction: ' + simError.message);
-            }
-
-            // STEP 2: Verify program exists and is executable
-            console.log('🔍 Checking program account...');
-            try {
-              const programAccount = await this.connection.getAccountInfo(this.PROGRAM_ID);
-              if (!programAccount) {
-                throw new Error('Program account not found! Check if program is deployed.');
-              }
-              console.log('✅ Program account found:', {
-                executable: programAccount.executable,
-                owner: programAccount.owner.toString(),
-                dataLength: programAccount.data.length
-              });
-            } catch (progError) {
-              console.error('❌ Program check failed:', progError);
-              throw new Error('Program verification failed: ' + progError.message);
-            }
-
-            // STEP 3: Send transaction after simulation passes
-            console.log('📤 Simulation passed, sending transaction...');
-            const initTxHash = await this.wallet.sendTransaction(initTransaction, connectionToUse);
-            console.log('Initialization transaction:', initTxHash);
-
-            // Wait for confirmation
-            await this.connection.confirmTransaction(initTxHash, 'confirmed');
-            console.log('Initialization confirmed');
-          } catch (initError) {
-            console.error('Initialization failed:', initError);
-            throw new Error('Failed to initialize savings account: ' + initError.message);
-          }
+          console.log('Savings account not found, adding initialize instruction...');
+          const initInstruction = await this.createInitializeInstruction(userPubkey);
+          transaction.add(initInstruction);
         }
 
-        // Now send the deposit transaction
-        const depositTransaction = new Transaction();
+        // Add the main deposit instruction to the same transaction
         const depositInstruction = await this.createDepositSplInstruction(
           userPubkey,
           amountBigInt,
@@ -563,14 +445,15 @@ export class SolanaAdapter extends BlockchainAdapter {
           userTokenAccount.address,
           savingsTokenAccount
         );
-        depositTransaction.add(depositInstruction);
+        transaction.add(depositInstruction);
 
+        // Send the single transaction with batched instructions
         const { blockhash } = await this.connection.getRecentBlockhash();
-        depositTransaction.recentBlockhash = blockhash;
-        depositTransaction.feePayer = userPubkey;
+        transaction.recentBlockhash = blockhash;
+        transaction.feePayer = userPubkey;
 
-        console.log('Sending SPL deposit transaction...');
-        const txHash = await this.wallet.sendTransaction(depositTransaction, this.connection);
+        console.log('Sending transaction with', transaction.instructions.length, 'instructions');
+        const txHash = await this.wallet.sendTransaction(transaction, this.connection);
         console.log('SPL token deposit transaction:', txHash);
 
         return {
@@ -584,6 +467,7 @@ export class SolanaAdapter extends BlockchainAdapter {
       throw error;
     }
   }
+
 
   async approveToken(tokenAddress, spenderAddress, amount) {
     // SPL tokens don't require explicit approval like ERC20
@@ -624,36 +508,45 @@ export class SolanaAdapter extends BlockchainAdapter {
         // Withdraw SPL tokens from savings program
         const mintPubkey = new PublicKey(tokenAddress);
 
-        // Get or create user's token account (for receiving withdrawn tokens)
-        console.log('Getting/creating user token account for withdrawal...');
-        const userTokenAccount = await getOrCreateAssociatedTokenAccount(
-          this.connection,
-          this.wallet,
+        // Get user's associated token account address (for receiving withdrawn tokens)
+        console.log('Getting user token account for withdrawal...');
+        const userTokenAccountAddress = await getAssociatedTokenAddress(
           mintPubkey,
           userPubkey
         );
 
-        // Get savings account's token account
-        console.log('Getting savings token account...');
-        let savingsTokenAccount;
-        try {
-          savingsTokenAccount = await getOrCreateAssociatedTokenAccount(
-            this.connection,
-            this.wallet,
-            mintPubkey,
-            savingsAccount,
-            true // allowOwnerOffCurve for PDA
+        // Check if user token account exists, create instruction if not
+        const userTokenAccountInfo = await this.connection.getAccountInfo(userTokenAccountAddress);
+        const needsUserTokenAccount = !userTokenAccountInfo;
+
+        if (needsUserTokenAccount) {
+          console.log('User token account does not exist - will create in withdrawal transaction');
+        }
+
+        // Get savings account's token account address
+        console.log('Getting savings token account address...');
+        const savingsTokenAccountAddress = await getAssociatedTokenAddress(
+          mintPubkey,
+          savingsAccount,
+          true // allowOwnerOffCurve for PDA
+        );
+
+        // For now, if user token account doesn't exist, we need to create it first
+        // This is a withdrawal operation using Anchor methods, so account creation
+        // needs to be handled separately until we implement full manual transaction building
+        if (needsUserTokenAccount) {
+          console.log('Creating user token account before withdrawal...');
+          const createUserAccountInstruction = createAssociatedTokenAccountInstruction(
+            userPubkey, // payer
+            userTokenAccountAddress, // account address
+            userPubkey, // owner
+            mintPubkey // mint
           );
-        } catch (error) {
-          console.error('Error getting savings token account for withdrawal:', error);
-          // Calculate the associated token account address manually
-          const { getAssociatedTokenAddress } = await import('@solana/spl-token');
-          const savingsTokenAccountAddress = await getAssociatedTokenAddress(
-            mintPubkey,
-            savingsAccount,
-            true // allowOwnerOffCurve for PDA
-          );
-          savingsTokenAccount = { address: savingsTokenAccountAddress };
+
+          const createAccountTx = new Transaction().add(createUserAccountInstruction);
+          createAccountTx.feePayer = userPubkey;
+          const createTxSig = await this.wallet.sendTransaction(createAccountTx, this.connection);
+          await this.connection.confirmTransaction(createTxSig, 'confirmed');
         }
 
         const tx = await this.program.methods
@@ -661,8 +554,8 @@ export class SolanaAdapter extends BlockchainAdapter {
           .accounts({
             savingsAccount: savingsAccount,
             user: userPubkey,
-            userTokenAccount: userTokenAccount.address,
-            savingsTokenAccount: savingsTokenAccount.address,
+            userTokenAccount: userTokenAccountAddress,
+            savingsTokenAccount: savingsTokenAccountAddress,
             mint: mintPubkey,
             tokenProgram: TOKEN_PROGRAM_ID,
           })
@@ -1258,18 +1151,12 @@ export class SolanaAdapter extends BlockchainAdapter {
     );
   }
 
-  // Initialize spending limits account
-  async initializeSpendingLimits() {
-    if (!this.wallet?.publicKey) {
-      throw new Error('Wallet not connected');
-    }
-
-    const userPubkey = this.wallet.publicKey;
+  // Helper function to create spending limits initialization instruction
+  async createInitializeSpendingLimitsInstruction(userPubkey) {
     const [spendingLimitsAccount] = await this.getSpendingLimitsPDA(userPubkey);
-
     const discriminator = Buffer.from(this._generateDiscriminator('InitializeSpendingLimits'));
 
-    const instruction = new TransactionInstruction({
+    return new TransactionInstruction({
       keys: [
         { pubkey: spendingLimitsAccount, isSigner: false, isWritable: true },
         { pubkey: userPubkey, isSigner: true, isWritable: true },
@@ -1278,6 +1165,16 @@ export class SolanaAdapter extends BlockchainAdapter {
       programId: this.PROGRAM_ID,
       data: discriminator
     });
+  }
+
+  // Initialize spending limits account
+  async initializeSpendingLimits() {
+    if (!this.wallet?.publicKey) {
+      throw new Error('Wallet not connected');
+    }
+
+    const userPubkey = this.wallet.publicKey;
+    const instruction = await this.createInitializeSpendingLimitsInstruction(userPubkey);
 
     const transaction = new Transaction().add(instruction);
     transaction.feePayer = this.wallet.publicKey;
@@ -1319,38 +1216,15 @@ export class SolanaAdapter extends BlockchainAdapter {
     console.log('🔑 SolanaAdapter: Using spending limits PDA:', spendingLimitsAccount.toString());
 
     // Check if spending limits account exists and is valid
+    let needsInitialization = false;
     try {
       console.log('🔍 SolanaAdapter: Checking if spending limits account exists...');
       const accountInfo = await this.connection.getAccountInfo(spendingLimitsAccount);
       console.log('📊 SolanaAdapter: Account info result:', accountInfo ? 'EXISTS' : 'NULL');
 
       if (!accountInfo) {
-        console.log('🔧 SolanaAdapter: Spending limits account does not exist, initializing...');
-        await this.initializeSpendingLimits();
-        console.log('✅ SolanaAdapter: Spending limits account initialized successfully');
-
-        // After initialization, verify the account exists with retry logic
-        console.log('🔍 SolanaAdapter: Verifying account exists after initialization...');
-        let verificationAttempts = 0;
-        const maxVerificationAttempts = 5;
-        let accountVerified = false;
-
-        while (!accountVerified && verificationAttempts < maxVerificationAttempts) {
-          await new Promise(resolve => setTimeout(resolve, 200)); // Wait 200ms between attempts
-          const verificationInfo = await this.connection.getAccountInfo(spendingLimitsAccount);
-
-          if (verificationInfo) {
-            console.log('✅ SolanaAdapter: Account verification successful after', verificationAttempts + 1, 'attempts');
-            accountVerified = true;
-          } else {
-            verificationAttempts++;
-            console.log(`⏳ SolanaAdapter: Account not yet available, attempt ${verificationAttempts}/${maxVerificationAttempts}...`);
-          }
-        }
-
-        if (!accountVerified) {
-          throw new Error('Account initialization failed: Account does not exist after confirmation and retries');
-        }
+        console.log('🔧 SolanaAdapter: Spending limits account does not exist, will initialize in same transaction...');
+        needsInitialization = true;
       } else {
         // Account exists, but check if it's properly formatted by trying to deserialize
         console.log('🔍 SolanaAdapter: Account exists, checking if data is valid...');
@@ -1366,9 +1240,22 @@ export class SolanaAdapter extends BlockchainAdapter {
         }
       }
     } catch (error) {
-      console.error('❌ SolanaAdapter: Error checking/initializing spending limits account:', error);
+      console.error('❌ SolanaAdapter: Error checking spending limits account:', error);
       throw error;
     }
+
+    // Create transaction with batched instructions
+    const transaction = new Transaction();
+
+    // Add initialization instruction if needed
+    if (needsInitialization) {
+      console.log('🔧 SolanaAdapter: Adding initialization instruction to transaction...');
+      const initInstruction = await this.createInitializeSpendingLimitsInstruction(userPubkey);
+      transaction.add(initInstruction);
+    }
+
+    // Add main setCommonPeriodLimits instruction to the transaction
+    console.log('🔧 SolanaAdapter: Adding setCommonPeriodLimits instruction to transaction...');
 
     // Serialize the data: discriminator + 3 optional u64 values
     const discriminator = Buffer.from(this._generateDiscriminator('SetCommonPeriodLimits'));
@@ -1406,7 +1293,7 @@ export class SolanaAdapter extends BlockchainAdapter {
       data = Buffer.concat([data, Buffer.from([0])]);  // None
     }
 
-    const instruction = new TransactionInstruction({
+    const setLimitsInstruction = new TransactionInstruction({
       keys: [
         { pubkey: spendingLimitsAccount, isSigner: false, isWritable: true },
         { pubkey: userPubkey, isSigner: true, isWritable: true }
@@ -1415,15 +1302,15 @@ export class SolanaAdapter extends BlockchainAdapter {
       data
     });
 
-    const transaction = new Transaction().add(instruction);
+    transaction.add(setLimitsInstruction);
 
     // Set the fee payer to the user's wallet
     transaction.feePayer = userPubkey;
 
-    console.log('📋 SolanaAdapter: Transaction created with instruction:', instruction);
+    console.log('📋 SolanaAdapter: Transaction created with instruction:', setLimitsInstruction);
     console.log('📋 SolanaAdapter: Transaction fee payer set to:', transaction.feePayer.toString());
-    console.log('📋 SolanaAdapter: Instruction data length:', instruction.data.length);
-    console.log('📋 SolanaAdapter: Instruction keys:', instruction.keys);
+    console.log('📋 SolanaAdapter: Instruction data length:', setLimitsInstruction.data.length);
+    console.log('📋 SolanaAdapter: Instruction keys:', setLimitsInstruction.keys);
 
     try {
       // First simulate the transaction to get better error details
@@ -1556,6 +1443,181 @@ export class SolanaAdapter extends BlockchainAdapter {
     const transaction = new Transaction().add(instruction);
     transaction.feePayer = this.wallet.publicKey;
     return await this.wallet.sendTransaction(transaction, this.connection);
+  }
+
+  // Commit setup with limits in a single batched transaction (solves double approval issue)
+  async commitSetupWithLimits(dailyLimit = null, weeklyLimit = null, monthlyLimit = null) {
+    console.log('🔧 SolanaAdapter: commitSetupWithLimits called with:', { dailyLimit, weeklyLimit, monthlyLimit });
+
+    if (!this.wallet?.publicKey) {
+      throw new Error('Wallet not connected');
+    }
+
+    const userPubkey = this.wallet.publicKey;
+    const [spendingLimitsAccount] = await this.getSpendingLimitsPDA(userPubkey);
+    console.log('🔑 SolanaAdapter: Using spending limits PDA:', spendingLimitsAccount.toString());
+
+    // Check if spending limits account exists
+    let needsInitialization = false;
+    try {
+      console.log('🔍 SolanaAdapter: Checking if spending limits account exists...');
+      const accountInfo = await this.connection.getAccountInfo(spendingLimitsAccount);
+      console.log('📊 SolanaAdapter: Account info result:', accountInfo ? 'EXISTS' : 'NULL');
+
+      if (!accountInfo) {
+        console.log('🔧 SolanaAdapter: Spending limits account does not exist, will initialize in same transaction...');
+        needsInitialization = true;
+      } else {
+        // Account exists, check if it's properly formatted
+        console.log('🔍 SolanaAdapter: Account exists, checking if data is valid...');
+        try {
+          this.deserializeSpendingLimitsAccount(accountInfo.data);
+          console.log('✅ SolanaAdapter: Account data is valid');
+        } catch (deserializeError) {
+          console.log('⚠️ SolanaAdapter: Account data is corrupted/incompatible');
+          throw new Error('Spending limits account has corrupted data. Please use a different wallet or reset the validator.');
+        }
+      }
+    } catch (error) {
+      console.error('❌ SolanaAdapter: Error checking spending limits account:', error);
+      throw error;
+    }
+
+    // Create transaction with batched instructions
+    const transaction = new Transaction();
+    console.log('🔧 SolanaAdapter: Creating batched transaction for setup commit...');
+
+    // Step 1: Add initialization instruction if needed
+    if (needsInitialization) {
+      console.log('🔧 SolanaAdapter: Adding initialization instruction to transaction...');
+      const initInstruction = await this.createInitializeSpendingLimitsInstruction(userPubkey);
+      transaction.add(initInstruction);
+    }
+
+    // Step 2: Add setCommonPeriodLimits instruction if any limits are provided
+    if (dailyLimit !== null || weeklyLimit !== null || monthlyLimit !== null) {
+      console.log('🔧 SolanaAdapter: Adding setCommonPeriodLimits instruction to transaction...');
+
+      // Serialize the data: discriminator + 3 optional u64 values
+      const setLimitsDiscriminator = Buffer.from(this._generateDiscriminator('SetCommonPeriodLimits'));
+      let setLimitsData = setLimitsDiscriminator;
+
+      // Daily limit
+      if (dailyLimit !== null && dailyLimit !== undefined) {
+        setLimitsData = Buffer.concat([setLimitsData, Buffer.from([1])]);  // Some
+        const dailyBuffer = Buffer.alloc(8);
+        dailyBuffer.writeBigUInt64LE(BigInt(Math.floor(dailyLimit * 1000000)), 0); // Convert to lamports/smallest unit
+        setLimitsData = Buffer.concat([setLimitsData, dailyBuffer]);
+      } else {
+        setLimitsData = Buffer.concat([setLimitsData, Buffer.from([0])]);  // None
+      }
+
+      // Weekly limit
+      if (weeklyLimit !== null && weeklyLimit !== undefined) {
+        setLimitsData = Buffer.concat([setLimitsData, Buffer.from([1])]);  // Some
+        const weeklyBuffer = Buffer.alloc(8);
+        weeklyBuffer.writeBigUInt64LE(BigInt(Math.floor(weeklyLimit * 1000000)), 0);
+        setLimitsData = Buffer.concat([setLimitsData, weeklyBuffer]);
+      } else {
+        setLimitsData = Buffer.concat([setLimitsData, Buffer.from([0])]);  // None
+      }
+
+      // Monthly limit
+      if (monthlyLimit !== null && monthlyLimit !== undefined) {
+        setLimitsData = Buffer.concat([setLimitsData, Buffer.from([1])]);  // Some
+        const monthlyBuffer = Buffer.alloc(8);
+        monthlyBuffer.writeBigUInt64LE(BigInt(Math.floor(monthlyLimit * 1000000)), 0);
+        setLimitsData = Buffer.concat([setLimitsData, monthlyBuffer]);
+      } else {
+        setLimitsData = Buffer.concat([setLimitsData, Buffer.from([0])]);  // None
+      }
+
+      const setLimitsInstruction = new TransactionInstruction({
+        keys: [
+          { pubkey: spendingLimitsAccount, isSigner: false, isWritable: true },
+          { pubkey: userPubkey, isSigner: true, isWritable: true }
+        ],
+        programId: this.PROGRAM_ID,
+        data: setLimitsData
+      });
+
+      transaction.add(setLimitsInstruction);
+    } else if (needsInitialization) {
+      // If we're initializing but no limits provided, still need to set null limits
+      console.log('🔧 SolanaAdapter: Adding null limits instruction after initialization...');
+
+      const setLimitsDiscriminator = Buffer.from(this._generateDiscriminator('SetCommonPeriodLimits'));
+      let setLimitsData = setLimitsDiscriminator;
+
+      // All limits as None
+      setLimitsData = Buffer.concat([setLimitsData, Buffer.from([0, 0, 0])]);  // None, None, None
+
+      const setLimitsInstruction = new TransactionInstruction({
+        keys: [
+          { pubkey: spendingLimitsAccount, isSigner: false, isWritable: true },
+          { pubkey: userPubkey, isSigner: true, isWritable: true }
+        ],
+        programId: this.PROGRAM_ID,
+        data: setLimitsData
+      });
+
+      transaction.add(setLimitsInstruction);
+    }
+
+    // Step 3: Add commitInitialSetup instruction
+    console.log('🔧 SolanaAdapter: Adding commitInitialSetup instruction to transaction...');
+    const commitDiscriminator = Buffer.from(this._generateDiscriminator('CommitInitialSetup'));
+
+    const commitInstruction = new TransactionInstruction({
+      keys: [
+        { pubkey: spendingLimitsAccount, isSigner: false, isWritable: true },
+        { pubkey: userPubkey, isSigner: true, isWritable: true }
+      ],
+      programId: this.PROGRAM_ID,
+      data: commitDiscriminator
+    });
+
+    transaction.add(commitInstruction);
+
+    // Set the fee payer
+    transaction.feePayer = userPubkey;
+
+    console.log('📋 SolanaAdapter: Batched transaction created with', transaction.instructions.length, 'instructions');
+    console.log('📋 SolanaAdapter: Transaction fee payer set to:', transaction.feePayer.toString());
+
+    try {
+      // Simulate the transaction first
+      console.log('🔍 SolanaAdapter: Simulating batched transaction...');
+      const simulation = await this.connection.simulateTransaction(transaction);
+      console.log('📊 SolanaAdapter: Simulation result:', simulation);
+
+      if (simulation.value.err) {
+        console.error('❌ SolanaAdapter: Simulation failed:', simulation.value.err);
+        if (simulation.value.logs) {
+          console.error('📋 SolanaAdapter: Simulation logs:', simulation.value.logs);
+        }
+        throw new Error(`Transaction simulation failed: ${JSON.stringify(simulation.value.err)}`);
+      }
+
+      console.log('✅ SolanaAdapter: Simulation passed, sending batched transaction...');
+      const txHash = await this.wallet.sendTransaction(transaction, this.connection);
+      console.log('📝 SolanaAdapter: Batched setup transaction sent with signature:', txHash);
+
+      // Wait for transaction confirmation
+      console.log('⏳ SolanaAdapter: Waiting for transaction confirmation...');
+      await this.connection.confirmTransaction(txHash, 'confirmed');
+      console.log('✅ SolanaAdapter: Batched setup transaction confirmed successfully');
+
+      return txHash;
+    } catch (error) {
+      console.error('❌ SolanaAdapter: Batched transaction failed:', error);
+      console.error('❌ SolanaAdapter: Error details:', error.message);
+      console.error('❌ SolanaAdapter: Full error object:', error);
+      if (error.logs) {
+        console.error('❌ SolanaAdapter: Transaction logs:', error.logs);
+      }
+      throw error;
+    }
   }
 
   // Fetch spending limits from account (main implementation)
@@ -2335,7 +2397,55 @@ export class SolanaAdapter extends BlockchainAdapter {
       data
     });
 
-    const transaction = new Transaction().add(instruction);
+    // Check if savings account exists, if not initialize it first
+    const savingsAccountInfo = await this.connection.getAccountInfo(savingsAccount);
+    const transaction = new Transaction();
+
+    if (!savingsAccountInfo) {
+      console.log('Savings account not found, adding initialize instruction...');
+      const initInstruction = await this.createInitializeInstruction(userPubkey);
+      transaction.add(initInstruction);
+    }
+
+    transaction.add(instruction);
+    transaction.feePayer = this.wallet.publicKey;
+
+    const { blockhash } = await this.connection.getRecentBlockhash();
+    transaction.recentBlockhash = blockhash;
+
+    // Debug transaction details
+    console.log('🔍 Transaction debug info:', {
+      feePayer: transaction.feePayer.toString(),
+      recentBlockhash: transaction.recentBlockhash,
+      instructionsCount: transaction.instructions.length,
+      programId: this.PROGRAM_ID.toString(),
+      savingsAccount: savingsAccount.toString(),
+      destinationAddress: address
+    });
+
+    // Simulate transaction first to get better error details
+    console.log('🔍 Simulating withdrawal destination request transaction...');
+    try {
+      const simulation = await this.connection.simulateTransaction(transaction);
+      if (simulation.value.err) {
+        console.error('❌ Transaction simulation failed:', simulation.value.err);
+        if (simulation.value.logs) {
+          console.log('📋 Simulation logs:', simulation.value.logs);
+        }
+        throw new Error(`Transaction simulation failed: ${JSON.stringify(simulation.value.err)}`);
+      }
+      console.log('✅ Transaction simulation succeeded');
+    } catch (simError) {
+      console.error('❌ Simulation error:', simError);
+
+      // Check for specific error codes and provide user-friendly messages
+      if (simError.message.includes('"Custom":6012')) {
+        throw new Error('Maximum withdrawal destinations limit reached (20 max). Please remove some existing destinations or wait for pending requests to be processed.');
+      }
+
+      throw new Error(`Failed to simulate transaction: ${simError.message}`);
+    }
+
     const txHash = await this.wallet.sendTransaction(transaction, this.connection);
 
     console.log(`✅ Requested withdrawal destination addition: ${address} - ${title} (tx: ${txHash})`);
@@ -2645,37 +2755,150 @@ export class SolanaAdapter extends BlockchainAdapter {
 
       // Parse bypass requests from account data
       const data = accountInfo.data;
+      console.log(`🔍 Account data length: ${data.length} bytes`);
+
+      if (data.length < 64) {
+        console.log('📭 Account data too small, likely uninitialized, returning empty bypass requests');
+        return [];
+      }
+
       let offset = 8; // Skip discriminator
       offset += 32; // Skip owner
       offset += 8; // Skip sol_balance
 
-      // Skip spl_balances vector
+      // Skip spl_balances vector with bounds checking
+      if (offset + 4 > data.length) {
+        console.log('📭 Account data incomplete (spl_balances length), returning empty bypass requests');
+        return [];
+      }
       const splBalancesLength = new DataView(data.buffer, data.byteOffset + offset, 4).getUint32(0, true);
+      console.log(`🔍 SPL balances length: ${splBalancesLength}`);
+
+      // Validate SPL balances length is reasonable
+      if (splBalancesLength > 100) {
+        console.log(`📭 SPL balances length too large (${splBalancesLength}), account may be corrupted`);
+        return [];
+      }
+
       offset += 4;
+      if (offset + splBalancesLength * 40 > data.length) {
+        console.log(`📭 Account data incomplete (spl_balances data: need ${splBalancesLength * 40} bytes), returning empty bypass requests`);
+        return [];
+      }
       offset += splBalancesLength * 40; // Each TokenBalance is 40 bytes
 
       offset += 1; // Skip bump
       offset += 8; // Skip created_at
       offset += 8; // Skip updated_at
 
-      // Skip withdrawal_destinations vector
+      // Skip withdrawal_destinations vector with bounds checking
+      if (offset + 4 > data.length) {
+        console.log('📭 Account data incomplete (withdrawal_destinations length), returning empty bypass requests');
+        return [];
+      }
       const destinationsLength = new DataView(data.buffer, data.byteOffset + offset, 4).getUint32(0, true);
+      console.log(`🔍 Withdrawal destinations length: ${destinationsLength}`);
+
+      // Validate destinations length is reasonable
+      if (destinationsLength > 50) {
+        console.log(`📭 Withdrawal destinations length too large (${destinationsLength}), account may be corrupted`);
+        return [];
+      }
+
       offset += 4;
       // Skip destinations data - we need to calculate size properly
       for (let i = 0; i < destinationsLength; i++) {
+        if (offset + 32 + 4 > data.length) {
+          console.log(`📭 Account data incomplete (destination ${i} address+title_len), returning empty bypass requests`);
+          return [];
+        }
         offset += 32; // address
         const titleLength = new DataView(data.buffer, data.byteOffset + offset, 4).getUint32(0, true);
+        console.log(`🔍 Destination ${i} title length: ${titleLength}`);
+
+        // Validate title length is reasonable
+        if (titleLength > 200) {
+          console.log(`📭 Destination ${i} title length too large (${titleLength}), account may be corrupted`);
+          return [];
+        }
+
+        if (offset + 4 + titleLength + 8 + 1 > data.length) {
+          console.log(`📭 Account data incomplete (destination ${i} full data), returning empty bypass requests`);
+          return [];
+        }
         offset += 4 + titleLength; // title
         offset += 8; // added_at
         offset += 1; // active
       }
 
-      // Read pending_bypass_requests vector
+      // Skip pending_withdrawal_destination_requests vector with bounds checking
+      if (offset + 4 > data.length) {
+        console.log('📭 Account data incomplete (pending_withdrawal_destination_requests length), returning empty bypass requests');
+        return [];
+      }
+      const pendingDestRequestsLength = new DataView(data.buffer, data.byteOffset + offset, 4).getUint32(0, true);
+      console.log(`🔍 Pending withdrawal destination requests length: ${pendingDestRequestsLength}`);
+
+      // Validate pending requests length is reasonable
+      if (pendingDestRequestsLength > 20) {
+        console.log(`📭 Pending withdrawal destination requests length too large (${pendingDestRequestsLength}), account may be corrupted`);
+        return [];
+      }
+
+      offset += 4;
+      // Skip pending withdrawal destination requests data
+      for (let i = 0; i < pendingDestRequestsLength; i++) {
+        if (offset + 32 + 32 + 4 > data.length) {
+          console.log(`📭 Account data incomplete (pending dest request ${i} headers), returning empty bypass requests`);
+          return [];
+        }
+        offset += 32; // request_id
+        offset += 32; // address
+
+        const titleLength = new DataView(data.buffer, data.byteOffset + offset, 4).getUint32(0, true);
+        console.log(`🔍 Pending dest request ${i} title length: ${titleLength}`);
+
+        // Validate title length is reasonable
+        if (titleLength > 200) {
+          console.log(`📭 Pending dest request ${i} title length too large (${titleLength}), account may be corrupted`);
+          return [];
+        }
+
+        if (offset + 4 + titleLength + 8 + 1 + 1 + 8 > data.length) {
+          console.log(`📭 Account data incomplete (pending dest request ${i} full data), returning empty bypass requests`);
+          return [];
+        }
+        offset += 4 + titleLength; // title
+        offset += 8; // execute_after
+        offset += 1; // executed
+        offset += 1; // cancelled
+        offset += 8; // created_at
+      }
+
+      // Read pending_bypass_requests vector with final bounds checking
+      if (offset + 4 > data.length) {
+        console.log('📭 Account data incomplete (pending_bypass_requests length), returning empty bypass requests');
+        return [];
+      }
       const requestsLength = new DataView(data.buffer, data.byteOffset + offset, 4).getUint32(0, true);
+      console.log(`🔍 Pending bypass requests length: ${requestsLength}`);
+
+      // Validate bypass requests length is reasonable
+      if (requestsLength > 50) {
+        console.log(`📭 Pending bypass requests length too large (${requestsLength}), account may be corrupted`);
+        return [];
+      }
+
       offset += 4;
 
       const requests = [];
       for (let i = 0; i < requestsLength; i++) {
+        // Check if we have enough data for this bypass request
+        if (offset + 32 + 8 + 32 + 4 > data.length) {
+          console.log(`📭 Account data incomplete (bypass request ${i} headers), stopping parsing`);
+          break;
+        }
+
         // Read BypassRequest struct
         const requestId = data.slice(offset, offset + 32);
         offset += 32;
@@ -2689,6 +2912,19 @@ export class SolanaAdapter extends BlockchainAdapter {
 
         // Read bypassing_period string
         const periodLength = new DataView(data.buffer, data.byteOffset + offset, 4).getUint32(0, true);
+        console.log(`🔍 Bypass request ${i} period length: ${periodLength}`);
+
+        // Validate period length is reasonable
+        if (periodLength > 100) {
+          console.log(`📭 Bypass request ${i} period length too large (${periodLength}), stopping parsing`);
+          break;
+        }
+
+        if (offset + 4 + periodLength + 32 + 8 + 1 + 1 + 8 > data.length) {
+          console.log(`📭 Account data incomplete (bypass request ${i} full data), stopping parsing`);
+          break;
+        }
+
         offset += 4;
         const periodBytes = data.slice(offset, offset + periodLength);
         const bypassingPeriod = new TextDecoder().decode(periodBytes);
@@ -2730,6 +2966,206 @@ export class SolanaAdapter extends BlockchainAdapter {
       return requests;
     } catch (error) {
       console.error('❌ Error fetching bypass requests:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Get pending withdrawal destination requests
+   * @param {string} userAddress - Optional user address (uses connected wallet if not provided)
+   * @returns {Array} Array of pending withdrawal destination requests
+   */
+  async getPendingWithdrawalDestinationRequests(userAddress = null) {
+    try {
+      // Validate userAddress format before creating PublicKey
+      if (userAddress && (userAddress.startsWith('0x') || userAddress.length !== 44)) {
+        console.error(`❌ Invalid Solana address format: ${userAddress}`);
+        console.log('📭 Address appears to be Ethereum format, returning empty withdrawal destination requests');
+        return [];
+      }
+
+      const userPubkey = userAddress ? new PublicKey(userAddress) : this.wallet?.publicKey;
+      if (!userPubkey) {
+        throw new Error('No user address provided');
+      }
+
+      const [savingsAccount] = await this.getSavingsAccountPDA(userPubkey);
+      const accountInfo = await this.connection.getAccountInfo(savingsAccount);
+
+      if (!accountInfo) {
+        console.log('📭 No savings account found, returning empty withdrawal destination requests');
+        return [];
+      }
+
+      // Parse withdrawal destination requests from account data
+      const data = accountInfo.data;
+      console.log(`🔍 [Withdrawal Destinations] Account data length: ${data.length} bytes`);
+
+      if (data.length < 64) {
+        console.log('📭 Account data too small, likely uninitialized, returning empty withdrawal destination requests');
+        return [];
+      }
+
+      let offset = 8; // Skip discriminator
+      offset += 32; // Skip owner
+      offset += 8; // Skip sol_balance
+
+      // Skip spl_balances vector with bounds checking
+      if (offset + 4 > data.length) {
+        console.log('📭 Account data incomplete (spl_balances length), returning empty withdrawal destination requests');
+        return [];
+      }
+      const splBalancesLength = new DataView(data.buffer, data.byteOffset + offset, 4).getUint32(0, true);
+      console.log(`🔍 [Withdrawal Destinations] SPL balances length: ${splBalancesLength}`);
+
+      // Validate SPL balances length is reasonable
+      if (splBalancesLength > 100) {
+        console.log(`📭 SPL balances length too large (${splBalancesLength}), account may be corrupted`);
+        return [];
+      }
+
+      offset += 4;
+      if (offset + splBalancesLength * 40 > data.length) {
+        console.log(`📭 Account data incomplete (spl_balances data: need ${splBalancesLength * 40} bytes), returning empty withdrawal destination requests`);
+        return [];
+      }
+      offset += splBalancesLength * 40; // Each TokenBalance is 40 bytes
+
+      offset += 1; // Skip bump
+      offset += 8; // Skip created_at
+      offset += 8; // Skip updated_at
+
+      // Skip withdrawal_destinations vector with bounds checking
+      if (offset + 4 > data.length) {
+        console.log('📭 Account data incomplete (withdrawal_destinations length), returning empty withdrawal destination requests');
+        return [];
+      }
+      const destinationsLength = new DataView(data.buffer, data.byteOffset + offset, 4).getUint32(0, true);
+      console.log(`🔍 [Withdrawal Destinations] Withdrawal destinations length: ${destinationsLength}`);
+
+      // Validate destinations length is reasonable
+      if (destinationsLength > 50) {
+        console.log(`📭 Withdrawal destinations length too large (${destinationsLength}), account may be corrupted`);
+        return [];
+      }
+
+      offset += 4;
+      // Skip destinations data - we need to calculate size properly
+      for (let i = 0; i < destinationsLength; i++) {
+        if (offset + 32 + 4 > data.length) {
+          console.log(`📭 Account data incomplete (destination ${i} address+title_len), returning empty withdrawal destination requests`);
+          return [];
+        }
+        offset += 32; // address
+        const titleLength = new DataView(data.buffer, data.byteOffset + offset, 4).getUint32(0, true);
+        console.log(`🔍 [Withdrawal Destinations] Destination ${i} title length: ${titleLength}`);
+
+        // Validate title length is reasonable
+        if (titleLength > 200) {
+          console.log(`📭 Destination ${i} title length too large (${titleLength}), account may be corrupted`);
+          return [];
+        }
+
+        if (offset + 4 + titleLength + 8 + 1 > data.length) {
+          console.log(`📭 Account data incomplete (destination ${i} full data), returning empty withdrawal destination requests`);
+          return [];
+        }
+        offset += 4 + titleLength; // title
+        offset += 8; // added_at
+        offset += 1; // active
+      }
+
+      // Read pending_withdrawal_destination_requests vector with final bounds checking
+      if (offset + 4 > data.length) {
+        console.log('📭 Account data incomplete (pending_withdrawal_destination_requests length), returning empty withdrawal destination requests');
+        return [];
+      }
+      const requestsLength = new DataView(data.buffer, data.byteOffset + offset, 4).getUint32(0, true);
+      console.log(`🔍 [Withdrawal Destinations] Pending withdrawal destination requests length: ${requestsLength}`);
+
+      // Validate requests length is reasonable
+      if (requestsLength > 20) {
+        console.log(`📭 Pending withdrawal destination requests length too large (${requestsLength}), account may be corrupted`);
+        return [];
+      }
+
+      offset += 4;
+
+      const requests = [];
+      for (let i = 0; i < requestsLength; i++) {
+        // Check if we have enough data for this withdrawal destination request
+        if (offset + 32 + 32 + 4 > data.length) {
+          console.log(`📭 Account data incomplete (withdrawal dest request ${i} headers), stopping parsing`);
+          break;
+        }
+
+        // Read PendingWithdrawalDestinationRequest struct
+        const requestId = data.slice(offset, offset + 32);
+        offset += 32;
+
+        const addressBytes = data.slice(offset, offset + 32);
+        console.log(`🔍 [Withdrawal Destinations] Request ${i} address bytes:`, Array.from(addressBytes.slice(0, 8)).map(b => b.toString(16).padStart(2, '0')).join(' '));
+
+        // Validate address bytes before creating PublicKey
+        try {
+          const address = new PublicKey(addressBytes);
+          offset += 32;
+
+          // Read title string
+          const titleLength = new DataView(data.buffer, data.byteOffset + offset, 4).getUint32(0, true);
+          console.log(`🔍 [Withdrawal Destinations] Request ${i} title length: ${titleLength}`);
+
+          // Validate title length is reasonable
+          if (titleLength > 200) {
+            console.log(`📭 Request ${i} title length too large (${titleLength}), stopping parsing`);
+            break;
+          }
+
+          if (offset + 4 + titleLength + 8 + 1 + 1 + 8 > data.length) {
+            console.log(`📭 Account data incomplete (withdrawal dest request ${i} full data), stopping parsing`);
+            break;
+          }
+
+          offset += 4;
+          const titleBytes = data.slice(offset, offset + titleLength);
+          const title = new TextDecoder().decode(titleBytes);
+          offset += titleLength;
+
+          const executeAfter = new DataView(data.buffer, data.byteOffset + offset, 8).getBigInt64(0, true);
+          offset += 8;
+
+          const executed = data[offset] !== 0;
+          offset += 1;
+
+          const cancelled = data[offset] !== 0;
+          offset += 1;
+
+          const createdAt = new DataView(data.buffer, data.byteOffset + offset, 8).getBigInt64(0, true);
+          offset += 8;
+
+          // Only include active (not executed, not cancelled) requests
+          if (!executed && !cancelled) {
+            requests.push({
+              requestId: Array.from(requestId),
+              address: address.toString(),
+              title,
+              executeAfter: Number(executeAfter),
+              executed,
+              cancelled,
+              createdAt: Number(createdAt)
+            });
+          }
+        } catch (addressError) {
+          console.error(`❌ [Withdrawal Destinations] Failed to parse address for request ${i}:`, addressError);
+          console.log(`📭 Invalid address bytes, stopping parsing at request ${i}`);
+          break;
+        }
+      }
+
+      console.log(`📋 Found ${requests.length} pending withdrawal destination requests`);
+      return requests;
+    } catch (error) {
+      console.error('❌ Error fetching withdrawal destination requests:', error);
       return [];
     }
   }
@@ -2784,7 +3220,17 @@ export class SolanaAdapter extends BlockchainAdapter {
       data
     });
 
-    const transaction = new Transaction().add(instruction);
+    // Check if savings account exists, if not initialize it first
+    const savingsAccountInfo = await this.connection.getAccountInfo(savingsAccount);
+    const transaction = new Transaction();
+
+    if (!savingsAccountInfo) {
+      console.log('Savings account not found, adding initialize instruction...');
+      const initInstruction = await this.createInitializeInstruction(userPubkey);
+      transaction.add(initInstruction);
+    }
+
+    transaction.add(instruction);
     const txHash = await this.wallet.sendTransaction(transaction, this.connection);
 
     console.log(`✅ Requested withdrawal bypass: ${amount} tokens for ${bypassingPeriod} (tx: ${txHash})`);
