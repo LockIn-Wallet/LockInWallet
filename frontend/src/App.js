@@ -3847,8 +3847,17 @@ function AppContent() {
     <div style={styles.app.container}>
       {/* Enhanced Status Header */}
       <div style={layoutStyles.headerSection}>
-        {/* Main Title */}
-        <h1 style={styles.app.title}>🔒 LockIn Wallet</h1>
+        {/* Main Logo */}
+        <img
+          src={require('./assets/images/logo.png')}
+          alt="LockIn Wallet"
+          style={styles.app.logo}
+          onError={(e) => {
+            e.target.style.display = 'none';
+            e.target.nextSibling.style.display = 'block';
+          }}
+        />
+        <h1 style={{...styles.app.title, display: 'none', textAlign: 'center'}}>🔒 LockIn Wallet</h1>
 
         {/* Status Info Card */}
         {(provider || (networkType === "solana" && solanaWallet)) && (

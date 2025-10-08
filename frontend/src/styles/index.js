@@ -15,58 +15,55 @@ export {
   shadows,
   transitions,
   commonStyles,
-  default as theme
-} from './theme.js';
+  default as theme,
+} from "./theme.js";
 
 // Component styles
 export {
   buttonStyles,
   buttonHoverEffects,
-  default as buttons
-} from './components/buttons.js';
+  default as buttons,
+} from "./components/buttons.js";
 
 export {
   cardStyles,
   layoutStyles as cardLayoutStyles,
-  default as cards
-} from './components/cards.js';
+  default as cards,
+} from "./components/cards.js";
 
 export {
   formStyles,
   formHandlers,
-  default as forms
-} from './components/forms.js';
+  default as forms,
+} from "./components/forms.js";
 
 export {
   stepStyles,
   getStepContainerStyle,
   getStepTitleColor,
-  default as steps
-} from './components/steps.js';
+  default as steps,
+} from "./components/steps.js";
 
-export {
-  layoutStyles,
-  default as layout
-} from './components/layout.js';
+export { layoutStyles, default as layout } from "./components/layout.js";
 
 // Utility styles
 export {
   utilityStyles,
   spacingUtilities,
-  default as utilities
-} from './utilities.js';
+  default as utilities,
+} from "./utilities.js";
 
 // =====================================
 // NAMESPACE IMPORTS (For convenience objects)
 // =====================================
 
-import * as theme from './theme.js';
-import * as buttons from './components/buttons.js';
-import * as cards from './components/cards.js';
-import * as forms from './components/forms.js';
-import * as steps from './components/steps.js';
-import * as layout from './components/layout.js';
-import * as utilities from './utilities.js';
+import * as theme from "./theme.js";
+import * as buttons from "./components/buttons.js";
+import * as cards from "./components/cards.js";
+import * as forms from "./components/forms.js";
+import * as steps from "./components/steps.js";
+import * as layout from "./components/layout.js";
+import * as utilities from "./utilities.js";
 
 // =====================================
 // CONVENIENCE EXPORTS (Clean references)
@@ -77,15 +74,22 @@ export const styles = {
   // App structure
   app: {
     container: {
-      maxWidth: '800px',
-      margin: '0 auto',
+      maxWidth: "800px",
+      margin: "0 auto",
       padding: theme.spacing.xxl,
     },
     title: {
       margin: `0 0 ${theme.spacing.xxl} 0`,
       fontSize: theme.fontSize.title,
       fontWeight: theme.fontWeight.bold,
-      color: theme.colors.text.dark,
+      color: theme.colors.primary.main,
+    },
+    logo: {
+      height: theme.fontSize.hero, // Bigger than title (2.5em vs 2.2em)
+      width: 'auto',
+      margin: `0 auto ${theme.spacing.xxl} auto`, // Center horizontally and bottom spacing
+      maxWidth: '400px', // Allow for bigger logos
+      display: 'block', // Ensure proper spacing and centering
     },
   },
 
