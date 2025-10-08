@@ -2049,6 +2049,12 @@ export class SolanaAdapter extends BlockchainAdapter {
 
       const txHash = await this.wallet.sendTransaction(transaction, this.connection);
       console.log(`✅ Proposed limit change for ${periodName}: ${newLimit} (tx: ${txHash})`);
+
+      // Wait for transaction confirmation to ensure blockchain state is updated
+      console.log('⏳ Waiting for proposal transaction confirmation...');
+      await this.connection.confirmTransaction(txHash, 'confirmed');
+      console.log('✅ Proposal transaction confirmed successfully');
+
       return txHash;
     } catch (error) {
       console.error('❌ Proposal transaction failed:', {
@@ -2152,7 +2158,7 @@ export class SolanaAdapter extends BlockchainAdapter {
         console.log(`📋 Proposal ${i + 1}: ${periodName} -> ${Number(newLimit) / Math.pow(10, 9)} SOL, executeAfter: ${executeAfterTimestamp}, timeRemaining: ${timeRemaining}s`);
 
         proposals.push({
-          proposalId: proposalId.join(''), // Convert array to string for UI
+          proposalId: Buffer.from(proposalId).toString('hex'), // Convert array to hex string for UI
           periodName,
           newLimit: (Number(newLimit) / Math.pow(10, 9)).toString(), // Convert from lamports to SOL
           executeAfter: executeAfterTimestamp,
@@ -2204,7 +2210,7 @@ export class SolanaAdapter extends BlockchainAdapter {
 
     // Create instruction data: discriminator + proposal_id
     const discriminator = Buffer.from(this._generateDiscriminator('ExecuteLimitProposal'));
-    const proposalIdBuffer = Buffer.from(proposalId);
+    const proposalIdBuffer = Buffer.from(proposalId, 'hex'); // Convert hex string back to bytes
 
     const data = Buffer.concat([discriminator, proposalIdBuffer]);
 
@@ -2235,7 +2241,7 @@ export class SolanaAdapter extends BlockchainAdapter {
 
     // Create instruction data: discriminator + proposal_id
     const discriminator = Buffer.from(this._generateDiscriminator('CancelLimitProposal'));
-    const proposalIdBuffer = Buffer.from(proposalId);
+    const proposalIdBuffer = Buffer.from(proposalId, 'hex'); // Convert hex string back to bytes
 
     const data = Buffer.concat([discriminator, proposalIdBuffer]);
 
@@ -2252,6 +2258,12 @@ export class SolanaAdapter extends BlockchainAdapter {
     const txHash = await this.wallet.sendTransaction(transaction, this.connection);
 
     console.log(`Cancelled proposal ${proposalId} (tx: ${txHash})`);
+
+    // Wait for transaction confirmation to ensure blockchain state is updated
+    console.log('⏳ Waiting for proposal cancellation confirmation...');
+    await this.connection.confirmTransaction(txHash, 'confirmed');
+    console.log('✅ Proposal cancellation confirmed successfully');
+
     return txHash;
   }
 

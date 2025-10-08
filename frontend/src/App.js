@@ -335,6 +335,11 @@ const detectExceedingPeriod = (amount, spendingLimits) => {
   return exceedingPeriods.length > 0 ? exceedingPeriods[0].name : null;
 };
 
+// Check if there's a pending proposal for a specific period name
+const hasPendingProposalForPeriod = (periodName, pendingLimitProposals) => {
+  return pendingLimitProposals.some(proposal => proposal.periodName === periodName);
+};
+
 // For backward compatibility
 const USDT_ADDRESS = "0x610178dA211FEF7D417bC0e6FeD39F05609AD788"; // Updated: 0x610178dA211FEF7D417bC0e6FeD39F05609AD788
 
@@ -641,8 +646,8 @@ function AppContent() {
           </div>
         ))}
 
-        {/* Add Address Button for Management Mode */}
-        {mode === "management" && showAddButton && (
+        {/* Add Address Button */}
+        {showAddButton && (
           <div style={layoutStyles.marginTopSmall}>
             <button
               onClick={() =>
@@ -848,7 +853,11 @@ function AppContent() {
           await refreshBalances(newTxManager);
           // Check proxy status for Solana
           const userAddress = await newTxManager.getAddress();
-          await checkSolanaProxyStatus(newTxManager, userAddress);
+          if (userAddress) {
+            await checkSolanaProxyStatus(newTxManager, userAddress);
+          } else {
+            console.warn("❌ Cannot check Solana proxy status: wallet not connected or address unavailable");
+          }
           // Load spending limits and proposals
           await fetchSpendingLimitsWithTxManager(newTxManager);
           await fetchPendingLimitProposals();
@@ -1071,6 +1080,12 @@ function AppContent() {
       try {
         console.log("🔄 Refreshing Solana balances...");
         const userAddress = await txManager.getAddress();
+
+        if (!userAddress) {
+          console.warn("❌ Cannot refresh Solana balances: wallet not connected or address unavailable");
+          return;
+        }
+
         const solanaBalances = await txManager.getAllBalances(userAddress);
         setBalances(solanaBalances);
         console.log("✅ Solana balances refreshed:", solanaBalances);
@@ -1148,7 +1163,11 @@ function AppContent() {
           await refreshBalances(newTxManager);
           // Check proxy status for Solana
           const userAddress = await newTxManager.getAddress();
-          await checkSolanaProxyStatus(newTxManager, userAddress);
+          if (userAddress) {
+            await checkSolanaProxyStatus(newTxManager, userAddress);
+          } else {
+            console.warn("❌ Cannot check Solana proxy status: wallet not connected or address unavailable");
+          }
 
           // Load spending limits for Solana (pass txManager directly to avoid state timing issues)
           console.log("📋 Loading Solana spending limits...");
@@ -1157,7 +1176,7 @@ function AppContent() {
 
           // Load pending proposals for Solana
           console.log("📋 Loading Solana pending proposals...");
-          await fetchPendingLimitProposals(null, newTxManager);
+          await fetchPendingLimitProposals();
           console.log("✅ Solana pending proposals loading completed");
 
           // Load withdrawal addresses and pending requests for Solana
@@ -1225,13 +1244,17 @@ function AppContent() {
 
             await refreshBalances(newTxManager);
             const userAddress = await newTxManager.getAddress();
-            await checkSolanaProxyStatus(newTxManager, userAddress);
+            if (userAddress) {
+              await checkSolanaProxyStatus(newTxManager, userAddress);
+            } else {
+              console.warn("❌ Retry: Cannot check Solana proxy status: wallet not connected or address unavailable");
+            }
 
             console.log("📋 Retry: Loading Solana spending limits...");
             await fetchSpendingLimitsWithTxManager(newTxManager);
             console.log("✅ Retry: Solana spending limits loading completed");
 
-            await fetchPendingLimitProposals(null, newTxManager);
+            await fetchPendingLimitProposals();
 
             // Load withdrawal data in retry initialization
             console.log("📋 Retry: Loading Solana withdrawal data...");
@@ -1607,7 +1630,11 @@ function AppContent() {
 
         // Refresh proxy status
         const userAddress = await transactionManager.getAddress();
-        await checkSolanaProxyStatus(transactionManager, userAddress);
+        if (userAddress) {
+          await checkSolanaProxyStatus(transactionManager, userAddress);
+        } else {
+          console.warn("❌ Cannot refresh Solana proxy status: wallet not connected or address unavailable");
+        }
 
         alert(
           "🎉 Permanent deposit address generated successfully! This address is permanently tied to your wallet and you can use it for all future deposits from exchanges."
@@ -1624,7 +1651,11 @@ function AppContent() {
             "Solana proxy was already deployed, refreshing status..."
           );
           const userAddress = await transactionManager.getAddress();
-          await checkSolanaProxyStatus(transactionManager, userAddress);
+          if (userAddress) {
+            await checkSolanaProxyStatus(transactionManager, userAddress);
+          } else {
+            console.warn("❌ Cannot refresh Solana proxy status after deployment: wallet not connected or address unavailable");
+          }
           alert(
             "✅ Your permanent deposit address is ready! This address is permanently tied to your wallet and you can use it for all deposits from exchanges."
           );
@@ -2632,12 +2663,6 @@ function AppContent() {
           "📊 Setup committed status:",
           spendingData.isSetupCommitted
         );
-        console.log(
-          "🚨 DEBUG: Contract shows setup committed but you expect it unlocked!"
-        );
-        console.log(
-          "🔧 If this is wrong, you may need to reset the contract or check deployment"
-        );
 
         setSpendingLimits(fetchedLimits);
         setLimitsLoaded(true);
@@ -2761,65 +2786,10 @@ function AppContent() {
     );
 
     if (networkType === "solana") {
-      console.log("🔵 Processing Solana spending limits...");
-      // Solana spending limits fetching
-      try {
-        if (!transactionManager?.getSpendingLimits) {
-          console.log("❌ Solana spending limits method not available yet");
-          console.log("TransactionManager state:", {
-            exists: !!transactionManager,
-            methods: transactionManager
-              ? Object.keys(transactionManager)
-              : "none",
-          });
-          setSpendingLimits([]);
-          setLimitsLoaded(true);
-          return;
-        }
-
-        console.log("🔄 Calling transactionManager.getSpendingLimits()...");
-        const spendingData = await transactionManager.getSpendingLimits();
-        console.log("✅ Fetched Solana spending limits:", spendingData);
-        console.log(
-          "📊 Limits array length:",
-          spendingData?.limits?.length || 0
-        );
-
-        // Convert Solana format to unified format (values are already in SOL)
-        // Filter to only include active limits for consistency with EVM
-        const fetchedLimits = spendingData.limits
-          .filter((limit) => limit.active) // Only include active limits like EVM
-          .map((limit) => ({
-            name: limit.name,
-            limit: limit.limit.toString(), // Already converted to SOL in SolanaAdapter
-            spent: limit.spent.toString(),
-            remaining: Math.max(0, limit.remaining),
-            duration: limit.duration.toString(),
-            active: limit.active,
-            durationHours: Math.floor(Number(limit.duration) / 3600),
-            durationDays: Math.floor(Number(limit.duration) / 86400),
-          }));
-
-        console.log("🔄 Converted limits for frontend:", fetchedLimits);
-        console.log(
-          "📊 Setup committed status:",
-          spendingData.isSetupCommitted
-        );
-
-        setSpendingLimits(fetchedLimits);
-        setLimitsLoaded(true);
-        setIsSetupCommitted(spendingData.isSetupCommitted);
-
-        console.log("✅ Solana spending limits state updated!");
-        console.log("📋 Final spending limits count:", fetchedLimits.length);
-
-        // Update unified limit editing state using shared helper function
-        updateLimitEditsFromFetchedLimits(fetchedLimits);
-      } catch (error) {
-        console.error("Error fetching Solana spending limits:", error);
-        setSpendingLimits([]);
-        setLimitsLoaded(true);
-      }
+      console.log("🔵 Delegating Solana spending limits to dedicated function...");
+      // Delegate to the dedicated Solana function to avoid duplication and race conditions
+      await fetchSpendingLimitsWithTxManager(transactionManager);
+      return;
     } else if (contract && userSigner) {
       // EVM spending limits fetching (existing logic)
       try {
@@ -3212,16 +3182,29 @@ function AppContent() {
   };
 
   const cancelWithdrawalRequest = async (requestId) => {
-    if (!savingsContract) return;
-
     try {
-      const tx = await savingsContract.cancelWithdrawalAddressRequest(
-        requestId
-      );
-      await tx.wait();
-      alert("Withdrawal address request cancelled successfully!");
+      if (networkType === "solana") {
+        // Solana implementation
+        if (!transactionManager) {
+          throw new Error("Transaction manager not initialized");
+        }
 
-      // Refresh data
+        const solanaAdapter = transactionManager.getCurrentAdapter();
+        const txHash = await solanaAdapter.cancelWithdrawalDestinationRequest(requestId);
+        console.log("Solana withdrawal request cancellation transaction:", txHash);
+        alert("Withdrawal address request cancelled successfully!");
+      } else {
+        // EVM implementation
+        if (!savingsContract) {
+          throw new Error("Savings contract not initialized");
+        }
+
+        const tx = await savingsContract.cancelWithdrawalAddressRequest(requestId);
+        await tx.wait();
+        alert("Withdrawal address request cancelled successfully!");
+      }
+
+      // Refresh data for both networks
       await fetchPendingWithdrawalRequests();
     } catch (error) {
       console.error("Error cancelling withdrawal request:", error);
@@ -3230,14 +3213,29 @@ function AppContent() {
   };
 
   const removeWithdrawalAddress = async (destination) => {
-    if (!savingsContract) return;
-
     try {
-      const tx = await savingsContract.removeWithdrawalAddress(destination);
-      await tx.wait();
-      alert("Withdrawal address removed successfully!");
+      if (networkType === "solana") {
+        // Solana implementation
+        if (!transactionManager) {
+          throw new Error("Transaction manager not initialized");
+        }
 
-      // Refresh data
+        const solanaAdapter = transactionManager.getCurrentAdapter();
+        const txHash = await solanaAdapter.removeWithdrawalDestination(destination);
+        console.log("Solana withdrawal address removal transaction:", txHash);
+        alert("Withdrawal address removed successfully!");
+      } else {
+        // EVM implementation
+        if (!savingsContract) {
+          throw new Error("Savings contract not initialized");
+        }
+
+        const tx = await savingsContract.removeWithdrawalAddress(destination);
+        await tx.wait();
+        alert("Withdrawal address removed successfully!");
+      }
+
+      // Refresh data for both networks
       await fetchWithdrawalAddresses();
     } catch (error) {
       console.error("Error removing withdrawal address:", error);
@@ -4639,7 +4637,7 @@ function AppContent() {
             </div>
           )}
 
-          {/* Step 1: Spending Limits Setup */}
+          {/* Step 1: Spending Limits Setup / Management */}
           <div
             style={getStepContainerStyle(1, currentStep, isSetupCommitted, {
               step1Complete: Object.keys(spendingLimits).length > 0,
@@ -4656,7 +4654,7 @@ function AppContent() {
                     }),
                   }}
                 >
-                  🧩 Step 1: Set Your Spending Limits
+                  {isSetupCommitted ? "💰 Spending Limits" : "🧩 Step 1: Set Your Spending Limits"}
                 </h3>
                 {!isSetupCommitted && (
                   <div
@@ -4907,7 +4905,7 @@ function AppContent() {
                       </div>
 
                       {/* Input or Display */}
-                      {edit?.isEditing || !isActive ? (
+                      {edit?.isEditing || (!isActive && !isSetupCommitted) ? (
                         <div style={layoutStyles.marginBottomSmall}>
                           <input
                             type="text"
@@ -4934,7 +4932,7 @@ function AppContent() {
                           />
                         </div>
                       ) : (
-                        existingLimit && (
+                        existingLimit ? (
                           <div style={layoutStyles.marginBottomSmall}>
                             <div
                               style={{
@@ -4994,6 +4992,25 @@ function AppContent() {
                               />
                             </div>
                           </div>
+                        ) : (
+                          !isActive && isSetupCommitted && (
+                            <div style={layoutStyles.marginBottomSmall}>
+                              <div
+                                style={{
+                                  color: "#a0aec0",
+                                  fontSize: "0.9em",
+                                  fontStyle: "italic",
+                                  textAlign: "center",
+                                  padding: "16px",
+                                  backgroundColor: "#2d3748",
+                                  borderRadius: "6px",
+                                  border: "1px solid #4a5568",
+                                }}
+                              >
+                                🔒 No {periodName.toLowerCase()} limit set. Use "Edit" to add one via proposal system.
+                              </div>
+                            </div>
+                          )
                         )
                       )}
 
@@ -5057,66 +5074,94 @@ function AppContent() {
                           </>
                         ) : (
                           <>
-                            {isActive ? ( // Only show Edit/Remove buttons for existing limits from contract
+                            {isActive || isSetupCommitted ? ( // Show Edit/Remove for active limits, or Add button for inactive limits when locked
                               <>
-                                <button
-                                  onClick={() => toggleEditMode(periodName)}
-                                  style={{
-                                    flex: 1,
-                                    padding: "8px",
-                                    borderRadius: "4px",
-                                    border: "1px solid #4a5568",
-                                    backgroundColor: "#2d3748",
-                                    backgroundImage: "none",
-                                    color: "#a0aec0",
-                                    cursor: "pointer",
-                                    fontSize: "0.85em",
-                                    fontWeight: "normal",
-                                    opacity: 0.7,
-                                    transition: "all 0.2s ease",
-                                  }}
-                                  onMouseEnter={(e) => {
-                                    e.target.style.opacity = "1";
-                                    e.target.style.color = "#e2e8f0";
-                                    e.target.style.borderColor = "#718096";
-                                  }}
-                                  onMouseLeave={(e) => {
-                                    e.target.style.opacity = "0.7";
-                                    e.target.style.color = "#a0aec0";
-                                    e.target.style.borderColor = "#4a5568";
-                                  }}
+                                <span
+                                  title={hasPendingProposalForPeriod(periodName, pendingLimitProposals)
+                                    ? `Cannot ${isActive ? 'edit' : 'add'} ${periodName} limit: There is already a pending proposal for this period. Only one proposal per period is allowed.`
+                                    : ''
+                                  }
+                                  style={{ flex: 1, display: 'block' }}
                                 >
-                                  ✏️ Edit
-                                </button>
-                                <button
-                                  onClick={() => removeLimitPeriod(periodName)}
-                                  style={{
-                                    flex: 1,
-                                    padding: "8px",
-                                    borderRadius: "4px",
-                                    border: "1px solid #4a5568",
-                                    backgroundColor: "#2d3748",
-                                    backgroundImage: "none",
-                                    color: "#a0aec0",
-                                    cursor: "pointer",
-                                    fontSize: "0.85em",
-                                    fontWeight: "normal",
-                                    opacity: 0.7,
-                                    transition: "all 0.2s ease",
-                                  }}
-                                  onMouseEnter={(e) => {
-                                    e.target.style.opacity = "1";
-                                    e.target.style.color = "#e2e8f0";
-                                    e.target.style.borderColor = "#718096";
-                                  }}
-                                  onMouseLeave={(e) => {
-                                    e.target.style.opacity = "0.7";
-                                    e.target.style.color = "#a0aec0";
-                                    e.target.style.borderColor = "#4a5568";
-                                  }}
+                                  <button
+                                    onClick={() => !hasPendingProposalForPeriod(periodName, pendingLimitProposals) && toggleEditMode(periodName)}
+                                    disabled={hasPendingProposalForPeriod(periodName, pendingLimitProposals)}
+                                    style={{
+                                      width: "100%",
+                                      padding: "8px",
+                                      borderRadius: "4px",
+                                      border: "1px solid #4a5568",
+                                      backgroundColor: "#2d3748",
+                                      backgroundImage: "none",
+                                      color: hasPendingProposalForPeriod(periodName, pendingLimitProposals) ? "#555" : "#a0aec0",
+                                      cursor: hasPendingProposalForPeriod(periodName, pendingLimitProposals) ? "not-allowed" : "pointer",
+                                      fontSize: "0.85em",
+                                      fontWeight: "normal",
+                                      opacity: hasPendingProposalForPeriod(periodName, pendingLimitProposals) ? 0.3 : 0.7,
+                                      transition: "all 0.2s ease",
+                                    }}
+                                    onMouseEnter={(e) => {
+                                      if (!hasPendingProposalForPeriod(periodName, pendingLimitProposals)) {
+                                        e.target.style.opacity = "1";
+                                        e.target.style.color = "#e2e8f0";
+                                        e.target.style.borderColor = "#718096";
+                                      }
+                                    }}
+                                    onMouseLeave={(e) => {
+                                      if (!hasPendingProposalForPeriod(periodName, pendingLimitProposals)) {
+                                        e.target.style.opacity = "0.7";
+                                        e.target.style.color = "#a0aec0";
+                                        e.target.style.borderColor = "#4a5568";
+                                      }
+                                    }}
+                                  >
+                                    {isActive ? "✏️ Edit" : "➕ Add Limit"}
+                                  </button>
+                                </span>
+                                {isActive && (
+                                <span
+                                  title={hasPendingProposalForPeriod(periodName, pendingLimitProposals)
+                                    ? `Cannot remove ${periodName} limit: There is already a pending proposal for this period. Only one proposal per period is allowed.`
+                                    : ''
+                                  }
+                                  style={{ flex: 1, display: 'block' }}
                                 >
-                                  🗑️ Remove
-                                </button>
+                                  <button
+                                    onClick={() => !hasPendingProposalForPeriod(periodName, pendingLimitProposals) && removeLimitPeriod(periodName)}
+                                    disabled={hasPendingProposalForPeriod(periodName, pendingLimitProposals)}
+                                    style={{
+                                      width: "100%",
+                                      padding: "8px",
+                                      borderRadius: "4px",
+                                      border: "1px solid #4a5568",
+                                      backgroundColor: "#2d3748",
+                                      backgroundImage: "none",
+                                      color: hasPendingProposalForPeriod(periodName, pendingLimitProposals) ? "#555" : "#a0aec0",
+                                      cursor: hasPendingProposalForPeriod(periodName, pendingLimitProposals) ? "not-allowed" : "pointer",
+                                      fontSize: "0.85em",
+                                      fontWeight: "normal",
+                                      opacity: hasPendingProposalForPeriod(periodName, pendingLimitProposals) ? 0.3 : 0.7,
+                                      transition: "all 0.2s ease",
+                                    }}
+                                    onMouseEnter={(e) => {
+                                      if (!hasPendingProposalForPeriod(periodName, pendingLimitProposals)) {
+                                        e.target.style.opacity = "1";
+                                        e.target.style.color = "#e2e8f0";
+                                        e.target.style.borderColor = "#718096";
+                                      }
+                                    }}
+                                    onMouseLeave={(e) => {
+                                      if (!hasPendingProposalForPeriod(periodName, pendingLimitProposals)) {
+                                        e.target.style.opacity = "0.7";
+                                        e.target.style.color = "#a0aec0";
+                                        e.target.style.borderColor = "#4a5568";
+                                      }
+                                    }}
+                                  >
+                                    🗑️ Remove
+                                  </button>
+                                </span>
+                                )}
                               </>
                             ) : (
                               <div
@@ -5128,7 +5173,10 @@ function AppContent() {
                                   padding: "8px",
                                 }}
                               >
-                                Enter an amount above to activate this limit
+                                {isSetupCommitted
+                                  ? "🔒 Click Edit to add this limit via proposal system"
+                                  : "Enter an amount above to activate this limit"
+                                }
                               </div>
                             )}
                           </>
@@ -6132,7 +6180,7 @@ function AppContent() {
                 mode="selection"
                 selectedDestination={selectedWithdrawalDestination}
                 onDestinationChange={setSelectedWithdrawalDestination}
-                showAddButton={false}
+                showAddButton={true}
                 title="Withdraw To:"
               />
 
@@ -6428,6 +6476,129 @@ function AppContent() {
                                 <button
                                   onClick={() =>
                                     cancelWithdrawalRequest(request.requestId)
+                                  }
+                                  style={{
+                                    padding: "4px 8px",
+                                    borderRadius: "4px",
+                                    border: "1px solid #e53e3e",
+                                    backgroundColor: "transparent",
+                                    color: "#e53e3e",
+                                    cursor: "pointer",
+                                    fontSize: "0.7em",
+                                  }}
+                                >
+                                  ❌ Cancel
+                                </button>
+                              </div>
+                            </div>
+                            <div
+                              style={{
+                                padding: "6px 10px",
+                                backgroundColor: "#4a5568",
+                                borderRadius: "4px",
+                                textAlign: "center",
+                                color: countdown.color,
+                                fontWeight: "bold",
+                                fontSize: "0.8em",
+                              }}
+                            >
+                              {countdown.text}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Pending Bypass Requests */}
+              {pendingBypassRequests.length > 0 && (
+                <div
+                  style={{
+                    marginTop: "15px",
+                    paddingTop: "15px",
+                    borderTop: "1px solid #4a5568",
+                  }}
+                >
+                  <div>
+                    <h5
+                      style={{
+                        color: colors.warning.light,
+                        margin: `0 0 ${spacing.md} 0`,
+                      }}
+                    >
+                      🔒 Pending Bypass Requests ({pendingBypassRequests.length})
+                    </h5>
+                    <div style={{ ...utilityStyles.grid, gap: spacing.sm }}>
+                      {pendingBypassRequests.map((request, index) => {
+                        const countdown = formatCountdown(
+                          request.executeAfter,
+                          currentTime
+                        );
+                        return (
+                          <div
+                            key={index}
+                            style={{
+                              padding: "10px",
+                              backgroundColor: "#1a202c",
+                              borderRadius: "6px",
+                              border: countdown.ready
+                                ? "1px solid #48bb78"
+                                : "1px solid #ed8936",
+                            }}
+                          >
+                            <div
+                              style={{
+                                display: "flex",
+                                justifyContent: "space-between",
+                                alignItems: "center",
+                                marginBottom: "8px",
+                              }}
+                            >
+                              <div>
+                                <div
+                                  style={{
+                                    color: "white",
+                                    fontWeight: "bold",
+                                  }}
+                                >
+                                  🔒 {request.amount} {request.token}
+                                </div>
+                                <div
+                                  style={{
+                                    fontSize: "0.8em",
+                                    color: "#a0aec0",
+                                  }}
+                                >
+                                  Period: {request.skipPeriod} • To: {request.destination?.slice(0, 8)}...{request.destination?.slice(-4)}
+                                </div>
+                              </div>
+                              <div style={{ display: "flex", gap: "6px" }}>
+                                {countdown.ready && (
+                                  <button
+                                    onClick={() =>
+                                      executeBypassRequest(
+                                        request.requestId
+                                      )
+                                    }
+                                    style={{
+                                      padding: "4px 8px",
+                                      borderRadius: "4px",
+                                      border: "none",
+                                      backgroundColor: "#48bb78",
+                                      color: "white",
+                                      cursor: "pointer",
+                                      fontSize: "0.7em",
+                                      fontWeight: "bold",
+                                    }}
+                                  >
+                                    ⚡ Execute
+                                  </button>
+                                )}
+                                <button
+                                  onClick={() =>
+                                    cancelBypassRequest(request.requestId)
                                   }
                                   style={{
                                     padding: "4px 8px",
