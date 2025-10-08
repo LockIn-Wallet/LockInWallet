@@ -1320,7 +1320,14 @@ function AppContent() {
   // Update step validation when relevant data changes
   useEffect(() => {
     updateStepValidation();
-  }, [spendingLimits, withdrawalAddresses, isSetupCommitted, limitEdits, customPeriodName, customPeriodLimit]);
+  }, [
+    spendingLimits,
+    withdrawalAddresses,
+    isSetupCommitted,
+    limitEdits,
+    customPeriodName,
+    customPeriodLimit,
+  ]);
 
   // Auto-advance steps when setup is not committed and during guided flow
   useEffect(() => {
@@ -4038,19 +4045,9 @@ function AppContent() {
                       color: isSetupCommitted ? "#63b3ed" : "#f6ad55",
                     }}
                   >
-                    {isSetupCommitted ? "🔒 Locked-In" : "⚙️ Setup Mode"}
+                    {isSetupCommitted ? "🔒 Locked-In" : "⚙️ Setup Wallet"}
                   </span>
-                  {!isSetupCommitted && (
-                    <span
-                      style={{
-                        color: "#f6ad55",
-                        fontSize: "0.8em",
-                        marginLeft: "4px",
-                      }}
-                    >
-                      ({currentStep}/3)
-                    </span>
-                  )}
+                  {/* Step counter removed per user request */}
                 </div>
               </div>
             </div>
@@ -4116,33 +4113,15 @@ function AppContent() {
         style={{
           marginBottom: "20px",
           padding: "15px",
-          border: !isSetupCommitted ? "2px dashed #4a5568" : "2px solid #333",
+          border: !isSetupCommitted ? "2px solid #48bb78" : "2px solid #333", // Active green border during setup
           borderRadius: "5px",
           backgroundColor: "#2d3748",
           color: "white",
-          opacity: !isSetupCommitted ? 0.6 : 1,
+          opacity: 1, // Always fully visible
           position: "relative",
         }}
       >
-        {/* Inactive Overlay for Setup Mode */}
-        {!isSetupCommitted && (
-          <div
-            style={{
-              position: "absolute",
-              top: "10px",
-              right: "10px",
-              padding: "4px 8px",
-              backgroundColor: "#744210",
-              border: "1px solid #d69e2e",
-              borderRadius: "4px",
-              fontSize: "0.75em",
-              fontWeight: "600",
-              color: "#f6ad55",
-            }}
-          >
-            Inactive until locked-in
-          </div>
-        )}
+        {/* Balances section now active during setup mode */}
 
         <div
           style={{
@@ -4172,6 +4151,61 @@ function AppContent() {
             </button>
           )}
         </div>
+
+        {/* Educational Introduction for Setup Mode */}
+        {!isSetupCommitted && (
+          <div
+            style={{
+              marginBottom: "20px",
+              padding: "16px",
+              backgroundColor: "#1a365d",
+              border: "2px solid #48bb78",
+              borderRadius: "8px",
+              color: "white",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                marginBottom: "12px",
+                gap: "8px",
+              }}
+            >
+              <span style={{ fontSize: "1.5em" }}>🛡️</span>
+              <h4
+                style={{
+                  margin: 0,
+                  color: "#9ae6b4",
+                  fontSize: "1.1em",
+                  fontWeight: "600",
+                }}
+              >
+                Protect your Bankroll/Savings/Profits even from yourself
+              </h4>
+            </div>
+            <div
+              style={{ fontSize: "0.9em", lineHeight: "1.6", color: "#e2e8f0" }}
+            >
+              <p style={{ margin: "0 0 8px 0" }}>
+                <strong>🏦 No Trading Wallet:</strong> Designed for storing
+                stablecoins only for your peace of mind and safety net.
+              </p>
+              <p style={{ margin: "0 0 8px 0" }}>
+                <strong>🔐 Set up withdrawal allowance:</strong> Changes to
+                allowance or by passing withdrawal limits are timelocked.
+              </p>
+              <p style={{ margin: "0 0 8px 0" }}>
+                <strong>🛡️ Compromise-Resistant:</strong> Remains secure even
+                when your wallet is compromised (coming soon)
+              </p>
+              <p style={{ margin: "0" }}>
+                <strong>⛓️ Fully On-Chain:</strong> No intermediaries
+              </p>
+            </div>
+          </div>
+        )}
+
         {!provider ? (
           <div
             style={{ textAlign: "center", color: "#a0aec0", padding: "20px" }}
@@ -4760,7 +4794,7 @@ function AppContent() {
               {isSetupCommitted
                 ? "⚠️ Account locked: Changes require 24-hour timelock proposals. Edit individual limits or add new ones."
                 : currentStep === 1
-                ? "Configure daily, weekly, or monthly spending limits to control your withdrawals. You'll be able to modify these freely until you lock in your wallet."
+                ? "Configure daily, weekly, or monthly spending limits to control your withdrawals. After wallet lock-in, updates will require 24 hours - 7 days approval for security and impulse control reasons."
                 : "Set your spending limits. You can freely modify them until you commit the setup."}
             </p>
 
@@ -5620,8 +5654,8 @@ function AppContent() {
               </div>
             )}
 
-            {/* Step 2: Withdrawal Addresses Management */}
-            <div
+          {/* Step 2: Withdrawal Addresses Management */}
+          <div
               style={{
                 marginBottom: "20px",
                 padding: "20px",
@@ -5662,7 +5696,7 @@ function AppContent() {
                   >
                     🔑 Step 2: Add Withdrawal Addresses
                   </h3>
-{/* Status label removed - Step 2 always active */}
+                  {/* Status label removed - Step 2 always active */}
                 </div>
 
                 {!isSetupCommitted &&
@@ -5922,11 +5956,11 @@ function AppContent() {
                   )}
                 </div>
               )}
-            </div>
+          </div>
 
-            {/* Step 3: Lock In Your Wallet */}
-            <div
-              style={{
+          {/* Step 3: Lock In Your Wallet */}
+          <div
+            style={{
                 marginBottom: "20px",
                 padding: "20px",
                 border:
@@ -6064,11 +6098,10 @@ function AppContent() {
                   </p>
                 </div>
               )}
-            </div>
+          </div>
 
-            {/* Enhanced Withdrawal Section - Hidden during setup mode */}
-            {isSetupCommitted && (
-              <div
+          {isSetupCommitted && (
+            <div
                 style={{
                   marginBottom: "20px",
                   padding: "15px",
