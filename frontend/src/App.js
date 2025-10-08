@@ -5572,12 +5572,13 @@ function AppContent() {
             )}
           </div>
 
-          {/* Step 2: Withdrawal Addresses Management */}
-          <div
-            style={getStepContainerStyle(2, currentStep, isSetupCommitted, {
-              step1Complete: Object.keys(spendingLimits).length > 0,
-            })}
-          >
+          {/* Step 2: Withdrawal Addresses Management - Hidden when setup is committed */}
+          {!isSetupCommitted && (
+            <div
+              style={getStepContainerStyle(2, currentStep, isSetupCommitted, {
+                step1Complete: Object.keys(spendingLimits).length > 0,
+              })}
+            >
             {/* Step Header */}
             <div style={stepStyles.stepHeader}>
               <div style={layoutStyles.flexAlignCenter}>
@@ -5860,15 +5861,17 @@ function AppContent() {
               </div>
             )}
           </div>
-          {/* Step 3: Lock In Your Wallet */}
-          <div
-            style={getStepContainerStyle(
-              3,
-              currentStep,
-              isSetupCommitted,
-              stepValidation
-            )}
-          >
+          )}
+          {/* Step 3: Lock In Your Wallet - Hidden when setup is committed */}
+          {!isSetupCommitted && (
+            <div
+              style={getStepContainerStyle(
+                3,
+                currentStep,
+                isSetupCommitted,
+                stepValidation
+              )}
+            >
             <h3 style={stepStyles.step3Title}>
               🧩 Step 3: Lock In Your Wallet
             </h3>
@@ -5968,6 +5971,7 @@ function AppContent() {
               </div>
             )}
           </div>
+          )}
           {isSetupCommitted && (
             <div
               style={{
@@ -6452,8 +6456,8 @@ function AppContent() {
               )}
             </div>
           )}
-          {/* Add Approver Section - Only shown after setup is committed */}
-          {isSetupCommitted && (
+          {/* Add Approver Section - Hidden for now (not implemented) */}
+          {false && isSetupCommitted && (
             <div
               style={{
                 marginTop: "20px",
