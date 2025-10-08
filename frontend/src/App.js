@@ -29,6 +29,25 @@ import {
 // Import Solana wallet adapter CSS
 import "@solana/wallet-adapter-react-ui/styles.css";
 
+// Import extracted styles
+import {
+  styles,
+  buttonStyles,
+  cardStyles,
+  formStyles,
+  stepStyles,
+  layoutStyles,
+  utilityStyles,
+  spacingUtilities,
+  getStepContainerStyle,
+  getStepTitleColor,
+  colors,
+  spacing,
+  borderRadius,
+  fontSize,
+  fontWeight,
+} from "./styles";
+
 const ETH_ADDRESS = "0x0000000000000000000000000000000000000000"; // ETH address (native token)
 const SOL_ADDRESS = "So11111111111111111111111111111111111111112"; // SOL address (native token)
 
@@ -460,20 +479,19 @@ function AppContent() {
     title = "Withdraw To:",
   }) => {
     return (
-      <div style={{ marginBottom: "15px" }}>
+      <div style={layoutStyles.marginBottom}>
         <label
           style={{
+            ...formStyles.label,
             display: "block",
-            fontSize: "0.9em",
-            color: "#e2e8f0",
-            marginBottom: "8px",
+            marginBottom: spacing.sm,
           }}
         >
           {title}
         </label>
 
         {/* My Wallet Option */}
-        <div style={{ marginBottom: "8px" }}>
+        <div style={spacingUtilities.mb2}>
           <div
             style={{
               display: "flex",
@@ -507,7 +525,7 @@ function AppContent() {
                 onChange={(e) =>
                   onDestinationChange && onDestinationChange(e.target.value)
                 }
-                style={{ marginRight: "8px", marginTop: "2px" }}
+                style={layoutStyles.marginRight}
               />
             )}
             <span
@@ -530,7 +548,7 @@ function AppContent() {
 
         {/* Withdrawal Addresses */}
         {withdrawalAddresses.map((addr, index) => (
-          <div key={index} style={{ marginBottom: "8px" }}>
+          <div key={index} style={spacingUtilities.mb2}>
             <div
               style={{
                 display: "flex",
@@ -567,11 +585,16 @@ function AppContent() {
                     onChange={(e) =>
                       onDestinationChange && onDestinationChange(e.target.value)
                     }
-                    style={{ marginRight: "8px", marginTop: "2px" }}
+                    style={layoutStyles.marginRight}
                   />
                 )}
                 <div>
-                  <div style={{ color: "white", fontWeight: "bold" }}>
+                  <div
+                    style={{
+                      color: colors.text.primary,
+                      fontWeight: fontWeight.bold,
+                    }}
+                  >
                     📍 {addr.title}
                   </div>
                   <div
@@ -620,23 +643,15 @@ function AppContent() {
 
         {/* Add Address Button for Management Mode */}
         {mode === "management" && showAddButton && (
-          <div style={{ marginTop: "10px" }}>
+          <div style={layoutStyles.marginTopSmall}>
             <button
               onClick={() =>
                 setShowWithdrawalAddressForm(!showWithdrawalAddressForm)
               }
               style={{
-                padding: "8px 16px",
-                borderRadius: "4px",
-                border: "1px solid #4a5568",
-                backgroundColor: "#2d3748",
-                backgroundImage: "none",
-                color: "#a0aec0",
-                cursor: "pointer",
-                fontSize: "0.85em",
-                fontWeight: "normal",
+                ...buttonStyles.secondary,
+                fontSize: fontSize.xs,
                 opacity: 0.7,
-                transition: "all 0.2s ease",
               }}
               onMouseEnter={(e) => {
                 e.target.style.opacity = "1";
@@ -3829,65 +3844,27 @@ function AppContent() {
   };
 
   return (
-    <div style={{ maxWidth: "800px", margin: "0 auto", padding: "20px" }}>
+    <div style={styles.app.container}>
       {/* Enhanced Status Header */}
-      <div style={{ marginBottom: "25px" }}>
+      <div style={layoutStyles.headerSection}>
         {/* Main Title */}
-        <h1
-          style={{
-            margin: "0 0 20px 0",
-            fontSize: "2.2em",
-            fontWeight: "bold",
-            color: "#1a202c",
-          }}
-        >
-          🔒 LockIn Wallet
-        </h1>
+        <h1 style={styles.app.title}>🔒 LockIn Wallet</h1>
 
         {/* Status Info Card */}
         {(provider || (networkType === "solana" && solanaWallet)) && (
-          <div
-            style={{
-              padding: "20px",
-              border: "1px solid #4a5568",
-              borderRadius: "8px",
-              backgroundColor: "#2d3748",
-              color: "white",
-              boxShadow: "0 4px 6px rgba(0, 0, 0, 0.1)",
-            }}
-          >
+          <div style={cardStyles.statusCard}>
             {/* Top Row: Connection & Status */}
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                marginBottom: "20px",
-                flexWrap: "wrap",
-                gap: "15px",
-              }}
-            >
+            <div style={layoutStyles.flexBetweenWrap}>
               {/* Connected Wallet Info */}
-              <div
-                style={{ display: "flex", alignItems: "center", gap: "12px" }}
-              >
+              <div style={layoutStyles.flexAlignCenter}>
+                <span style={utilityStyles.statusText}>Connected:</span>
                 <span
                   style={{
-                    fontSize: "1.1em",
-                    fontWeight: "500",
-                    color: "#e2e8f0",
-                  }}
-                >
-                  Connected:
-                </span>
-                <span
-                  style={{
-                    fontSize: "1em",
-                    fontFamily: "monospace",
-                    color: "#9ae6b4",
-                    backgroundColor: "#1a365d",
-                    padding: "4px 8px",
-                    borderRadius: "4px",
+                    ...utilityStyles.addressText,
+                    color: colors.success.light,
+                    backgroundColor: colors.background.darkBlue,
+                    padding: spacing.xs + " " + spacing.sm,
+                    borderRadius: borderRadius.sm,
                   }}
                 >
                   {networkType === "solana"
@@ -3902,14 +3879,14 @@ function AppContent() {
                     ? `${userAddress.slice(0, 6)}...${userAddress.slice(-4)}`
                     : "Loading..."}
                 </span>
-                <span style={{ fontSize: "0.9em", color: "#a0aec0" }}>
+                <span style={utilityStyles.caption}>
                   ({networkType === "solana" ? "Phantom" : "MetaMask"})
                 </span>
               </div>
 
               {/* Wallet Buttons for Solana */}
               {networkType === "solana" && (
-                <div style={{ display: "flex", gap: "10px" }}>
+                <div style={layoutStyles.flexGap}>
                   <WalletMultiButton />
                   {solanaConnected && <WalletDisconnectButton />}
                 </div>
@@ -3917,72 +3894,29 @@ function AppContent() {
             </div>
 
             {/* Second Row: Network & Status Badge */}
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                marginBottom: "15px",
-                flexWrap: "wrap",
-                gap: "15px",
-              }}
-            >
+            <div style={layoutStyles.flexBetweenWrap}>
               {/* Network Selection */}
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "20px",
-                  flexWrap: "wrap",
-                }}
-              >
-                <div
-                  style={{ display: "flex", alignItems: "center", gap: "10px" }}
-                >
-                  <span
-                    style={{
-                      color: "#a0aec0",
-                      fontSize: "0.9em",
-                      fontWeight: "500",
-                    }}
-                  >
-                    Network:
-                  </span>
+              <div style={layoutStyles.networkSelection}>
+                <div style={layoutStyles.networkSelectionGroup}>
+                  <span style={utilityStyles.label}>Network:</span>
                   <select
                     value={networkType}
                     onChange={(e) => switchNetworkType(e.target.value)}
-                    style={{
-                      padding: "6px 12px",
-                      borderRadius: "4px",
-                      border: "1px solid #4a5568",
-                      backgroundColor: "#4a5568",
-                      color: "white",
-                      fontSize: "0.9em",
-                      cursor: "pointer",
-                      fontWeight: "500",
-                    }}
+                    style={formStyles.select}
                   >
                     <option value="evm">Ethereum (EVM)</option>
                     <option value="solana">Solana</option>
                   </select>
                 </div>
 
-                <div
-                  style={{ display: "flex", alignItems: "center", gap: "10px" }}
-                >
+                <div style={layoutStyles.networkSelectionGroup}>
                   <select
                     value={selectedNetwork}
                     onChange={(e) => switchNetwork(e.target.value)}
                     disabled={isNetworkSwitching}
                     style={{
-                      padding: "6px 12px",
-                      borderRadius: "4px",
-                      border: "1px solid #4a5568",
-                      backgroundColor: "#4a5568",
-                      color: "white",
-                      fontSize: "0.9em",
+                      ...formStyles.select,
                       cursor: isNetworkSwitching ? "not-allowed" : "pointer",
-                      fontWeight: "500",
                     }}
                   >
                     {networkType === "solana" ? (
@@ -4008,31 +3942,23 @@ function AppContent() {
               </div>
 
               {/* Dynamic Status Badge */}
-              <div
-                style={{ display: "flex", alignItems: "center", gap: "12px" }}
-              >
-                <span
-                  style={{
-                    color: "#a0aec0",
-                    fontSize: "0.9em",
-                    fontWeight: "500",
-                  }}
-                >
-                  Status:
-                </span>
+              <div style={layoutStyles.statusBadge}>
+                <span style={utilityStyles.label}>Status:</span>
                 <div
                   style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "8px",
-                    padding: "8px 12px",
-                    borderRadius: "6px",
-                    backgroundColor: isSetupCommitted ? "#1a365d" : "#744210",
+                    ...layoutStyles.statusIndicator,
+                    padding: spacing.sm + " " + spacing.md,
+                    borderRadius: borderRadius.md,
+                    backgroundColor: isSetupCommitted
+                      ? colors.background.darkBlue
+                      : colors.warning.bg,
                     border: `1px solid ${
-                      isSetupCommitted ? "#2b77ad" : "#d69e2e"
+                      isSetupCommitted
+                        ? colors.success.border
+                        : colors.warning.dark
                     }`,
-                    fontSize: "0.9em",
-                    fontWeight: "600",
+                    fontSize: fontSize.sm,
+                    fontWeight: fontWeight.semibold,
                   }}
                   title={
                     isSetupCommitted
@@ -4042,7 +3968,9 @@ function AppContent() {
                 >
                   <span
                     style={{
-                      color: isSetupCommitted ? "#63b3ed" : "#f6ad55",
+                      color: isSetupCommitted
+                        ? colors.success.light
+                        : colors.warning.light,
                     }}
                   >
                     {isSetupCommitted ? "🔒 Locked-In" : "⚙️ Setup Wallet"}
@@ -4053,19 +3981,21 @@ function AppContent() {
             </div>
 
             {/* Connection Status Indicator */}
-            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <div style={layoutStyles.connectionStatus}>
               <div
                 style={{
-                  width: "8px",
-                  height: "8px",
-                  borderRadius: "50%",
-                  backgroundColor: isCorrectNetwork() ? "#48bb78" : "#f56565",
+                  ...utilityStyles.statusIndicator,
+                  backgroundColor: isCorrectNetwork()
+                    ? colors.success.main
+                    : colors.error.main,
                 }}
               />
               <span
                 style={{
-                  fontSize: "0.8em",
-                  color: isCorrectNetwork() ? "#9ae6b4" : "#fc8181",
+                  fontSize: fontSize.xs,
+                  color: isCorrectNetwork()
+                    ? colors.success.light
+                    : colors.error.light,
                 }}
               >
                 {isCorrectNetwork()
@@ -4088,18 +4018,19 @@ function AppContent() {
             "0x0000000000000000000000000000000000000000" && (
             <div
               style={{
-                marginTop: "15px",
-                padding: "15px",
-                border: "2px solid #f56565",
-                borderRadius: "5px",
-                backgroundColor: "#fed7d7",
-                color: "#c53030",
+                ...cardStyles.warningCard,
+                marginTop: spacing.xl,
               }}
             >
-              <h4 style={{ margin: "0 0 10px 0", color: "#c53030" }}>
+              <h4
+                style={{
+                  margin: `0 0 ${spacing.md} 0`,
+                  color: colors.error.main,
+                }}
+              >
                 ⚠️ Contract Not Deployed
               </h4>
-              <p style={{ margin: 0, fontSize: "0.9em" }}>
+              <p style={{ margin: 0, fontSize: fontSize.sm }}>
                 The Savings contract is not yet deployed on{" "}
                 {getCurrentNetwork(selectedNetwork).name}. Please switch to
                 Localhost for development or wait for mainnet deployment.
@@ -4111,12 +4042,10 @@ function AppContent() {
       {/* Multi-token balance display - ALWAYS SHOWN */}
       <div
         style={{
-          marginBottom: "20px",
-          padding: "15px",
-          border: !isSetupCommitted ? "2px solid #48bb78" : "2px solid #333", // Active green border during setup
-          borderRadius: "5px",
-          backgroundColor: "#2d3748",
-          color: "white",
+          ...cardStyles.balanceCard,
+          border: !isSetupCommitted
+            ? `2px solid ${colors.success.main}`
+            : `2px solid ${colors.border.default}`, // Active green border during setup
           opacity: 1, // Always fully visible
           position: "relative",
         }}
@@ -4137,14 +4066,9 @@ function AppContent() {
             <button
               onClick={() => refreshBalances()}
               style={{
-                padding: "6px 12px",
-                borderRadius: "4px",
-                border: "1px solid #3182ce",
-                backgroundColor: "#3182ce",
-                color: "white",
-                cursor: "pointer",
-                fontSize: "0.8em",
-                fontWeight: "bold",
+                ...buttonStyles.primary,
+                padding: `${spacing.xs} ${spacing.md}`,
+                fontSize: fontSize.xs,
               }}
             >
               🔄 Refresh
@@ -4172,7 +4096,7 @@ function AppContent() {
                 gap: "8px",
               }}
             >
-              <span style={{ fontSize: "1.5em" }}>🛡️</span>
+              <span style={{ fontSize: fontSize.xl }}>🛡️</span>
               <h4
                 style={{
                   margin: 0,
@@ -4187,15 +4111,15 @@ function AppContent() {
             <div
               style={{ fontSize: "0.9em", lineHeight: "1.6", color: "#e2e8f0" }}
             >
-              <p style={{ margin: "0 0 8px 0" }}>
+              <p style={{ margin: `0 0 ${spacing.sm} 0` }}>
                 <strong>🏦 No Trading Wallet:</strong> Designed for storing
                 stablecoins only for your peace of mind and safety net.
               </p>
-              <p style={{ margin: "0 0 8px 0" }}>
+              <p style={{ margin: `0 0 ${spacing.sm} 0` }}>
                 <strong>🔐 Set up withdrawal allowance:</strong> Changes to
                 allowance or by passing withdrawal limits are timelocked.
               </p>
-              <p style={{ margin: "0 0 8px 0" }}>
+              <p style={{ margin: `0 0 ${spacing.sm} 0` }}>
                 <strong>🛡️ Compromise-Resistant:</strong> Remains secure even
                 when your wallet is compromised (coming soon)
               </p>
@@ -4207,9 +4131,7 @@ function AppContent() {
         )}
 
         {!provider ? (
-          <div
-            style={{ textAlign: "center", color: "#a0aec0", padding: "20px" }}
-          >
+          <div style={layoutStyles.emptyState}>
             <p>Connect your wallet to view balances</p>
             <button
               onClick={connectWallet}
@@ -4274,7 +4196,7 @@ function AppContent() {
       </div>
 
       {!provider ? (
-        <div style={{ textAlign: "center", color: "#666", padding: "20px" }}>
+        <div style={layoutStyles.emptyState}>
           <p>Please connect your wallet to access the savings features.</p>
         </div>
       ) : (
@@ -4315,7 +4237,7 @@ function AppContent() {
                 </div>
               )}
 
-              <h3 style={{ color: "white" }}>
+              <h3 style={{ color: colors.text.primary }}>
                 💰 Deposit from{" "}
                 {networkType === "solana"
                   ? solanaPublicKey
@@ -4329,8 +4251,13 @@ function AppContent() {
               </h3>
 
               {/* Direct Deposit from Connected Wallet */}
-              <div style={{ marginBottom: "20px" }}>
-                <h4 style={{ color: "#9ae6b4", margin: "0 0 10px 0" }}>
+              <div style={layoutStyles.marginBottomLarge}>
+                <h4
+                  style={{
+                    color: colors.success.light,
+                    margin: `0 0 ${spacing.md} 0`,
+                  }}
+                >
                   📱 From Currently Connected Wallet
                 </h4>
                 <p
@@ -4459,7 +4386,12 @@ function AppContent() {
 
               {/* Direct Deposit from Exchange/Other Wallet */}
               <div>
-                <h4 style={{ color: "#9ae6b4", margin: "0 0 10px 0" }}>
+                <h4
+                  style={{
+                    color: colors.success.light,
+                    margin: `0 0 ${spacing.md} 0`,
+                  }}
+                >
                   🏦 Direct Deposit from Exchange
                 </h4>
                 <p
@@ -4484,8 +4416,13 @@ function AppContent() {
                       textAlign: "center",
                     }}
                   >
-                    <div style={{ marginBottom: "15px" }}>
-                      <div style={{ fontSize: "2em", marginBottom: "10px" }}>
+                    <div style={layoutStyles.marginBottom}>
+                      <div
+                        style={{
+                          fontSize: fontSize.xxxl,
+                          marginBottom: spacing.md,
+                        }}
+                      >
                         🔒
                       </div>
                       <h5 style={{ color: "#e2e8f0", margin: "0 0 8px 0" }}>
@@ -4499,7 +4436,7 @@ function AppContent() {
                         }}
                       >
                         Generate your unique{" "}
-                        <strong style={{ color: "#9ae6b4" }}>
+                        <strong style={{ color: colors.success.light }}>
                           permanent deposit address
                         </strong>{" "}
                         to receive funds directly from exchanges
@@ -4529,10 +4466,10 @@ function AppContent() {
                         color: "#718096",
                       }}
                     >
-                      <p style={{ margin: "5px 0" }}>
+                      <p style={{ margin: `${spacing.xs} 0` }}>
                         ✨ One-time setup • Gas fee required
                       </p>
-                      <p style={{ margin: "5px 0" }}>
+                      <p style={{ margin: `${spacing.xs} 0` }}>
                         🎯 Direct exchange withdrawals • Permanent address you
                         can always use
                       </p>
@@ -4551,8 +4488,13 @@ function AppContent() {
                       textAlign: "center",
                     }}
                   >
-                    <div style={{ marginBottom: "15px" }}>
-                      <div style={{ fontSize: "2em", marginBottom: "10px" }}>
+                    <div style={layoutStyles.marginBottom}>
+                      <div
+                        style={{
+                          fontSize: fontSize.xxxl,
+                          marginBottom: spacing.md,
+                        }}
+                      >
                         ⏳
                       </div>
                       <h5 style={{ color: "#e2e8f0", margin: "0 0 8px 0" }}>
@@ -4595,7 +4537,12 @@ function AppContent() {
                     }}
                   >
                     <div style={{ marginBottom: "15px", textAlign: "center" }}>
-                      <div style={{ fontSize: "2em", marginBottom: "10px" }}>
+                      <div
+                        style={{
+                          fontSize: fontSize.xxxl,
+                          marginBottom: spacing.md,
+                        }}
+                      >
                         ✅
                       </div>
                       <h5 style={{ color: "#9ae6b4", margin: "0 0 8px 0" }}>
@@ -4685,46 +4632,19 @@ function AppContent() {
 
           {/* Step 1: Spending Limits Setup */}
           <div
-            style={{
-              marginBottom: "20px",
-              padding: "20px",
-              border:
-                !isSetupCommitted && currentStep === 1
-                  ? "3px solid #d69e2e" // Highlighted border for active step
-                  : "2px solid #333",
-              borderRadius: "8px",
-              backgroundColor: "#2d3748",
-              color: "white",
-              boxShadow:
-                !isSetupCommitted && currentStep === 1
-                  ? "0 0 0 1px rgba(214, 158, 46, 0.3)"
-                  : "none",
-              position: "relative",
-            }}
+            style={getStepContainerStyle(1, currentStep, isSetupCommitted, {
+              step1Complete: Object.keys(spendingLimits).length > 0,
+            })}
           >
             {/* Step Header */}
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                marginBottom: "15px",
-                flexWrap: "wrap",
-                gap: "10px",
-              }}
-            >
-              <div
-                style={{ display: "flex", alignItems: "center", gap: "12px" }}
-              >
+            <div style={stepStyles.stepHeader}>
+              <div style={layoutStyles.flexAlignCenter}>
                 <h3
                   style={{
-                    color:
-                      !isSetupCommitted && currentStep === 1
-                        ? "#f6ad55"
-                        : "white",
-                    margin: 0,
-                    fontSize: "1.3em",
-                    fontWeight: "600",
+                    ...stepStyles.step1Title,
+                    color: getStepTitleColor(1, isSetupCommitted, {
+                      step1Complete: Object.keys(spendingLimits).length > 0,
+                    }),
                   }}
                 >
                   🧩 Step 1: Set Your Spending Limits
@@ -4732,19 +4652,10 @@ function AppContent() {
                 {!isSetupCommitted && (
                   <div
                     style={{
-                      fontSize: "0.8em",
-                      color: stepValidation.step1Complete
-                        ? "#9ae6b4"
-                        : "#f6ad55",
-                      backgroundColor: stepValidation.step1Complete
-                        ? "#1a365d"
-                        : "#744210",
-                      padding: "4px 8px",
-                      borderRadius: "4px",
-                      fontWeight: "600",
-                      border: stepValidation.step1Complete
-                        ? "1px solid #2b77ad"
-                        : "1px solid #d69e2e",
+                      ...stepStyles.stepStatus,
+                      ...(stepValidation.step1Complete
+                        ? stepStyles.stepStatusComplete
+                        : stepStyles.stepStatusRequired),
                     }}
                   >
                     {stepValidation.step1Complete
@@ -4818,7 +4729,7 @@ function AppContent() {
             )}
 
             {/* Daily/Weekly/Monthly Cards */}
-            <div style={{ marginBottom: "20px" }}>
+            <div style={layoutStyles.marginBottomLarge}>
               <h4 style={{ color: "#9ae6b4", margin: "0 0 15px 0" }}>
                 🎯 Standard Time Periods
               </h4>
@@ -4988,7 +4899,7 @@ function AppContent() {
 
                       {/* Input or Display */}
                       {edit?.isEditing || !isActive ? (
-                        <div style={{ marginBottom: "12px" }}>
+                        <div style={layoutStyles.marginBottomSmall}>
                           <input
                             type="text"
                             placeholder={
@@ -5015,7 +4926,7 @@ function AppContent() {
                         </div>
                       ) : (
                         existingLimit && (
-                          <div style={{ marginBottom: "12px" }}>
+                          <div style={layoutStyles.marginBottomSmall}>
                             <div
                               style={{
                                 display: "flex",
@@ -5078,7 +4989,7 @@ function AppContent() {
                       )}
 
                       {/* Action Buttons */}
-                      <div style={{ display: "flex", gap: "8px" }}>
+                      <div style={layoutStyles.flexGapSmall}>
                         {edit?.isEditing ? (
                           <>
                             {isSetupCommitted ? (
@@ -5232,7 +5143,7 @@ function AppContent() {
             </div>
 
             {/* Custom Periods Section */}
-            <div style={{ marginBottom: "20px" }}>
+            <div style={layoutStyles.marginBottomLarge}>
               <div
                 style={{
                   display: "flex",
@@ -5264,7 +5175,7 @@ function AppContent() {
               {spendingLimits.filter(
                 (limit) => !["Daily", "Weekly", "Monthly"].includes(limit.name)
               ).length > 0 && (
-                <div style={{ marginBottom: "15px" }}>
+                <div style={layoutStyles.marginBottom}>
                   <div style={{ display: "grid", gap: "10px" }}>
                     {spendingLimits
                       .filter(
@@ -5308,7 +5219,10 @@ function AppContent() {
                                 }}
                               >
                                 <span
-                                  style={{ color: "white", fontWeight: "bold" }}
+                                  style={{
+                                    color: colors.text.primary,
+                                    fontWeight: fontWeight.bold,
+                                  }}
                                 >
                                   ⚙️ {limit.name}
                                 </span>
@@ -5504,7 +5418,7 @@ function AppContent() {
 
             {/* Pending Limit Proposals Section */}
             {pendingLimitProposals.length > 0 && (
-              <div style={{ marginBottom: "20px" }}>
+              <div style={layoutStyles.marginBottomLarge}>
                 <h4 style={{ color: "#ed8936", margin: "0 0 15px 0" }}>
                   ⏳ Pending Limit Changes ({pendingLimitProposals.length})
                 </h4>
@@ -5557,7 +5471,10 @@ function AppContent() {
                             }}
                           >
                             <span
-                              style={{ color: "white", fontWeight: "bold" }}
+                              style={{
+                                color: colors.text.primary,
+                                fontWeight: fontWeight.bold,
+                              }}
                             >
                               📝{" "}
                               {proposal.action === "change"
@@ -5653,615 +5570,614 @@ function AppContent() {
                 </div>
               </div>
             )}
+          </div>
 
           {/* Step 2: Withdrawal Addresses Management */}
           <div
-              style={{
-                marginBottom: "20px",
-                padding: "20px",
-                border: !isSetupCommitted
-                  ? "3px solid #d69e2e" // Always active during setup
-                  : "2px solid #333",
-                borderRadius: "8px",
-                backgroundColor: "#2d3748",
-                color: "white",
-                boxShadow: !isSetupCommitted
-                  ? "0 0 0 1px rgba(214, 158, 46, 0.3)" // Always active during setup
-                  : "none",
-                position: "relative",
-                opacity: 1, // Always fully visible
-              }}
-            >
-              {/* Step Header */}
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  marginBottom: "15px",
-                  flexWrap: "wrap",
-                  gap: "10px",
-                }}
-              >
-                <div
-                  style={{ display: "flex", alignItems: "center", gap: "12px" }}
-                >
-                  <h3
-                    style={{
-                      color: !isSetupCommitted ? "#f6ad55" : "white", // Always active during setup
-                      margin: 0,
-                      fontSize: "1.3em",
-                      fontWeight: "600",
-                    }}
-                  >
-                    🔑 Step 2: Add Withdrawal Addresses
-                  </h3>
-                  {/* Status label removed - Step 2 always active */}
-                </div>
-
-                {!isSetupCommitted &&
-                  stepValidation.step2Complete &&
-                  currentStep === 2 && (
-                    <button
-                      onClick={goToNextStep}
-                      style={{
-                        padding: "8px 16px",
-                        borderRadius: "6px",
-                        border: "1px solid #3182ce",
-                        backgroundColor: "#3182ce",
-                        color: "white",
-                        cursor: "pointer",
-                        fontSize: "0.9em",
-                        fontWeight: "600",
-                        transition: "all 0.2s ease",
-                      }}
-                      onMouseOver={(e) => {
-                        e.target.style.backgroundColor = "#2c5aa0";
-                      }}
-                      onMouseOut={(e) => {
-                        e.target.style.backgroundColor = "#3182ce";
-                      }}
-                    >
-                      Proceed to Lock-In →
-                    </button>
-                  )}
-              </div>
-
-              {/* Step Description */}
-              <p
-                style={{
-                  fontSize: "0.9em",
-                  color: "#cbd5e0",
-                  marginBottom: "15px",
-                  lineHeight: "1.5",
-                }}
-              >
-                {isSetupCommitted
-                  ? "Manage your approved withdrawal addresses. New addresses require 24-48 hour approval after wallet is locked."
-                  : "Add addresses where you'll be able to withdraw funds. After lock-in, new addresses will require 24-48 hour approval for security."}
-              </p>
-
-              {/* Progress Tips for Setup Mode */}
-              {!isSetupCommitted && currentStep === 2 && (
-                <div
+            style={getStepContainerStyle(2, currentStep, isSetupCommitted, {
+              step1Complete: Object.keys(spendingLimits).length > 0,
+            })}
+          >
+            {/* Step Header */}
+            <div style={stepStyles.stepHeader}>
+              <div style={layoutStyles.flexAlignCenter}>
+                <h3
                   style={{
-                    fontSize: "0.8em",
-                    color: "#a0aec0",
-                    backgroundColor: "#1a202c",
-                    padding: "10px",
-                    borderRadius: "4px",
-                    marginBottom: "15px",
-                    borderLeft: "3px solid #f6ad55",
+                    ...stepStyles.step2Title,
+                    color: getStepTitleColor(2, isSetupCommitted, {
+                      step1Complete: Object.keys(spendingLimits).length > 0,
+                    }),
                   }}
                 >
-                  💡 <strong>Tip:</strong> "My Wallet" is automatically added.
-                  Add other addresses you'll withdraw to (exchanges, hardware
-                  wallets, etc.).
-                </div>
-              )}
+                  🔑 Step 2: Add Withdrawal Addresses
+                </h3>
+                {/* Status label removed - Step 2 always active */}
+              </div>
 
-              {/* Step 2 Address Management Component */}
-              {!isSetupCommitted && (
-                <div>
-                  <WithdrawalAddressSelector
-                    mode="management"
-                    title="Your Withdrawal Addresses:"
-                  />
+              {!isSetupCommitted &&
+                stepValidation.step2Complete &&
+                currentStep === 2 && (
+                  <button
+                    onClick={goToNextStep}
+                    style={{
+                      padding: "8px 16px",
+                      borderRadius: "6px",
+                      border: "1px solid #3182ce",
+                      backgroundColor: "#3182ce",
+                      color: "white",
+                      cursor: "pointer",
+                      fontSize: "0.9em",
+                      fontWeight: "600",
+                      transition: "all 0.2s ease",
+                    }}
+                    onMouseOver={(e) => {
+                      e.target.style.backgroundColor = "#2c5aa0";
+                    }}
+                    onMouseOut={(e) => {
+                      e.target.style.backgroundColor = "#3182ce";
+                    }}
+                  >
+                    Proceed to Lock-In →
+                  </button>
+                )}
+            </div>
 
-                  {/* Add New Withdrawal Address Form */}
-                  {showWithdrawalAddressForm && (
+            {/* Step Description */}
+            <p
+              style={{
+                fontSize: "0.9em",
+                color: "#cbd5e0",
+                marginBottom: "15px",
+                lineHeight: "1.5",
+              }}
+            >
+              {isSetupCommitted
+                ? "Manage your approved withdrawal addresses. New addresses require 24-48 hour approval after wallet is locked."
+                : "Add addresses where you'll be able to withdraw funds. After lock-in, new addresses will require 24-48 hour approval for security."}
+            </p>
+
+            {/* Progress Tips for Setup Mode */}
+            {!isSetupCommitted && currentStep === 2 && (
+              <div
+                style={{
+                  fontSize: "0.8em",
+                  color: "#a0aec0",
+                  backgroundColor: "#1a202c",
+                  padding: "10px",
+                  borderRadius: "4px",
+                  marginBottom: "15px",
+                  borderLeft: "3px solid #f6ad55",
+                }}
+              >
+                💡 <strong>Tip:</strong> "My Wallet" is automatically added. Add
+                other addresses you'll withdraw to (exchanges, hardware wallets,
+                etc.).
+              </div>
+            )}
+
+            {/* Step 2 Address Management Component */}
+            {!isSetupCommitted && (
+              <div>
+                <WithdrawalAddressSelector
+                  mode="management"
+                  title="Your Withdrawal Addresses:"
+                />
+
+                {/* Add New Withdrawal Address Form */}
+                {showWithdrawalAddressForm && (
+                  <div
+                    style={{
+                      padding: "15px",
+                      backgroundColor: "#1a202c",
+                      borderRadius: "6px",
+                      border: "1px solid #4a5568",
+                      marginTop: "15px",
+                    }}
+                  >
+                    <h5 style={{ color: "#f6ad55", margin: "0 0 15px 0" }}>
+                      📍 Add New Withdrawal Address
+                    </h5>
+
                     <div
                       style={{
-                        padding: "15px",
-                        backgroundColor: "#1a202c",
-                        borderRadius: "6px",
-                        border: "1px solid #4a5568",
-                        marginTop: "15px",
+                        display: "grid",
+                        gap: "12px",
+                        marginBottom: "15px",
                       }}
                     >
-                      <h5 style={{ color: "#f6ad55", margin: "0 0 15px 0" }}>
-                        📍 Add New Withdrawal Address
-                      </h5>
-
-                      <div
-                        style={{
-                          display: "grid",
-                          gap: "12px",
-                          marginBottom: "15px",
-                        }}
-                      >
-                        <div>
-                          <label
-                            style={{
-                              display: "block",
-                              fontSize: "0.9em",
-                              color: "#e2e8f0",
-                              marginBottom: "5px",
-                            }}
-                          >
-                            Address Title
-                          </label>
-                          <input
-                            type="text"
-                            placeholder="e.g., 'Hardware Wallet', 'Exchange Account'"
-                            value={newWithdrawalTitle}
-                            onChange={(e) =>
-                              setNewWithdrawalTitle(e.target.value)
-                            }
-                            style={{
-                              width: "100%",
-                              padding: "10px",
-                              borderRadius: "4px",
-                              border: "1px solid #4a5568",
-                              backgroundColor: "#4a5568",
-                              color: "white",
-                              fontSize: "0.9em",
-                            }}
-                          />
-                        </div>
-                        <div>
-                          <label
-                            style={{
-                              display: "block",
-                              fontSize: "0.9em",
-                              color: "#e2e8f0",
-                              marginBottom: "5px",
-                            }}
-                          >
-                            {networkType === "solana"
-                              ? "Solana Address"
-                              : "Ethereum Address"}
-                          </label>
-                          <input
-                            type="text"
-                            placeholder={
-                              networkType === "solana"
-                                ? "Solana address..."
-                                : "0x..."
-                            }
-                            value={newWithdrawalAddress}
-                            onChange={(e) =>
-                              setNewWithdrawalAddress(e.target.value)
-                            }
-                            style={{
-                              width: "100%",
-                              padding: "10px",
-                              borderRadius: "4px",
-                              border: "1px solid #4a5568",
-                              backgroundColor: "#4a5568",
-                              color: "white",
-                              fontFamily: "monospace",
-                              fontSize: "0.9em",
-                            }}
-                          />
-                        </div>
+                      <div>
+                        <label
+                          style={{
+                            display: "block",
+                            fontSize: "0.9em",
+                            color: "#e2e8f0",
+                            marginBottom: "5px",
+                          }}
+                        >
+                          Address Title
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="e.g., 'Hardware Wallet', 'Exchange Account'"
+                          value={newWithdrawalTitle}
+                          onChange={(e) =>
+                            setNewWithdrawalTitle(e.target.value)
+                          }
+                          style={{
+                            width: "100%",
+                            padding: "10px",
+                            borderRadius: "4px",
+                            border: "1px solid #4a5568",
+                            backgroundColor: "#4a5568",
+                            color: "white",
+                            fontSize: "0.9em",
+                          }}
+                        />
                       </div>
+                      <div>
+                        <label
+                          style={{
+                            display: "block",
+                            fontSize: "0.9em",
+                            color: "#e2e8f0",
+                            marginBottom: "5px",
+                          }}
+                        >
+                          {networkType === "solana"
+                            ? "Solana Address"
+                            : "Ethereum Address"}
+                        </label>
+                        <input
+                          type="text"
+                          placeholder={
+                            networkType === "solana"
+                              ? "Solana address..."
+                              : "0x..."
+                          }
+                          value={newWithdrawalAddress}
+                          onChange={(e) =>
+                            setNewWithdrawalAddress(e.target.value)
+                          }
+                          style={{
+                            width: "100%",
+                            padding: "10px",
+                            borderRadius: "4px",
+                            border: "1px solid #4a5568",
+                            backgroundColor: "#4a5568",
+                            color: "white",
+                            fontFamily: "monospace",
+                            fontSize: "0.9em",
+                          }}
+                        />
+                      </div>
+                    </div>
 
-                      <button
-                        onClick={requestWithdrawalAddress}
-                        disabled={
+                    <button
+                      onClick={requestWithdrawalAddress}
+                      disabled={
+                        !newWithdrawalTitle.trim() ||
+                        !newWithdrawalAddress.trim()
+                      }
+                      style={{
+                        padding: "10px 20px",
+                        borderRadius: "4px",
+                        border: "none",
+                        backgroundColor:
                           !newWithdrawalTitle.trim() ||
                           !newWithdrawalAddress.trim()
-                        }
-                        style={{
-                          padding: "10px 20px",
-                          borderRadius: "4px",
-                          border: "none",
-                          backgroundColor:
-                            !newWithdrawalTitle.trim() ||
-                            !newWithdrawalAddress.trim()
-                              ? "#4a5568"
-                              : "#ed8936",
-                          color: "white",
-                          cursor:
-                            !newWithdrawalTitle.trim() ||
-                            !newWithdrawalAddress.trim()
-                              ? "not-allowed"
-                              : "pointer",
-                          fontSize: "0.9em",
-                          fontWeight: "bold",
-                          width: "100%",
-                          opacity:
-                            !newWithdrawalTitle.trim() ||
-                            !newWithdrawalAddress.trim()
-                              ? 0.5
-                              : 1,
-                        }}
-                      >
-                        📍 Add Withdrawal Address
-                      </button>
-                    </div>
-                  )}
+                            ? "#4a5568"
+                            : "#ed8936",
+                        color: "white",
+                        cursor:
+                          !newWithdrawalTitle.trim() ||
+                          !newWithdrawalAddress.trim()
+                            ? "not-allowed"
+                            : "pointer",
+                        fontSize: "0.9em",
+                        fontWeight: "bold",
+                        width: "100%",
+                        opacity:
+                          !newWithdrawalTitle.trim() ||
+                          !newWithdrawalAddress.trim()
+                            ? 0.5
+                            : 1,
+                      }}
+                    >
+                      📍 Add Withdrawal Address
+                    </button>
+                  </div>
+                )}
 
-                  {/* Pending Withdrawal Address Requests */}
-                  {pendingWithdrawalRequests.length > 0 && (
-                    <div style={{ marginTop: "15px" }}>
-                      <h5 style={{ color: "#ed8936", margin: "0 0 10px 0" }}>
-                        ⏳ Pending New Addresses (
-                        {pendingWithdrawalRequests.length})
-                      </h5>
-                      <div style={{ display: "grid", gap: "8px" }}>
-                        {pendingWithdrawalRequests.map((request, index) => (
+                {/* Pending Withdrawal Address Requests */}
+                {pendingWithdrawalRequests.length > 0 && (
+                  <div style={{ marginTop: "15px" }}>
+                    <h5
+                      style={{
+                        color: colors.warning.light,
+                        margin: `0 0 ${spacing.md} 0`,
+                      }}
+                    >
+                      ⏳ Pending New Addresses (
+                      {pendingWithdrawalRequests.length})
+                    </h5>
+                    <div style={{ ...utilityStyles.grid, gap: spacing.sm }}>
+                      {pendingWithdrawalRequests.map((request, index) => (
+                        <div
+                          key={index}
+                          style={{
+                            padding: "10px",
+                            backgroundColor: "#2a1810",
+                            borderRadius: "6px",
+                            border: "1px solid #ed8936",
+                          }}
+                        >
                           <div
-                            key={index}
                             style={{
-                              padding: "10px",
-                              backgroundColor: "#2a1810",
-                              borderRadius: "6px",
-                              border: "1px solid #ed8936",
+                              display: "flex",
+                              justifyContent: "space-between",
+                              alignItems: "center",
                             }}
                           >
-                            <div
-                              style={{
-                                display: "flex",
-                                justifyContent: "space-between",
-                                alignItems: "center",
-                              }}
-                            >
-                              <div>
-                                <div
-                                  style={{ color: "white", fontWeight: "bold" }}
-                                >
-                                  📍 {request.title}
-                                </div>
-                                <div
-                                  style={{
-                                    fontSize: "0.8em",
-                                    color: "#a0aec0",
-                                    fontFamily: "monospace",
-                                  }}
-                                >
-                                  {request.destination.length > 50
-                                    ? `${request.destination.slice(
-                                        0,
-                                        25
-                                      )}...${request.destination.slice(-15)}`
-                                    : request.destination}
-                                </div>
-                                <div
-                                  style={{
-                                    fontSize: "0.7em",
-                                    color: "#ed8936",
-                                    marginTop: "4px",
-                                  }}
-                                >
-                                  ⏰ Will be available after setup is locked
-                                </div>
+                            <div>
+                              <div
+                                style={{
+                                  color: colors.text.primary,
+                                  fontWeight: fontWeight.bold,
+                                }}
+                              >
+                                📍 {request.title}
+                              </div>
+                              <div
+                                style={{
+                                  fontSize: "0.8em",
+                                  color: "#a0aec0",
+                                  fontFamily: "monospace",
+                                }}
+                              >
+                                {request.destination.length > 50
+                                  ? `${request.destination.slice(
+                                      0,
+                                      25
+                                    )}...${request.destination.slice(-15)}`
+                                  : request.destination}
+                              </div>
+                              <div
+                                style={{
+                                  fontSize: "0.7em",
+                                  color: "#ed8936",
+                                  marginTop: "4px",
+                                }}
+                              >
+                                ⏰ Will be available after setup is locked
                               </div>
                             </div>
                           </div>
-                        ))}
-                      </div>
+                        </div>
+                      ))}
                     </div>
-                  )}
-                </div>
-              )}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
-
           {/* Step 3: Lock In Your Wallet */}
           <div
-            style={{
-                marginBottom: "20px",
-                padding: "20px",
-                border:
-                  !isSetupCommitted && currentStep === 3
-                    ? "3px solid #d69e2e" // Highlighted border for active step
-                    : stepValidation.step1Complete
-                    ? "2px solid #48bb78"
-                    : "2px solid #333",
-                borderRadius: "8px",
-                backgroundColor: "#2d3748",
-                color: "white",
-                boxShadow:
-                  !isSetupCommitted && currentStep === 3
-                    ? "0 0 0 1px rgba(214, 158, 46, 0.3)"
-                    : "none",
-              }}
-            >
-              <h3
+            style={getStepContainerStyle(
+              3,
+              currentStep,
+              isSetupCommitted,
+              stepValidation
+            )}
+          >
+            <h3 style={stepStyles.step3Title}>
+              🧩 Step 3: Lock In Your Wallet
+            </h3>
+
+            <p style={stepStyles.stepDescription}>
+              {isSetupCommitted
+                ? "Your wallet is locked and all security features are active."
+                : "Ready to activate your wallet security? This will enable all spending limits and withdrawal controls."}
+            </p>
+
+            {!isSetupCommitted ? (
+              <div>
+                <div
+                  style={{
+                    backgroundColor: "#1a1a1a",
+                    border: "1px solid #ed8936",
+                    borderRadius: "6px",
+                    padding: "12px",
+                    marginBottom: "15px",
+                  }}
+                >
+                  <h5
+                    style={{
+                      ...stepStyles.prerequisitesTitle,
+                      color: stepValidation.step1Complete
+                        ? colors.success.light
+                        : colors.warning.light,
+                    }}
+                  >
+                    📝 Prerequisites
+                  </h5>
+                  <div
+                    style={{
+                      fontSize: fontSize.xs,
+                      color: colors.text.muted,
+                    }}
+                  >
+                    <div
+                      style={{
+                        ...stepStyles.prerequisitesItem,
+                        ...(stepValidation.step1Complete
+                          ? stepStyles.prerequisitesItemComplete
+                          : stepStyles.prerequisitesItemIncomplete),
+                      }}
+                    >
+                      {stepValidation.step1Complete ? "✅" : "❌"}
+                      Set at least one spending limit
+                    </div>
+                  </div>
+                </div>
+
+                <div style={layoutStyles.textCenter}>
+                  <button
+                    onClick={commitSetup}
+                    disabled={!stepValidation.step1Complete}
+                    style={{
+                      ...stepStyles.lockInButton,
+                      ...(stepValidation.step1Complete
+                        ? stepStyles.lockInButtonActive
+                        : stepStyles.lockInButtonDisabled),
+                    }}
+                  >
+                    🔒 Lock In My Wallet
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div
                 style={{
-                  color: "#48bb78",
-                  margin: "0 0 15px 0",
-                  fontSize: "1.4em",
-                  fontWeight: "600",
+                  padding: "20px",
+                  backgroundColor: "#1a365d",
+                  borderRadius: "8px",
+                  border: "2px solid #48bb78",
+                  textAlign: "center",
                 }}
               >
-                🧩 Step 3: Lock In Your Wallet
-              </h3>
-
+                <div style={{ fontSize: "3em", marginBottom: "10px" }}>🛡️</div>
+                <h3
+                  style={{
+                    color: colors.success.light,
+                    margin: `0 0 ${spacing.md} 0`,
+                  }}
+                >
+                  Wallet Secured
+                </h3>
+                <p
+                  style={{
+                    color: "#e2e8f0",
+                    margin: 0,
+                    fontSize: "0.9em",
+                    lineHeight: "1.5",
+                  }}
+                >
+                  Your spending limits are active and withdrawal controls are
+                  enforced. All security features are now protecting your funds.
+                </p>
+              </div>
+            )}
+          </div>
+          {isSetupCommitted && (
+            <div
+              style={{
+                marginBottom: "20px",
+                padding: "15px",
+                border: "1px solid #333",
+                borderRadius: "5px",
+                backgroundColor: "#2d3748",
+                color: "white",
+                position: "relative",
+              }}
+            >
+              <h3 style={{ color: colors.text.primary }}>💸 Withdraw Funds</h3>
               <p
                 style={{
                   fontSize: "0.9em",
                   color: "#cbd5e0",
                   marginBottom: "15px",
-                  lineHeight: "1.5",
                 }}
               >
-                {isSetupCommitted
-                  ? "Your wallet is locked and all security features are active."
-                  : "Ready to activate your wallet security? This will enable all spending limits and withdrawal controls."}
+                Withdrawals are automatically checked against all your active
+                spending limits. You can withdraw to your own wallet or to
+                approved withdrawal addresses.
               </p>
 
-              {!isSetupCommitted ? (
-                <div>
-                  <div
-                    style={{
-                      backgroundColor: "#1a1a1a",
-                      border: "1px solid #ed8936",
-                      borderRadius: "6px",
-                      padding: "12px",
-                      marginBottom: "15px",
-                    }}
-                  >
-                    <h5
-                      style={{
-                        color: stepValidation.step1Complete
-                          ? "#9ae6b4"
-                          : "#ed8936",
-                        margin: "0 0 10px 0",
-                      }}
-                    >
-                      📝 Prerequisites
-                    </h5>
-                    <div style={{ fontSize: "0.85em", color: "#a0aec0" }}>
-                      <div
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "8px",
-                          color: stepValidation.step1Complete
-                            ? "#9ae6b4"
-                            : "#fc8181",
-                        }}
-                      >
-                        {stepValidation.step1Complete ? "✅" : "❌"}
-                        Set at least one spending limit
-                      </div>
-                    </div>
-                  </div>
-
-                  <div style={{ textAlign: "center" }}>
-                    <button
-                      onClick={commitSetup}
-                      disabled={!stepValidation.step1Complete}
-                      style={{
-                        padding: "15px 30px",
-                        borderRadius: "8px",
-                        border: "none",
-                        backgroundColor: stepValidation.step1Complete
-                          ? "#48bb78"
-                          : "#4a5568",
-                        color: "white",
-                        cursor: stepValidation.step1Complete
-                          ? "pointer"
-                          : "not-allowed",
-                        fontSize: "1.1em",
-                        fontWeight: "bold",
-                        transition: "all 0.2s ease",
-                        opacity: stepValidation.step1Complete ? 1 : 0.5,
-                        boxShadow: stepValidation.step1Complete
-                          ? "0 4px 12px rgba(72, 187, 120, 0.4)"
-                          : "none",
-                      }}
-                    >
-                      🔒 Lock In My Wallet
-                    </button>
-                  </div>
-                </div>
-              ) : (
+              {/* Token and Amount Selection */}
+              <div style={layoutStyles.marginBottom}>
                 <div
                   style={{
-                    padding: "20px",
-                    backgroundColor: "#1a365d",
-                    borderRadius: "8px",
-                    border: "2px solid #48bb78",
-                    textAlign: "center",
+                    display: "flex",
+                    gap: "10px",
+                    marginBottom: "10px",
+                    flexWrap: "wrap",
                   }}
                 >
-                  <div style={{ fontSize: "3em", marginBottom: "10px" }}>
-                    🛡️
-                  </div>
-                  <h3 style={{ color: "#9ae6b4", margin: "0 0 10px 0" }}>
-                    Wallet Secured
-                  </h3>
-                  <p
+                  <select
+                    value={selectedToken}
+                    onChange={(e) => setSelectedToken(e.target.value)}
                     style={{
-                      color: "#e2e8f0",
-                      margin: 0,
-                      fontSize: "0.9em",
-                      lineHeight: "1.5",
+                      padding: "8px",
+                      borderRadius: "4px",
+                      border: "1px solid #4a5568",
+                      backgroundColor: "#4a5568",
+                      color: "white",
+                      flex: "1",
+                      minWidth: "120px",
                     }}
                   >
-                    Your spending limits are active and withdrawal controls are
-                    enforced. All security features are now protecting your
-                    funds.
-                  </p>
-                </div>
-              )}
-          </div>
+                    <option value="ETH">ETH</option>
+                    {Object.entries(getCurrentNetwork(selectedNetwork).tokens)
+                      .filter(
+                        ([_, token]) =>
+                          token.address !==
+                          "0x0000000000000000000000000000000000000000"
+                      )
+                      .map(([key, token]) => (
+                        <option key={key} value={key}>
+                          {token.symbol}
+                        </option>
+                      ))}
+                  </select>
 
-          {isSetupCommitted && (
-            <div
+                  <input
+                    type="text"
+                    placeholder={`Amount (${selectedToken})`}
+                    value={withdrawalAmount}
+                    onChange={(e) => setWithdrawalAmount(e.target.value)}
+                    style={{
+                      flex: "2",
+                      padding: "8px",
+                      borderRadius: "4px",
+                      border: "1px solid #4a5568",
+                      backgroundColor: "#4a5568",
+                      color: "white",
+                      minWidth: "150px",
+                    }}
+                  />
+                </div>
+              </div>
+
+              {/* Instant Withdrawal Information */}
+              <div
                 style={{
-                  marginBottom: "20px",
-                  padding: "15px",
-                  border: "1px solid #333",
-                  borderRadius: "5px",
-                  backgroundColor: "#2d3748",
-                  color: "white",
-                  position: "relative",
+                  marginBottom: "15px",
+                  padding: "10px",
+                  backgroundColor: "#1a202c",
+                  borderRadius: "4px",
+                  border: "1px solid #4a5568",
                 }}
               >
-                <h3 style={{ color: "white" }}>💸 Withdraw Funds</h3>
-                <p
-                  style={{
-                    fontSize: "0.9em",
-                    color: "#cbd5e0",
-                    marginBottom: "15px",
-                  }}
-                >
-                  Withdrawals are automatically checked against all your active
-                  spending limits. You can withdraw to your own wallet or to
-                  approved withdrawal addresses.
-                </p>
-
-                {/* Token and Amount Selection */}
-                <div style={{ marginBottom: "15px" }}>
-                  <div
-                    style={{
-                      display: "flex",
-                      gap: "10px",
-                      marginBottom: "10px",
-                      flexWrap: "wrap",
-                    }}
-                  >
-                    <select
-                      value={selectedToken}
-                      onChange={(e) => setSelectedToken(e.target.value)}
-                      style={{
-                        padding: "8px",
-                        borderRadius: "4px",
-                        border: "1px solid #4a5568",
-                        backgroundColor: "#4a5568",
-                        color: "white",
-                        flex: "1",
-                        minWidth: "120px",
-                      }}
-                    >
-                      <option value="ETH">ETH</option>
-                      {Object.entries(getCurrentNetwork(selectedNetwork).tokens)
-                        .filter(
-                          ([_, token]) =>
-                            token.address !==
-                            "0x0000000000000000000000000000000000000000"
-                        )
-                        .map(([key, token]) => (
-                          <option key={key} value={key}>
-                            {token.symbol}
-                          </option>
-                        ))}
-                    </select>
-
-                    <input
-                      type="text"
-                      placeholder={`Amount (${selectedToken})`}
-                      value={withdrawalAmount}
-                      onChange={(e) => setWithdrawalAmount(e.target.value)}
-                      style={{
-                        flex: "2",
-                        padding: "8px",
-                        borderRadius: "4px",
-                        border: "1px solid #4a5568",
-                        backgroundColor: "#4a5568",
-                        color: "white",
-                        minWidth: "150px",
-                      }}
-                    />
-                  </div>
-                </div>
-
-                {/* Instant Withdrawal Information */}
                 <div
                   style={{
-                    marginBottom: "15px",
-                    padding: "10px",
-                    backgroundColor: "#1a202c",
-                    borderRadius: "4px",
-                    border: "1px solid #4a5568",
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    marginBottom: "5px",
                   }}
                 >
+                  <span style={{ fontSize: "0.9em", color: "#cbd5e0" }}>
+                    💡 Instant Withdrawable:
+                  </span>
+                  <span style={{ fontWeight: "bold", color: "#48bb78" }}>
+                    {(typeof instantWithdrawableAmount === "number"
+                      ? instantWithdrawableAmount
+                      : 0
+                    ).toFixed(2)}{" "}
+                    {selectedToken}
+                  </span>
+                </div>
+                {limitingPeriod && (
+                  <div style={{ fontSize: "0.8em", color: "#a0aec0" }}>
+                    Limited by: {limitingPeriod} spending limit
+                  </div>
+                )}
+                {withdrawalAmount && exceedsInstantLimit && exceedingPeriod && (
                   <div
                     style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                      marginBottom: "5px",
+                      marginTop: "8px",
+                      padding: "8px",
+                      backgroundColor: "#2d3748",
+                      borderRadius: "4px",
+                      border: "1px solid #ed8936",
                     }}
                   >
-                    <span style={{ fontSize: "0.9em", color: "#cbd5e0" }}>
-                      💡 Instant Withdrawable:
-                    </span>
-                    <span style={{ fontWeight: "bold", color: "#48bb78" }}>
-                      {(typeof instantWithdrawableAmount === "number"
-                        ? instantWithdrawableAmount
-                        : 0
-                      ).toFixed(2)}{" "}
-                      {selectedToken}
-                    </span>
-                  </div>
-                  {limitingPeriod && (
-                    <div style={{ fontSize: "0.8em", color: "#a0aec0" }}>
-                      Limited by: {limitingPeriod} spending limit
+                    <div
+                      style={{
+                        fontSize: "0.85em",
+                        color: "#ed8936",
+                        fontWeight: "bold",
+                      }}
+                    >
+                      ⚠️ Amount exceeds {exceedingPeriod} limit
                     </div>
-                  )}
-                  {withdrawalAmount &&
-                    exceedsInstantLimit &&
-                    exceedingPeriod && (
-                      <div
-                        style={{
-                          marginTop: "8px",
-                          padding: "8px",
-                          backgroundColor: "#2d3748",
-                          borderRadius: "4px",
-                          border: "1px solid #ed8936",
-                        }}
-                      >
-                        <div
-                          style={{
-                            fontSize: "0.85em",
-                            color: "#ed8936",
-                            fontWeight: "bold",
-                          }}
-                        >
-                          ⚠️ Amount exceeds {exceedingPeriod} limit
-                        </div>
-                        <div
-                          style={{
-                            fontSize: "0.8em",
-                            color: "#a0aec0",
-                            marginTop: "2px",
-                          }}
-                        >
-                          This withdrawal will require a 24-hour approval period
-                        </div>
-                      </div>
-                    )}
-                </div>
+                    <div
+                      style={{
+                        fontSize: "0.8em",
+                        color: "#a0aec0",
+                        marginTop: "2px",
+                      }}
+                    >
+                      This withdrawal will require a 24-hour approval period
+                    </div>
+                  </div>
+                )}
+              </div>
 
-                {/* Destination Selection as Radio Buttons */}
-                <WithdrawalAddressSelector
-                  mode="selection"
-                  selectedDestination={selectedWithdrawalDestination}
-                  onDestinationChange={setSelectedWithdrawalDestination}
-                  showAddButton={false}
-                  title="Withdraw To:"
-                />
+              {/* Destination Selection as Radio Buttons */}
+              <WithdrawalAddressSelector
+                mode="selection"
+                selectedDestination={selectedWithdrawalDestination}
+                onDestinationChange={setSelectedWithdrawalDestination}
+                showAddButton={false}
+                title="Withdraw To:"
+              />
 
-                {/* Dynamic Withdrawal Buttons */}
-                <div style={{ display: "flex", gap: "10px", width: "100%" }}>
-                  {!exceedsInstantLimit ? (
+              {/* Dynamic Withdrawal Buttons */}
+              <div
+                style={{ ...layoutStyles.flexGap, ...layoutStyles.fullWidth }}
+              >
+                {!exceedsInstantLimit ? (
+                  <button
+                    onClick={withdrawToDestination}
+                    disabled={
+                      !withdrawalAmount || parseFloat(withdrawalAmount) <= 0
+                    }
+                    style={{
+                      padding: "12px 24px",
+                      borderRadius: "4px",
+                      border: "none",
+                      backgroundColor:
+                        !withdrawalAmount || parseFloat(withdrawalAmount) <= 0
+                          ? "#4a5568"
+                          : "#48bb78",
+                      color: "white",
+                      cursor:
+                        !withdrawalAmount || parseFloat(withdrawalAmount) <= 0
+                          ? "not-allowed"
+                          : "pointer",
+                      fontWeight: "bold",
+                      flex: "1",
+                      fontSize: "1em",
+                      opacity:
+                        !withdrawalAmount || parseFloat(withdrawalAmount) <= 0
+                          ? 0.5
+                          : 1,
+                    }}
+                  >
+                    ⚡ Instant Withdraw {selectedToken}
+                  </button>
+                ) : (
+                  <>
                     <button
-                      onClick={withdrawToDestination}
+                      disabled={true}
+                      style={{
+                        padding: "12px 24px",
+                        borderRadius: "4px",
+                        border: "none",
+                        backgroundColor: "#4a5568",
+                        color: "#a0aec0",
+                        cursor: "not-allowed",
+                        fontWeight: "bold",
+                        flex: "1",
+                        fontSize: "1em",
+                        opacity: 0.5,
+                      }}
+                    >
+                      ⚡ Instant Withdraw
+                    </button>
+                    <button
+                      onClick={() => requestBypassForWithdrawal()}
                       disabled={
                         !withdrawalAmount || parseFloat(withdrawalAmount) <= 0
                       }
@@ -6272,7 +6188,7 @@ function AppContent() {
                         backgroundColor:
                           !withdrawalAmount || parseFloat(withdrawalAmount) <= 0
                             ? "#4a5568"
-                            : "#48bb78",
+                            : "#ed8936",
                         color: "white",
                         cursor:
                           !withdrawalAmount || parseFloat(withdrawalAmount) <= 0
@@ -6280,330 +6196,282 @@ function AppContent() {
                             : "pointer",
                         fontWeight: "bold",
                         flex: "1",
-                        fontSize: "1em",
+                        fontSize: "0.9em",
                         opacity:
                           !withdrawalAmount || parseFloat(withdrawalAmount) <= 0
                             ? 0.5
                             : 1,
                       }}
                     >
-                      ⚡ Instant Withdraw {selectedToken}
+                      🕐 Request Above {exceedingPeriod} Limit
                     </button>
-                  ) : (
-                    <>
-                      <button
-                        disabled={true}
-                        style={{
-                          padding: "12px 24px",
-                          borderRadius: "4px",
-                          border: "none",
-                          backgroundColor: "#4a5568",
-                          color: "#a0aec0",
-                          cursor: "not-allowed",
-                          fontWeight: "bold",
-                          flex: "1",
-                          fontSize: "1em",
-                          opacity: 0.5,
-                        }}
-                      >
-                        ⚡ Instant Withdraw
-                      </button>
-                      <button
-                        onClick={() => requestBypassForWithdrawal()}
-                        disabled={
-                          !withdrawalAmount || parseFloat(withdrawalAmount) <= 0
-                        }
-                        style={{
-                          padding: "12px 24px",
-                          borderRadius: "4px",
-                          border: "none",
-                          backgroundColor:
-                            !withdrawalAmount ||
-                            parseFloat(withdrawalAmount) <= 0
-                              ? "#4a5568"
-                              : "#ed8936",
-                          color: "white",
-                          cursor:
-                            !withdrawalAmount ||
-                            parseFloat(withdrawalAmount) <= 0
-                              ? "not-allowed"
-                              : "pointer",
-                          fontWeight: "bold",
-                          flex: "1",
-                          fontSize: "0.9em",
-                          opacity:
-                            !withdrawalAmount ||
-                            parseFloat(withdrawalAmount) <= 0
-                              ? 0.5
-                              : 1,
-                        }}
-                      >
-                        🕐 Request Above {exceedingPeriod} Limit
-                      </button>
-                    </>
-                  )}
-                </div>
+                  </>
+                )}
+              </div>
 
-                {/* Add New Withdrawal Address Form */}
-                {showWithdrawalAddressForm && (
+              {/* Add New Withdrawal Address Form */}
+              {showWithdrawalAddressForm && (
+                <div
+                  style={{
+                    marginTop: "15px",
+                    paddingTop: "15px",
+                    borderTop: "1px solid #4a5568",
+                  }}
+                >
                   <div
                     style={{
-                      marginTop: "15px",
-                      paddingTop: "15px",
-                      borderTop: "1px solid #4a5568",
+                      padding: "15px",
+                      backgroundColor: "#1a202c",
+                      borderRadius: "4px",
+                      border: "1px solid #4a5568",
+                      marginBottom: "15px",
                     }}
                   >
-                    <div
+                    <h5 style={{ color: "#fbb6ce", margin: "0 0 15px 0" }}>
+                      📍 Add New Withdrawal Address
+                    </h5>
+                    <p
                       style={{
-                        padding: "15px",
-                        backgroundColor: "#1a202c",
-                        borderRadius: "4px",
-                        border: "1px solid #4a5568",
+                        fontSize: "0.8em",
+                        color: "#a0aec0",
                         marginBottom: "15px",
                       }}
                     >
-                      <h5 style={{ color: "#fbb6ce", margin: "0 0 15px 0" }}>
-                        📍 Add New Withdrawal Address
-                      </h5>
-                      <p
-                        style={{
-                          fontSize: "0.8em",
-                          color: "#a0aec0",
-                          marginBottom: "15px",
-                        }}
-                      >
-                        Withdrawal addresses require a 24-hour approval period
-                        for security.
-                      </p>
+                      Withdrawal addresses require a 24-hour approval period for
+                      security.
+                    </p>
 
-                      <div
-                        style={{
-                          display: "grid",
-                          gap: "10px",
-                          marginBottom: "15px",
-                        }}
-                      >
-                        <div>
-                          <label
-                            style={{
-                              display: "block",
-                              fontSize: "0.9em",
-                              color: "#e2e8f0",
-                              marginBottom: "5px",
-                            }}
-                          >
-                            Address Title
-                          </label>
-                          <input
-                            type="text"
-                            placeholder="e.g., 'Hardware Wallet', 'Exchange Account'"
-                            value={newWithdrawalTitle}
-                            onChange={(e) =>
-                              setNewWithdrawalTitle(e.target.value)
-                            }
-                            style={{
-                              width: "100%",
-                              padding: "8px",
-                              borderRadius: "4px",
-                              border: "1px solid #4a5568",
-                              backgroundColor: "#4a5568",
-                              color: "white",
-                            }}
-                          />
-                        </div>
-                        <div>
-                          <label
-                            style={{
-                              display: "block",
-                              fontSize: "0.9em",
-                              color: "#e2e8f0",
-                              marginBottom: "5px",
-                            }}
-                          >
-                            Ethereum Address
-                          </label>
-                          <input
-                            type="text"
-                            placeholder="0x..."
-                            value={newWithdrawalAddress}
-                            onChange={(e) =>
-                              setNewWithdrawalAddress(e.target.value)
-                            }
-                            style={{
-                              width: "100%",
-                              padding: "8px",
-                              borderRadius: "4px",
-                              border: "1px solid #4a5568",
-                              backgroundColor: "#4a5568",
-                              color: "white",
-                              fontFamily: "monospace",
-                            }}
-                          />
-                        </div>
+                    <div
+                      style={{
+                        display: "grid",
+                        gap: "10px",
+                        marginBottom: "15px",
+                      }}
+                    >
+                      <div>
+                        <label
+                          style={{
+                            display: "block",
+                            fontSize: "0.9em",
+                            color: "#e2e8f0",
+                            marginBottom: "5px",
+                          }}
+                        >
+                          Address Title
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="e.g., 'Hardware Wallet', 'Exchange Account'"
+                          value={newWithdrawalTitle}
+                          onChange={(e) =>
+                            setNewWithdrawalTitle(e.target.value)
+                          }
+                          style={{
+                            width: "100%",
+                            padding: "8px",
+                            borderRadius: "4px",
+                            border: "1px solid #4a5568",
+                            backgroundColor: "#4a5568",
+                            color: "white",
+                          }}
+                        />
                       </div>
-
-                      <button
-                        onClick={requestWithdrawalAddress}
-                        style={{
-                          padding: "10px 20px",
-                          borderRadius: "4px",
-                          border: "none",
-                          backgroundColor: "#ed64a6",
-                          color: "white",
-                          cursor: "pointer",
-                          fontSize: "0.9em",
-                          fontWeight: "bold",
-                          width: "100%",
-                        }}
-                      >
-                        📍 Request Withdrawal Address
-                      </button>
+                      <div>
+                        <label
+                          style={{
+                            display: "block",
+                            fontSize: "0.9em",
+                            color: "#e2e8f0",
+                            marginBottom: "5px",
+                          }}
+                        >
+                          Ethereum Address
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="0x..."
+                          value={newWithdrawalAddress}
+                          onChange={(e) =>
+                            setNewWithdrawalAddress(e.target.value)
+                          }
+                          style={{
+                            width: "100%",
+                            padding: "8px",
+                            borderRadius: "4px",
+                            border: "1px solid #4a5568",
+                            backgroundColor: "#4a5568",
+                            color: "white",
+                            fontFamily: "monospace",
+                          }}
+                        />
+                      </div>
                     </div>
-                  </div>
-                )}
 
-                {/* Pending Withdrawal Address Requests */}
-                {pendingWithdrawalRequests.length > 0 && (
-                  <div
-                    style={{
-                      marginTop: "15px",
-                      paddingTop: "15px",
-                      borderTop: "1px solid #4a5568",
-                    }}
-                  >
-                    <div>
-                      <h5 style={{ color: "#ed8936", margin: "0 0 10px 0" }}>
-                        ⏳ Pending Requests ({pendingWithdrawalRequests.length})
-                      </h5>
-                      <div style={{ display: "grid", gap: "8px" }}>
-                        {pendingWithdrawalRequests.map((request, index) => {
-                          const countdown = formatCountdown(
-                            request.executeAfter,
-                            currentTime
-                          );
-                          return (
+                    <button
+                      onClick={requestWithdrawalAddress}
+                      style={{
+                        padding: "10px 20px",
+                        borderRadius: "4px",
+                        border: "none",
+                        backgroundColor: "#ed64a6",
+                        color: "white",
+                        cursor: "pointer",
+                        fontSize: "0.9em",
+                        fontWeight: "bold",
+                        width: "100%",
+                      }}
+                    >
+                      📍 Request Withdrawal Address
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Pending Withdrawal Address Requests */}
+              {pendingWithdrawalRequests.length > 0 && (
+                <div
+                  style={{
+                    marginTop: "15px",
+                    paddingTop: "15px",
+                    borderTop: "1px solid #4a5568",
+                  }}
+                >
+                  <div>
+                    <h5
+                      style={{
+                        color: colors.warning.light,
+                        margin: `0 0 ${spacing.md} 0`,
+                      }}
+                    >
+                      ⏳ Pending Requests ({pendingWithdrawalRequests.length})
+                    </h5>
+                    <div style={{ ...utilityStyles.grid, gap: spacing.sm }}>
+                      {pendingWithdrawalRequests.map((request, index) => {
+                        const countdown = formatCountdown(
+                          request.executeAfter,
+                          currentTime
+                        );
+                        return (
+                          <div
+                            key={index}
+                            style={{
+                              padding: "10px",
+                              backgroundColor: "#1a202c",
+                              borderRadius: "6px",
+                              border: countdown.ready
+                                ? "1px solid #48bb78"
+                                : "1px solid #ed8936",
+                            }}
+                          >
                             <div
-                              key={index}
                               style={{
-                                padding: "10px",
-                                backgroundColor: "#1a202c",
-                                borderRadius: "6px",
-                                border: countdown.ready
-                                  ? "1px solid #48bb78"
-                                  : "1px solid #ed8936",
+                                display: "flex",
+                                justifyContent: "space-between",
+                                alignItems: "center",
+                                marginBottom: "8px",
                               }}
                             >
-                              <div
-                                style={{
-                                  display: "flex",
-                                  justifyContent: "space-between",
-                                  alignItems: "center",
-                                  marginBottom: "8px",
-                                }}
-                              >
-                                <div>
-                                  <div
-                                    style={{
-                                      color: "white",
-                                      fontWeight: "bold",
-                                    }}
-                                  >
-                                    📍 {request.title}
-                                  </div>
-                                  <div
-                                    style={{
-                                      fontSize: "0.8em",
-                                      color: "#a0aec0",
-                                      fontFamily: "monospace",
-                                    }}
-                                  >
-                                    {request.destination}
-                                  </div>
+                              <div>
+                                <div
+                                  style={{
+                                    color: "white",
+                                    fontWeight: "bold",
+                                  }}
+                                >
+                                  📍 {request.title}
                                 </div>
-                                <div style={{ display: "flex", gap: "6px" }}>
-                                  {countdown.ready && (
-                                    <button
-                                      onClick={() =>
-                                        executeWithdrawalRequest(
-                                          request.requestId
-                                        )
-                                      }
-                                      style={{
-                                        padding: "4px 8px",
-                                        borderRadius: "4px",
-                                        border: "none",
-                                        backgroundColor: "#48bb78",
-                                        color: "white",
-                                        cursor: "pointer",
-                                        fontSize: "0.7em",
-                                        fontWeight: "bold",
-                                      }}
-                                    >
-                                      ⚡ Execute
-                                    </button>
-                                  )}
+                                <div
+                                  style={{
+                                    fontSize: "0.8em",
+                                    color: "#a0aec0",
+                                    fontFamily: "monospace",
+                                  }}
+                                >
+                                  {request.destination}
+                                </div>
+                              </div>
+                              <div style={{ display: "flex", gap: "6px" }}>
+                                {countdown.ready && (
                                   <button
                                     onClick={() =>
-                                      cancelWithdrawalRequest(request.requestId)
+                                      executeWithdrawalRequest(
+                                        request.requestId
+                                      )
                                     }
                                     style={{
                                       padding: "4px 8px",
                                       borderRadius: "4px",
-                                      border: "1px solid #e53e3e",
-                                      backgroundColor: "transparent",
-                                      color: "#e53e3e",
+                                      border: "none",
+                                      backgroundColor: "#48bb78",
+                                      color: "white",
                                       cursor: "pointer",
                                       fontSize: "0.7em",
+                                      fontWeight: "bold",
                                     }}
                                   >
-                                    ❌ Cancel
+                                    ⚡ Execute
                                   </button>
-                                </div>
-                              </div>
-                              <div
-                                style={{
-                                  padding: "6px 10px",
-                                  backgroundColor: "#4a5568",
-                                  borderRadius: "4px",
-                                  textAlign: "center",
-                                  color: countdown.color,
-                                  fontWeight: "bold",
-                                  fontSize: "0.8em",
-                                }}
-                              >
-                                {countdown.text}
+                                )}
+                                <button
+                                  onClick={() =>
+                                    cancelWithdrawalRequest(request.requestId)
+                                  }
+                                  style={{
+                                    padding: "4px 8px",
+                                    borderRadius: "4px",
+                                    border: "1px solid #e53e3e",
+                                    backgroundColor: "transparent",
+                                    color: "#e53e3e",
+                                    cursor: "pointer",
+                                    fontSize: "0.7em",
+                                  }}
+                                >
+                                  ❌ Cancel
+                                </button>
                               </div>
                             </div>
-                          );
-                        })}
-                      </div>
+                            <div
+                              style={{
+                                padding: "6px 10px",
+                                backgroundColor: "#4a5568",
+                                borderRadius: "4px",
+                                textAlign: "center",
+                                color: countdown.color,
+                                fontWeight: "bold",
+                                fontSize: "0.8em",
+                              }}
+                            >
+                              {countdown.text}
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
-                )}
-              </div>
-            )}
-
-            {/* Add Approver Section - Only shown after setup is committed */}
-            {isSetupCommitted && (
-              <div
-                style={{
-                  marginTop: "20px",
-                  padding: "15px",
-                  backgroundColor: "#2d3748",
-                  color: "white",
-                }}
-              >
-                <h3>Add Emergency Approver</h3>
-                <input
-                  type="text"
-                  placeholder="Enter approver address..."
-                  value={approver}
-                  onChange={(e) => setApprover(e.target.value)}
-                />
-                <button onClick={addApprover}>Add Approver</button>
-              </div>
-            )}
-          </div>
+                </div>
+              )}
+            </div>
+          )}
+          {/* Add Approver Section - Only shown after setup is committed */}
+          {isSetupCommitted && (
+            <div
+              style={{
+                marginTop: "20px",
+                padding: "15px",
+                backgroundColor: "#2d3748",
+                color: "white",
+              }}
+            >
+              <h3>Add Emergency Approver</h3>
+              <input
+                type="text"
+                placeholder="Enter approver address..."
+                value={approver}
+                onChange={(e) => setApprover(e.target.value)}
+              />
+              <button onClick={addApprover}>Add Approver</button>
+            </div>
+          )}
         </div>
       )}
     </div>

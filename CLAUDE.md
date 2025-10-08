@@ -206,6 +206,165 @@ Use workspace commands from project root or navigate to specific folders:
 - **Multi-chain testing**: Use workspace commands from root for cross-chain orchestration
 - **Documentation**: Component-specific docs in respective folders, orchestration in root
 
+## Frontend Styles Architecture
+
+**⚠️ CRITICAL: Never create inline styles in components. Always use the organized style system.**
+
+### Overview
+The frontend uses a comprehensive, organized style system to ensure maintainability, consistency, and DRY principles. All styles are centralized in `frontend/src/styles/` with a clean import system.
+
+### Style System Structure
+```
+frontend/src/styles/
+├── index.js              # Main export file - import everything from here
+├── theme.js              # Design tokens (colors, spacing, typography)
+├── utilities.js          # Common utility styles & spacing helpers
+└── components/           # Component-specific styles
+    ├── buttons.js        # Button variants & states
+    ├── cards.js          # Card layouts & status cards
+    ├── forms.js          # Form inputs, labels, selects
+    ├── layout.js         # Layout patterns & containers
+    └── steps.js          # Step wizard styles & states
+```
+
+### Usage Pattern (ALWAYS Follow)
+```javascript
+// ✅ CORRECT - Import from styles system
+import {
+  styles,              // Convenience object with common patterns
+  buttonStyles,        // Button variants (primary, secondary, etc.)
+  cardStyles,          // Card types (status, balance, warning, etc.)
+  formStyles,          // Form elements (input, select, label)
+  stepStyles,          // Step containers & validation states
+  layoutStyles,        // Layout patterns (flex, grid, spacing)
+  utilityStyles,       // Typography & utility classes
+  spacingUtilities,    // Margin/padding utilities (m0, mb2, p3, etc.)
+  colors,              // Color tokens (success.light, text.primary)
+  spacing,             // Spacing scale (xs, sm, md, lg, xl, xxl)
+  borderRadius,        // Border radius scale
+  fontSize,            // Font size scale
+  fontWeight,          // Font weight scale
+  // Helper functions
+  getStepContainerStyle,
+  getStepTitleColor,
+} from "./styles";
+
+// ✅ Use organized styles in components
+<button style={buttonStyles.primary}>
+<div style={cardStyles.statusCard}>
+<input style={formStyles.input}>
+<div style={layoutStyles.flexBetween}>
+<span style={utilityStyles.textSuccess}>
+<div style={spacingUtilities.mb3}>  // marginBottom: spacing.md
+```
+
+### Design Tokens
+All visual properties use centralized design tokens:
+```javascript
+// Colors
+colors.success.main        // #48bb78
+colors.success.light       // #9ae6b4
+colors.text.primary        // white
+colors.text.secondary      // #e2e8f0
+colors.background.primary  // #2d3748
+
+// Spacing Scale
+spacing.xs    // 4px      spacingUtilities.m1, p1
+spacing.sm    // 8px      spacingUtilities.m2, p2
+spacing.md    // 10px     spacingUtilities.m3, p3
+spacing.lg    // 12px     spacingUtilities.m4, p4
+spacing.xl    // 15px     spacingUtilities.m5, p5
+spacing.xxl   // 20px     spacingUtilities.m6, p6
+
+// Typography
+fontSize.xs    // 0.75rem
+fontSize.sm    // 0.875rem
+fontSize.normal // 1rem
+fontSize.lg    // 1.125rem
+fontSize.xl    // 1.25rem
+```
+
+### Component Style Patterns
+```javascript
+// Buttons
+buttonStyles.primary      // Main action buttons
+buttonStyles.secondary    // Secondary actions
+buttonStyles.success      // Success states
+buttonStyles.warning      // Warning actions
+buttonStyles.danger       // Destructive actions
+buttonStyles.disabled     // Disabled state
+
+// Cards
+cardStyles.statusCard     // Main status display
+cardStyles.balanceCard    // Balance information
+cardStyles.warningCard    // Warning messages
+cardStyles.successCard    // Success notifications
+
+// Layout
+layoutStyles.flexBetween  // justify-content: space-between
+layoutStyles.flexCenter   // Center content
+layoutStyles.flexAlignCenter // Align items center with gap
+layoutStyles.section      // Standard section spacing
+layoutStyles.textCenter   // Text alignment
+```
+
+### Conditional Styling Helpers
+```javascript
+// Step containers with conditional logic
+getStepContainerStyle(stepNumber, currentStep, isCommitted, validation)
+
+// Step titles with dynamic colors
+getStepTitleColor(stepNumber, isCommitted, validation)
+
+// Example usage
+<div style={getStepContainerStyle(1, currentStep, isSetupCommitted, stepValidation)}>
+<h3 style={{ ...stepStyles.step1Title, color: getStepTitleColor(1, isSetupCommitted, stepValidation) }}>
+```
+
+### ❌ What NOT to Do
+```javascript
+// ❌ NEVER create inline styles
+<div style={{ padding: "20px", marginBottom: "15px", color: "#48bb78" }}>
+
+// ❌ NEVER hardcode values
+<span style={{ fontSize: "1.2em", color: "#9ae6b4" }}>
+
+// ❌ NEVER repeat style objects
+const buttonStyle = { padding: "8px 16px", borderRadius: "4px" }
+```
+
+### ✅ What TO Do
+```javascript
+// ✅ ALWAYS use organized styles
+<div style={cardStyles.statusCard}>
+<div style={layoutStyles.section}>
+<span style={utilityStyles.textSuccess}>
+<button style={buttonStyles.primary}>
+
+// ✅ Combine styles when needed
+<div style={{ ...cardStyles.baseCard, ...layoutStyles.flexBetween }}>
+
+// ✅ Use design tokens for custom styles
+<div style={{ padding: spacing.xl, color: colors.success.light }}>
+```
+
+### Adding New Styles
+When adding new UI elements:
+
+1. **Check existing patterns first** - likely already exists
+2. **Use design tokens** - never hardcode values
+3. **Add to appropriate component file** - buttons.js, cards.js, etc.
+4. **Export from main index.js** - maintain clean import
+5. **Follow naming convention** - descriptive, component-based names
+
+### Benefits of This System
+- **Maintainability**: Central design system
+- **Consistency**: All components use same tokens
+- **DRY Principle**: No repeated style values
+- **Performance**: Reused style objects
+- **Developer Experience**: Clear, organized imports
+- **Design System**: Easy theme changes via tokens
+
 ### Testing Requirements
 - **Write tests for all new features** unless explicitly told not to
 - **Run tests before committing** to ensure code quality and functionality
