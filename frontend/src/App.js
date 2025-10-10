@@ -3175,14 +3175,29 @@ function AppContent() {
   };
 
   const executeWithdrawalRequest = async (requestId) => {
-    if (!savingsContract) return;
+    // Check connection for both networks
+    if (networkType === "solana" && (!transactionManager || !solanaConnected)) {
+      alert("Please connect your Solana wallet first");
+      return;
+    }
+    if (networkType === "evm" && !savingsContract) {
+      alert("Please connect your wallet first");
+      return;
+    }
 
     try {
-      const tx = await savingsContract.executeWithdrawalAddressRequest(
-        requestId
-      );
-      await tx.wait();
-      alert("✅ Withdrawal address request executed successfully!");
+      if (networkType === "solana") {
+        // Solana withdrawal destination request execution
+        console.log("🔄 Executing Solana withdrawal destination request:", requestId);
+        const adapter = transactionManager.getCurrentAdapter();
+        await adapter.executeWithdrawalDestinationRequest(requestId);
+        alert("✅ Withdrawal address request executed successfully!");
+      } else {
+        // EVM withdrawal destination request execution
+        const tx = await savingsContract.executeWithdrawalAddressRequest(requestId);
+        await tx.wait();
+        alert("✅ Withdrawal address request executed successfully!");
+      }
 
       // Refresh data
       await fetchWithdrawalAddresses();
@@ -3821,48 +3836,82 @@ function AppContent() {
   };
 
   const executeBypassRequest = async (requestId) => {
-    if (savingsContract) {
-      try {
+    // Check connection for both networks
+    if (networkType === "solana" && (!transactionManager || !solanaConnected)) {
+      alert("Please connect your Solana wallet first");
+      return;
+    }
+    if (networkType === "evm" && !savingsContract) {
+      alert("Please connect your wallet first");
+      return;
+    }
+
+    try {
+      if (networkType === "solana") {
+        // Solana bypass execution
+        console.log("🔄 Executing Solana bypass request:", requestId);
+        const adapter = transactionManager.getCurrentAdapter();
+        await adapter.executeWithdrawalBypass(requestId);
+        alert("✅ Bypass withdrawal executed successfully!");
+      } else {
+        // EVM bypass execution
         const tx = await savingsContract.executeBypassWithdrawal(requestId);
         await tx.wait();
         alert("✅ Bypass withdrawal executed successfully!");
+      }
 
-        // Refresh data
-        await refreshBalances();
-        await fetchSpendingLimits();
-        await fetchPendingBypassRequests();
-      } catch (error) {
-        console.error("Execute bypass error:", error);
-        if (error.message.includes("Request still in timelock")) {
-          alert("Request is still in 24-hour timelock period");
-        } else if (error.message.includes("Request does not exist")) {
-          alert("Request not found");
-        } else if (error.message.includes("Request already executed")) {
-          alert("Request has already been executed");
-        } else if (error.message.includes("Insufficient balance")) {
-          alert("Insufficient balance for this withdrawal");
-        } else if (error.message.includes("Exceeds")) {
-          alert(`Withdrawal blocked: ${error.message}`);
-        } else {
-          alert(`Failed to execute bypass: ${error.message}`);
-        }
+      // Refresh data
+      await refreshBalances();
+      await fetchSpendingLimits();
+      await fetchPendingBypassRequests();
+    } catch (error) {
+      console.error("Execute bypass error:", error);
+      if (error.message.includes("Request still in timelock")) {
+        alert("Request is still in 24-hour timelock period");
+      } else if (error.message.includes("Request does not exist")) {
+        alert("Request not found");
+      } else if (error.message.includes("Request already executed")) {
+        alert("Request has already been executed");
+      } else if (error.message.includes("Insufficient balance")) {
+        alert("Insufficient balance for this withdrawal");
+      } else if (error.message.includes("Exceeds")) {
+        alert(`Withdrawal blocked: ${error.message}`);
+      } else {
+        alert(`Failed to execute bypass: ${error.message}`);
       }
     }
   };
 
   const cancelBypassRequest = async (requestId) => {
-    if (savingsContract) {
-      try {
+    // Check connection for both networks
+    if (networkType === "solana" && (!transactionManager || !solanaConnected)) {
+      alert("Please connect your Solana wallet first");
+      return;
+    }
+    if (networkType === "evm" && !savingsContract) {
+      alert("Please connect your wallet first");
+      return;
+    }
+
+    try {
+      if (networkType === "solana") {
+        // Solana bypass cancellation
+        console.log("🔄 Cancelling Solana bypass request:", requestId);
+        const adapter = transactionManager.getCurrentAdapter();
+        await adapter.cancelWithdrawalBypass(requestId);
+        alert("Bypass request cancelled successfully!");
+      } else {
+        // EVM bypass cancellation
         const tx = await savingsContract.cancelBypassRequest(requestId);
         await tx.wait();
         alert("Bypass request cancelled successfully!");
-
-        // Refresh pending requests
-        await fetchPendingBypassRequests(savingsContract, userAddress);
-      } catch (error) {
-        console.error("Cancel bypass error:", error);
-        alert(`Failed to cancel bypass request: ${error.message}`);
       }
+
+      // Refresh pending requests
+      await fetchPendingBypassRequests();
+    } catch (error) {
+      console.error("Cancel bypass error:", error);
+      alert(`Failed to cancel bypass request: ${error.message}`);
     }
   };
 

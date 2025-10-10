@@ -2515,6 +2515,11 @@ export class SolanaAdapter extends BlockchainAdapter {
 
     const txHash = await this.wallet.sendTransaction(transaction, this.connection);
 
+    // Wait for transaction confirmation to ensure blockchain state is updated
+    console.log('⏳ Waiting for withdrawal destination request transaction confirmation...');
+    await this.connection.confirmTransaction(txHash, 'confirmed');
+    console.log('✅ Withdrawal destination request transaction confirmed successfully');
+
     console.log(`✅ Requested withdrawal destination addition: ${address} - ${title} (tx: ${txHash})`);
     console.log(`⏰ Will be executable after 24 hours`);
     return txHash;
@@ -3408,7 +3413,7 @@ export class SolanaAdapter extends BlockchainAdapter {
         { pubkey: savingsAccount, isSigner: false, isWritable: true },
         { pubkey: userPubkey, isSigner: true, isWritable: true },
         { pubkey: userPubkey, isSigner: false, isWritable: true }, // destination (placeholder)
-        { pubkey: anchor_lang.system_program.ID, isSigner: false, isWritable: false }
+        { pubkey: SystemProgram.programId, isSigner: false, isWritable: false }
       ],
       programId: this.PROGRAM_ID,
       data
@@ -3416,6 +3421,11 @@ export class SolanaAdapter extends BlockchainAdapter {
 
     const transaction = new Transaction().add(instruction);
     const txHash = await this.wallet.sendTransaction(transaction, this.connection);
+
+    // Wait for transaction confirmation to ensure blockchain state is updated
+    console.log('⏳ Waiting for bypass execution transaction confirmation...');
+    await this.connection.confirmTransaction(txHash, 'confirmed');
+    console.log('✅ Bypass execution transaction confirmed successfully');
 
     console.log(`✅ Executed withdrawal bypass (tx: ${txHash})`);
     return txHash;
