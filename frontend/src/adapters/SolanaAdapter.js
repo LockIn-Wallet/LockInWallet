@@ -26,7 +26,7 @@ const INSTRUCTION_DISCRIMINATORS = {
   WithdrawSol: [145, 131, 74, 136, 65, 137, 42, 38],
   WithdrawSpl: [181, 154, 94, 86, 62, 115, 6, 186],
 
-  // Deposit Proxy Program (auto-generated on 2025-10-07)
+  // Deposit Proxy Program (auto-generated on 2025-10-10)
   InitializeProxy: [245, 74, 175, 136, 0, 146, 100, 224],
   ForwardSolDeposit: [29, 156, 48, 213, 90, 128, 229, 58],
   ForwardSplDeposit: [131, 71, 27, 250, 233, 24, 75, 240]
@@ -41,8 +41,8 @@ export class SolanaAdapter extends BlockchainAdapter {
     this.wallet = wallet;
     this.connection = connection;
     this.userAddress = null;
-    this.PROGRAM_ID = new PublicKey("b7DwCc8gcNd5hfUit1ezJXGXxd2pjga6BTz2vB6e62y"); // Updated 2025-10-07
-    this.DEPOSIT_PROXY_PROGRAM_ID = new PublicKey("9YoBL7APteanq755GyDLpMLUwXaidEAojpophJcoX5W4"); // Updated 2025-10-07
+    this.PROGRAM_ID = new PublicKey("b7DwCc8gcNd5hfUit1ezJXGXxd2pjga6BTz2vB6e62y"); // Updated 2025-10-10
+    this.DEPOSIT_PROXY_PROGRAM_ID = new PublicKey("9YoBL7APteanq755GyDLpMLUwXaidEAojpophJcoX5W4"); // Updated 2025-10-10
 
     if (this.wallet?.connected && this.wallet?.publicKey) {
       this.userAddress = this.wallet.publicKey.toString();
@@ -1855,9 +1855,9 @@ export class SolanaAdapter extends BlockchainAdapter {
 
     // Add time period limits
     accountData.timePeriodLimits.forEach(limit => {
-      // Convert from lamports to SOL (divide by 1000000)
-      const limitAmount = Number(limit.limit) / 1000000;
-      const spentAmount = Number(limit.currentSpent) / 1000000;
+      // Convert from lamports to USDT (divide by 1000000000 - 1e9)
+      const limitAmount = Number(limit.limit) / 1000000000;
+      const spentAmount = Number(limit.currentSpent) / 1000000000;
       const remainingAmount = limitAmount - spentAmount;
 
       // Calculate time remaining for reset
@@ -2003,7 +2003,7 @@ export class SolanaAdapter extends BlockchainAdapter {
       console.warn('⚠️ Could not verify setup status, proceeding anyway:', error.message);
     }
 
-    // Convert newLimit to lamports/base units (same as EVM uses wei)
+    // Convert newLimit to base units (treat input as USDT value, store as lamports for precision)
     const newLimitBigInt = BigInt(Math.floor(parseFloat(newLimit) * Math.pow(10, 9))); // Convert to lamports
 
     // Create instruction data: discriminator + period_name + new_limit
@@ -2174,8 +2174,11 @@ export class SolanaAdapter extends BlockchainAdapter {
         });
       }
 
-      console.log(`Found ${proposals.length} pending proposals for user ${userPubkey.toString()}`);
-      return proposals;
+      // Filter out executed proposals - only return pending ones
+      const pendingProposals = proposals.filter(proposal => !proposal.executed);
+
+      console.log(`Found ${proposals.length} total proposals, ${pendingProposals.length} pending for user ${userPubkey.toString()}`);
+      return pendingProposals;
     } catch (error) {
       console.error('Error fetching pending proposals:', error);
       return [];
@@ -2225,6 +2228,11 @@ export class SolanaAdapter extends BlockchainAdapter {
 
     const transaction = new Transaction().add(instruction);
     const txHash = await this.wallet.sendTransaction(transaction, this.connection);
+
+    // Wait for transaction confirmation to ensure blockchain state is updated
+    console.log('⏳ Waiting for proposal execution transaction confirmation...');
+    await this.connection.confirmTransaction(txHash, 'confirmed');
+    console.log('✅ Proposal execution transaction confirmed successfully');
 
     console.log(`Executed proposal ${proposalId} (tx: ${txHash})`);
     return txHash;

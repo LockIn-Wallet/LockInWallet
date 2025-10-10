@@ -1,10 +1,10 @@
 {
   "solanaTokens": {
-    "usdtMint": "CyGLZzacTQBHJ77qaSuDrVekhJEkuiGM66ToWJkWxR8v",
-    "userTokenAccount": "8YrYEziadSEEN3jKpng8zJbuMS5KVjds4w2n1D8P3QL",
+    "usdtMint": "66KxBd1RCmKWseTVe832CUEea1kbSTFGgtrmLaFUyT1h",
+    "userTokenAccount": "68FC3u3C1MpjSzLDXRPpQArA5CpKhxAexVmB6yxiA5oB",
     "userAddress": "4xo6a3qHYgtsDkKUAy1wMQhyN1zoXo3tKPR5foxa3hV4",
-    "mintAuthority": "6hJzgdh5zhbywrz14vrdvytEv28B5br9nymYr2DEp3jc",
+    "mintAuthority": "goyyxjYRaHsQd86diBTPPayop7eG8voRNnRgWv4hBtX",
     "balance": 1000000,
-    "createdAt": "2025-10-07T18:26:16.183Z"
+    "createdAt": "2025-10-10T10:44:08.401Z"
   }
 }

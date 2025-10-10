@@ -277,8 +277,8 @@ impl SavingsAccount {
         // Check if user is trying to add their own address (not allowed for security)
         require!(address != self.owner, crate::error::ErrorCode::CannotSetOwnAddress);
 
-        // 24-hour timelock (86400 seconds)
-        let execute_after = current_time + 86400;
+        // Timelock (configurable via cargo features)
+        let execute_after = current_time + crate::constants::WITHDRAWAL_DESTINATION_TIMELOCK;
 
         self.pending_withdrawal_destination_requests.push(PendingWithdrawalDestinationRequest {
             request_id,
@@ -359,8 +359,8 @@ impl SavingsAccount {
         // Check if destination is approved
         require!(self.is_destination_approved(destination), crate::error::ErrorCode::DestinationNotApproved);
 
-        // 24-hour timelock (86400 seconds)
-        let execute_after = current_time + 86400;
+        // Timelock (configurable via cargo features)
+        let execute_after = current_time + crate::constants::BYPASS_REQUEST_TIMELOCK;
 
         self.pending_bypass_requests.push(BypassRequest {
             request_id,

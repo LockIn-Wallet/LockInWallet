@@ -1032,8 +1032,8 @@ pub fn propose_limit_change(
 
     let proposal_id = anchor_lang::solana_program::keccak::hash(&hasher_input).to_bytes();
 
-    // Create proposal with timelock (24 hours in production, 30 seconds for development)
-    let timelock_duration = 24 * 60 * 60; // 24 hours
+    // Create proposal with timelock (configurable via cargo features)
+    let timelock_duration = crate::constants::PROPOSAL_TIMELOCK;
     let execute_after = clock.unix_timestamp + timelock_duration;
 
     // Determine if this is an increase

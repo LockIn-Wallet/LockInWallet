@@ -27,7 +27,7 @@ for arg in "$@"; do
     esac
 done
 
-echo "🚀 Starting Solana Program Deployment (auto-upgrade if program exists)..."
+echo "🚀 Starting Solana Program Deployment with DEV TIMELOCKS (15s) - auto-upgrade if program exists..."
 
 # Configuration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -298,8 +298,16 @@ build_program() {
 
     log_info "Building... (this may take a few minutes and appear silent)"
 
+    # Show timelock configuration
+    log_info "⚡ TIMELOCK MODE: Development (15 seconds) - Default for fast E2E testing"
+    log_warning "   Spending limit proposals: 15 seconds"
+    log_warning "   Withdrawal destinations: 15 seconds"
+    log_warning "   Bypass requests: 15 seconds"
+    log_warning "   (Future: Use --prod flag for production 24-hour timelocks)"
+    echo ""
+
     # Use homebrew anchor directly - show errors
-    echo "🔍 Running: $ANCHOR_PATH build"
+    echo "🔍 Running: $ANCHOR_PATH build (with dev-timelock feature)"
     if $ANCHOR_PATH build 2>&1; then
         log_info "✅ Program built successfully"
 

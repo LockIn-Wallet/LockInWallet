@@ -178,7 +178,7 @@ const NETWORKS = {
           recommended: true,
         },
         USDT: {
-          mint: "CyGLZzacTQBHJ77qaSuDrVekhJEkuiGM66ToWJkWxR8v", // Test USDT mint address
+          mint: "66KxBd1RCmKWseTVe832CUEea1kbSTFGgtrmLaFUyT1h", // Test USDT mint address
           symbol: "USDT",
           name: "Test USDT",
           decimals: 6,
@@ -337,7 +337,9 @@ const detectExceedingPeriod = (amount, spendingLimits) => {
 
 // Check if there's a pending proposal for a specific period name
 const hasPendingProposalForPeriod = (periodName, pendingLimitProposals) => {
-  return pendingLimitProposals.some(proposal => proposal.periodName === periodName);
+  return pendingLimitProposals.some(
+    (proposal) => proposal.periodName === periodName
+  );
 };
 
 // For backward compatibility
@@ -856,7 +858,9 @@ function AppContent() {
           if (userAddress) {
             await checkSolanaProxyStatus(newTxManager, userAddress);
           } else {
-            console.warn("❌ Cannot check Solana proxy status: wallet not connected or address unavailable");
+            console.warn(
+              "❌ Cannot check Solana proxy status: wallet not connected or address unavailable"
+            );
           }
           // Load spending limits and proposals
           await fetchSpendingLimitsWithTxManager(newTxManager);
@@ -1082,7 +1086,9 @@ function AppContent() {
         const userAddress = await txManager.getAddress();
 
         if (!userAddress) {
-          console.warn("❌ Cannot refresh Solana balances: wallet not connected or address unavailable");
+          console.warn(
+            "❌ Cannot refresh Solana balances: wallet not connected or address unavailable"
+          );
           return;
         }
 
@@ -1166,7 +1172,9 @@ function AppContent() {
           if (userAddress) {
             await checkSolanaProxyStatus(newTxManager, userAddress);
           } else {
-            console.warn("❌ Cannot check Solana proxy status: wallet not connected or address unavailable");
+            console.warn(
+              "❌ Cannot check Solana proxy status: wallet not connected or address unavailable"
+            );
           }
 
           // Load spending limits for Solana (pass txManager directly to avoid state timing issues)
@@ -1247,7 +1255,9 @@ function AppContent() {
             if (userAddress) {
               await checkSolanaProxyStatus(newTxManager, userAddress);
             } else {
-              console.warn("❌ Retry: Cannot check Solana proxy status: wallet not connected or address unavailable");
+              console.warn(
+                "❌ Retry: Cannot check Solana proxy status: wallet not connected or address unavailable"
+              );
             }
 
             console.log("📋 Retry: Loading Solana spending limits...");
@@ -1633,7 +1643,9 @@ function AppContent() {
         if (userAddress) {
           await checkSolanaProxyStatus(transactionManager, userAddress);
         } else {
-          console.warn("❌ Cannot refresh Solana proxy status: wallet not connected or address unavailable");
+          console.warn(
+            "❌ Cannot refresh Solana proxy status: wallet not connected or address unavailable"
+          );
         }
 
         alert(
@@ -1654,7 +1666,9 @@ function AppContent() {
           if (userAddress) {
             await checkSolanaProxyStatus(transactionManager, userAddress);
           } else {
-            console.warn("❌ Cannot refresh Solana proxy status after deployment: wallet not connected or address unavailable");
+            console.warn(
+              "❌ Cannot refresh Solana proxy status after deployment: wallet not connected or address unavailable"
+            );
           }
           alert(
             "✅ Your permanent deposit address is ready! This address is permanently tied to your wallet and you can use it for all deposits from exchanges."
@@ -2786,7 +2800,9 @@ function AppContent() {
     );
 
     if (networkType === "solana") {
-      console.log("🔵 Delegating Solana spending limits to dedicated function...");
+      console.log(
+        "🔵 Delegating Solana spending limits to dedicated function..."
+      );
       // Delegate to the dedicated Solana function to avoid duplication and race conditions
       await fetchSpendingLimitsWithTxManager(transactionManager);
       return;
@@ -3190,8 +3206,13 @@ function AppContent() {
         }
 
         const solanaAdapter = transactionManager.getCurrentAdapter();
-        const txHash = await solanaAdapter.cancelWithdrawalDestinationRequest(requestId);
-        console.log("Solana withdrawal request cancellation transaction:", txHash);
+        const txHash = await solanaAdapter.cancelWithdrawalDestinationRequest(
+          requestId
+        );
+        console.log(
+          "Solana withdrawal request cancellation transaction:",
+          txHash
+        );
         alert("Withdrawal address request cancelled successfully!");
       } else {
         // EVM implementation
@@ -3199,7 +3220,9 @@ function AppContent() {
           throw new Error("Savings contract not initialized");
         }
 
-        const tx = await savingsContract.cancelWithdrawalAddressRequest(requestId);
+        const tx = await savingsContract.cancelWithdrawalAddressRequest(
+          requestId
+        );
         await tx.wait();
         alert("Withdrawal address request cancelled successfully!");
       }
@@ -3221,7 +3244,9 @@ function AppContent() {
         }
 
         const solanaAdapter = transactionManager.getCurrentAdapter();
-        const txHash = await solanaAdapter.removeWithdrawalDestination(destination);
+        const txHash = await solanaAdapter.removeWithdrawalDestination(
+          destination
+        );
         console.log("Solana withdrawal address removal transaction:", txHash);
         alert("Withdrawal address removed successfully!");
       } else {
@@ -3847,15 +3872,19 @@ function AppContent() {
       <div style={layoutStyles.headerSection}>
         {/* Main Logo */}
         <img
-          src={require('./assets/images/logo.png')}
+          src={require("./assets/images/logo.png")}
           alt="LockIn Wallet"
           style={styles.app.logo}
           onError={(e) => {
-            e.target.style.display = 'none';
-            e.target.nextSibling.style.display = 'block';
+            e.target.style.display = "none";
+            e.target.nextSibling.style.display = "block";
           }}
         />
-        <h1 style={{...styles.app.title, display: 'none', textAlign: 'center'}}>🔒 LockIn Wallet</h1>
+        <h1
+          style={{ ...styles.app.title, display: "none", textAlign: "center" }}
+        >
+          🔒 LockIn Wallet
+        </h1>
 
         {/* Status Info Card */}
         {(provider || (networkType === "solana" && solanaWallet)) && (
@@ -4119,16 +4148,16 @@ function AppContent() {
               style={{ fontSize: "0.9em", lineHeight: "1.6", color: "#e2e8f0" }}
             >
               <p style={{ margin: `0 0 ${spacing.sm} 0` }}>
-                <strong>🏦 No Trading Wallet:</strong> Designed for storing
-                stablecoins only for your peace of mind and safety net.
+                <strong>🏦 No-trading & no-staking wallet:</strong> Designed for
+                storing stablecoins for your peace of mind.
               </p>
               <p style={{ margin: `0 0 ${spacing.sm} 0` }}>
                 <strong>🔐 Set up withdrawal allowance:</strong> Changes to
                 allowance or by passing withdrawal limits are timelocked.
               </p>
               <p style={{ margin: `0 0 ${spacing.sm} 0` }}>
-                <strong>🛡️ Compromise-Resistant:</strong> Remains secure even
-                when your wallet is compromised (coming soon)
+                <strong>🛡️ Compromise-Resistant:</strong> Funds are safe even
+                when your private key is compromised (coming soon)
               </p>
               <p style={{ margin: "0" }}>
                 <strong>⛓️ Fully On-Chain:</strong> No intermediaries
@@ -4654,7 +4683,9 @@ function AppContent() {
                     }),
                   }}
                 >
-                  {isSetupCommitted ? "💰 Spending Limits" : "🧩 Step 1: Set Your Spending Limits"}
+                  {isSetupCommitted
+                    ? "💰 Spending Limits"
+                    : "🧩 Step 1: Set Your Spending Limits"}
                 </h3>
                 {!isSetupCommitted && (
                   <div
@@ -4931,86 +4962,86 @@ function AppContent() {
                             }}
                           />
                         </div>
+                      ) : existingLimit ? (
+                        <div style={layoutStyles.marginBottomSmall}>
+                          <div
+                            style={{
+                              display: "flex",
+                              justifyContent: "space-between",
+                              marginBottom: "8px",
+                            }}
+                          >
+                            <span
+                              style={{ color: "#e2e8f0", fontSize: "0.9em" }}
+                            >
+                              Remaining
+                            </span>
+                            <span
+                              style={{
+                                color: isAtLimit ? "#fc8181" : "#9ae6b4",
+                                fontWeight: "bold",
+                                fontSize: "1.1em",
+                              }}
+                            >
+                              {existingLimit.remaining} USDT
+                            </span>
+                          </div>
+                          <div
+                            style={{
+                              display: "flex",
+                              justifyContent: "space-between",
+                              fontSize: "0.8em",
+                              color: "#a0aec0",
+                              marginBottom: "8px",
+                            }}
+                          >
+                            <span>Spent: {existingLimit.spent} USDT</span>
+                            <span>Limit: {existingLimit.limit} USDT</span>
+                          </div>
+                          {/* Progress bar */}
+                          <div
+                            style={{
+                              width: "100%",
+                              height: "6px",
+                              backgroundColor: "#4a5568",
+                              borderRadius: "3px",
+                              overflow: "hidden",
+                            }}
+                          >
+                            <div
+                              style={{
+                                width: `${Math.min(progressPercent, 100)}%`,
+                                height: "100%",
+                                backgroundColor: isAtLimit
+                                  ? "#e53e3e"
+                                  : isNearLimit
+                                  ? "#ed8936"
+                                  : "#48bb78",
+                                transition: "width 0.3s ease",
+                              }}
+                            />
+                          </div>
+                        </div>
                       ) : (
-                        existingLimit ? (
+                        !isActive &&
+                        isSetupCommitted && (
                           <div style={layoutStyles.marginBottomSmall}>
                             <div
                               style={{
-                                display: "flex",
-                                justifyContent: "space-between",
-                                marginBottom: "8px",
-                              }}
-                            >
-                              <span
-                                style={{ color: "#e2e8f0", fontSize: "0.9em" }}
-                              >
-                                Remaining
-                              </span>
-                              <span
-                                style={{
-                                  color: isAtLimit ? "#fc8181" : "#9ae6b4",
-                                  fontWeight: "bold",
-                                  fontSize: "1.1em",
-                                }}
-                              >
-                                {existingLimit.remaining} USDT
-                              </span>
-                            </div>
-                            <div
-                              style={{
-                                display: "flex",
-                                justifyContent: "space-between",
-                                fontSize: "0.8em",
                                 color: "#a0aec0",
-                                marginBottom: "8px",
+                                fontSize: "0.9em",
+                                fontStyle: "italic",
+                                textAlign: "center",
+                                padding: "16px",
+                                backgroundColor: "#2d3748",
+                                borderRadius: "6px",
+                                border: "1px solid #4a5568",
                               }}
                             >
-                              <span>Spent: {existingLimit.spent} USDT</span>
-                              <span>Limit: {existingLimit.limit} USDT</span>
-                            </div>
-                            {/* Progress bar */}
-                            <div
-                              style={{
-                                width: "100%",
-                                height: "6px",
-                                backgroundColor: "#4a5568",
-                                borderRadius: "3px",
-                                overflow: "hidden",
-                              }}
-                            >
-                              <div
-                                style={{
-                                  width: `${Math.min(progressPercent, 100)}%`,
-                                  height: "100%",
-                                  backgroundColor: isAtLimit
-                                    ? "#e53e3e"
-                                    : isNearLimit
-                                    ? "#ed8936"
-                                    : "#48bb78",
-                                  transition: "width 0.3s ease",
-                                }}
-                              />
+                              🔒 No {periodName.toLowerCase()} limit set. Use
+                              "Edit" to add one via proposal system.
                             </div>
                           </div>
-                        ) : (
-                          !isActive && isSetupCommitted && (
-                            <div style={layoutStyles.marginBottomSmall}>
-                              <div
-                                style={{
-                                  color: "#a0aec0",
-                                  fontSize: "0.9em",
-                                  fontStyle: "italic",
-                                  textAlign: "center",
-                                  padding: "16px",
-                                  backgroundColor: "#2d3748",
-                                  borderRadius: "6px",
-                                  border: "1px solid #4a5568",
-                                }}
-                              >
-                                🔒 No {periodName.toLowerCase()} limit set. Use "Edit" to add one via proposal system.
-                              </div>
-                            </div>
-                          )
                         )
                       )}
 
@@ -5077,15 +5108,29 @@ function AppContent() {
                             {isActive || isSetupCommitted ? ( // Show Edit/Remove for active limits, or Add button for inactive limits when locked
                               <>
                                 <span
-                                  title={hasPendingProposalForPeriod(periodName, pendingLimitProposals)
-                                    ? `Cannot ${isActive ? 'edit' : 'add'} ${periodName} limit: There is already a pending proposal for this period. Only one proposal per period is allowed.`
-                                    : ''
+                                  title={
+                                    hasPendingProposalForPeriod(
+                                      periodName,
+                                      pendingLimitProposals
+                                    )
+                                      ? `Cannot ${
+                                          isActive ? "edit" : "add"
+                                        } ${periodName} limit: There is already a pending proposal for this period. Only one proposal per period is allowed.`
+                                      : ""
                                   }
-                                  style={{ flex: 1, display: 'block' }}
+                                  style={{ flex: 1, display: "block" }}
                                 >
                                   <button
-                                    onClick={() => !hasPendingProposalForPeriod(periodName, pendingLimitProposals) && toggleEditMode(periodName)}
-                                    disabled={hasPendingProposalForPeriod(periodName, pendingLimitProposals)}
+                                    onClick={() =>
+                                      !hasPendingProposalForPeriod(
+                                        periodName,
+                                        pendingLimitProposals
+                                      ) && toggleEditMode(periodName)
+                                    }
+                                    disabled={hasPendingProposalForPeriod(
+                                      periodName,
+                                      pendingLimitProposals
+                                    )}
                                     style={{
                                       width: "100%",
                                       padding: "8px",
@@ -5093,22 +5138,47 @@ function AppContent() {
                                       border: "1px solid #4a5568",
                                       backgroundColor: "#2d3748",
                                       backgroundImage: "none",
-                                      color: hasPendingProposalForPeriod(periodName, pendingLimitProposals) ? "#555" : "#a0aec0",
-                                      cursor: hasPendingProposalForPeriod(periodName, pendingLimitProposals) ? "not-allowed" : "pointer",
+                                      color: hasPendingProposalForPeriod(
+                                        periodName,
+                                        pendingLimitProposals
+                                      )
+                                        ? "#555"
+                                        : "#a0aec0",
+                                      cursor: hasPendingProposalForPeriod(
+                                        periodName,
+                                        pendingLimitProposals
+                                      )
+                                        ? "not-allowed"
+                                        : "pointer",
                                       fontSize: "0.85em",
                                       fontWeight: "normal",
-                                      opacity: hasPendingProposalForPeriod(periodName, pendingLimitProposals) ? 0.3 : 0.7,
+                                      opacity: hasPendingProposalForPeriod(
+                                        periodName,
+                                        pendingLimitProposals
+                                      )
+                                        ? 0.3
+                                        : 0.7,
                                       transition: "all 0.2s ease",
                                     }}
                                     onMouseEnter={(e) => {
-                                      if (!hasPendingProposalForPeriod(periodName, pendingLimitProposals)) {
+                                      if (
+                                        !hasPendingProposalForPeriod(
+                                          periodName,
+                                          pendingLimitProposals
+                                        )
+                                      ) {
                                         e.target.style.opacity = "1";
                                         e.target.style.color = "#e2e8f0";
                                         e.target.style.borderColor = "#718096";
                                       }
                                     }}
                                     onMouseLeave={(e) => {
-                                      if (!hasPendingProposalForPeriod(periodName, pendingLimitProposals)) {
+                                      if (
+                                        !hasPendingProposalForPeriod(
+                                          periodName,
+                                          pendingLimitProposals
+                                        )
+                                      ) {
                                         e.target.style.opacity = "0.7";
                                         e.target.style.color = "#a0aec0";
                                         e.target.style.borderColor = "#4a5568";
@@ -5119,48 +5189,87 @@ function AppContent() {
                                   </button>
                                 </span>
                                 {isActive && (
-                                <span
-                                  title={hasPendingProposalForPeriod(periodName, pendingLimitProposals)
-                                    ? `Cannot remove ${periodName} limit: There is already a pending proposal for this period. Only one proposal per period is allowed.`
-                                    : ''
-                                  }
-                                  style={{ flex: 1, display: 'block' }}
-                                >
-                                  <button
-                                    onClick={() => !hasPendingProposalForPeriod(periodName, pendingLimitProposals) && removeLimitPeriod(periodName)}
-                                    disabled={hasPendingProposalForPeriod(periodName, pendingLimitProposals)}
-                                    style={{
-                                      width: "100%",
-                                      padding: "8px",
-                                      borderRadius: "4px",
-                                      border: "1px solid #4a5568",
-                                      backgroundColor: "#2d3748",
-                                      backgroundImage: "none",
-                                      color: hasPendingProposalForPeriod(periodName, pendingLimitProposals) ? "#555" : "#a0aec0",
-                                      cursor: hasPendingProposalForPeriod(periodName, pendingLimitProposals) ? "not-allowed" : "pointer",
-                                      fontSize: "0.85em",
-                                      fontWeight: "normal",
-                                      opacity: hasPendingProposalForPeriod(periodName, pendingLimitProposals) ? 0.3 : 0.7,
-                                      transition: "all 0.2s ease",
-                                    }}
-                                    onMouseEnter={(e) => {
-                                      if (!hasPendingProposalForPeriod(periodName, pendingLimitProposals)) {
-                                        e.target.style.opacity = "1";
-                                        e.target.style.color = "#e2e8f0";
-                                        e.target.style.borderColor = "#718096";
-                                      }
-                                    }}
-                                    onMouseLeave={(e) => {
-                                      if (!hasPendingProposalForPeriod(periodName, pendingLimitProposals)) {
-                                        e.target.style.opacity = "0.7";
-                                        e.target.style.color = "#a0aec0";
-                                        e.target.style.borderColor = "#4a5568";
-                                      }
-                                    }}
+                                  <span
+                                    title={
+                                      hasPendingProposalForPeriod(
+                                        periodName,
+                                        pendingLimitProposals
+                                      )
+                                        ? `Cannot remove ${periodName} limit: There is already a pending proposal for this period. Only one proposal per period is allowed.`
+                                        : ""
+                                    }
+                                    style={{ flex: 1, display: "block" }}
                                   >
-                                    🗑️ Remove
-                                  </button>
-                                </span>
+                                    <button
+                                      onClick={() =>
+                                        !hasPendingProposalForPeriod(
+                                          periodName,
+                                          pendingLimitProposals
+                                        ) && removeLimitPeriod(periodName)
+                                      }
+                                      disabled={hasPendingProposalForPeriod(
+                                        periodName,
+                                        pendingLimitProposals
+                                      )}
+                                      style={{
+                                        width: "100%",
+                                        padding: "8px",
+                                        borderRadius: "4px",
+                                        border: "1px solid #4a5568",
+                                        backgroundColor: "#2d3748",
+                                        backgroundImage: "none",
+                                        color: hasPendingProposalForPeriod(
+                                          periodName,
+                                          pendingLimitProposals
+                                        )
+                                          ? "#555"
+                                          : "#a0aec0",
+                                        cursor: hasPendingProposalForPeriod(
+                                          periodName,
+                                          pendingLimitProposals
+                                        )
+                                          ? "not-allowed"
+                                          : "pointer",
+                                        fontSize: "0.85em",
+                                        fontWeight: "normal",
+                                        opacity: hasPendingProposalForPeriod(
+                                          periodName,
+                                          pendingLimitProposals
+                                        )
+                                          ? 0.3
+                                          : 0.7,
+                                        transition: "all 0.2s ease",
+                                      }}
+                                      onMouseEnter={(e) => {
+                                        if (
+                                          !hasPendingProposalForPeriod(
+                                            periodName,
+                                            pendingLimitProposals
+                                          )
+                                        ) {
+                                          e.target.style.opacity = "1";
+                                          e.target.style.color = "#e2e8f0";
+                                          e.target.style.borderColor =
+                                            "#718096";
+                                        }
+                                      }}
+                                      onMouseLeave={(e) => {
+                                        if (
+                                          !hasPendingProposalForPeriod(
+                                            periodName,
+                                            pendingLimitProposals
+                                          )
+                                        ) {
+                                          e.target.style.opacity = "0.7";
+                                          e.target.style.color = "#a0aec0";
+                                          e.target.style.borderColor =
+                                            "#4a5568";
+                                        }
+                                      }}
+                                    >
+                                      🗑️ Remove
+                                    </button>
+                                  </span>
                                 )}
                               </>
                             ) : (
@@ -5175,8 +5284,7 @@ function AppContent() {
                               >
                                 {isSetupCommitted
                                   ? "🔒 Click Edit to add this limit via proposal system"
-                                  : "Enter an amount above to activate this limit"
-                                }
+                                  : "Enter an amount above to activate this limit"}
                               </div>
                             )}
                           </>
@@ -5636,288 +5744,288 @@ function AppContent() {
                 step1Complete: Object.keys(spendingLimits).length > 0,
               })}
             >
-            {/* Step Header */}
-            <div style={stepStyles.stepHeader}>
-              <div style={layoutStyles.flexAlignCenter}>
-                <h3
-                  style={{
-                    ...stepStyles.step2Title,
-                    color: getStepTitleColor(2, isSetupCommitted, {
-                      step1Complete: Object.keys(spendingLimits).length > 0,
-                    }),
-                  }}
-                >
-                  🔑 Step 2: Add Withdrawal Addresses
-                </h3>
-                {/* Status label removed - Step 2 always active */}
-              </div>
-
-              {!isSetupCommitted &&
-                stepValidation.step2Complete &&
-                currentStep === 2 && (
-                  <button
-                    onClick={goToNextStep}
+              {/* Step Header */}
+              <div style={stepStyles.stepHeader}>
+                <div style={layoutStyles.flexAlignCenter}>
+                  <h3
                     style={{
-                      padding: "8px 16px",
-                      borderRadius: "6px",
-                      border: "1px solid #3182ce",
-                      backgroundColor: "#3182ce",
-                      color: "white",
-                      cursor: "pointer",
-                      fontSize: "0.9em",
-                      fontWeight: "600",
-                      transition: "all 0.2s ease",
-                    }}
-                    onMouseOver={(e) => {
-                      e.target.style.backgroundColor = "#2c5aa0";
-                    }}
-                    onMouseOut={(e) => {
-                      e.target.style.backgroundColor = "#3182ce";
+                      ...stepStyles.step2Title,
+                      color: getStepTitleColor(2, isSetupCommitted, {
+                        step1Complete: Object.keys(spendingLimits).length > 0,
+                      }),
                     }}
                   >
-                    Proceed to Lock-In →
-                  </button>
-                )}
-            </div>
+                    🔑 Step 2: Add Withdrawal Addresses
+                  </h3>
+                  {/* Status label removed - Step 2 always active */}
+                </div>
 
-            {/* Step Description */}
-            <p
-              style={{
-                fontSize: "0.9em",
-                color: "#cbd5e0",
-                marginBottom: "15px",
-                lineHeight: "1.5",
-              }}
-            >
-              {isSetupCommitted
-                ? "Manage your approved withdrawal addresses. New addresses require 24-48 hour approval after wallet is locked."
-                : "Add addresses where you'll be able to withdraw funds. After lock-in, new addresses will require 24-48 hour approval for security."}
-            </p>
+                {!isSetupCommitted &&
+                  stepValidation.step2Complete &&
+                  currentStep === 2 && (
+                    <button
+                      onClick={goToNextStep}
+                      style={{
+                        padding: "8px 16px",
+                        borderRadius: "6px",
+                        border: "1px solid #3182ce",
+                        backgroundColor: "#3182ce",
+                        color: "white",
+                        cursor: "pointer",
+                        fontSize: "0.9em",
+                        fontWeight: "600",
+                        transition: "all 0.2s ease",
+                      }}
+                      onMouseOver={(e) => {
+                        e.target.style.backgroundColor = "#2c5aa0";
+                      }}
+                      onMouseOut={(e) => {
+                        e.target.style.backgroundColor = "#3182ce";
+                      }}
+                    >
+                      Proceed to Lock-In →
+                    </button>
+                  )}
+              </div>
 
-            {/* Progress Tips for Setup Mode */}
-            {!isSetupCommitted && currentStep === 2 && (
-              <div
+              {/* Step Description */}
+              <p
                 style={{
-                  fontSize: "0.8em",
-                  color: "#a0aec0",
-                  backgroundColor: "#1a202c",
-                  padding: "10px",
-                  borderRadius: "4px",
+                  fontSize: "0.9em",
+                  color: "#cbd5e0",
                   marginBottom: "15px",
-                  borderLeft: "3px solid #f6ad55",
+                  lineHeight: "1.5",
                 }}
               >
-                💡 <strong>Tip:</strong> "My Wallet" is automatically added. Add
-                other addresses you'll withdraw to (exchanges, hardware wallets,
-                etc.).
-              </div>
-            )}
+                {isSetupCommitted
+                  ? "Manage your approved withdrawal addresses. New addresses require 24-48 hour approval after wallet is locked."
+                  : "Add addresses where you'll be able to withdraw funds. After lock-in, new addresses will require 24-48 hour approval for security."}
+              </p>
 
-            {/* Step 2 Address Management Component */}
-            {!isSetupCommitted && (
-              <div>
-                <WithdrawalAddressSelector
-                  mode="management"
-                  title="Your Withdrawal Addresses:"
-                />
+              {/* Progress Tips for Setup Mode */}
+              {!isSetupCommitted && currentStep === 2 && (
+                <div
+                  style={{
+                    fontSize: "0.8em",
+                    color: "#a0aec0",
+                    backgroundColor: "#1a202c",
+                    padding: "10px",
+                    borderRadius: "4px",
+                    marginBottom: "15px",
+                    borderLeft: "3px solid #f6ad55",
+                  }}
+                >
+                  💡 <strong>Tip:</strong> "My Wallet" is automatically added.
+                  Add other addresses you'll withdraw to (exchanges, hardware
+                  wallets, etc.).
+                </div>
+              )}
 
-                {/* Add New Withdrawal Address Form */}
-                {showWithdrawalAddressForm && (
-                  <div
-                    style={{
-                      padding: "15px",
-                      backgroundColor: "#1a202c",
-                      borderRadius: "6px",
-                      border: "1px solid #4a5568",
-                      marginTop: "15px",
-                    }}
-                  >
-                    <h5 style={{ color: "#f6ad55", margin: "0 0 15px 0" }}>
-                      📍 Add New Withdrawal Address
-                    </h5>
+              {/* Step 2 Address Management Component */}
+              {!isSetupCommitted && (
+                <div>
+                  <WithdrawalAddressSelector
+                    mode="management"
+                    title="Your Withdrawal Addresses:"
+                  />
 
+                  {/* Add New Withdrawal Address Form */}
+                  {showWithdrawalAddressForm && (
                     <div
                       style={{
-                        display: "grid",
-                        gap: "12px",
-                        marginBottom: "15px",
+                        padding: "15px",
+                        backgroundColor: "#1a202c",
+                        borderRadius: "6px",
+                        border: "1px solid #4a5568",
+                        marginTop: "15px",
                       }}
                     >
-                      <div>
-                        <label
-                          style={{
-                            display: "block",
-                            fontSize: "0.9em",
-                            color: "#e2e8f0",
-                            marginBottom: "5px",
-                          }}
-                        >
-                          Address Title
-                        </label>
-                        <input
-                          type="text"
-                          placeholder="e.g., 'Hardware Wallet', 'Exchange Account'"
-                          value={newWithdrawalTitle}
-                          onChange={(e) =>
-                            setNewWithdrawalTitle(e.target.value)
-                          }
-                          style={{
-                            width: "100%",
-                            padding: "10px",
-                            borderRadius: "4px",
-                            border: "1px solid #4a5568",
-                            backgroundColor: "#4a5568",
-                            color: "white",
-                            fontSize: "0.9em",
-                          }}
-                        />
-                      </div>
-                      <div>
-                        <label
-                          style={{
-                            display: "block",
-                            fontSize: "0.9em",
-                            color: "#e2e8f0",
-                            marginBottom: "5px",
-                          }}
-                        >
-                          {networkType === "solana"
-                            ? "Solana Address"
-                            : "Ethereum Address"}
-                        </label>
-                        <input
-                          type="text"
-                          placeholder={
-                            networkType === "solana"
-                              ? "Solana address..."
-                              : "0x..."
-                          }
-                          value={newWithdrawalAddress}
-                          onChange={(e) =>
-                            setNewWithdrawalAddress(e.target.value)
-                          }
-                          style={{
-                            width: "100%",
-                            padding: "10px",
-                            borderRadius: "4px",
-                            border: "1px solid #4a5568",
-                            backgroundColor: "#4a5568",
-                            color: "white",
-                            fontFamily: "monospace",
-                            fontSize: "0.9em",
-                          }}
-                        />
-                      </div>
-                    </div>
+                      <h5 style={{ color: "#f6ad55", margin: "0 0 15px 0" }}>
+                        📍 Add New Withdrawal Address
+                      </h5>
 
-                    <button
-                      onClick={requestWithdrawalAddress}
-                      disabled={
-                        !newWithdrawalTitle.trim() ||
-                        !newWithdrawalAddress.trim()
-                      }
-                      style={{
-                        padding: "10px 20px",
-                        borderRadius: "4px",
-                        border: "none",
-                        backgroundColor:
-                          !newWithdrawalTitle.trim() ||
-                          !newWithdrawalAddress.trim()
-                            ? "#4a5568"
-                            : "#ed8936",
-                        color: "white",
-                        cursor:
-                          !newWithdrawalTitle.trim() ||
-                          !newWithdrawalAddress.trim()
-                            ? "not-allowed"
-                            : "pointer",
-                        fontSize: "0.9em",
-                        fontWeight: "bold",
-                        width: "100%",
-                        opacity:
-                          !newWithdrawalTitle.trim() ||
-                          !newWithdrawalAddress.trim()
-                            ? 0.5
-                            : 1,
-                      }}
-                    >
-                      📍 Add Withdrawal Address
-                    </button>
-                  </div>
-                )}
-
-                {/* Pending Withdrawal Address Requests */}
-                {pendingWithdrawalRequests.length > 0 && (
-                  <div style={{ marginTop: "15px" }}>
-                    <h5
-                      style={{
-                        color: colors.warning.light,
-                        margin: `0 0 ${spacing.md} 0`,
-                      }}
-                    >
-                      ⏳ Pending New Addresses (
-                      {pendingWithdrawalRequests.length})
-                    </h5>
-                    <div style={{ ...utilityStyles.grid, gap: spacing.sm }}>
-                      {pendingWithdrawalRequests.map((request, index) => (
-                        <div
-                          key={index}
-                          style={{
-                            padding: "10px",
-                            backgroundColor: "#2a1810",
-                            borderRadius: "6px",
-                            border: "1px solid #ed8936",
-                          }}
-                        >
-                          <div
+                      <div
+                        style={{
+                          display: "grid",
+                          gap: "12px",
+                          marginBottom: "15px",
+                        }}
+                      >
+                        <div>
+                          <label
                             style={{
-                              display: "flex",
-                              justifyContent: "space-between",
-                              alignItems: "center",
+                              display: "block",
+                              fontSize: "0.9em",
+                              color: "#e2e8f0",
+                              marginBottom: "5px",
                             }}
                           >
-                            <div>
-                              <div
-                                style={{
-                                  color: colors.text.primary,
-                                  fontWeight: fontWeight.bold,
-                                }}
-                              >
-                                📍 {request.title}
-                              </div>
-                              <div
-                                style={{
-                                  fontSize: "0.8em",
-                                  color: "#a0aec0",
-                                  fontFamily: "monospace",
-                                }}
-                              >
-                                {request.destination.length > 50
-                                  ? `${request.destination.slice(
-                                      0,
-                                      25
-                                    )}...${request.destination.slice(-15)}`
-                                  : request.destination}
-                              </div>
-                              <div
-                                style={{
-                                  fontSize: "0.7em",
-                                  color: "#ed8936",
-                                  marginTop: "4px",
-                                }}
-                              >
-                                ⏰ Will be available after setup is locked
+                            Address Title
+                          </label>
+                          <input
+                            type="text"
+                            placeholder="e.g., 'Hardware Wallet', 'Exchange Account'"
+                            value={newWithdrawalTitle}
+                            onChange={(e) =>
+                              setNewWithdrawalTitle(e.target.value)
+                            }
+                            style={{
+                              width: "100%",
+                              padding: "10px",
+                              borderRadius: "4px",
+                              border: "1px solid #4a5568",
+                              backgroundColor: "#4a5568",
+                              color: "white",
+                              fontSize: "0.9em",
+                            }}
+                          />
+                        </div>
+                        <div>
+                          <label
+                            style={{
+                              display: "block",
+                              fontSize: "0.9em",
+                              color: "#e2e8f0",
+                              marginBottom: "5px",
+                            }}
+                          >
+                            {networkType === "solana"
+                              ? "Solana Address"
+                              : "Ethereum Address"}
+                          </label>
+                          <input
+                            type="text"
+                            placeholder={
+                              networkType === "solana"
+                                ? "Solana address..."
+                                : "0x..."
+                            }
+                            value={newWithdrawalAddress}
+                            onChange={(e) =>
+                              setNewWithdrawalAddress(e.target.value)
+                            }
+                            style={{
+                              width: "100%",
+                              padding: "10px",
+                              borderRadius: "4px",
+                              border: "1px solid #4a5568",
+                              backgroundColor: "#4a5568",
+                              color: "white",
+                              fontFamily: "monospace",
+                              fontSize: "0.9em",
+                            }}
+                          />
+                        </div>
+                      </div>
+
+                      <button
+                        onClick={requestWithdrawalAddress}
+                        disabled={
+                          !newWithdrawalTitle.trim() ||
+                          !newWithdrawalAddress.trim()
+                        }
+                        style={{
+                          padding: "10px 20px",
+                          borderRadius: "4px",
+                          border: "none",
+                          backgroundColor:
+                            !newWithdrawalTitle.trim() ||
+                            !newWithdrawalAddress.trim()
+                              ? "#4a5568"
+                              : "#ed8936",
+                          color: "white",
+                          cursor:
+                            !newWithdrawalTitle.trim() ||
+                            !newWithdrawalAddress.trim()
+                              ? "not-allowed"
+                              : "pointer",
+                          fontSize: "0.9em",
+                          fontWeight: "bold",
+                          width: "100%",
+                          opacity:
+                            !newWithdrawalTitle.trim() ||
+                            !newWithdrawalAddress.trim()
+                              ? 0.5
+                              : 1,
+                        }}
+                      >
+                        📍 Add Withdrawal Address
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Pending Withdrawal Address Requests */}
+                  {pendingWithdrawalRequests.length > 0 && (
+                    <div style={{ marginTop: "15px" }}>
+                      <h5
+                        style={{
+                          color: colors.warning.light,
+                          margin: `0 0 ${spacing.md} 0`,
+                        }}
+                      >
+                        ⏳ Pending New Addresses (
+                        {pendingWithdrawalRequests.length})
+                      </h5>
+                      <div style={{ ...utilityStyles.grid, gap: spacing.sm }}>
+                        {pendingWithdrawalRequests.map((request, index) => (
+                          <div
+                            key={index}
+                            style={{
+                              padding: "10px",
+                              backgroundColor: "#2a1810",
+                              borderRadius: "6px",
+                              border: "1px solid #ed8936",
+                            }}
+                          >
+                            <div
+                              style={{
+                                display: "flex",
+                                justifyContent: "space-between",
+                                alignItems: "center",
+                              }}
+                            >
+                              <div>
+                                <div
+                                  style={{
+                                    color: colors.text.primary,
+                                    fontWeight: fontWeight.bold,
+                                  }}
+                                >
+                                  📍 {request.title}
+                                </div>
+                                <div
+                                  style={{
+                                    fontSize: "0.8em",
+                                    color: "#a0aec0",
+                                    fontFamily: "monospace",
+                                  }}
+                                >
+                                  {request.destination.length > 50
+                                    ? `${request.destination.slice(
+                                        0,
+                                        25
+                                      )}...${request.destination.slice(-15)}`
+                                    : request.destination}
+                                </div>
+                                <div
+                                  style={{
+                                    fontSize: "0.7em",
+                                    color: "#ed8936",
+                                    marginTop: "4px",
+                                  }}
+                                >
+                                  ⏰ Will be available after setup is locked
+                                </div>
                               </div>
                             </div>
                           </div>
-                        </div>
-                      ))}
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
+                  )}
+                </div>
+              )}
+            </div>
           )}
           {/* Step 3: Lock In Your Wallet - Hidden when setup is committed */}
           {!isSetupCommitted && (
@@ -5929,105 +6037,108 @@ function AppContent() {
                 stepValidation
               )}
             >
-            <h3 style={stepStyles.step3Title}>
-              🧩 Step 3: Lock In Your Wallet
-            </h3>
+              <h3 style={stepStyles.step3Title}>
+                🧩 Step 3: Lock In Your Wallet
+              </h3>
 
-            <p style={stepStyles.stepDescription}>
-              {isSetupCommitted
-                ? "Your wallet is locked and all security features are active."
-                : "Ready to activate your wallet security? This will enable all spending limits and withdrawal controls."}
-            </p>
+              <p style={stepStyles.stepDescription}>
+                {isSetupCommitted
+                  ? "Your wallet is locked and all security features are active."
+                  : "Ready to activate your wallet security? This will enable all spending limits and withdrawal controls."}
+              </p>
 
-            {!isSetupCommitted ? (
-              <div>
-                <div
-                  style={{
-                    backgroundColor: "#1a1a1a",
-                    border: "1px solid #ed8936",
-                    borderRadius: "6px",
-                    padding: "12px",
-                    marginBottom: "15px",
-                  }}
-                >
-                  <h5
-                    style={{
-                      ...stepStyles.prerequisitesTitle,
-                      color: stepValidation.step1Complete
-                        ? colors.success.light
-                        : colors.warning.light,
-                    }}
-                  >
-                    📝 Prerequisites
-                  </h5>
+              {!isSetupCommitted ? (
+                <div>
                   <div
                     style={{
-                      fontSize: fontSize.xs,
-                      color: colors.text.muted,
+                      backgroundColor: "#1a1a1a",
+                      border: "1px solid #ed8936",
+                      borderRadius: "6px",
+                      padding: "12px",
+                      marginBottom: "15px",
                     }}
                   >
-                    <div
+                    <h5
                       style={{
-                        ...stepStyles.prerequisitesItem,
-                        ...(stepValidation.step1Complete
-                          ? stepStyles.prerequisitesItemComplete
-                          : stepStyles.prerequisitesItemIncomplete),
+                        ...stepStyles.prerequisitesTitle,
+                        color: stepValidation.step1Complete
+                          ? colors.success.light
+                          : colors.warning.light,
                       }}
                     >
-                      {stepValidation.step1Complete ? "✅" : "❌"}
-                      Set at least one spending limit
+                      📝 Prerequisites
+                    </h5>
+                    <div
+                      style={{
+                        fontSize: fontSize.xs,
+                        color: colors.text.muted,
+                      }}
+                    >
+                      <div
+                        style={{
+                          ...stepStyles.prerequisitesItem,
+                          ...(stepValidation.step1Complete
+                            ? stepStyles.prerequisitesItemComplete
+                            : stepStyles.prerequisitesItemIncomplete),
+                        }}
+                      >
+                        {stepValidation.step1Complete ? "✅" : "❌"}
+                        Set at least one spending limit
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                <div style={layoutStyles.textCenter}>
-                  <button
-                    onClick={commitSetup}
-                    disabled={!stepValidation.step1Complete}
+                  <div style={layoutStyles.textCenter}>
+                    <button
+                      onClick={commitSetup}
+                      disabled={!stepValidation.step1Complete}
+                      style={{
+                        ...stepStyles.lockInButton,
+                        ...(stepValidation.step1Complete
+                          ? stepStyles.lockInButtonActive
+                          : stepStyles.lockInButtonDisabled),
+                      }}
+                    >
+                      🔒 Lock In My Wallet
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div
+                  style={{
+                    padding: "20px",
+                    backgroundColor: "#1a365d",
+                    borderRadius: "8px",
+                    border: "2px solid #48bb78",
+                    textAlign: "center",
+                  }}
+                >
+                  <div style={{ fontSize: "3em", marginBottom: "10px" }}>
+                    🛡️
+                  </div>
+                  <h3
                     style={{
-                      ...stepStyles.lockInButton,
-                      ...(stepValidation.step1Complete
-                        ? stepStyles.lockInButtonActive
-                        : stepStyles.lockInButtonDisabled),
+                      color: colors.success.light,
+                      margin: `0 0 ${spacing.md} 0`,
                     }}
                   >
-                    🔒 Lock In My Wallet
-                  </button>
+                    Wallet Secured
+                  </h3>
+                  <p
+                    style={{
+                      color: "#e2e8f0",
+                      margin: 0,
+                      fontSize: "0.9em",
+                      lineHeight: "1.5",
+                    }}
+                  >
+                    Your spending limits are active and withdrawal controls are
+                    enforced. All security features are now protecting your
+                    funds.
+                  </p>
                 </div>
-              </div>
-            ) : (
-              <div
-                style={{
-                  padding: "20px",
-                  backgroundColor: "#1a365d",
-                  borderRadius: "8px",
-                  border: "2px solid #48bb78",
-                  textAlign: "center",
-                }}
-              >
-                <div style={{ fontSize: "3em", marginBottom: "10px" }}>🛡️</div>
-                <h3
-                  style={{
-                    color: colors.success.light,
-                    margin: `0 0 ${spacing.md} 0`,
-                  }}
-                >
-                  Wallet Secured
-                </h3>
-                <p
-                  style={{
-                    color: "#e2e8f0",
-                    margin: 0,
-                    fontSize: "0.9em",
-                    lineHeight: "1.5",
-                  }}
-                >
-                  Your spending limits are active and withdrawal controls are
-                  enforced. All security features are now protecting your funds.
-                </p>
-              </div>
-            )}
-          </div>
+              )}
+            </div>
           )}
           {isSetupCommitted && (
             <div
@@ -6528,7 +6639,8 @@ function AppContent() {
                         margin: `0 0 ${spacing.md} 0`,
                       }}
                     >
-                      🔒 Pending Bypass Requests ({pendingBypassRequests.length})
+                      🔒 Pending Bypass Requests ({pendingBypassRequests.length}
+                      )
                     </h5>
                     <div style={{ ...utilityStyles.grid, gap: spacing.sm }}>
                       {pendingBypassRequests.map((request, index) => {
@@ -6571,16 +6683,16 @@ function AppContent() {
                                     color: "#a0aec0",
                                   }}
                                 >
-                                  Period: {request.skipPeriod} • To: {request.destination?.slice(0, 8)}...{request.destination?.slice(-4)}
+                                  Period: {request.skipPeriod} • To:{" "}
+                                  {request.destination?.slice(0, 8)}...
+                                  {request.destination?.slice(-4)}
                                 </div>
                               </div>
                               <div style={{ display: "flex", gap: "6px" }}>
                                 {countdown.ready && (
                                   <button
                                     onClick={() =>
-                                      executeBypassRequest(
-                                        request.requestId
-                                      )
+                                      executeBypassRequest(request.requestId)
                                     }
                                     style={{
                                       padding: "4px 8px",
