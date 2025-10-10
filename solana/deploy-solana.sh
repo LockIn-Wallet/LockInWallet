@@ -548,29 +548,32 @@ setup_test_tokens() {
         log_warning "Token setup script not found, skipping token setup"
     fi
 
-    cd "$SOLANA_DIR/.."
+    # Return to original directory (removed cd to parent - causes verification issues)
 }
 
 # Verify program ID consistency
 verify_program_id() {
     log_info "Verifying program ID consistency..."
 
-# Already in solana directory, no need to cd
-
-    # PATH is dynamically set by find_tools() function
+    # Use solana-keygen directly from PATH (set by find_tools)
+    local KEYGEN_CMD="solana-keygen"
+    local SOLANA_CMD="solana"
 
     # Get program ID from keypair
     if [ -f "target/deploy/savings_core-keypair.json" ]; then
-        PROGRAM_ID=$("$SOLANA_BIN_DIR/solana-keygen" pubkey "target/deploy/savings_core-keypair.json" 2>/dev/null)
+        PROGRAM_ID=$($KEYGEN_CMD pubkey "target/deploy/savings_core-keypair.json" 2>/dev/null)
+        if [ $? -ne 0 ] || [ -z "$PROGRAM_ID" ]; then
+            log_error "Failed to read program ID from keypair"
+            return 1
+        fi
         log_info "Program ID from keypair: $PROGRAM_ID"
     else
-        log_error "Program keypair not found"
-    # No need to cd back
+        log_error "Program keypair not found at target/deploy/savings_core-keypair.json"
         return 1
     fi
 
-    # Check program ID in lib.rs
-    RUST_FILE="$SOLANA_DIR/programs/savings-core/src/lib.rs"
+    # Check program ID in lib.rs (use relative path)
+    RUST_FILE="programs/savings-core/src/lib.rs"
     if [ -f "$RUST_FILE" ]; then
         DECLARED_ID=$(grep "declare_id!" "$RUST_FILE" | sed 's/.*declare_id!("\([^"]*\)").*/\1/')
         log_info "Program ID in lib.rs: $DECLARED_ID"
@@ -581,18 +584,16 @@ verify_program_id() {
             log_error "❌ lib.rs program ID mismatch!"
             log_error "  Keypair: $PROGRAM_ID"
             log_error "  lib.rs:  $DECLARED_ID"
-        # No need to cd back
             return 1
         fi
     else
-        log_error "lib.rs not found"
-    # No need to cd back
+        log_error "lib.rs not found at $RUST_FILE"
         return 1
     fi
 
-    # Check program ID in Anchor.toml
-    if [ -f "$SOLANA_DIR/Anchor.toml" ]; then
-        ANCHOR_ID=$(grep "savings_core" "$SOLANA_DIR/Anchor.toml" | sed 's/.*savings_core = "\([^"]*\)".*/\1/')
+    # Check program ID in Anchor.toml (use relative path)
+    if [ -f "Anchor.toml" ]; then
+        ANCHOR_ID=$(grep "savings_core" "Anchor.toml" | head -1 | sed 's/.*savings_core = "\([^"]*\)".*/\1/')
         log_info "Program ID in Anchor.toml: $ANCHOR_ID"
 
         if [ "$PROGRAM_ID" = "$ANCHOR_ID" ]; then
@@ -601,55 +602,49 @@ verify_program_id() {
             log_error "❌ Anchor.toml program ID mismatch!"
             log_error "  Keypair:     $PROGRAM_ID"
             log_error "  Anchor.toml: $ANCHOR_ID"
-        # No need to cd back
             return 1
         fi
     else
         log_error "Anchor.toml not found"
-    # No need to cd back
         return 1
     fi
 
     # Check if program is actually deployed
     log_info "Checking if program is deployed on validator..."
-    if "$SOLANA_CLI" program show "$PROGRAM_ID" > /dev/null 2>&1; then
+    if $SOLANA_CMD program show "$PROGRAM_ID" > /dev/null 2>&1; then
         log_info "✅ Program is deployed on validator"
 
         # Get deployment info
-        DEPLOYED_INFO=$("$SOLANA_CLI" program show "$PROGRAM_ID" 2>/dev/null)
+        DEPLOYED_INFO=$($SOLANA_CMD program show "$PROGRAM_ID" 2>/dev/null)
         if echo "$DEPLOYED_INFO" | grep -q "Program Id: $PROGRAM_ID"; then
             log_info "✅ Deployed program ID matches expected ID"
         else
             log_error "❌ Deployed program info doesn't match expected ID"
-        # No need to cd back
             return 1
         fi
     else
         log_error "❌ Program not found on validator"
-    # No need to cd back
         return 1
     fi
 
     # Check frontend addresses file
     FRONTEND_ADDRESSES="../frontend/src/savings_core.json"
     if [ -f "$FRONTEND_ADDRESSES" ]; then
-        FRONTEND_ID=$(grep '"address"' "$FRONTEND_ADDRESSES" | sed 's/.*"address": "\([^"]*\)".*/\1/')
+        FRONTEND_ID=$(grep '"address":' "$FRONTEND_ADDRESSES" | head -1 | sed 's/.*"address": *"\([^"]*\)".*/\1/')
         log_info "Program ID in frontend: $FRONTEND_ID"
 
-        if [ "$PROGRAM_ID" = "$FRONTEND_ID" ]; then
+        if [ -n "$FRONTEND_ID" ] && [ "$PROGRAM_ID" = "$FRONTEND_ID" ]; then
             log_info "✅ Frontend program ID matches keypair"
         else
-            log_error "❌ Frontend program ID mismatch!"
+            log_error "❌ Frontend program ID mismatch or parsing failed!"
             log_error "  Keypair:  $PROGRAM_ID"
             log_error "  Frontend: $FRONTEND_ID"
-        # No need to cd back
             return 1
         fi
     else
         log_warning "Frontend addresses file not found, will be created by update script"
     fi
 
-# No need to cd back
     log_info "🎉 All program ID consistency checks passed!"
     return 0
 }

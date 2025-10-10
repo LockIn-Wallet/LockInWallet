@@ -41,8 +41,8 @@ export class SolanaAdapter extends BlockchainAdapter {
     this.wallet = wallet;
     this.connection = connection;
     this.userAddress = null;
-    this.PROGRAM_ID = new PublicKey("b7DwCc8gcNd5hfUit1ezJXGXxd2pjga6BTz2vB6e62y"); // Updated 2025-10-10
-    this.DEPOSIT_PROXY_PROGRAM_ID = new PublicKey("9YoBL7APteanq755GyDLpMLUwXaidEAojpophJcoX5W4"); // Updated 2025-10-10
+    this.PROGRAM_ID = new PublicKey("EYzR74ixPESkTn927Qmvp5H8TqMMeF1A1DKRc7g4DTFC"); // Updated 2025-10-10
+    this.DEPOSIT_PROXY_PROGRAM_ID = new PublicKey("5wF1LdVJgPLjszC1PnACChApTxK2yXSvU813ztzoe558"); // Updated 2025-10-10
 
     if (this.wallet?.connected && this.wallet?.publicKey) {
       this.userAddress = this.wallet.publicKey.toString();
@@ -105,6 +105,317 @@ export class SolanaAdapter extends BlockchainAdapter {
     // Update our connection
     this.networkConfig = networkConfig;
     this.connection = new Connection(networkConfig.rpcUrl, 'confirmed');
+  }
+
+  // ========== TOKEN-AWARE DECIMAL SYSTEM ==========
+
+  /**
+   * Get the decimal precision for a given token
+   * @param {string} tokenMint - Token mint address or 'SOL'/'native'
+   * @returns {number} Number of decimal places
+   */
+  getTokenDecimals(tokenMint) {
+    // Handle SOL/native tokens
+    if (tokenMint === 'SOL' || tokenMint === 'native' || tokenMint === SystemProgram.programId.toString()) {
+      return 9; // SOL has 9 decimals
+    }
+
+    // Common SPL tokens with known decimals
+    const knownTokens = {
+      'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v': 6, // USDT
+      'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB': 6, // USDT (alternative)
+      'A9mUU4qviSctJVPJdBJWkb28deg915LYJKrzQ19ji3FM': 6, // USDCet (USDC Ethereum)
+      'Gh9ZwEmdLJ8DscKNTkTqPbNwLNNBjuSzaG9Vp2KGtKJr': 6, // USDC
+      '4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R': 6, // RAY
+      'So11111111111111111111111111111111111111112': 9,  // Wrapped SOL
+    };
+
+    // Return known decimal count or default to 6 for most SPL tokens
+    return knownTokens[tokenMint] || 6;
+  }
+
+  /**
+   * Convert human-readable amount to smallest unit (lamports/token units)
+   * @param {number|string} amount - Human-readable amount
+   * @param {string} tokenMint - Token mint address
+   * @returns {BigInt} Amount in smallest units
+   */
+  toSmallestUnit(amount, tokenMint) {
+    const decimals = this.getTokenDecimals(tokenMint);
+    const multiplier = Math.pow(10, decimals);
+    return BigInt(Math.floor(parseFloat(amount) * multiplier));
+  }
+
+  /**
+   * Convert smallest unit amount to human-readable amount
+   * @param {BigInt|number|string} amount - Amount in smallest units
+   * @param {string} tokenMint - Token mint address
+   * @returns {number} Human-readable amount
+   */
+  fromSmallestUnit(amount, tokenMint) {
+    const decimals = this.getTokenDecimals(tokenMint);
+    const divisor = Math.pow(10, decimals);
+    return Number(amount) / divisor;
+  }
+
+  /**
+   * Format amount for display with appropriate decimal places
+   * @param {BigInt|number|string} amount - Amount in smallest units
+   * @param {string} tokenMint - Token mint address
+   * @param {number} displayDecimals - Number of decimal places to show (default: 2)
+   * @returns {string} Formatted amount string
+   */
+  formatAmount(amount, tokenMint, displayDecimals = 2) {
+    const humanAmount = this.fromSmallestUnit(amount, tokenMint);
+    return humanAmount.toFixed(displayDecimals);
+  }
+
+  // Helper to parse custom program errors from simulation results
+  _parseCustomProgramError(simulationError, programLogs = []) {
+    try {
+      // First, check for detailed Anchor error information in program logs
+      if (programLogs && programLogs.length > 0) {
+        for (const log of programLogs) {
+          // Look for Anchor error pattern: "AnchorError thrown in src/instructions.rs:1579. Error Code: InvalidParameters. Error Number: 6011. Error Message: Invalid parameters provided."
+          const anchorErrorRegex = /AnchorError thrown in (.+?)\. Error Code: (.+?)\. Error Number: (\d+)\. Error Message: (.+?)\./;
+          const match = log.match(anchorErrorRegex);
+
+          if (match) {
+            const [, sourceLocation, errorCode, errorNumber, errorMessage] = match;
+            return `${errorMessage} (${errorCode} #${errorNumber} at ${sourceLocation})`;
+          }
+
+          // Also look for simpler error patterns
+          if (log.includes('Error Message:')) {
+            const simpleErrorRegex = /Error Message: (.+?)(\.|$)/;
+            const simpleMatch = log.match(simpleErrorRegex);
+            if (simpleMatch) {
+              return simpleMatch[1];
+            }
+          }
+        }
+      }
+
+      // Check for custom program error
+      if (simulationError.InstructionError && simulationError.InstructionError[1].Custom) {
+        const errorCode = simulationError.InstructionError[1].Custom;
+
+        // Map common Anchor/custom error codes to readable messages
+        const errorMessages = {
+          // Common Anchor errors
+          0x0: "Instruction did not deserialize",
+          0x1: "Instruction did not serialize",
+          0x2: "Account did not deserialize",
+          0x3: "Account did not serialize",
+          0x64: "Constraint was violated",
+          0x65: "Insufficient funds",
+          0x66: "State is invalid",
+
+          // Custom program errors (these would be defined in your Rust program)
+          0x1770: "Request not found or already executed",
+          0x1771: "Timelock period has not elapsed",
+          0x1772: "Invalid destination address",
+          0x1773: "Request has been cancelled",
+          0x1774: "Request has expired",
+          0x1775: "Insufficient balance for withdrawal",
+          0x1776: "Spending limit exceeded",
+          0x1777: "Invalid request ID",
+          0x1778: "Request execution time not reached",
+          0x1779: "Account not initialized",
+          0x177A: "Invalid authority",
+          0x177B: "Too many pending requests",
+          0x177C: "Invalid amount",
+          0x177D: "Token mint mismatch"
+        };
+
+        if (errorMessages[errorCode]) {
+          return errorMessages[errorCode];
+        } else {
+          return `Custom program error ${errorCode} (0x${errorCode.toString(16)})`;
+        }
+      }
+
+      // Check for other error types
+      if (simulationError.InstructionError && simulationError.InstructionError[1].InsufficientFunds) {
+        return "Insufficient funds for transaction";
+      }
+
+      if (simulationError.InstructionError && simulationError.InstructionError[1].InvalidAccountData) {
+        return "Invalid account data or account not properly initialized";
+      }
+
+      if (simulationError.InstructionError && simulationError.InstructionError[1].AccountNotFound) {
+        return "Required account not found - ensure account is initialized";
+      }
+
+      // Parse program logs for additional context
+      if (programLogs && programLogs.length > 0) {
+        for (const log of programLogs) {
+          if (log.includes('Error:') || log.includes('panicked')) {
+            return `Program error: ${log}`;
+          }
+        }
+      }
+
+      return `Transaction simulation failed: ${JSON.stringify(simulationError)}`;
+    } catch (parseError) {
+      return `Failed to parse program error: ${simulationError}`;
+    }
+  }
+
+  // Helper to get method name from transaction discriminator
+  _getMethodNameFromTransaction(transaction) {
+    try {
+      if (transaction.instructions && transaction.instructions.length > 0) {
+        const instruction = transaction.instructions[0];
+        if (instruction.data && instruction.data.length >= 8) {
+          const discriminator = Array.from(instruction.data.slice(0, 8));
+
+          // Reverse lookup from discriminator to method name
+          const discriminators = {
+            'AddTimePeriodLimit': [241, 217, 123, 93, 14, 188, 236, 51],
+            'AddWithdrawalDestination': [22, 253, 18, 184, 234, 85, 147, 84],
+            'CancelLimitProposal': [201, 126, 142, 5, 126, 97, 232, 133],
+            'CancelWithdrawalBypass': [67, 241, 187, 146, 79, 62, 136, 181],
+            'CancelWithdrawalDestinationRequest': [233, 183, 160, 123, 7, 15, 61, 197],
+            'CommitInitialSetup': [248, 193, 240, 26, 1, 132, 74, 226],
+            'DepositSol': [108, 81, 78, 117, 125, 155, 56, 200],
+            'DepositSolSelf': [253, 113, 121, 194, 75, 233, 114, 223],
+            'DepositSpl': [224, 0, 198, 175, 198, 47, 105, 204],
+            'DepositSplSelf': [177, 32, 212, 139, 117, 61, 41, 95],
+            'ExecuteLimitProposal': [77, 88, 235, 59, 216, 111, 1, 133],
+            'ExecuteSplWithdrawalBypass': [241, 42, 36, 134, 236, 241, 142, 40],
+            'ExecuteWithdrawalBypass': [179, 43, 138, 230, 25, 62, 50, 189],
+            'ExecuteWithdrawalDestinationRequest': [117, 222, 85, 202, 28, 30, 24, 66],
+            'ProposeLimitChange': [240, 134, 56, 167, 156, 63, 133, 138],
+            'RemoveTimePeriodLimit': [228, 71, 179, 28, 246, 39, 126, 179],
+            'RequestWithdrawalBypass': [169, 181, 15, 31, 30, 209, 180, 40],
+            'RequestWithdrawalDestinationAddition': [54, 218, 102, 157, 3, 140, 19, 151],
+            'SetCommonPeriodLimits': [254, 2, 48, 72, 183, 81, 218, 100],
+            'WithdrawSolToDestination': [59, 82, 37, 12, 148, 66, 139, 94],
+            'WithdrawSolWithLimits': [110, 152, 129, 179, 210, 78, 140, 98],
+            'WithdrawSplToDestination': [129, 219, 175, 220, 63, 101, 157, 224],
+            'WithdrawSplWithLimits': [252, 241, 84, 159, 224, 212, 124, 95]
+          };
+
+          // Find matching discriminator
+          for (const [methodName, methodDiscriminator] of Object.entries(discriminators)) {
+            if (JSON.stringify(discriminator) === JSON.stringify(methodDiscriminator)) {
+              return methodName;
+            }
+          }
+        }
+      }
+    } catch (error) {
+      // If we can't derive the method name, fall back to generic
+    }
+
+    return 'transaction';
+  }
+
+  // Enhanced transaction sender with detailed error handling
+  async _sendTransaction(transaction, context = {}) {
+    // Auto-derive method name from transaction discriminator
+    const methodName = this._getMethodNameFromTransaction(transaction);
+
+    if (!this.wallet?.publicKey) {
+      throw new Error(`${methodName}: Wallet not connected`);
+    }
+
+    try {
+      // Check user account balance before sending transaction
+      const userBalance = await this.connection.getBalance(this.wallet.publicKey);
+      const estimatedFee = 5000; // Typical transaction fee in lamports
+
+      if (userBalance < estimatedFee) {
+        throw new Error(`${methodName}: Insufficient SOL balance for transaction fees. Required: ${estimatedFee / 1e9} SOL, Available: ${userBalance / 1e9} SOL`);
+      }
+
+      console.log(`🚀 Sending ${methodName} transaction...`);
+      console.log(`📍 User: ${this.wallet.publicKey.toString()}`);
+      console.log(`💰 Balance: ${userBalance / 1e9} SOL`);
+
+      if (context.requestId) {
+        console.log(`🆔 Request ID: [${context.requestId}]`);
+      }
+
+      // Prepare transaction with required fields for simulation and sending
+      console.log(`🔧 Preparing ${methodName} transaction...`);
+      transaction.feePayer = this.wallet.publicKey;
+      const { blockhash } = await this.connection.getLatestBlockhash();
+      transaction.recentBlockhash = blockhash;
+
+      // Simulate transaction first to get detailed program errors
+      console.log(`🔍 Simulating ${methodName} transaction...`);
+      try {
+        const simulation = await this.connection.simulateTransaction(transaction);
+
+        if (simulation.value.err) {
+          const programLogs = simulation.value.logs || [];
+          console.log(`📜 Program logs:`, programLogs);
+
+          const detailedError = this._parseCustomProgramError(simulation.value.err, programLogs);
+          throw new Error(`${methodName}: ${detailedError}`);
+        }
+
+        console.log(`✅ ${methodName} simulation successful`);
+        if (simulation.value.logs && simulation.value.logs.length > 0) {
+          console.log(`📋 Simulation logs:`, simulation.value.logs);
+        }
+      } catch (simulationError) {
+        if (simulationError.message.includes(methodName)) {
+          // This is our custom error from _parseCustomProgramError
+          throw simulationError;
+        } else {
+          // This is a simulation failure (network, etc.)
+          console.warn(`⚠️ Transaction simulation failed (proceeding anyway): ${simulationError.message}`);
+        }
+      }
+
+      // Send the transaction
+      const txHash = await this.wallet.sendTransaction(transaction, this.connection);
+      console.log(`✅ ${methodName} transaction sent: ${txHash}`);
+
+      return txHash;
+
+    } catch (error) {
+      console.error(`❌ ${methodName} transaction failed:`, error);
+
+      // Parse common Solana error types for better user experience
+      let errorMessage = error.message || 'Unknown error';
+
+      if (errorMessage.includes('User rejected')) {
+        throw new Error(`${methodName}: Transaction was rejected by user`);
+      }
+
+      if (errorMessage.includes('insufficient')) {
+        throw new Error(`${methodName}: Insufficient funds for transaction`);
+      }
+
+      if (errorMessage.includes('blockhash')) {
+        throw new Error(`${methodName}: Transaction expired, please try again`);
+      }
+
+      if (errorMessage.includes('signature verification')) {
+        throw new Error(`${methodName}: Invalid transaction signature`);
+      }
+
+      if (errorMessage.includes('Account not found')) {
+        throw new Error(`${methodName}: Required account not found. Ensure account is properly initialized.`);
+      }
+
+      if (errorMessage.includes('custom program error')) {
+        // Extract program error code if available
+        const match = errorMessage.match(/custom program error: 0x([a-fA-F0-9]+)/);
+        if (match) {
+          const errorCode = parseInt(match[1], 16);
+          throw new Error(`${methodName}: Program error ${errorCode}. Check program logs for details.`);
+        }
+      }
+
+      // For any other error, provide the context
+      throw new Error(`${methodName}: ${errorMessage}${context.requestId ? ` (Request: [${context.requestId}])` : ''}`);
+    }
   }
 
   // Balance Management
@@ -365,7 +676,7 @@ export class SolanaAdapter extends BlockchainAdapter {
         transaction.feePayer = userPubkey;
 
         console.log('Sending transaction with', transaction.instructions.length, 'instructions');
-        const txHash = await this.wallet.sendTransaction(transaction, this.connection);
+        const txHash = await this._sendTransaction(transaction);
         console.log('SOL deposit transaction:', txHash);
 
         return {
@@ -453,7 +764,7 @@ export class SolanaAdapter extends BlockchainAdapter {
         transaction.feePayer = userPubkey;
 
         console.log('Sending transaction with', transaction.instructions.length, 'instructions');
-        const txHash = await this.wallet.sendTransaction(transaction, this.connection);
+        const txHash = await this._sendTransaction(transaction);
         console.log('SPL token deposit transaction:', txHash);
 
         return {
@@ -628,7 +939,7 @@ export class SolanaAdapter extends BlockchainAdapter {
       const transaction = new Transaction().add(instruction);
       transaction.feePayer = userPubkey;
 
-      const signature = await this.wallet.sendTransaction(transaction, this.connection);
+      const signature = await this._sendTransaction(transaction);
       await this.connection.confirmTransaction(signature, 'confirmed');
 
       console.log('✅ Savings account initialized:', signature);
@@ -688,7 +999,7 @@ export class SolanaAdapter extends BlockchainAdapter {
       transaction.recentBlockhash = blockhash;
       transaction.feePayer = userPubkey;
 
-      const signature = await this.wallet.sendTransaction(transaction, this.connection);
+      const signature = await this._sendTransaction(transaction);
       await this.connection.confirmTransaction(signature, 'confirmed');
 
       console.log('✅ Deposit proxy initialized:', signature);
@@ -917,7 +1228,7 @@ export class SolanaAdapter extends BlockchainAdapter {
       accounts: (accountsObj) => ({
         rpc: async () => {
           const transaction = new web3.Transaction().add(instruction);
-          return await this.wallet.sendTransaction(transaction, this.connection);
+          return await this._sendTransaction(transaction);
         }
       })
     };
@@ -978,7 +1289,7 @@ export class SolanaAdapter extends BlockchainAdapter {
     const transaction = new web3.Transaction().add(instruction);
 
     try {
-      const txHash = await this.wallet.sendTransaction(transaction, this.connection);
+      const txHash = await this._sendTransaction(transaction);
       console.log('Transaction sent successfully:', txHash);
 
       // Resolve the pending promise
@@ -1064,7 +1375,7 @@ export class SolanaAdapter extends BlockchainAdapter {
             transaction.feePayer = userPubkey;
 
             console.log('Sending transaction with recent blockhash:', blockhash);
-            const txHash = await this.wallet.sendTransaction(transaction, this.connection);
+            const txHash = await this._sendTransaction(transaction);
             console.log('Initialize transaction sent successfully:', txHash);
             return txHash;
           } catch (error) {
@@ -1180,7 +1491,7 @@ export class SolanaAdapter extends BlockchainAdapter {
     transaction.feePayer = this.wallet.publicKey;
 
     console.log('📤 SolanaAdapter: Sending spending limits initialization transaction...');
-    const txHash = await this.wallet.sendTransaction(transaction, this.connection);
+    const txHash = await this._sendTransaction(transaction);
     console.log('📝 SolanaAdapter: Transaction sent with signature:', txHash);
 
     // Wait for transaction confirmation
@@ -1263,11 +1574,13 @@ export class SolanaAdapter extends BlockchainAdapter {
     // Encode optional values (1 byte for Some/None + 8 bytes for u64 if Some)
     let data = discriminator;
 
-    // Daily limit
+    // Daily limit - Use USDT as the base denomination for spending limits
+    const SPENDING_LIMIT_TOKEN = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'; // USDT
     if (dailyLimit !== null && dailyLimit !== undefined) {
       data = Buffer.concat([data, Buffer.from([1])]);  // Some
       const dailyBuffer = Buffer.alloc(8);
-      dailyBuffer.writeBigUInt64LE(BigInt(Math.floor(dailyLimit * 1000000)), 0); // Convert to lamports/smallest unit
+      const dailyAmountSmallest = this.toSmallestUnit(dailyLimit, SPENDING_LIMIT_TOKEN);
+      dailyBuffer.writeBigUInt64LE(dailyAmountSmallest, 0);
       data = Buffer.concat([data, dailyBuffer]);
     } else {
       data = Buffer.concat([data, Buffer.from([0])]);  // None
@@ -1277,7 +1590,8 @@ export class SolanaAdapter extends BlockchainAdapter {
     if (weeklyLimit !== null && weeklyLimit !== undefined) {
       data = Buffer.concat([data, Buffer.from([1])]);  // Some
       const weeklyBuffer = Buffer.alloc(8);
-      weeklyBuffer.writeBigUInt64LE(BigInt(Math.floor(weeklyLimit * 1000000)), 0);
+      const weeklyAmountSmallest = this.toSmallestUnit(weeklyLimit, SPENDING_LIMIT_TOKEN);
+      weeklyBuffer.writeBigUInt64LE(weeklyAmountSmallest, 0);
       data = Buffer.concat([data, weeklyBuffer]);
     } else {
       data = Buffer.concat([data, Buffer.from([0])]);  // None
@@ -1287,7 +1601,8 @@ export class SolanaAdapter extends BlockchainAdapter {
     if (monthlyLimit !== null && monthlyLimit !== undefined) {
       data = Buffer.concat([data, Buffer.from([1])]);  // Some
       const monthlyBuffer = Buffer.alloc(8);
-      monthlyBuffer.writeBigUInt64LE(BigInt(Math.floor(monthlyLimit * 1000000)), 0);
+      const monthlyAmountSmallest = this.toSmallestUnit(monthlyLimit, SPENDING_LIMIT_TOKEN);
+      monthlyBuffer.writeBigUInt64LE(monthlyAmountSmallest, 0);
       data = Buffer.concat([data, monthlyBuffer]);
     } else {
       data = Buffer.concat([data, Buffer.from([0])]);  // None
@@ -1327,7 +1642,7 @@ export class SolanaAdapter extends BlockchainAdapter {
       }
 
       console.log('✅ SolanaAdapter: Simulation passed, sending transaction...');
-      const txHash = await this.wallet.sendTransaction(transaction, this.connection);
+      const txHash = await this._sendTransaction(transaction);
       console.log('📝 SolanaAdapter: Transaction sent with signature:', txHash);
 
       // Wait for transaction confirmation to ensure it's processed
@@ -1364,9 +1679,11 @@ export class SolanaAdapter extends BlockchainAdapter {
     const nameLength = Buffer.alloc(4);
     nameLength.writeUInt32LE(nameBytes.length, 0);
 
-    // Amount encoding (convert to smallest unit)
+    // Amount encoding (convert to smallest unit) - Use USDT as base denomination
+    const SPENDING_LIMIT_TOKEN = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'; // USDT
     const limitBuffer = Buffer.alloc(8);
-    limitBuffer.writeBigUInt64LE(BigInt(Math.floor(limit * 1000000)), 0);
+    const limitAmountSmallest = this.toSmallestUnit(limit, SPENDING_LIMIT_TOKEN);
+    limitBuffer.writeBigUInt64LE(limitAmountSmallest, 0);
 
     // Duration encoding (seconds)
     const durationBuffer = Buffer.alloc(8);
@@ -1385,7 +1702,7 @@ export class SolanaAdapter extends BlockchainAdapter {
 
     const transaction = new Transaction().add(instruction);
     transaction.feePayer = this.wallet.publicKey;
-    return await this.wallet.sendTransaction(transaction, this.connection);
+    return await this._sendTransaction(transaction);
   }
 
   // Remove time period limit
@@ -1417,7 +1734,7 @@ export class SolanaAdapter extends BlockchainAdapter {
 
     const transaction = new Transaction().add(instruction);
     transaction.feePayer = this.wallet.publicKey;
-    return await this.wallet.sendTransaction(transaction, this.connection);
+    return await this._sendTransaction(transaction);
   }
 
   // Commit initial setup
@@ -1442,7 +1759,7 @@ export class SolanaAdapter extends BlockchainAdapter {
 
     const transaction = new Transaction().add(instruction);
     transaction.feePayer = this.wallet.publicKey;
-    return await this.wallet.sendTransaction(transaction, this.connection);
+    return await this._sendTransaction(transaction);
   }
 
   // Commit setup with limits in a single batched transaction (solves double approval issue)
@@ -1502,11 +1819,13 @@ export class SolanaAdapter extends BlockchainAdapter {
       const setLimitsDiscriminator = Buffer.from(this._generateDiscriminator('SetCommonPeriodLimits'));
       let setLimitsData = setLimitsDiscriminator;
 
-      // Daily limit
+      // Daily limit - Use USDT as base denomination for spending limits
+      const SPENDING_LIMIT_TOKEN = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'; // USDT
       if (dailyLimit !== null && dailyLimit !== undefined) {
         setLimitsData = Buffer.concat([setLimitsData, Buffer.from([1])]);  // Some
         const dailyBuffer = Buffer.alloc(8);
-        dailyBuffer.writeBigUInt64LE(BigInt(Math.floor(dailyLimit * 1000000)), 0); // Convert to lamports/smallest unit
+        const dailyAmountSmallest = this.toSmallestUnit(dailyLimit, SPENDING_LIMIT_TOKEN);
+        dailyBuffer.writeBigUInt64LE(dailyAmountSmallest, 0);
         setLimitsData = Buffer.concat([setLimitsData, dailyBuffer]);
       } else {
         setLimitsData = Buffer.concat([setLimitsData, Buffer.from([0])]);  // None
@@ -1516,7 +1835,8 @@ export class SolanaAdapter extends BlockchainAdapter {
       if (weeklyLimit !== null && weeklyLimit !== undefined) {
         setLimitsData = Buffer.concat([setLimitsData, Buffer.from([1])]);  // Some
         const weeklyBuffer = Buffer.alloc(8);
-        weeklyBuffer.writeBigUInt64LE(BigInt(Math.floor(weeklyLimit * 1000000)), 0);
+        const weeklyAmountSmallest = this.toSmallestUnit(weeklyLimit, SPENDING_LIMIT_TOKEN);
+        weeklyBuffer.writeBigUInt64LE(weeklyAmountSmallest, 0);
         setLimitsData = Buffer.concat([setLimitsData, weeklyBuffer]);
       } else {
         setLimitsData = Buffer.concat([setLimitsData, Buffer.from([0])]);  // None
@@ -1526,7 +1846,8 @@ export class SolanaAdapter extends BlockchainAdapter {
       if (monthlyLimit !== null && monthlyLimit !== undefined) {
         setLimitsData = Buffer.concat([setLimitsData, Buffer.from([1])]);  // Some
         const monthlyBuffer = Buffer.alloc(8);
-        monthlyBuffer.writeBigUInt64LE(BigInt(Math.floor(monthlyLimit * 1000000)), 0);
+        const monthlyAmountSmallest = this.toSmallestUnit(monthlyLimit, SPENDING_LIMIT_TOKEN);
+        monthlyBuffer.writeBigUInt64LE(monthlyAmountSmallest, 0);
         setLimitsData = Buffer.concat([setLimitsData, monthlyBuffer]);
       } else {
         setLimitsData = Buffer.concat([setLimitsData, Buffer.from([0])]);  // None
@@ -1600,7 +1921,7 @@ export class SolanaAdapter extends BlockchainAdapter {
       }
 
       console.log('✅ SolanaAdapter: Simulation passed, sending batched transaction...');
-      const txHash = await this.wallet.sendTransaction(transaction, this.connection);
+      const txHash = await this._sendTransaction(transaction);
       console.log('📝 SolanaAdapter: Batched setup transaction sent with signature:', txHash);
 
       // Wait for transaction confirmation
@@ -1853,11 +2174,14 @@ export class SolanaAdapter extends BlockchainAdapter {
   formatSpendingLimitsForFrontend(accountData) {
     const limits = [];
 
+    // Spending limits are denominated in USDT
+    const SPENDING_LIMIT_TOKEN = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'; // USDT
+
     // Add time period limits
     accountData.timePeriodLimits.forEach(limit => {
-      // Convert from lamports to USDT (divide by 1000000000 - 1e9)
-      const limitAmount = Number(limit.limit) / 1000000000;
-      const spentAmount = Number(limit.currentSpent) / 1000000000;
+      // Convert from smallest units to human-readable amounts using token-aware conversion
+      const limitAmount = this.fromSmallestUnit(limit.limit, SPENDING_LIMIT_TOKEN);
+      const spentAmount = this.fromSmallestUnit(limit.currentSpent, SPENDING_LIMIT_TOKEN);
       const remainingAmount = limitAmount - spentAmount;
 
       // Calculate time remaining for reset
@@ -1881,7 +2205,7 @@ export class SolanaAdapter extends BlockchainAdapter {
     return {
       limits,
       isSetupCommitted: accountData.isSetupCommitted,
-      totalLockedValue: Number(accountData.totalLockedValue) / 1000000 // Convert to SOL
+      totalLockedValue: this.fromSmallestUnit(accountData.totalLockedValue, 'SOL') // Convert from lamports to SOL
     };
   }
 
@@ -1924,7 +2248,7 @@ export class SolanaAdapter extends BlockchainAdapter {
       });
 
       const transaction = new Transaction().add(instruction);
-      return await this.wallet.sendTransaction(transaction, this.connection);
+      return await this._sendTransaction(transaction);
     } else {
       // SPL token withdrawal with limits - more complex, needs token accounts
       const mintPubkey = new PublicKey(tokenAddress);
@@ -1951,7 +2275,7 @@ export class SolanaAdapter extends BlockchainAdapter {
       });
 
       const transaction = new Transaction().add(instruction);
-      return await this.wallet.sendTransaction(transaction, this.connection);
+      return await this._sendTransaction(transaction);
     }
   }
 
@@ -2047,7 +2371,7 @@ export class SolanaAdapter extends BlockchainAdapter {
         }
       });
 
-      const txHash = await this.wallet.sendTransaction(transaction, this.connection);
+      const txHash = await this._sendTransaction(transaction);
       console.log(`✅ Proposed limit change for ${periodName}: ${newLimit} (tx: ${txHash})`);
 
       // Wait for transaction confirmation to ensure blockchain state is updated
@@ -2227,7 +2551,7 @@ export class SolanaAdapter extends BlockchainAdapter {
     });
 
     const transaction = new Transaction().add(instruction);
-    const txHash = await this.wallet.sendTransaction(transaction, this.connection);
+    const txHash = await this._sendTransaction(transaction);
 
     // Wait for transaction confirmation to ensure blockchain state is updated
     console.log('⏳ Waiting for proposal execution transaction confirmation...');
@@ -2263,7 +2587,7 @@ export class SolanaAdapter extends BlockchainAdapter {
     });
 
     const transaction = new Transaction().add(instruction);
-    const txHash = await this.wallet.sendTransaction(transaction, this.connection);
+    const txHash = await this._sendTransaction(transaction);
 
     console.log(`Cancelled proposal ${proposalId} (tx: ${txHash})`);
 
@@ -2513,7 +2837,7 @@ export class SolanaAdapter extends BlockchainAdapter {
       throw new Error(`Failed to simulate transaction: ${simError.message}`);
     }
 
-    const txHash = await this.wallet.sendTransaction(transaction, this.connection);
+    const txHash = await this._sendTransaction(transaction);
 
     // Wait for transaction confirmation to ensure blockchain state is updated
     console.log('⏳ Waiting for withdrawal destination request transaction confirmation...');
@@ -2591,7 +2915,7 @@ export class SolanaAdapter extends BlockchainAdapter {
     const { blockhash } = await this.connection.getRecentBlockhash();
     transaction.recentBlockhash = blockhash;
 
-    const txHash = await this.wallet.sendTransaction(transaction, this.connection);
+    const txHash = await this._sendTransaction(transaction);
 
     // Wait for transaction confirmation before returning
     console.log('⏳ Waiting for transaction confirmation...');
@@ -2631,7 +2955,7 @@ export class SolanaAdapter extends BlockchainAdapter {
     });
 
     const transaction = new Transaction().add(instruction);
-    const txHash = await this.wallet.sendTransaction(transaction, this.connection);
+    const txHash = await this._sendTransaction(transaction);
 
     console.log(`✅ Executed withdrawal destination request: ${requestId} (tx: ${txHash})`);
     return txHash;
@@ -2666,7 +2990,7 @@ export class SolanaAdapter extends BlockchainAdapter {
     });
 
     const transaction = new Transaction().add(instruction);
-    const txHash = await this.wallet.sendTransaction(transaction, this.connection);
+    const txHash = await this._sendTransaction(transaction);
 
     console.log(`✅ Cancelled withdrawal destination request: ${requestId} (tx: ${txHash})`);
     return txHash;
@@ -2702,7 +3026,7 @@ export class SolanaAdapter extends BlockchainAdapter {
     });
 
     const transaction = new Transaction().add(instruction);
-    const txHash = await this.wallet.sendTransaction(transaction, this.connection);
+    const txHash = await this._sendTransaction(transaction);
 
     console.log(`✅ Removed withdrawal destination: ${address} (tx: ${txHash})`);
     return txHash;
@@ -2764,7 +3088,7 @@ export class SolanaAdapter extends BlockchainAdapter {
     }
 
     console.log('📤 SolanaAdapter: Simulation passed, sending SOL withdrawal transaction...');
-    const txHash = await this.wallet.sendTransaction(transaction, this.connection);
+    const txHash = await this._sendTransaction(transaction);
 
     console.log(`✅ Withdrew ${amount} lamports to ${destination} (tx: ${txHash})`);
     return txHash;
@@ -2874,7 +3198,7 @@ export class SolanaAdapter extends BlockchainAdapter {
     }
 
     console.log('📤 SolanaAdapter: Simulation passed, sending withdrawal transaction...');
-    const txHash = await this.wallet.sendTransaction(transaction, this.connection);
+    const txHash = await this._sendTransaction(transaction);
 
     console.log(`✅ Withdrew ${amount} tokens to ${destination} (tx: ${txHash})`);
     return txHash;
@@ -3335,8 +3659,8 @@ export class SolanaAdapter extends BlockchainAdapter {
     const userPubkey = this.wallet.publicKey;
     const [savingsAccount] = await this.getSavingsAccountPDA(userPubkey);
 
-    // Convert amount to appropriate units
-    const amountBigInt = BigInt(Math.floor(parseFloat(amount) * Math.pow(10, 9))); // Convert to lamports for SOL
+    // Convert amount to appropriate units based on token type
+    const amountBigInt = this.toSmallestUnit(amount, tokenAddress);
     const tokenMintPubkey = new PublicKey(tokenAddress);
     const destinationPubkey = new PublicKey(destination);
 
@@ -3380,10 +3704,77 @@ export class SolanaAdapter extends BlockchainAdapter {
     }
 
     transaction.add(instruction);
-    const txHash = await this.wallet.sendTransaction(transaction, this.connection);
+    const txHash = await this._sendTransaction(transaction);
 
     console.log(`✅ Requested withdrawal bypass: ${amount} tokens for ${bypassingPeriod} (tx: ${txHash})`);
     return txHash;
+  }
+
+  /**
+   * Get the savings account balance for a specific SPL token
+   * @param {PublicKey} tokenMint - The token mint to check
+   * @param {PublicKey} userAddress - User's public key
+   * @returns {BigInt} The token balance in the savings account
+   */
+  async getSavingsTokenBalance(tokenMint, userAddress = null) {
+    const targetUser = userAddress || this.wallet?.publicKey;
+    if (!targetUser) {
+      throw new Error('No user address provided and wallet not connected');
+    }
+
+    try {
+      const [savingsAccount] = await this.getSavingsAccountPDA(targetUser);
+      const accountInfo = await this.connection.getAccountInfo(savingsAccount);
+
+      if (!accountInfo) {
+        console.log('📭 No savings account found, balance is 0');
+        return BigInt(0);
+      }
+
+      const data = accountInfo.data;
+      if (data.length < 16) {
+        console.log('📭 Account data too small, balance is 0');
+        return BigInt(0);
+      }
+
+      // Parse the savings account structure to find SPL token balances
+      let offset = 8; // Skip discriminator
+
+      // Skip SOL balance (8 bytes)
+      offset += 8;
+
+      // Read spl_balances vector
+      const splBalancesLength = new DataView(data.buffer, data.byteOffset + offset, 4).getUint32(0, true);
+      offset += 4;
+
+      console.log(`🔍 Found ${splBalancesLength} SPL token entries in savings account`);
+
+      // Look for the specific token mint
+      for (let i = 0; i < splBalancesLength; i++) {
+        if (offset + 40 > data.length) break; // Each entry is 32 bytes (mint) + 8 bytes (balance)
+
+        const mintBytes = data.slice(offset, offset + 32);
+        const mint = new PublicKey(mintBytes);
+        offset += 32;
+
+        const balance = new DataView(data.buffer, data.byteOffset + offset, 8).getBigUint64(0, true);
+        offset += 8;
+
+        console.log(`🪙 Token ${mint.toString()}: ${balance.toString()}`);
+
+        if (mint.equals(tokenMint)) {
+          console.log(`✅ Found matching token balance: ${balance.toString()}`);
+          return balance;
+        }
+      }
+
+      console.log(`❌ Token ${tokenMint.toString()} not found in savings account`);
+      return BigInt(0);
+
+    } catch (error) {
+      console.error('❌ Error fetching savings token balance:', error);
+      throw error;
+    }
   }
 
   /**
@@ -3396,6 +3787,36 @@ export class SolanaAdapter extends BlockchainAdapter {
       throw new Error('Wallet not connected');
     }
 
+    // First, fetch the bypass request to determine token type
+    console.log('🔍 Fetching bypass request data to determine token type...');
+    const bypassRequests = await this.fetchPendingBypassRequests();
+    const matchingRequest = bypassRequests.find(req =>
+      JSON.stringify(req.requestId) === JSON.stringify(requestId)
+    );
+
+    if (!matchingRequest) {
+      throw new Error('Bypass request not found or no longer pending');
+    }
+
+    // Check if this is a SOL or SPL token withdrawal
+    const isSOL = matchingRequest.tokenMint === SystemProgram.programId.toString();
+    console.log(`🪙 Token type: ${isSOL ? 'SOL' : 'SPL Token'} (${matchingRequest.tokenMint})`);
+
+    // Route to the appropriate execution method
+    if (isSOL) {
+      return await this.executeSOLWithdrawalBypass(requestId, matchingRequest);
+    } else {
+      return await this.executeSplWithdrawalBypass(requestId, matchingRequest);
+    }
+  }
+
+  /**
+   * Execute a SOL withdrawal bypass request
+   * @param {Array} requestId - Request ID as byte array
+   * @param {Object} requestData - The bypass request data
+   * @returns {string} Transaction hash
+   */
+  async executeSOLWithdrawalBypass(requestId, requestData) {
     const userPubkey = this.wallet.publicKey;
     const [savingsAccount] = await this.getSavingsAccountPDA(userPubkey);
 
@@ -3406,13 +3827,14 @@ export class SolanaAdapter extends BlockchainAdapter {
     const data = Buffer.concat([discriminator, requestIdBuffer]);
 
     // For SOL withdrawal, we need the destination as an account
-    // Note: This is a simplified version - in practice, you'd need to determine
-    // the destination from the request data
+    const destinationPubkey = new PublicKey(requestData.destination);
+    console.log(`🏠 SOL withdrawal destination: ${destinationPubkey.toString()}`);
+
     const instruction = new TransactionInstruction({
       keys: [
         { pubkey: savingsAccount, isSigner: false, isWritable: true },
         { pubkey: userPubkey, isSigner: true, isWritable: true },
-        { pubkey: userPubkey, isSigner: false, isWritable: true }, // destination (placeholder)
+        { pubkey: destinationPubkey, isSigner: false, isWritable: true }, // actual destination
         { pubkey: SystemProgram.programId, isSigner: false, isWritable: false }
       ],
       programId: this.PROGRAM_ID,
@@ -3420,7 +3842,7 @@ export class SolanaAdapter extends BlockchainAdapter {
     });
 
     const transaction = new Transaction().add(instruction);
-    const txHash = await this.wallet.sendTransaction(transaction, this.connection);
+    const txHash = await this._sendTransaction(transaction, { requestId });
 
     // Wait for transaction confirmation to ensure blockchain state is updated
     console.log('⏳ Waiting for bypass execution transaction confirmation...');
@@ -3428,6 +3850,81 @@ export class SolanaAdapter extends BlockchainAdapter {
     console.log('✅ Bypass execution transaction confirmed successfully');
 
     console.log(`✅ Executed withdrawal bypass (tx: ${txHash})`);
+    return txHash;
+  }
+
+  /**
+   * Execute an SPL token withdrawal bypass request
+   * @param {Array} requestId - Request ID as byte array
+   * @param {Object} requestData - The bypass request data
+   * @returns {string} Transaction hash
+   */
+  async executeSplWithdrawalBypass(requestId, requestData) {
+    const userPubkey = this.wallet.publicKey;
+    const [savingsAccount] = await this.getSavingsAccountPDA(userPubkey);
+
+    // Get token mint from request data
+    const tokenMint = new PublicKey(requestData.tokenMint);
+    console.log(`🪙 Executing SPL bypass for token: ${tokenMint.toString()}`);
+
+    // Debug: Show withdrawal details
+    const withdrawalAmount = BigInt(requestData.amount);
+    console.log(`🎯 Requested withdrawal amount: ${withdrawalAmount.toString()} (raw)`);
+    const humanReadableAmount = this.fromSmallestUnit(withdrawalAmount, tokenMint);
+    console.log(`🎯 Requested withdrawal amount: ${humanReadableAmount} tokens (${this.getTokenDecimals(tokenMint)} decimals)`);
+
+    // Debug: Get actual savings balance for this token
+    try {
+      const actualBalance = await this.getSavingsTokenBalance(tokenMint, userPubkey);
+      console.log(`🏦 Actual savings balance: ${actualBalance.toString()} (raw)`);
+      const humanReadableBalance = this.fromSmallestUnit(actualBalance, tokenMint);
+      console.log(`🏦 Actual savings balance: ${humanReadableBalance} tokens (${this.getTokenDecimals(tokenMint)} decimals)`);
+      console.log(`⚖️ Balance check: ${actualBalance.toString()} >= ${withdrawalAmount.toString()} = ${actualBalance >= withdrawalAmount}`);
+
+      if (actualBalance < withdrawalAmount) {
+        const actualTokens = this.fromSmallestUnit(actualBalance, tokenMint);
+        const requestedTokens = this.fromSmallestUnit(withdrawalAmount, tokenMint);
+        throw new Error(`Insufficient savings balance. Available: ${actualTokens} tokens, Requested: ${requestedTokens} tokens. Please deposit more tokens into your savings account.`);
+      }
+    } catch (balanceError) {
+      console.warn(`⚠️ Could not fetch balance for pre-flight check: ${balanceError.message}`);
+    }
+
+    // Get user's token account for this mint
+    const userTokenAccount = await getAssociatedTokenAddress(tokenMint, userPubkey);
+
+    // Get destination token account (for now, use same as user - could be different in practice)
+    const destinationPubkey = new PublicKey(requestData.destination);
+    const destinationTokenAccount = await getAssociatedTokenAddress(tokenMint, destinationPubkey);
+
+    // Create instruction data
+    const discriminator = Buffer.from(this._generateDiscriminator('ExecuteSplWithdrawalBypass'));
+    const requestIdBuffer = Buffer.from(requestId);
+    const data = Buffer.concat([discriminator, requestIdBuffer]);
+
+    // Create SPL token withdrawal bypass instruction
+    const instruction = new TransactionInstruction({
+      keys: [
+        { pubkey: savingsAccount, isSigner: false, isWritable: true },
+        { pubkey: userPubkey, isSigner: true, isWritable: true },
+        { pubkey: tokenMint, isSigner: false, isWritable: false },
+        { pubkey: userTokenAccount, isSigner: false, isWritable: true },
+        { pubkey: destinationTokenAccount, isSigner: false, isWritable: true },
+        { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false }
+      ],
+      programId: this.PROGRAM_ID,
+      data
+    });
+
+    const transaction = new Transaction().add(instruction);
+    const txHash = await this._sendTransaction(transaction, { requestId });
+
+    // Wait for transaction confirmation to ensure blockchain state is updated
+    console.log('⏳ Waiting for SPL bypass execution transaction confirmation...');
+    await this.connection.confirmTransaction(txHash, 'confirmed');
+    console.log('✅ SPL bypass execution transaction confirmed successfully');
+
+    console.log(`✅ Executed SPL withdrawal bypass (tx: ${txHash})`);
     return txHash;
   }
 
@@ -3460,7 +3957,7 @@ export class SolanaAdapter extends BlockchainAdapter {
     });
 
     const transaction = new Transaction().add(instruction);
-    const txHash = await this.wallet.sendTransaction(transaction, this.connection);
+    const txHash = await this._sendTransaction(transaction, { requestId });
 
     console.log(`✅ Cancelled withdrawal bypass (tx: ${txHash})`);
     return txHash;

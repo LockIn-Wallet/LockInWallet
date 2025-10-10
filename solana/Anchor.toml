@@ -6,16 +6,16 @@ skip-lint = false
 anchor_version = "0.31.1"
 
 [programs.localnet]
-savings_core = "b7DwCc8gcNd5hfUit1ezJXGXxd2pjga6BTz2vB6e62y"
-deposit_proxy = "9YoBL7APteanq755GyDLpMLUwXaidEAojpophJcoX5W4"
+savings_core = "EYzR74ixPESkTn927Qmvp5H8TqMMeF1A1DKRc7g4DTFC"
+deposit_proxy = "5wF1LdVJgPLjszC1PnACChApTxK2yXSvU813ztzoe558"
 
 [programs.devnet]
-savings_core = "b7DwCc8gcNd5hfUit1ezJXGXxd2pjga6BTz2vB6e62y"
-deposit_proxy = "9YoBL7APteanq755GyDLpMLUwXaidEAojpophJcoX5W4"
+savings_core = "EYzR74ixPESkTn927Qmvp5H8TqMMeF1A1DKRc7g4DTFC"
+deposit_proxy = "5wF1LdVJgPLjszC1PnACChApTxK2yXSvU813ztzoe558"
 
 [programs.mainnet]
-savings_core = "b7DwCc8gcNd5hfUit1ezJXGXxd2pjga6BTz2vB6e62y"
-deposit_proxy = "9YoBL7APteanq755GyDLpMLUwXaidEAojpophJcoX5W4"
+savings_core = "EYzR74ixPESkTn927Qmvp5H8TqMMeF1A1DKRc7g4DTFC"
+deposit_proxy = "5wF1LdVJgPLjszC1PnACChApTxK2yXSvU813ztzoe558"
 
 [registry]
 url = "https://api.apr.dev"

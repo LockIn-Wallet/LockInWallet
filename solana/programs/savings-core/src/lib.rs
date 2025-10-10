@@ -4,7 +4,7 @@ use anchor_spl::associated_token::AssociatedToken;
 
 // This is your program's public key and it will update
 // automatically when you build the project.
-declare_id!("b7DwCc8gcNd5hfUit1ezJXGXxd2pjga6BTz2vB6e62y");
+declare_id!("EYzR74ixPESkTn927Qmvp5H8TqMMeF1A1DKRc7g4DTFC");
 
 pub mod state;
 pub mod instructions;

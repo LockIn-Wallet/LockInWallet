@@ -3,7 +3,7 @@ use anchor_spl::token::{self, Mint, Token, TokenAccount, Transfer};
 use anchor_spl::associated_token::AssociatedToken;
 
 // This will be updated during deployment
-declare_id!("9YoBL7APteanq755GyDLpMLUwXaidEAojpophJcoX5W4");
+declare_id!("5wF1LdVJgPLjszC1PnACChApTxK2yXSvU813ztzoe558");
 
 pub mod state;
 pub mod instructions;
