@@ -2714,15 +2714,13 @@ function AppContent() {
 
             // Transform to match EVM format
             const formattedRequests = bypassRequests.map((req) => {
-              // Format amount properly - convert from token base units to decimal
+              // Format amount properly - convert from token base units to decimal using token-aware decimals
               let formattedAmount = req.amount;
               try {
-                // The Solana program stores all amounts with 9 decimals (SOL standard)
-                formattedAmount = (
-                  Number(req.amount) / Math.pow(10, 9)
-                ).toString();
+                // Use adapter's token-aware decimal conversion instead of hardcoded SOL decimals
+                formattedAmount = adapter.fromSmallestUnit(req.amount, req.tokenMint).toString();
                 console.log(
-                  `🔍 Amount conversion: ${req.amount} -> ${formattedAmount}`
+                  `🔍 Amount conversion: ${req.amount} -> ${formattedAmount} (${adapter.getTokenDecimals(req.tokenMint)} decimals for ${req.tokenMint})`
                 );
               } catch (error) {
                 console.warn("Error formatting amount:", error);
@@ -3719,13 +3717,13 @@ function AppContent() {
 
         // Transform to match EVM format
         const formattedRequests = bypassRequests.map((req) => {
-          // Format amount properly - convert from token base units to decimal
+          // Format amount properly - convert from token base units to decimal using token-aware decimals
           let formattedAmount = req.amount;
           try {
-            // The Solana program stores all amounts with 9 decimals (SOL standard)
-            formattedAmount = (Number(req.amount) / Math.pow(10, 9)).toString();
+            // Use adapter's token-aware decimal conversion instead of hardcoded SOL decimals
+            formattedAmount = adapter.fromSmallestUnit(req.amount, req.tokenMint).toString();
             console.log(
-              `🔍 Amount conversion: ${req.amount} -> ${formattedAmount}`
+              `🔍 Amount conversion: ${req.amount} -> ${formattedAmount} (${adapter.getTokenDecimals(req.tokenMint)} decimals for ${req.tokenMint})`
             );
           } catch (error) {
             console.warn("Error formatting amount:", error);
