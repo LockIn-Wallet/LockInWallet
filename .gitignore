@@ -21,6 +21,10 @@ test-ledger/
 .anchor/
 target/
 
+# Solana deployment backup files
+*.bak
+*.bak2
+
 # Frontend build and cache files
 frontend/build/
 frontend/dist/
