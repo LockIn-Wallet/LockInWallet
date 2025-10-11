@@ -5,7 +5,7 @@
  * IDL can be found at `target/idl/savings_core.json`.
  */
 export type SavingsCore = {
-  "address": "EYzR74ixPESkTn927Qmvp5H8TqMMeF1A1DKRc7g4DTFC",
+  "address": "9j511uJuYwoFRFiU1h5wy2oi1Xc8n1FdoK91QxoXHRh2",
   "metadata": {
     "name": "savingsCore",
     "version": "0.1.0",

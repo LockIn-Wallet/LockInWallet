@@ -1,14 +1,14 @@
 {
   "savingsCore": {
-    "programId": "EYzR74ixPESkTn927Qmvp5H8TqMMeF1A1DKRc7g4DTFC",
+    "programId": "9j511uJuYwoFRFiU1h5wy2oi1Xc8n1FdoK91QxoXHRh2",
     "name": "Savings Core Program"
   },
   "depositProxy": {
-    "programId": "5wF1LdVJgPLjszC1PnACChApTxK2yXSvU813ztzoe558",
+    "programId": "EyfA57i8PgyJBDmyLYFmdYMjPonZcY7BbnH98UmP8Rqp",
     "name": "Deposit Proxy Program"
   },
-  "network": "devnet",
-  "endpoint": "https://api.devnet.solana.com",
-  "deployedAt": "2025-01-10T16:45:00.000Z",
+  "network": "localnet",
+  "endpoint": "http://127.0.0.1:8899",
+  "deployedAt": "2025-10-11T17:34:45.833Z",
   "accounts": {}
 }

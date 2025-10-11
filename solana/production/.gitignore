@@ -1,0 +1,7 @@
+# Production keypairs - NEVER commit private keys!
+*-keypair.json
+
+# Only commit public keys
+!*-pubkey.txt
+!keypair-config.json
+!.gitignore

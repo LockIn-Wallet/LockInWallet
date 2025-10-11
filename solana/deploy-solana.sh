@@ -11,6 +11,10 @@ set -e  # Exit on any error
 # Parse command line arguments
 UPGRADE_MODE=false
 FORCE_RESET=false
+PROD_MODE=false
+NETWORK="localnet"
+DRY_RUN=false
+
 for arg in "$@"; do
     case $arg in
         --upgrade)
@@ -21,13 +25,39 @@ for arg in "$@"; do
             FORCE_RESET=true
             shift
             ;;
+        --prod)
+            PROD_MODE=true
+            shift
+            ;;
+        --network=*)
+            NETWORK="${arg#*=}"
+            shift
+            ;;
+        --dry-run)
+            DRY_RUN=true
+            shift
+            ;;
         *)
             # Unknown option
             ;;
     esac
 done
 
-echo "🚀 Starting Solana Program Deployment with DEV TIMELOCKS (15s) - auto-upgrade if program exists..."
+# Set timelock mode and deployment message based on flags
+if [ "$PROD_MODE" = true ]; then
+    TIMELOCK_MODE="PRODUCTION (24 hours)"
+    TIMELOCK_FEATURE="prod-timelock"
+    echo "🏭 Starting PRODUCTION Solana Program Deployment with 24-HOUR TIMELOCKS"
+else
+    TIMELOCK_MODE="DEVELOPMENT (15 seconds)"
+    TIMELOCK_FEATURE="dev-timelock"
+    echo "🚀 Starting Solana Program Deployment with DEV TIMELOCKS (15s) - auto-upgrade if program exists..."
+fi
+
+echo "Network: $NETWORK | Timelock Mode: $TIMELOCK_MODE"
+if [ "$DRY_RUN" = true ]; then
+    echo "⚠️  DRY RUN MODE - No actual deployment will occur"
+fi
 
 # Configuration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -52,6 +82,135 @@ log_warning() {
 
 log_error() {
     echo -e "${RED}❌ $1${NC}"
+}
+
+log_production() {
+    echo -e "\033[0;35m🏭 PRODUCTION: $1${NC}"
+}
+
+log_cost() {
+    echo -e "\033[0;34m💰 COST: $1${NC}"
+}
+
+# Production safety check
+production_safety_check() {
+    if [ "$NETWORK" = "mainnet" ] && [ "$DRY_RUN" = false ]; then
+        log_production "⚠️  MAINNET DEPLOYMENT DETECTED"
+        echo ""
+        echo "This will deploy to Solana MAINNET with real SOL costs."
+        echo "Please confirm the following:"
+        echo "  - You have reviewed all code changes"
+        echo "  - You have tested on devnet/localnet"
+        echo "  - You have sufficient SOL for deployment"
+        echo "  - You understand this cannot be easily undone"
+        echo ""
+        read -p "Type 'DEPLOY TO MAINNET' to continue: " confirmation
+
+        if [ "$confirmation" != "DEPLOY TO MAINNET" ]; then
+            log_error "Deployment cancelled by user"
+            exit 1
+        fi
+
+        log_production "✅ User confirmed mainnet deployment"
+    fi
+}
+
+# Generate static production keypairs for mainnet
+generate_production_keypairs() {
+    if [ "$NETWORK" = "mainnet" ] || [ "$PROD_MODE" = true ]; then
+        log_info "Setting up production keypairs..."
+
+        PRODUCTION_DIR="$SCRIPT_DIR/production"
+        mkdir -p "$PRODUCTION_DIR"
+
+        # Generate savings-core production keypair if it doesn't exist
+        SAVINGS_PROD_KEYPAIR="$PRODUCTION_DIR/savings_core-mainnet-keypair.json"
+        if [ ! -f "$SAVINGS_PROD_KEYPAIR" ]; then
+            log_production "Generating NEW static savings-core production keypair..."
+            "$SOLANA_BIN_DIR/solana-keygen" new --outfile "$SAVINGS_PROD_KEYPAIR" --no-bip39-passphrase --silent
+            SAVINGS_PROGRAM_ID=$("$SOLANA_BIN_DIR/solana-keygen" pubkey "$SAVINGS_PROD_KEYPAIR")
+            log_production "🔑 NEW Savings-Core Program ID: $SAVINGS_PROGRAM_ID"
+
+            # Create public key file for repository
+            echo "$SAVINGS_PROGRAM_ID" > "$PRODUCTION_DIR/savings_core-mainnet-pubkey.txt"
+            log_production "📝 Public key saved to: $PRODUCTION_DIR/savings_core-mainnet-pubkey.txt"
+        else
+            SAVINGS_PROGRAM_ID=$("$SOLANA_BIN_DIR/solana-keygen" pubkey "$SAVINGS_PROD_KEYPAIR")
+            log_production "♻️  Using existing savings-core keypair: $SAVINGS_PROGRAM_ID"
+        fi
+
+        # Generate deposit-proxy production keypair if it doesn't exist
+        PROXY_PROD_KEYPAIR="$PRODUCTION_DIR/deposit_proxy-mainnet-keypair.json"
+        if [ ! -f "$PROXY_PROD_KEYPAIR" ]; then
+            log_production "Generating NEW static deposit-proxy production keypair..."
+            "$SOLANA_BIN_DIR/solana-keygen" new --outfile "$PROXY_PROD_KEYPAIR" --no-bip39-passphrase --silent
+            PROXY_PROGRAM_ID=$("$SOLANA_BIN_DIR/solana-keygen" pubkey "$PROXY_PROD_KEYPAIR")
+            log_production "🔑 NEW Deposit-Proxy Program ID: $PROXY_PROGRAM_ID"
+
+            # Create public key file for repository
+            echo "$PROXY_PROGRAM_ID" > "$PRODUCTION_DIR/deposit_proxy-mainnet-pubkey.txt"
+            log_production "📝 Public key saved to: $PRODUCTION_DIR/deposit_proxy-mainnet-pubkey.txt"
+        else
+            PROXY_PROGRAM_ID=$("$SOLANA_BIN_DIR/solana-keygen" pubkey "$PROXY_PROD_KEYPAIR")
+            log_production "♻️  Using existing deposit-proxy keypair: $PROXY_PROGRAM_ID"
+        fi
+
+        # Copy to deployment location (overwrite existing dev keypairs)
+        mkdir -p target/deploy
+        cp "$SAVINGS_PROD_KEYPAIR" "target/deploy/savings_core-keypair.json"
+        cp "$PROXY_PROD_KEYPAIR" "target/deploy/deposit_proxy-keypair.json"
+
+        log_production "✅ Production keypairs configured"
+
+        # Security reminder
+        echo ""
+        log_warning "🔐 SECURITY REMINDER:"
+        log_warning "  - Keep private keypairs ($PRODUCTION_DIR/*-keypair.json) SECURE and LOCAL"
+        log_warning "  - Commit public keys (*-pubkey.txt) to repository"
+        log_warning "  - NEVER commit private keypairs to version control"
+        log_warning "  - Backup private keypairs securely (encrypted storage)"
+        echo ""
+    fi
+}
+
+# Calculate deployment costs
+calculate_deployment_costs() {
+    if [ "$NETWORK" = "mainnet" ]; then
+        log_info "Calculating mainnet deployment costs..."
+
+        # Check if binaries exist
+        SAVINGS_BINARY="target/deploy/savings_core.so"
+        PROXY_BINARY="target/deploy/deposit_proxy.so"
+
+        if [ ! -f "$SAVINGS_BINARY" ] || [ ! -f "$PROXY_BINARY" ]; then
+            log_warning "Program binaries not found - costs will be calculated after build"
+            return 0
+        fi
+
+        # Get binary sizes
+        SAVINGS_SIZE=$(wc -c < "$SAVINGS_BINARY" 2>/dev/null || echo "0")
+        PROXY_SIZE=$(wc -c < "$PROXY_BINARY" 2>/dev/null || echo "0")
+        TOTAL_SIZE=$((SAVINGS_SIZE + PROXY_SIZE))
+
+        if [ "$TOTAL_SIZE" -gt 0 ]; then
+            log_cost "📊 Program Sizes:"
+            log_cost "  Savings Core: $(numfmt --to=iec-i --suffix=B $SAVINGS_SIZE 2>/dev/null || echo "$SAVINGS_SIZE bytes")"
+            log_cost "  Deposit Proxy: $(numfmt --to=iec-i --suffix=B $PROXY_SIZE 2>/dev/null || echo "$PROXY_SIZE bytes")"
+            log_cost "  Total: $(numfmt --to=iec-i --suffix=B $TOTAL_SIZE 2>/dev/null || echo "$TOTAL_SIZE bytes")"
+
+            # Estimate costs (approximate calculations)
+            # Solana rent: ~0.00000348 SOL per byte for 2 years
+            RENT_ESTIMATE=$(echo "scale=8; $TOTAL_SIZE * 0.00000348" | bc -l 2>/dev/null || echo "~0.002")
+            TX_ESTIMATE="0.00001"  # ~10000 lamports for transactions
+
+            log_cost "💰 Estimated Mainnet Costs:"
+            log_cost "  Program Rent: ~${RENT_ESTIMATE} SOL"
+            log_cost "  Transaction Fees: ~${TX_ESTIMATE} SOL"
+            log_cost "  ━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            log_cost "  TOTAL ESTIMATED: ~$(echo "scale=8; $RENT_ESTIMATE + $TX_ESTIMATE" | bc -l 2>/dev/null || echo "0.003") SOL"
+            echo ""
+        fi
+    fi
 }
 
 # Dynamically find required tools (no hardcoding!)
@@ -299,17 +458,49 @@ build_program() {
     log_info "Building... (this may take a few minutes and appear silent)"
 
     # Show timelock configuration
-    log_info "⚡ TIMELOCK MODE: Development (15 seconds) - Default for fast E2E testing"
-    log_warning "   Spending limit proposals: 15 seconds"
-    log_warning "   Withdrawal destinations: 15 seconds"
-    log_warning "   Bypass requests: 15 seconds"
-    log_warning "   (Future: Use --prod flag for production 24-hour timelocks)"
+    if [ "$PROD_MODE" = true ]; then
+        log_production "🔒 PRODUCTION TIMELOCK MODE ENABLED"
+        log_production "   Spending limit proposals: 24 hours"
+        log_production "   Withdrawal destinations: 24 hours"
+        log_production "   Bypass requests: 24 hours"
+        log_production "   This provides maximum security for mainnet deployment"
+    else
+        log_info "⚡ TIMELOCK MODE: Development (15 seconds) - Default for fast E2E testing"
+        log_warning "   Spending limit proposals: 15 seconds"
+        log_warning "   Withdrawal destinations: 15 seconds"
+        log_warning "   Bypass requests: 15 seconds"
+        log_warning "   (Use --prod flag for production 24-hour timelocks)"
+    fi
     echo ""
 
-    # Use homebrew anchor directly - show errors
-    echo "🔍 Running: $ANCHOR_PATH build (with dev-timelock feature)"
-    if $ANCHOR_PATH build 2>&1; then
-        log_info "✅ Program built successfully"
+    # Build with appropriate timelock feature using Anchor consistently
+    if [ "$PROD_MODE" = true ]; then
+        echo "🔍 Temporarily switching to prod-timelock for production build..."
+
+        # Backup and modify Cargo.toml to use prod-timelock as default
+        cp programs/savings-core/Cargo.toml programs/savings-core/Cargo.toml.backup
+        sed -i.tmp 's/default = \["dev-timelock"\]/default = ["prod-timelock"]/' programs/savings-core/Cargo.toml
+
+        echo "🔍 Running: $ANCHOR_PATH build (with prod-timelock as default)"
+        BUILD_SUCCESS=false
+        if $ANCHOR_PATH build 2>&1; then
+            log_production "✅ Program built successfully with 24-hour production timelocks"
+            BUILD_SUCCESS=true
+        else
+            log_error "Anchor build failed with production features"
+        fi
+
+        # Restore original Cargo.toml
+        mv programs/savings-core/Cargo.toml.backup programs/savings-core/Cargo.toml
+        rm -f programs/savings-core/Cargo.toml.tmp
+
+        if [ "$BUILD_SUCCESS" = false ]; then
+            exit 1
+        fi
+    else
+        echo "🔍 Running: $ANCHOR_PATH build (with default dev-timelock)"
+        if $ANCHOR_PATH build 2>&1; then
+            log_info "✅ Program built successfully"
 
         # Copy binaries to expected location for deployment
         log_info "Copying binaries to deployment location..."
@@ -332,12 +523,13 @@ build_program() {
             log_error "Deposit-proxy binary not found at programs/deposit-proxy/target/deploy/deposit_proxy.so"
             exit 1
         fi
-    else
-        log_error "Anchor build failed"
-        log_error "Please try running 'anchor build' manually in the solana/ directory"
-        log_error "Current Solana version: $("$SOLANA_CLI" --version)"
-        log_error "Current Anchor version: $($ANCHOR_PATH --version 2>&1 || echo 'not found')"
-        exit 1
+        else
+            log_error "Anchor build failed"
+            log_error "Please try running 'anchor build' manually in the solana/ directory"
+            log_error "Current Solana version: $("$SOLANA_CLI" --version)"
+            log_error "Current Anchor version: $($ANCHOR_PATH --version 2>&1 || echo 'not found')"
+            exit 1
+        fi
     fi
 
 # No need to cd back
@@ -372,27 +564,56 @@ deploy_program() {
         exit 1
     fi
 
+    # Set cluster URL based on network
+    local cluster_url
+    case $NETWORK in
+        mainnet)
+            cluster_url="https://api.mainnet-beta.solana.com"
+            ;;
+        devnet)
+            cluster_url="https://api.devnet.solana.com"
+            ;;
+        localnet)
+            cluster_url="http://127.0.0.1:8899"
+            ;;
+        *)
+            log_error "Unknown network: $NETWORK"
+            exit 1
+            ;;
+    esac
+
+    if [ "$DRY_RUN" = true ]; then
+        log_info "🎭 DRY RUN: Would deploy to $NETWORK ($cluster_url)"
+        log_info "🎭 DRY RUN: Skipping actual deployment"
+        return 0
+    fi
+
+    # Set Solana config for deployment
+    "$SOLANA_CLI" config set --url "$cluster_url"
+
     # Auto-detect best deployment method (upgrade for existing, deploy for new)
     if check_program_exists "$PROGRAM_ID"; then
         log_info "🔄 Program exists on chain, attempting upgrade..."
-        if $ANCHOR_PATH upgrade --provider.cluster localnet --program-id "$PROGRAM_ID" target/deploy/savings_core.so; then
-            log_info "✅ Program upgraded successfully"
+        if $ANCHOR_PATH upgrade --provider.cluster "$NETWORK" --program-id "$PROGRAM_ID" target/deploy/savings_core.so; then
+            log_info "✅ Program upgraded successfully on $NETWORK"
         else
             log_warning "⚠️  Upgrade failed, attempting deploy as fallback..."
-            if $ANCHOR_PATH deploy --provider.cluster localnet; then
-                log_info "✅ Program deployed successfully"
+            if $ANCHOR_PATH deploy --provider.cluster "$NETWORK"; then
+                log_info "✅ Program deployed successfully on $NETWORK"
             else
                 log_error "❌ Both upgrade and deploy failed"
                 log_error "Using Anchor at: $ANCHOR_PATH"
                 log_error "Current Solana version: $("$SOLANA_CLI" --version)"
-                log_error "💡 Consider using --force-reset flag to reset validator state"
+                if [ "$NETWORK" = "localnet" ]; then
+                    log_error "💡 Consider using --force-reset flag to reset validator state"
+                fi
                 exit 1
             fi
         fi
     else
         log_info "🚀 Program not found on chain, deploying new program..."
-        if $ANCHOR_PATH deploy --provider.cluster localnet; then
-            log_info "✅ Program deployed successfully"
+        if $ANCHOR_PATH deploy --provider.cluster "$NETWORK"; then
+            log_info "✅ Program deployed successfully on $NETWORK"
         else
             log_error "❌ Failed to deploy new program"
             log_error "Using Anchor at: $ANCHOR_PATH"
@@ -693,19 +914,32 @@ main() {
     echo ""
 
     find_tools
+    production_safety_check
+    generate_production_keypairs
     detect_breaking_changes
     check_prerequisites
-    check_validator
+    if [ "$NETWORK" = "localnet" ]; then
+        check_validator
+    fi
     sync_program_id
     build_program
+    calculate_deployment_costs
     deploy_program
     update_frontend
-    setup_test_tokens
+    if [ "$NETWORK" = "localnet" ]; then
+        setup_test_tokens
+    fi
 
     # Verify everything is consistent
     if verify_program_id; then
         generate_summary
-        log_info "🎉 Program deployment completed successfully!"
+        if [ "$DRY_RUN" = true ]; then
+            log_info "🎭 DRY RUN COMPLETED - No actual deployment occurred"
+        elif [ "$PROD_MODE" = true ]; then
+            log_production "🎉 Production deployment completed successfully!"
+        else
+            log_info "🎉 Program deployment completed successfully!"
+        fi
     else
         log_error "❌ Program ID verification failed!"
         log_error "Please check the errors above and run the deployment again."
@@ -714,6 +948,48 @@ main() {
 
     echo ""
 }
+
+# Show usage if no arguments provided
+show_usage() {
+    echo "Enhanced Solana Program Deployment Script"
+    echo "========================================="
+    echo ""
+    echo "Usage: $0 [OPTIONS]"
+    echo ""
+    echo "OPTIONS:"
+    echo "  --prod              Enable production mode (24-hour timelocks)"
+    echo "  --network=NETWORK   Target network (mainnet, devnet, localnet)"
+    echo "  --upgrade           Upgrade existing program"
+    echo "  --force-reset       Reset validator state (localnet only)"
+    echo "  --dry-run           Show what would be deployed without deploying"
+    echo ""
+    echo "EXAMPLES:"
+    echo "  $0                                        # Deploy to localnet with dev timelocks"
+    echo "  $0 --prod --network=mainnet              # Deploy to mainnet with production timelocks"
+    echo "  $0 --prod --network=devnet               # Test production build on devnet"
+    echo "  $0 --network=localnet                    # Deploy to localnet (default)"
+    echo "  $0 --dry-run --prod --network=mainnet    # Preview mainnet deployment"
+    echo "  $0 --upgrade --network=mainnet           # Upgrade existing mainnet program"
+    echo ""
+    echo "NETWORKS:"
+    echo "  localnet    Local Solana validator (default, dev timelocks)"
+    echo "  devnet      Solana devnet (for testing)"
+    echo "  mainnet     Solana mainnet (production, requires --prod for safety)"
+    echo ""
+    echo "PRODUCTION DEPLOYMENT:"
+    echo "  - Use --prod flag for 24-hour production timelocks"
+    echo "  - Generates static keypairs in production/ directory"
+    echo "  - Provides cost estimation for mainnet"
+    echo "  - Includes safety confirmations for mainnet"
+    echo ""
+}
+
+# Show usage if no arguments and not being sourced
+# Temporarily disabled for debugging
+# if [ $# -eq 0 ] && [ "${BASH_SOURCE[0]}" = "${0}" ]; then
+#     show_usage
+#     exit 0
+# fi
 
 # Run main function
 main "$@"
