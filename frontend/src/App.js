@@ -179,6 +179,7 @@ const NETWORKS = {
         },
         USDT: {
           mint: "FgXubes1kViJqK9WeuCTEkNx7o4F392udaspnsGH7zp7", // Test USDT mint address
+          address: "FgXubes1kViJqK9WeuCTEkNx7o4F392udaspnsGH7zp7", // For frontend compatibility
           symbol: "USDT",
           name: "Test USDT",
           decimals: 6,
@@ -190,7 +191,7 @@ const NETWORKS = {
       network: WalletAdapterNetwork.Devnet,
       name: "Solana Devnet",
       rpcUrl: clusterApiUrl(WalletAdapterNetwork.Devnet),
-      programId: "HNi2JKTNeHvz2ENckdVBW1ncfkJUYppuYeBwNhWjkK7d",
+      programId: "EYzR74ixPESkTn927Qmvp5H8TqMMeF1A1DKRc7g4DTFC",
       tokens: {
         SOL: {
           mint: SOL_ADDRESS,
@@ -201,8 +202,17 @@ const NETWORKS = {
         },
         USDC: {
           mint: "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU", // USDC on Devnet
+          address: "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU", // For frontend compatibility
           symbol: "USDC",
           name: "USD Coin",
+          decimals: 6,
+          recommended: true,
+        },
+        USDT: {
+          mint: "Gh9ZwEmdLJ8DscKNTkTqPbNwLNNBjuSzaG9Vp2KGtKJr", // USDT on Devnet
+          address: "Gh9ZwEmdLJ8DscKNTkTqPbNwLNNBjuSzaG9Vp2KGtKJr", // For frontend compatibility
+          symbol: "USDT",
+          name: "Tether USD",
           decimals: 6,
           recommended: true,
         },
@@ -879,8 +889,20 @@ function AppContent() {
 
   const switchNetwork = async (networkKey) => {
     if (networkType === "solana") {
-      // For Solana networks, just update the selected network
+      // For Solana networks, update the selected network and clear cached data
       setSelectedNetwork(networkKey);
+
+      // Clear all cached data when switching Solana networks
+      setSpendingLimits([]); // Clear spending limits from previous network
+      setPendingLimitProposals([]); // Clear proposals from previous network
+      setPendingBypassRequests([]); // Clear bypass requests from previous network
+      setPendingWithdrawalRequests([]); // Clear withdrawal requests from previous network
+      setWithdrawalAddresses([]); // Clear withdrawal addresses from previous network
+      setBalances({}); // Clear balances from previous network
+      setLimitsLoaded(false); // Reset limits loaded state
+      setIsSetupCommitted(false); // Reset setup status
+
+      console.log(`🔄 Solana network switched to ${networkKey}, cached data cleared`);
       return true;
     }
 
@@ -1399,7 +1421,7 @@ function AppContent() {
     if (contract && signer) {
       try {
         const userAddress = userAddr || (await signer.getAddress());
-        const currentNetwork = getCurrentNetwork(selectedNetwork);
+        const currentNetwork = getCurrentNetwork(networkType, selectedNetwork);
         const newBalances = {};
 
         // Skip ETH balance - only fetch stablecoins
@@ -2406,12 +2428,12 @@ function AppContent() {
 
         // Check if user is on the correct network
         if (!isCorrectNetwork()) {
-          const currentNetwork = getCurrentNetwork(selectedNetwork);
+          const currentNetwork = getCurrentNetwork(networkType, selectedNetwork);
           alert(`Please switch to ${currentNetwork.name} to make withdrawals`);
           return;
         }
 
-        const currentNetwork = getCurrentNetwork(selectedNetwork);
+        const currentNetwork = getCurrentNetwork(networkType, selectedNetwork);
         const usdtToken = currentNetwork.tokens.USDT;
         const amount = ethers.parseUnits(withdrawalAmount, usdtToken.decimals);
         const tx = await savingsContract.withdraw(amount, usdtToken.address);
@@ -3339,7 +3361,7 @@ function AppContent() {
         } else {
           // Withdraw SPL token to destination
           // Get the token mint address from network configuration
-          const currentNetwork = getCurrentNetwork(selectedNetwork);
+          const currentNetwork = getCurrentNetwork(networkType, selectedNetwork);
           const token = currentNetwork.tokens[selectedToken];
           if (!token) {
             alert("Please select a valid token");
@@ -3373,12 +3395,12 @@ function AppContent() {
 
         // Check if user is on the correct network
         if (!isCorrectNetwork()) {
-          const currentNetwork = getCurrentNetwork(selectedNetwork);
+          const currentNetwork = getCurrentNetwork(networkType, selectedNetwork);
           alert(`Please switch to ${currentNetwork.name} to make withdrawals`);
           return;
         }
 
-        const currentNetwork = getCurrentNetwork(selectedNetwork);
+        const currentNetwork = getCurrentNetwork(networkType, selectedNetwork);
         let tokenAddress;
         let decimals;
         let tokenSymbol;
@@ -3591,7 +3613,7 @@ function AppContent() {
         );
       } else {
         // EVM bypass request logic (existing)
-        const currentNetwork = getCurrentNetwork(selectedNetwork);
+        const currentNetwork = getCurrentNetwork(networkType, selectedNetwork);
         let tokenAddress;
         let decimals;
 
@@ -4097,7 +4119,7 @@ function AppContent() {
 
         {/* Contract Deployment Warning */}
         {provider &&
-          getCurrentNetwork(selectedNetwork).savingsContract ===
+          getCurrentNetwork(networkType, selectedNetwork).savingsContract ===
             "0x0000000000000000000000000000000000000000" && (
             <div
               style={{
@@ -4244,7 +4266,7 @@ function AppContent() {
             }}
           >
             {/* Show stablecoins */}
-            {Object.entries(getCurrentNetwork(selectedNetwork).tokens).map(
+            {Object.entries(getCurrentNetwork(networkType, selectedNetwork).tokens).map(
               ([key, token]) => (
                 <div
                   key={key}
@@ -4379,7 +4401,7 @@ function AppContent() {
 
                     {/* Recommended Stablecoins Section */}
                     <optgroup label="🌟 Recommended Stablecoins">
-                      {Object.entries(getCurrentNetwork(selectedNetwork).tokens)
+                      {Object.entries(getCurrentNetwork(networkType, selectedNetwork).tokens)
                         .filter(
                           ([_, token]) =>
                             token.recommended &&
@@ -4396,7 +4418,7 @@ function AppContent() {
                     {/* Other Tokens Section */}
                     <optgroup label="Other Tokens">
                       <option value="ETH">ETH - Ethereum</option>
-                      {Object.entries(getCurrentNetwork(selectedNetwork).tokens)
+                      {Object.entries(getCurrentNetwork(networkType, selectedNetwork).tokens)
                         .filter(
                           ([_, token]) =>
                             !token.recommended ||
@@ -4450,7 +4472,7 @@ function AppContent() {
                       backgroundColor: isDepositing
                         ? "#6b7280"
                         : selectedToken &&
-                          getCurrentNetwork(selectedNetwork).tokens[
+                          getCurrentNetwork(networkType, selectedNetwork).tokens[
                             selectedToken
                           ]?.recommended
                         ? "#28a745"
@@ -6236,7 +6258,7 @@ function AppContent() {
                     }}
                   >
                     <option value="ETH">ETH</option>
-                    {Object.entries(getCurrentNetwork(selectedNetwork).tokens)
+                    {Object.entries(getCurrentNetwork(networkType, selectedNetwork).tokens)
                       .filter(
                         ([_, token]) =>
                           token.address !==
