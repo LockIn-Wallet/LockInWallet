@@ -21,7 +21,7 @@ const fs = require('fs');
 const path = require('path');
 
 // Use your actual wallet address from devnet
-const USER_ADDRESS = 'HaUQYr2ztfEr7zdZtHAZRUpe8ZiaZeSVPrSWEjoFUQ8y'; // Your devnet wallet
+const USER_ADDRESS = '4xo6a3qHYgtsDkKUAy1wMQhyN1zoXo3tKPR5foxa3hV4'; // Your devnet wallet
 const RPC_URL = 'https://api.devnet.solana.com';
 
 async function setupDevnetTokens() {
@@ -139,17 +139,24 @@ async function setupDevnetTokens() {
       console.log('📝 Updating frontend App.js with new USDT mint address...');
       let appJsContent = fs.readFileSync(appJsPath, 'utf8');
 
-      // Find and update the devnet USDT configuration
-      const devnetUsdtRegex = /(devnet:\s*{[\s\S]*?USDT:\s*{[\s\S]*?mint:\s*)"[^"]*"/;
+      // Find and update the devnet USDT configuration (now using address field)
+      const devnetUsdtRegex = /(devnet:\s*{[\s\S]*?USDT:\s*{[\s\S]*?address:\s*)"[^"]*"/;
       if (devnetUsdtRegex.test(appJsContent)) {
         appJsContent = appJsContent.replace(devnetUsdtRegex, `$1"${usdtMint.toString()}"`);
         fs.writeFileSync(appJsPath, appJsContent);
-        console.log('✅ Updated network config mint address:', usdtMint.toString());
+        console.log('✅ Updated devnet USDT address:', usdtMint.toString());
       } else {
         console.log('⚠️  Could not find devnet USDT configuration in App.js');
       }
 
-      console.log('✅ Frontend App.js updated with new mint address:', usdtMint.toString());
+      // Also update localhost USDT configuration if present
+      const localhostUsdtRegex = /(localhost:\s*{[\s\S]*?USDT:\s*{[\s\S]*?address:\s*)"[^"]*"/;
+      if (localhostUsdtRegex.test(appJsContent)) {
+        // Keep localhost as-is, just log that we found it
+        console.log('ℹ️  Found localhost USDT configuration, keeping unchanged');
+      }
+
+      console.log('✅ Frontend App.js updated with new token address:', usdtMint.toString());
     }
 
     console.log('\n🎉 Solana devnet tokens setup complete!');

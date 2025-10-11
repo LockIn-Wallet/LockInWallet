@@ -169,21 +169,33 @@ const NETWORKS = {
       rpcUrl: "http://127.0.0.1:8899",
       programId: "HNi2JKTNeHvz2ENckdVBW1ncfkJUYppuYeBwNhWjkK7d", // From our Anchor.toml
       tokens: {
-        SOL: {
-          address: "native", // Use "native" for SOL deposits
-          mint: SOL_ADDRESS,
-          symbol: "SOL",
-          name: "Solana",
-          decimals: 9,
-          recommended: true,
-        },
         USDT: {
-          mint: "FgXubes1kViJqK9WeuCTEkNx7o4F392udaspnsGH7zp7", // Test USDT mint address
-          address: "FgXubes1kViJqK9WeuCTEkNx7o4F392udaspnsGH7zp7", // For frontend compatibility
+          address: "FgXubes1kViJqK9WeuCTEkNx7o4F392udaspnsGH7zp7", // Test USDT mint address
           symbol: "USDT",
           name: "Test USDT",
           decimals: 6,
           recommended: true,
+        },
+        USDC: {
+          address: "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU", // Test USDC mint address (same as devnet for consistency)
+          symbol: "USDC",
+          name: "Test USDC",
+          decimals: 6,
+          recommended: true,
+        },
+        DAI: {
+          address: "EjmyN6qEC1Tf1JxioBo3j1VdTz8EBaRLPXP7Y5p3H5Ks", // Test DAI mint address
+          symbol: "DAI",
+          name: "Test DAI",
+          decimals: 18,
+          recommended: true,
+        },
+        SOL: {
+          address: "native", // Use "native" for SOL (but not for deposits)
+          symbol: "SOL",
+          name: "Solana",
+          decimals: 9,
+          recommended: false, // Don't show as deposit option
         },
       },
     },
@@ -193,28 +205,33 @@ const NETWORKS = {
       rpcUrl: clusterApiUrl(WalletAdapterNetwork.Devnet),
       programId: "EYzR74ixPESkTn927Qmvp5H8TqMMeF1A1DKRc7g4DTFC",
       tokens: {
-        SOL: {
-          mint: SOL_ADDRESS,
-          symbol: "SOL",
-          name: "Solana",
-          decimals: 9,
+        USDT: {
+          address: "6J3gqpfHM6aGYub7ojjAukBMVKVsvp3KT5eC6BDp5s8P", // Custom USDT on Devnet (will be updated by deployment script)
+          symbol: "USDT",
+          name: "Tether USD",
+          decimals: 6,
           recommended: true,
         },
         USDC: {
-          mint: "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU", // USDC on Devnet
-          address: "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU", // For frontend compatibility
+          address: "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU", // USDC on Devnet
           symbol: "USDC",
           name: "USD Coin",
           decimals: 6,
           recommended: true,
         },
-        USDT: {
-          mint: "Gh9ZwEmdLJ8DscKNTkTqPbNwLNNBjuSzaG9Vp2KGtKJr", // USDT on Devnet
-          address: "Gh9ZwEmdLJ8DscKNTkTqPbNwLNNBjuSzaG9Vp2KGtKJr", // For frontend compatibility
-          symbol: "USDT",
-          name: "Tether USD",
-          decimals: 6,
+        DAI: {
+          address: "EjmyN6qEC1Tf1JxioBo3j1VdTz8EBaRLPXP7Y5p3H5Ks", // Test DAI mint address
+          symbol: "DAI",
+          name: "DAI Stablecoin",
+          decimals: 18,
           recommended: true,
+        },
+        SOL: {
+          address: "native", // Use "native" for SOL (but not for deposits)
+          symbol: "SOL",
+          name: "Solana",
+          decimals: 9,
+          recommended: false, // Don't show as deposit option
         },
       },
     },
@@ -366,10 +383,32 @@ function SolanaWalletProvider({ children, networkType, selectedNetwork }) {
       ? NETWORKS.solana[selectedNetwork]?.rpcUrl || "http://127.0.0.1:8899"
       : "http://127.0.0.1:8899";
 
+  // Debug network configuration lookup
+  console.log('🔍 DEBUGGING: SolanaWalletProvider endpoint calculation:', {
+    networkType,
+    selectedNetwork,
+    availableNetworks: Object.keys(NETWORKS.solana),
+    networkConfig: NETWORKS.solana[selectedNetwork],
+    rpcUrl: NETWORKS.solana[selectedNetwork]?.rpcUrl,
+    endpoint,
+    network
+  });
+
+  // Add validation that endpoint is correctly calculated
+  if (networkType === "solana" && selectedNetwork === "devnet") {
+    if (endpoint === "http://127.0.0.1:8899") {
+      console.error('❌ ENDPOINT ERROR: Selected devnet but endpoint is still localhost!');
+      console.error('Expected: https://api.devnet.solana.com');
+      console.error('Got:', endpoint);
+    } else {
+      console.log('✅ ENDPOINT CORRECT: Devnet endpoint properly set to:', endpoint);
+    }
+  }
+
   const wallets = [new PhantomWalletAdapter(), new SolflareWalletAdapter()];
 
   return (
-    <ConnectionProvider endpoint={endpoint}>
+    <ConnectionProvider key={`${networkType}-${selectedNetwork}`} endpoint={endpoint}>
       <WalletProvider wallets={wallets} autoConnect>
         <WalletModalProvider>{children}</WalletModalProvider>
       </WalletProvider>
@@ -377,8 +416,35 @@ function SolanaWalletProvider({ children, networkType, selectedNetwork }) {
   );
 }
 
-// Main App Component
+// Main App Component with state management
 function AppContent() {
+  // Network state management - try to restore from localStorage
+  const [networkType, setNetworkType] = useState(() => {
+    // Check localStorage first
+    const saved = localStorage.getItem("preferredNetworkType");
+    if (saved === "solana" || saved === "evm") {
+      return saved;
+    }
+
+    // Default to Solana if we detect a Solana wallet connection
+    return localStorage.getItem("walletName") ? "solana" : "evm";
+  }); // "evm" or "solana"
+  const [selectedNetwork, setSelectedNetwork] = useState("localhost"); // Current selected network
+
+  return (
+    <SolanaWalletProvider networkType={networkType} selectedNetwork={selectedNetwork}>
+      <AppContentInner
+        networkType={networkType}
+        setNetworkType={setNetworkType}
+        selectedNetwork={selectedNetwork}
+        setSelectedNetwork={setSelectedNetwork}
+      />
+    </SolanaWalletProvider>
+  );
+}
+
+// Inner component that uses wallet hooks
+function AppContentInner({ networkType, setNetworkType, selectedNetwork, setSelectedNetwork }) {
   // EVM state
   const [provider, setProvider] = useState(null);
   const [signer, setSigner] = useState(null);
@@ -386,7 +452,7 @@ function AppContent() {
   const [balances, setBalances] = useState({}); // Multi-token balances
   const [approver, setApprover] = useState("");
 
-  // Solana wallet hooks (only used when networkType is 'solana')
+  // Solana wallet hooks (now safely inside provider)
   const {
     connected: solanaConnected,
     publicKey: solanaPublicKey,
@@ -397,20 +463,6 @@ function AppContent() {
     signAllTransactions: solanaSignAllTransactions,
   } = useWallet();
   const { connection } = useConnection();
-
-  // Network state management - try to restore from localStorage or detect Solana connection
-  const [networkType, setNetworkType] = useState(() => {
-    // Check localStorage first
-    const saved = localStorage.getItem("preferredNetworkType");
-    if (saved === "solana" || saved === "evm") {
-      return saved;
-    }
-
-    // Default to Solana if we detect a Solana wallet connection
-    // Note: solanaConnected might not be available yet during initialization
-    return localStorage.getItem("walletName") ? "solana" : "evm";
-  }); // "evm" or "solana"
-  const [selectedNetwork, setSelectedNetwork] = useState("localhost"); // Current selected network
   const [currentChainId, setCurrentChainId] = useState(null); // MetaMask's current chain ID
   const [isNetworkSwitching, setIsNetworkSwitching] = useState(false);
 
@@ -486,6 +538,7 @@ function AppContent() {
     step2Complete: false, // At least one withdrawal address added
     step3Complete: false, // Setup committed/locked
   });
+
 
   // Reusable WithdrawalAddressSelector component
   const WithdrawalAddressSelector = ({
@@ -892,7 +945,7 @@ function AppContent() {
       // For Solana networks, update the selected network and clear cached data
       setSelectedNetwork(networkKey);
 
-      // Clear all cached data when switching Solana networks
+      // Clear ALL cached data when switching Solana networks
       setSpendingLimits([]); // Clear spending limits from previous network
       setPendingLimitProposals([]); // Clear proposals from previous network
       setPendingBypassRequests([]); // Clear bypass requests from previous network
@@ -900,9 +953,51 @@ function AppContent() {
       setWithdrawalAddresses([]); // Clear withdrawal addresses from previous network
       setBalances({}); // Clear balances from previous network
       setLimitsLoaded(false); // Reset limits loaded state
-      setIsSetupCommitted(false); // Reset setup status
 
-      console.log(`🔄 Solana network switched to ${networkKey}, cached data cleared`);
+      // Clear spending limit editing state
+      setLimitEdits({
+        Daily: { value: "", isActive: false, isEditing: false },
+        Weekly: { value: "", isActive: false, isEditing: false },
+        Monthly: { value: "", isActive: false, isEditing: false },
+      });
+
+      // Reset setup state to initial values - will be updated from blockchain
+      setIsSetupCommitted(false); // Will be set from blockchain data when loaded
+      setCurrentStep(1); // Reset to first step of setup wizard
+      setStepValidation({
+        step1Complete: false, // Spending limits configured
+        step2Complete: false, // Withdrawal addresses configured
+        step3Complete: false  // Setup committed
+      });
+
+      // Clear form state
+      setDepositAmount("");
+      setWithdrawalAmount("");
+
+      // Clear custom period state
+      setShowCustomPeriod(false);
+      setCustomPeriodName("");
+      setCustomPeriodLimit("");
+      setCustomPeriodDuration("86400");
+
+      // Reset card states
+      setCardStates({
+        spendingLimits: { minimized: false },
+        balanceCard: { minimized: false },
+        addWithdrawalAddress: { minimized: false }
+      });
+
+      console.log(`🔄 Solana network switching from ${selectedNetwork} to ${networkKey}`);
+      console.log(`📊 Spending limits cleared: ${spendingLimits.length} -> 0`);
+      console.log(`🔧 Setup status reset: ${isSetupCommitted} -> false`);
+
+      const newNetworkConfig = getCurrentNetwork(networkType, networkKey);
+      console.log(`🌐 Network endpoint changing to: ${newNetworkConfig?.rpcUrl}`);
+      console.log(`🔍 Network config:`, newNetworkConfig);
+
+      // Small delay to allow ConnectionProvider to update
+      await new Promise(resolve => setTimeout(resolve, 500));
+      console.log(`✅ Network switch completed for ${networkKey} - ConnectionProvider should now use new endpoint`);
       return true;
     }
 
@@ -1313,6 +1408,7 @@ function AppContent() {
     };
   }, [
     networkType,
+    selectedNetwork, // Add selectedNetwork to trigger on network switch
     solanaConnected,
     solanaPublicKey,
     connection,
@@ -1890,7 +1986,7 @@ function AppContent() {
           currentNetwork.tokens[selectedToken]
         ) {
           const token = currentNetwork.tokens[selectedToken];
-          tokenAddress = token.mint || token.address; // Use mint for Solana, address for EVM
+          tokenAddress = token.address; // Unified token address field
           decimals = token.decimals;
           tokenSymbol = token.symbol;
         } else {
@@ -3368,7 +3464,7 @@ function AppContent() {
             return;
           }
 
-          const tokenMint = token.mint || token.address; // Use mint for Solana, address for EVM
+          const tokenMint = token.address; // Unified token address field
           const decimals = token.decimals;
 
           // Convert to token's base units
@@ -3413,7 +3509,7 @@ function AppContent() {
         } else if (currentNetwork.tokens[selectedToken]) {
           const token = currentNetwork.tokens[selectedToken];
           // Check availability based on network type
-          const networkTokenAddress = token.mint || token.address;
+          const networkTokenAddress = token.address;
           if (
             !networkTokenAddress ||
             token.address === "0x0000000000000000000000000000000000000000"
@@ -3571,10 +3667,9 @@ function AppContent() {
 
           const token = currentNetwork.tokens[selectedToken];
           if (token) {
-            // For Solana, use mint address; for EVM, use address
-            tokenAddress = token.mint || token.address;
+            // Unified token address field for both Solana and EVM
+            tokenAddress = token.address;
             console.log("🔍 DEBUG: Token resolution:", {
-              tokenMint: token.mint,
               tokenAddress: token.address,
               finalTokenAddress: tokenAddress,
             });
@@ -3623,7 +3718,7 @@ function AppContent() {
           decimals = 18;
         } else if (currentNetwork.tokens[selectedToken]) {
           const token = currentNetwork.tokens[selectedToken];
-          tokenAddress = token.mint || token.address; // Use mint for Solana, address for EVM
+          tokenAddress = token.address; // Unified token address field
           decimals = token.decimals;
         } else {
           alert("Please select a valid token");
@@ -4078,7 +4173,7 @@ function AppContent() {
                         : colors.warning.light,
                     }}
                   >
-                    {isSetupCommitted ? "🔒 Locked-In" : "⚙️ Setup Wallet"}
+                    {!isSetupCommitted ? "⚙️ Setup Wallet" : "🔒 Locked-In"}
                   </span>
                   {/* Step counter removed per user request */}
                 </div>
@@ -4222,7 +4317,7 @@ function AppContent() {
               </p>
               <p style={{ margin: `0 0 ${spacing.sm} 0` }}>
                 <strong>🔐 Set up withdrawal allowance:</strong> Changes to
-                allowance or by passing withdrawal limits are timelocked.
+                allowance or bypassing withdrawal limits are timelocked to combat spending/risking impulses.
               </p>
               <p style={{ margin: `0 0 ${spacing.sm} 0` }}>
                 <strong>🛡️ Compromise-Resistant:</strong> Funds are safe even
@@ -4266,8 +4361,17 @@ function AppContent() {
             }}
           >
             {/* Show stablecoins */}
-            {Object.entries(getCurrentNetwork(networkType, selectedNetwork).tokens).map(
-              ([key, token]) => (
+            {Object.entries(getCurrentNetwork(networkType, selectedNetwork).tokens)
+              .filter(([_, token]) => token.recommended) // Only show recommended tokens (excludes SOL)
+              .sort(([keyA], [keyB]) => {
+                // Sort by balance: non-zero balances first
+                const balanceA = parseFloat(balances[keyA] || "0");
+                const balanceB = parseFloat(balances[keyB] || "0");
+                if (balanceA > 0 && balanceB === 0) return -1;
+                if (balanceA === 0 && balanceB > 0) return 1;
+                return 0; // Keep original order for same balance status
+              })
+              .map(([key, token]) => (
                 <div
                   key={key}
                   style={{
@@ -5376,7 +5480,8 @@ function AppContent() {
               </div>
             </div>
 
-            {/* Custom Periods Section */}
+            {/* Custom Periods Section - Hidden (not implemented) */}
+            {false && (
             <div style={layoutStyles.marginBottomLarge}>
               <div
                 style={{
@@ -5649,6 +5754,7 @@ function AppContent() {
                 </div>
               )}
             </div>
+            )}
 
             {/* Pending Limit Proposals Section */}
             {pendingLimitProposals.length > 0 && (
@@ -6839,17 +6945,13 @@ function AppContent() {
           )}
         </div>
       )}
-    </div>
+      </div>
   );
 }
 
 // Wrapped App component with Solana wallet provider
 function App() {
-  return (
-    <SolanaWalletProvider networkType="evm" selectedNetwork="localhost">
-      <AppContent />
-    </SolanaWalletProvider>
-  );
+  return <AppContent />;
 }
 
 export default App;

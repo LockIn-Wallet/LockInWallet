@@ -1,0 +1,15 @@
+{
+  "network": "devnet",
+  "endpoint": "https://api.devnet.solana.com",
+  "tokens": {
+    "USDT": {
+      "mint": "6J3gqpfHM6aGYub7ojjAukBMVKVsvp3KT5eC6BDp5s8P",
+      "decimals": 6,
+      "symbol": "USDT",
+      "name": "Test USDT (Devnet)",
+      "userTokenAccount": "Byg4GJUG1bix61sgbcPuPPDupNao68SHWbT3RVtpWtdF"
+    }
+  },
+  "userAddress": "4xo6a3qHYgtsDkKUAy1wMQhyN1zoXo3tKPR5foxa3hV4",
+  "created": "2025-10-11T11:34:58.454Z"
+}

@@ -101,10 +101,54 @@ export class SolanaAdapter extends BlockchainAdapter {
   }
 
   async switchNetwork(networkConfig) {
-    // Solana wallets typically handle network switching internally
-    // Update our connection
+    // Solana wallets and ConnectionProvider handle network switching internally
+    // The connection is managed by the parent component's ConnectionProvider
+    // We just update our network configuration
     this.networkConfig = networkConfig;
-    this.connection = new Connection(networkConfig.rpcUrl, 'confirmed');
+
+    // Note: We don't create a new connection here because it should come from
+    // the ConnectionProvider which is already configured for the selected network
+    console.log(`SolanaAdapter switched to network: ${networkConfig.name} (${networkConfig.rpcUrl})`);
+
+    // Validate the connection after switching
+    await this.validateNetworkConnection();
+  }
+
+  async validateNetworkConnection() {
+    try {
+      console.log('🔍 Validating network connection...');
+
+      // Check if connection is working
+      const version = await this.connection.getVersion();
+      console.log('✅ Connection active, Solana version:', version['solana-core']);
+
+      // Check which cluster we're connected to
+      const genesisHash = await this.connection.getGenesisHash();
+      console.log('🌐 Genesis hash:', genesisHash);
+
+      // For devnet, also try to verify we can find our custom token mint
+      if (this.networkConfig?.name?.includes('Devnet') || this.networkConfig?.rpcUrl?.includes('devnet')) {
+        console.log('🧪 Devnet detected, validating custom token mint...');
+
+        // Check if our custom USDT mint exists
+        const customUSDTMint = 'BXGxW72iHDuaF4mCeNk4P7N18iBXz5e3XKVDQ3rsd1wJ';
+        try {
+          const mintInfo = await this.connection.getAccountInfo(new PublicKey(customUSDTMint));
+          if (mintInfo) {
+            console.log('✅ Custom devnet USDT mint found and accessible');
+          } else {
+            console.log('⚠️ Custom devnet USDT mint not found');
+          }
+        } catch (mintError) {
+          console.log('⚠️ Error checking custom USDT mint:', mintError.message);
+        }
+      }
+
+      return true;
+    } catch (error) {
+      console.error('❌ Network validation failed:', error);
+      return false;
+    }
   }
 
   // ========== TOKEN-AWARE DECIMAL SYSTEM ==========
@@ -696,18 +740,86 @@ export class SolanaAdapter extends BlockchainAdapter {
           this.PROGRAM_ID
         );
 
-        // Check if user has any tokens first
-        console.log('Checking if user has tokens for mint:', mintPubkey.toString());
+        console.log('🔍 DEBUGGING: Checking if user has tokens for mint:', mintPubkey.toString());
+
+        // First, let's validate our connection and network
+        try {
+          const version = await this.connection.getVersion();
+          console.log('🌐 DEBUGGING: Connected to Solana, version:', version['solana-core']);
+
+          const genesisHash = await this.connection.getGenesisHash();
+          console.log('🌐 DEBUGGING: Genesis hash:', genesisHash);
+
+          // Check RPC endpoint
+          console.log('🌐 DEBUGGING: Connection RPC endpoint:', this.connection.rpcEndpoint);
+
+          // Validate we're on the expected network
+          if (this.connection.rpcEndpoint === "http://127.0.0.1:8899") {
+            console.log('📍 NETWORK: Using localhost validator');
+          } else if (this.connection.rpcEndpoint.includes('devnet.solana.com')) {
+            console.log('📍 NETWORK: Using Solana devnet');
+          } else {
+            console.log('📍 NETWORK: Using other network:', this.connection.rpcEndpoint);
+          }
+        } catch (connError) {
+          console.error('❌ DEBUGGING: Connection validation failed:', connError);
+        }
 
         // Get user's associated token account address
         const userTokenAccountAddress = await getAssociatedTokenAddress(
           mintPubkey,
           userPubkey
         );
+        console.log('🔍 DEBUGGING: Computed ATA:', userTokenAccountAddress.toString());
+
+        // From setup script, we expect: Byg4GJUG1bix61sgbcPuPPDupNao68SHWbT3RVtpWtdF
+        console.log('🔍 DEBUGGING: Expected from setup script: Byg4GJUG1bix61sgbcPuPPDupNao68SHWbT3RVtpWtdF');
+        console.log('🔍 DEBUGGING: Addresses match:', userTokenAccountAddress.toString() === 'Byg4GJUG1bix61sgbcPuPPDupNao68SHWbT3RVtpWtdF');
 
         // Check if user token account exists and has balance
+        console.log('🔍 DEBUGGING: Calling getAccountInfo for:', userTokenAccountAddress.toString());
         const userTokenAccountInfo = await this.connection.getAccountInfo(userTokenAccountAddress);
+        console.log('🔍 DEBUGGING: getAccountInfo result:', userTokenAccountInfo ? 'Account found' : 'Account NOT found');
+
+        if (userTokenAccountInfo) {
+          console.log('🔍 DEBUGGING: Account data length:', userTokenAccountInfo.data.length);
+          console.log('🔍 DEBUGGING: Account owner:', userTokenAccountInfo.owner.toString());
+        }
+
+        // Also try getting all token accounts for this user to see what exists
+        try {
+          console.log('🔍 DEBUGGING: Getting all token accounts by owner...');
+          const allTokenAccounts = await this.connection.getTokenAccountsByOwner(
+            userPubkey,
+            { programId: TOKEN_PROGRAM_ID }
+          );
+          console.log('🔍 DEBUGGING: User has', allTokenAccounts.value.length, 'total token accounts');
+
+          // Look specifically for this mint
+          const thisMintAccounts = await this.connection.getTokenAccountsByOwner(
+            userPubkey,
+            { mint: mintPubkey }
+          );
+          console.log('🔍 DEBUGGING: User has', thisMintAccounts.value.length, 'accounts for this mint');
+
+          if (thisMintAccounts.value.length > 0) {
+            console.log('🔍 DEBUGGING: Found accounts for this mint:');
+            thisMintAccounts.value.forEach((account, i) => {
+              console.log(`🔍 DEBUGGING: Account ${i}:`, account.pubkey.toString());
+            });
+          }
+        } catch (ownerError) {
+          console.error('❌ DEBUGGING: Error getting accounts by owner:', ownerError);
+        }
+
         if (!userTokenAccountInfo) {
+          console.error('❌ DEBUGGING: No token account found. Summary:');
+          console.error('  - Mint:', mintPubkey.toString());
+          console.error('  - User:', userPubkey.toString());
+          console.error('  - Computed ATA:', userTokenAccountAddress.toString());
+          console.error('  - Expected ATA:', 'Byg4GJUG1bix61sgbcPuPPDupNao68SHWbT3RVtpWtdF');
+          console.error('  - Network endpoint:', this.connection.rpcEndpoint);
+
           throw new Error(`No ${tokenAddress.slice(0,8)}... token account found. Please get some tokens first to deposit.`);
         }
 
