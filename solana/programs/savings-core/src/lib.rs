@@ -250,4 +250,26 @@ pub mod savings_core {
     ) -> Result<()> {
         instructions::cancel_withdrawal_bypass(ctx, request_id)
     }
+
+    // ========== DEPOSIT PROXY INSTRUCTIONS ==========
+
+    /// Initialize a deposit proxy for a user
+    pub fn initialize_proxy(ctx: Context<InitializeProxy>) -> Result<()> {
+        instructions::initialize_proxy(ctx)
+    }
+
+    /// Forward SOL deposit to savings program
+    pub fn forward_sol_deposit(ctx: Context<ForwardSolDeposit>, amount: u64) -> Result<()> {
+        instructions::forward_sol_deposit(ctx, amount)
+    }
+
+    /// Forward SPL token deposit to savings program
+    pub fn forward_spl_deposit(ctx: Context<ForwardSplDeposit>, amount: u64) -> Result<()> {
+        instructions::forward_spl_deposit(ctx, amount)
+    }
+
+    /// Get the proxy address for a user (view function)
+    pub fn get_proxy_address(ctx: Context<GetProxyAddress>) -> Result<Pubkey> {
+        Ok(ctx.accounts.deposit_proxy.key())
+    }
 }

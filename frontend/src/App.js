@@ -48,216 +48,16 @@ import {
   fontWeight,
 } from "./styles";
 
-const ETH_ADDRESS = "0x0000000000000000000000000000000000000000"; // ETH address (native token)
-const SOL_ADDRESS = "So11111111111111111111111111111111111111112"; // SOL address (native token)
+// Import network configuration
+import networkConfig from "./networkConfig.json";
 
-// Network configuration - now supports both EVM and Solana
+const ETH_ADDRESS = networkConfig.constants.ETH_ADDRESS; // ETH address (native token)
+const SOL_ADDRESS = networkConfig.constants.SOL_ADDRESS; // SOL address (native token)
+
+// Network configuration - now supports both EVM and Solana (imported from JSON)
 const NETWORKS = {
-  // EVM Networks
-  evm: {
-    localhost: {
-      chainId: 31337,
-      name: "Localhost",
-      nativeCurrency: {
-        name: "Ethereum",
-        symbol: "ETH",
-        decimals: 18,
-      },
-      rpcUrls: ["http://127.0.0.1:8545"],
-      blockExplorerUrls: [""],
-      savingsContract: "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512",
-      tokens: {
-        USDT: {
-          address: "0xB7f8BC63BbcaD18155201308C8f3540b07f84F5e",
-          symbol: "USDT",
-          name: "Tether USD",
-          decimals: 6,
-          recommended: true,
-        },
-        USDC: {
-          address: "0x0000000000000000000000000000000000000000", // Placeholder
-          symbol: "USDC",
-          name: "USD Coin",
-          decimals: 6,
-          recommended: true,
-        },
-        DAI: {
-          address: "0x0000000000000000000000000000000000000000", // Placeholder
-          symbol: "DAI",
-          name: "Dai Stablecoin",
-          decimals: 18,
-          recommended: true,
-        },
-      },
-    },
-    ethereum: {
-      chainId: 1,
-      name: "Ethereum Mainnet",
-      nativeCurrency: {
-        name: "Ethereum",
-        symbol: "ETH",
-        decimals: 18,
-      },
-      rpcUrls: ["https://eth-mainnet.g.alchemy.com/v2/demo"],
-      blockExplorerUrls: ["https://etherscan.io"],
-      savingsContract: "0x0000000000000000000000000000000000000000", // TODO: Deploy contract
-      tokens: {
-        USDT: {
-          address: "0xdAC17F958D2ee523a2206206994597C13D831ec7",
-          symbol: "USDT",
-          name: "Tether USD",
-          decimals: 6,
-          recommended: true,
-        },
-        USDC: {
-          address: "0xA0b86a33E6B6c3c3A3B8DBbc81b2B4C98B25C96f",
-          symbol: "USDC",
-          name: "USD Coin",
-          decimals: 6,
-          recommended: true,
-        },
-        DAI: {
-          address: "0x6B175474E89094C44Da98b954EedeAC495271d0F",
-          symbol: "DAI",
-          name: "Dai Stablecoin",
-          decimals: 18,
-          recommended: true,
-        },
-      },
-    },
-    optimism: {
-      chainId: 10,
-      name: "Optimism",
-      nativeCurrency: {
-        name: "Ethereum",
-        symbol: "ETH",
-        decimals: 18,
-      },
-      rpcUrls: ["https://opt-mainnet.g.alchemy.com/v2/demo"],
-      blockExplorerUrls: ["https://optimistic.etherscan.io"],
-      savingsContract: "0x0000000000000000000000000000000000000000", // TODO: Deploy contract
-      tokens: {
-        USDT: {
-          address: "0x94b008aA00579c1307B0EF2c499aD98a8ce58e58",
-          symbol: "USDT",
-          name: "Tether USD",
-          decimals: 6,
-          recommended: true,
-        },
-        USDC: {
-          address: "0x7F5c764cBc14f9669B88837ca1490cCa17c31607",
-          symbol: "USDC",
-          name: "USD Coin",
-          decimals: 6,
-          recommended: true,
-        },
-        DAI: {
-          address: "0xDA10009cBd5D07dd0CeCc66161FC93D7c9000da1",
-          symbol: "DAI",
-          name: "Dai Stablecoin",
-          decimals: 18,
-          recommended: true,
-        },
-      },
-    },
-  },
-  // Solana Networks
-  solana: {
-    localhost: {
-      network: WalletAdapterNetwork.Devnet, // Use devnet for local testing
-      name: "Solana Localhost",
-      rpcUrl: "http://127.0.0.1:8899",
-      programId: "HNi2JKTNeHvz2ENckdVBW1ncfkJUYppuYeBwNhWjkK7d", // From our Anchor.toml
-      tokens: {
-        USDT: {
-          address: "FgXubes1kViJqK9WeuCTEkNx7o4F392udaspnsGH7zp7", // Test USDT mint address
-          symbol: "USDT",
-          name: "Test USDT",
-          decimals: 6,
-          recommended: true,
-        },
-        USDC: {
-          address: "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU", // Test USDC mint address (same as devnet for consistency)
-          symbol: "USDC",
-          name: "Test USDC",
-          decimals: 6,
-          recommended: true,
-        },
-        DAI: {
-          address: "EjmyN6qEC1Tf1JxioBo3j1VdTz8EBaRLPXP7Y5p3H5Ks", // Test DAI mint address
-          symbol: "DAI",
-          name: "Test DAI",
-          decimals: 18,
-          recommended: true,
-        },
-        SOL: {
-          address: "native", // Use "native" for SOL (but not for deposits)
-          symbol: "SOL",
-          name: "Solana",
-          decimals: 9,
-          recommended: false, // Don't show as deposit option
-        },
-      },
-    },
-    devnet: {
-      network: WalletAdapterNetwork.Devnet,
-      name: "Solana Devnet",
-      rpcUrl: clusterApiUrl(WalletAdapterNetwork.Devnet),
-      programId: "EYzR74ixPESkTn927Qmvp5H8TqMMeF1A1DKRc7g4DTFC",
-      tokens: {
-        USDT: {
-          address: "6J3gqpfHM6aGYub7ojjAukBMVKVsvp3KT5eC6BDp5s8P", // Custom USDT on Devnet (will be updated by deployment script)
-          symbol: "USDT",
-          name: "Tether USD",
-          decimals: 6,
-          recommended: true,
-        },
-        USDC: {
-          address: "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU", // USDC on Devnet
-          symbol: "USDC",
-          name: "USD Coin",
-          decimals: 6,
-          recommended: true,
-        },
-        DAI: {
-          address: "EjmyN6qEC1Tf1JxioBo3j1VdTz8EBaRLPXP7Y5p3H5Ks", // Test DAI mint address
-          symbol: "DAI",
-          name: "DAI Stablecoin",
-          decimals: 18,
-          recommended: true,
-        },
-        SOL: {
-          address: "native", // Use "native" for SOL (but not for deposits)
-          symbol: "SOL",
-          name: "Solana",
-          decimals: 9,
-          recommended: false, // Don't show as deposit option
-        },
-      },
-    },
-    mainnet: {
-      network: WalletAdapterNetwork.Mainnet,
-      name: "Solana Mainnet",
-      rpcUrl: clusterApiUrl(WalletAdapterNetwork.Mainnet),
-      programId: "HNi2JKTNeHvz2ENckdVBW1ncfkJUYppuYeBwNhWjkK7d", // TODO: Deploy to mainnet
-      tokens: {
-        SOL: {
-          mint: SOL_ADDRESS,
-          symbol: "SOL",
-          name: "Solana",
-          decimals: 9,
-          recommended: true,
-        },
-        USDC: {
-          mint: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
-          symbol: "USDC",
-          name: "USD Coin",
-          decimals: 6,
-          recommended: true,
-        },
-      },
-    },
-  },
+  evm: networkConfig.evm,
+  solana: networkConfig.solana
 };
 
 // Helper functions for network management
@@ -1744,13 +1544,13 @@ function AppContentInner({ networkType, setNetworkType, selectedNetwork, setSele
       }
 
       if (isProxyDeployed) {
-        alert("Deposit proxy already deployed!");
+        alert("Permanent deposit address already deployed!");
         return;
       }
 
       try {
         setIsDeploying(true);
-        console.log("Deploying Solana deposit proxy...");
+        console.log("Deploying Solana permanent deposit address...");
 
         // Deploy proxy using transaction manager
         const result = await transactionManager.deployProxy();

@@ -65,4 +65,14 @@ pub enum ErrorCode {
 
     #[msg("Bypass request not found")]
     RequestNotFound,
+
+    // Proxy related errors
+    #[msg("Invalid savings program")]
+    InvalidSavingsProgram,
+
+    #[msg("Proxy already exists for this user")]
+    ProxyAlreadyExists,
+
+    #[msg("Cross-program invocation failed")]
+    CpiCallFailed,
 }

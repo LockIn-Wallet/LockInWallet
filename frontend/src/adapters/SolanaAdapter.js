@@ -42,7 +42,6 @@ export class SolanaAdapter extends BlockchainAdapter {
     this.connection = connection;
     this.userAddress = null;
     this.PROGRAM_ID = new PublicKey("9j511uJuYwoFRFiU1h5wy2oi1Xc8n1FdoK91QxoXHRh2"); // Updated 2025-10-11
-    this.DEPOSIT_PROXY_PROGRAM_ID = new PublicKey("EyfA57i8PgyJBDmyLYFmdYMjPonZcY7BbnH98UmP8Rqp"); // Updated 2025-10-11
 
     if (this.wallet?.connected && this.wallet?.publicKey) {
       this.userAddress = this.wallet.publicKey.toString();
@@ -1014,7 +1013,7 @@ export class SolanaAdapter extends BlockchainAdapter {
     const userPubkey = new PublicKey(userAddress);
     const [depositProxy] = await PublicKey.findProgramAddress(
       [Buffer.from("deposit_proxy"), userPubkey.toBuffer()],
-      this.DEPOSIT_PROXY_PROGRAM_ID
+      this.PROGRAM_ID
     );
 
     return depositProxy.toString();
@@ -1075,7 +1074,7 @@ export class SolanaAdapter extends BlockchainAdapter {
     const userPubkey = this.wallet.publicKey;
     const [depositProxy] = await PublicKey.findProgramAddress(
       [Buffer.from("deposit_proxy"), userPubkey.toBuffer()],
-      this.DEPOSIT_PROXY_PROGRAM_ID
+      this.PROGRAM_ID
     );
 
     // Check if proxy already exists
@@ -1100,7 +1099,7 @@ export class SolanaAdapter extends BlockchainAdapter {
 
       const instruction = new TransactionInstruction({
         keys: accounts,
-        programId: this.DEPOSIT_PROXY_PROGRAM_ID,
+        programId: this.PROGRAM_ID,
         data: instructionData
       });
 
@@ -1126,7 +1125,7 @@ export class SolanaAdapter extends BlockchainAdapter {
     const userPubkey = new PublicKey(userAddress);
     const [depositProxy] = await PublicKey.findProgramAddress(
       [Buffer.from("deposit_proxy"), userPubkey.toBuffer()],
-      this.DEPOSIT_PROXY_PROGRAM_ID
+      this.PROGRAM_ID
     );
 
     const proxyInfo = await this.connection.getAccountInfo(depositProxy);
@@ -1545,10 +1544,14 @@ export class SolanaAdapter extends BlockchainAdapter {
       'ExecuteSplWithdrawalBypass': [241, 42, 36, 134, 236, 241, 142, 40],
       'ExecuteWithdrawalBypass': [179, 43, 138, 230, 25, 62, 50, 189],
       'ExecuteWithdrawalDestinationRequest': [117, 222, 85, 202, 28, 30, 24, 66],
+      'ForwardSolDeposit': [29, 156, 48, 213, 90, 128, 229, 58],
+      'ForwardSplDeposit': [131, 71, 27, 250, 233, 24, 75, 240],
+      'GetProxyAddress': [152, 239, 157, 227, 144, 172, 220, 146],
       'GetSolBalance': [177, 197, 179, 97, 50, 111, 178, 70],
       'GetSpendingLimits': [23, 121, 238, 204, 69, 213, 157, 147],
       'GetSplBalance': [92, 135, 40, 171, 133, 246, 90, 120],
       'Initialize': [175, 175, 109, 31, 13, 152, 155, 237],
+      'InitializeProxy': [245, 74, 175, 136, 0, 146, 100, 224],
       'InitializeSpendingLimits': [240, 49, 54, 19, 46, 201, 202, 42],
       'ProposeLimitChange': [146, 253, 178, 82, 191, 64, 35, 251],
       'RemoveTimePeriodLimit': [213, 185, 190, 218, 206, 221, 93, 152],

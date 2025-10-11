@@ -20,8 +20,7 @@ const TEST_CONFIG = {
 
   // Test program IDs (should match deployed programs)
   PROGRAM_IDS: {
-    SAVINGS_CORE: 'HNi2JKTNeHvz2ENckdVBW1ncfkJUYppuYeBwNhWjkK7d',
-    DEPOSIT_PROXY: '4Tr7zEp7p5YtvXNAK98UnEUUpYP9q87sgKBJjfgfNtr4'
+    SAVINGS_CORE: 'HNi2JKTNeHvz2ENckdVBW1ncfkJUYppuYeBwNhWjkK7d'
   },
 
   // Test amounts

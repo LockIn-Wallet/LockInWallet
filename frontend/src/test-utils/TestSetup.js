@@ -214,8 +214,7 @@ class TestSetup {
     this.log('🔍 Validating program deployment...');
 
     const programIds = [
-      'HNi2JKTNeHvz2ENckdVBW1ncfkJUYppuYeBwNhWjkK7d', // savings_core
-      '4Tr7zEp7p5YtvXNAK98UnEUUpYP9q87sgKBJjfgfNtr4'  // deposit_proxy
+      'HNi2JKTNeHvz2ENckdVBW1ncfkJUYppuYeBwNhWjkK7d'  // savings_core (includes proxy functionality)
     ];
 
     for (const programId of programIds) {

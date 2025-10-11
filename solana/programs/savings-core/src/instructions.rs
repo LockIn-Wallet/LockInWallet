@@ -1702,3 +1702,193 @@ fn hash_request_id(user: Pubkey, amount: u64, timestamp: i64) -> [u8; 32] {
     let hash_result: Hash = hash(&data);
     hash_result.to_bytes()
 }
+
+// ========== DEPOSIT PROXY INSTRUCTIONS ==========
+
+/// Initialize a new deposit proxy for a user
+#[derive(Accounts)]
+pub struct InitializeProxy<'info> {
+    #[account(
+        init,
+        payer = user,
+        space = 8 + 32 + 32 + 1 + 8 + 8 + 8, // discriminator + owner + savings_program + bump + created_at + last_used + deposit_count
+        seeds = [b"deposit_proxy", user.key().as_ref()],
+        bump
+    )]
+    pub deposit_proxy: Account<'info, DepositProxy>,
+
+    #[account(mut)]
+    pub user: Signer<'info>,
+
+    /// The savings program this proxy will forward to
+    /// CHECK: We validate this is a valid program account
+    pub savings_program: UncheckedAccount<'info>,
+
+    pub system_program: Program<'info, System>,
+}
+
+/// Forward SOL deposit to savings program
+#[derive(Accounts)]
+pub struct ForwardSolDeposit<'info> {
+    #[account(
+        mut,
+        seeds = [b"deposit_proxy", deposit_proxy.owner.as_ref()],
+        bump = deposit_proxy.bump,
+    )]
+    pub deposit_proxy: Account<'info, DepositProxy>,
+
+    #[account(mut)]
+    pub depositor: Signer<'info>,
+
+    /// The proxy owner (beneficiary of the deposit)
+    /// CHECK: This is validated against the proxy owner field
+    #[account(constraint = proxy_owner.key() == deposit_proxy.owner @ ErrorCode::UnauthorizedAccess)]
+    pub proxy_owner: UncheckedAccount<'info>,
+
+    /// The savings program to forward to
+    /// CHECK: We validate this matches the proxy configuration
+    #[account(constraint = savings_program.key() == deposit_proxy.savings_program @ ErrorCode::InvalidSavingsProgram)]
+    pub savings_program: UncheckedAccount<'info>,
+
+    /// Savings account PDA in the target program
+    /// CHECK: This will be validated by the savings program
+    pub savings_account: UncheckedAccount<'info>,
+
+    pub system_program: Program<'info, System>,
+}
+
+/// Forward SPL token deposit to savings program
+#[derive(Accounts)]
+pub struct ForwardSplDeposit<'info> {
+    #[account(
+        mut,
+        seeds = [b"deposit_proxy", deposit_proxy.owner.as_ref()],
+        bump = deposit_proxy.bump,
+    )]
+    pub deposit_proxy: Account<'info, DepositProxy>,
+
+    #[account(mut)]
+    pub depositor: Signer<'info>,
+
+    /// The proxy owner (beneficiary of the deposit)
+    /// CHECK: This is validated against the proxy owner field
+    #[account(constraint = proxy_owner.key() == deposit_proxy.owner @ ErrorCode::UnauthorizedAccess)]
+    pub proxy_owner: UncheckedAccount<'info>,
+
+    /// Depositor's token account
+    #[account(
+        mut,
+        constraint = depositor_token_account.owner == depositor.key(),
+        constraint = depositor_token_account.mint == mint.key()
+    )]
+    pub depositor_token_account: Account<'info, TokenAccount>,
+
+    /// Proxy's token account (intermediate holder)
+    #[account(
+        init_if_needed,
+        payer = depositor,
+        associated_token::mint = mint,
+        associated_token::authority = deposit_proxy,
+    )]
+    pub proxy_token_account: Account<'info, TokenAccount>,
+
+    /// Target savings account for the proxy owner
+    /// CHECK: This will be validated by the savings program
+    pub savings_account: UncheckedAccount<'info>,
+
+    /// Owner's token account in savings program
+    /// CHECK: This will be validated by the savings program
+    pub savings_token_account: UncheckedAccount<'info>,
+
+    /// The mint of the SPL token being deposited
+    pub mint: Account<'info, Mint>,
+
+    /// The savings program to forward to
+    /// CHECK: We validate this matches the proxy configuration
+    #[account(constraint = savings_program.key() == deposit_proxy.savings_program @ ErrorCode::InvalidSavingsProgram)]
+    pub savings_program: UncheckedAccount<'info>,
+
+    pub token_program: Program<'info, Token>,
+    pub associated_token_program: Program<'info, AssociatedToken>,
+    pub system_program: Program<'info, System>,
+}
+
+/// Get proxy address context
+#[derive(Accounts)]
+pub struct GetProxyAddress<'info> {
+    #[account(
+        seeds = [b"deposit_proxy", user.key().as_ref()],
+        bump = deposit_proxy.bump
+    )]
+    pub deposit_proxy: Account<'info, DepositProxy>,
+
+    pub user: Signer<'info>,
+}
+
+// ========== DEPOSIT PROXY INSTRUCTION IMPLEMENTATIONS ==========
+
+/// Initialize deposit proxy instruction
+pub fn initialize_proxy(ctx: Context<InitializeProxy>) -> Result<()> {
+    let deposit_proxy = &mut ctx.accounts.deposit_proxy;
+    let user = &ctx.accounts.user;
+    let savings_program = &ctx.accounts.savings_program;
+    let clock = Clock::get()?;
+
+    // Validate that savings_program is actually a program
+    require!(savings_program.executable, ErrorCode::InvalidSavingsProgram);
+
+    deposit_proxy.owner = user.key();
+    deposit_proxy.savings_program = savings_program.key();
+    deposit_proxy.bump = ctx.bumps.deposit_proxy;
+    deposit_proxy.created_at = clock.unix_timestamp;
+    deposit_proxy.last_used = clock.unix_timestamp;
+    deposit_proxy.deposit_count = 0;
+
+    msg!("Deposit proxy initialized for user: {} -> program: {}",
+         user.key(), savings_program.key());
+
+    Ok(())
+}
+
+/// Forward SOL deposit to savings program - simplified implementation
+pub fn forward_sol_deposit(ctx: Context<ForwardSolDeposit>, amount: u64) -> Result<()> {
+    require!(amount > 0, ErrorCode::InvalidAmount);
+
+    let deposit_proxy = &mut ctx.accounts.deposit_proxy;
+    let depositor = &ctx.accounts.depositor;
+    let proxy_owner = &ctx.accounts.proxy_owner;
+
+    // Record deposit in proxy statistics
+    deposit_proxy.record_deposit()?;
+
+    // TODO: For MVP, we're simplifying this to just record the deposit
+    // The actual fund forwarding logic will be implemented after we verify
+    // the basic program compilation and deployment cost savings
+
+    msg!("Proxy deposit recorded: {} lamports from {} for {}",
+         amount, depositor.key(), proxy_owner.key());
+
+    Ok(())
+}
+
+/// Forward SPL token deposit to savings program - simplified implementation
+pub fn forward_spl_deposit(ctx: Context<ForwardSplDeposit>, amount: u64) -> Result<()> {
+    require!(amount > 0, ErrorCode::InvalidAmount);
+
+    let deposit_proxy = &mut ctx.accounts.deposit_proxy;
+    let depositor = &ctx.accounts.depositor;
+    let proxy_owner = &ctx.accounts.proxy_owner;
+    let mint = &ctx.accounts.mint;
+
+    // Record deposit in proxy statistics
+    deposit_proxy.record_deposit()?;
+
+    // TODO: For MVP, we're simplifying this to just record the deposit
+    // The actual token forwarding logic will be implemented after we verify
+    // the basic program compilation and deployment cost savings
+
+    msg!("Proxy SPL deposit recorded: {} tokens of mint {} from {} for {}",
+         amount, mint.key(), depositor.key(), proxy_owner.key());
+
+    Ok(())
+}

@@ -126,41 +126,35 @@ async function setupTokens() {
     fs.writeFileSync(configPath, JSON.stringify(tokenConfig, null, 2));
     console.log(`✅ Token config saved to: ${configPath}`);
 
-    // Auto-update the frontend App.js with new mint address
-    console.log('📝 Updating frontend App.js with new USDT mint address...');
-    const appJsPath = path.join(__dirname, '../frontend/src/App.js');
-    let appJsContent = fs.readFileSync(appJsPath, 'utf8');
+    // Auto-update the frontend networkConfig.json with new mint address
+    console.log('📝 Updating frontend networkConfig.json with new USDT mint address...');
+    const networkConfigPath = path.join(__dirname, '../frontend/src/networkConfig.json');
 
-    // Replace the USDT mint address in both places
-    const withdrawalMintRegex = /const tokenMint = "[\w\d]+"; \/\/ USDT mint/;
-    const withdrawalMintLine = `const tokenMint = "${usdtMint.toString()}"; // USDT mint`;
-
-    const networkConfigMintRegex = /mint: "[\w\d]+", \/\/ Test USDT mint address/;
-    const networkConfigMintLine = `mint: "${usdtMint.toString()}", // Test USDT mint address`;
-
-    let updated = false;
-
-    if (withdrawalMintRegex.test(appJsContent)) {
-      appJsContent = appJsContent.replace(withdrawalMintRegex, withdrawalMintLine);
-      updated = true;
-      console.log(`✅ Updated withdrawal function mint address: ${usdtMint.toString()}`);
-    } else {
-      console.log('⚠️  Could not find withdrawal mint address pattern in App.js');
+    let networkConfig;
+    try {
+      const networkConfigContent = fs.readFileSync(networkConfigPath, 'utf8');
+      networkConfig = JSON.parse(networkConfigContent);
+    } catch (error) {
+      console.error('❌ Error reading networkConfig.json:', error.message);
+      throw error;
     }
 
-    if (networkConfigMintRegex.test(appJsContent)) {
-      appJsContent = appJsContent.replace(networkConfigMintRegex, networkConfigMintLine);
-      updated = true;
-      console.log(`✅ Updated network config mint address: ${usdtMint.toString()}`);
-    } else {
-      console.log('⚠️  Could not find network config mint address pattern in App.js');
-    }
+    // Update localhost USDT token address in Solana configuration
+    if (networkConfig.solana && networkConfig.solana.localhost && networkConfig.solana.localhost.tokens && networkConfig.solana.localhost.tokens.USDT) {
+      const oldMintAddress = networkConfig.solana.localhost.tokens.USDT.address;
+      networkConfig.solana.localhost.tokens.USDT.address = usdtMint.toString();
 
-    if (updated) {
-      fs.writeFileSync(appJsPath, appJsContent);
-      console.log(`✅ Frontend App.js updated with new mint address: ${usdtMint.toString()}`);
+      try {
+        fs.writeFileSync(networkConfigPath, JSON.stringify(networkConfig, null, 2));
+        console.log(`✅ Network configuration updated successfully`);
+        console.log(`   Old USDT mint: ${oldMintAddress}`);
+        console.log(`   New USDT mint: ${usdtMint.toString()}`);
+      } catch (error) {
+        console.error('❌ Error writing networkConfig.json:', error.message);
+        throw error;
+      }
     } else {
-      console.log('⚠️  No mint address patterns found to update in App.js');
+      console.log('⚠️  Could not find localhost USDT token configuration in networkConfig.json');
     }
 
     // Check user SOL balance
@@ -175,6 +169,7 @@ async function setupTokens() {
     console.log(`   User Address: ${USER_ADDRESS}`);
     console.log(`   USDT Balance: ${balance.toLocaleString()} USDT`);
     console.log(`   SOL Balance: ${solBalanceFormatted} SOL`);
+    console.log(`   Frontend Config: networkConfig.json updated with new mint address`);
 
   } catch (error) {
     console.error('❌ Error setting up tokens:', error.message);

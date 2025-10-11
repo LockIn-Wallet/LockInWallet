@@ -1124,6 +1124,343 @@ export type SavingsCore = {
       ]
     },
     {
+      "name": "forwardSolDeposit",
+      "docs": [
+        "Forward SOL deposit to savings program"
+      ],
+      "discriminator": [
+        29,
+        156,
+        48,
+        213,
+        90,
+        128,
+        229,
+        58
+      ],
+      "accounts": [
+        {
+          "name": "depositProxy",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  100,
+                  101,
+                  112,
+                  111,
+                  115,
+                  105,
+                  116,
+                  95,
+                  112,
+                  114,
+                  111,
+                  120,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "deposit_proxy.owner",
+                "account": "depositProxy"
+              }
+            ]
+          }
+        },
+        {
+          "name": "depositor",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "proxyOwner",
+          "docs": [
+            "The proxy owner (beneficiary of the deposit)"
+          ]
+        },
+        {
+          "name": "savingsProgram",
+          "docs": [
+            "The savings program to forward to"
+          ]
+        },
+        {
+          "name": "savingsAccount",
+          "docs": [
+            "Savings account PDA in the target program"
+          ]
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "forwardSplDeposit",
+      "docs": [
+        "Forward SPL token deposit to savings program"
+      ],
+      "discriminator": [
+        131,
+        71,
+        27,
+        250,
+        233,
+        24,
+        75,
+        240
+      ],
+      "accounts": [
+        {
+          "name": "depositProxy",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  100,
+                  101,
+                  112,
+                  111,
+                  115,
+                  105,
+                  116,
+                  95,
+                  112,
+                  114,
+                  111,
+                  120,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "deposit_proxy.owner",
+                "account": "depositProxy"
+              }
+            ]
+          }
+        },
+        {
+          "name": "depositor",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "proxyOwner",
+          "docs": [
+            "The proxy owner (beneficiary of the deposit)"
+          ]
+        },
+        {
+          "name": "depositorTokenAccount",
+          "docs": [
+            "Depositor's token account"
+          ],
+          "writable": true
+        },
+        {
+          "name": "proxyTokenAccount",
+          "docs": [
+            "Proxy's token account (intermediate holder)"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "depositProxy"
+              },
+              {
+                "kind": "const",
+                "value": [
+                  6,
+                  221,
+                  246,
+                  225,
+                  215,
+                  101,
+                  161,
+                  147,
+                  217,
+                  203,
+                  225,
+                  70,
+                  206,
+                  235,
+                  121,
+                  172,
+                  28,
+                  180,
+                  133,
+                  237,
+                  95,
+                  91,
+                  55,
+                  145,
+                  58,
+                  140,
+                  245,
+                  133,
+                  126,
+                  255,
+                  0,
+                  169
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "savingsAccount",
+          "docs": [
+            "Target savings account for the proxy owner"
+          ]
+        },
+        {
+          "name": "savingsTokenAccount",
+          "docs": [
+            "Owner's token account in savings program"
+          ]
+        },
+        {
+          "name": "mint",
+          "docs": [
+            "The mint of the SPL token being deposited"
+          ]
+        },
+        {
+          "name": "savingsProgram",
+          "docs": [
+            "The savings program to forward to"
+          ]
+        },
+        {
+          "name": "tokenProgram",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "associatedTokenProgram",
+          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "getProxyAddress",
+      "docs": [
+        "Get the proxy address for a user (view function)"
+      ],
+      "discriminator": [
+        152,
+        239,
+        157,
+        227,
+        144,
+        172,
+        220,
+        146
+      ],
+      "accounts": [
+        {
+          "name": "depositProxy",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  100,
+                  101,
+                  112,
+                  111,
+                  115,
+                  105,
+                  116,
+                  95,
+                  112,
+                  114,
+                  111,
+                  120,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "user"
+              }
+            ]
+          }
+        },
+        {
+          "name": "user",
+          "signer": true
+        }
+      ],
+      "args": [],
+      "returns": "pubkey"
+    },
+    {
       "name": "getSolBalance",
       "docs": [
         "Get user's total SOL balance"
@@ -1320,6 +1657,70 @@ export type SavingsCore = {
           "name": "user",
           "writable": true,
           "signer": true
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "initializeProxy",
+      "docs": [
+        "Initialize a deposit proxy for a user"
+      ],
+      "discriminator": [
+        245,
+        74,
+        175,
+        136,
+        0,
+        146,
+        100,
+        224
+      ],
+      "accounts": [
+        {
+          "name": "depositProxy",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  100,
+                  101,
+                  112,
+                  111,
+                  115,
+                  105,
+                  116,
+                  95,
+                  112,
+                  114,
+                  111,
+                  120,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "user"
+              }
+            ]
+          }
+        },
+        {
+          "name": "user",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "savingsProgram",
+          "docs": [
+            "The savings program this proxy will forward to"
+          ]
         },
         {
           "name": "systemProgram",
@@ -2409,6 +2810,19 @@ export type SavingsCore = {
   ],
   "accounts": [
     {
+      "name": "depositProxy",
+      "discriminator": [
+        6,
+        171,
+        248,
+        84,
+        68,
+        180,
+        200,
+        168
+      ]
+    },
+    {
       "name": "savingsAccount",
       "discriminator": [
         136,
@@ -2535,6 +2949,21 @@ export type SavingsCore = {
       "code": 6019,
       "name": "requestNotFound",
       "msg": "Bypass request not found"
+    },
+    {
+      "code": 6020,
+      "name": "invalidSavingsProgram",
+      "msg": "Invalid savings program"
+    },
+    {
+      "code": 6021,
+      "name": "proxyAlreadyExists",
+      "msg": "Proxy already exists for this user"
+    },
+    {
+      "code": 6022,
+      "name": "cpiCallFailed",
+      "msg": "Cross-program invocation failed"
     }
   ],
   "types": [
@@ -2613,6 +3042,60 @@ export type SavingsCore = {
               "When this request was created"
             ],
             "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "depositProxy",
+      "docs": [
+        "Deposit proxy account that provides permanent addresses for exchange deposits",
+        "This allows users to have deterministic deposit addresses that forward to their savings"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "owner",
+            "docs": [
+              "The owner of this deposit proxy (user's wallet)"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "savingsProgram",
+            "docs": [
+              "The savings program this proxy forwards to (should be current program)"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "bump",
+            "docs": [
+              "Bump seed for this PDA"
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "createdAt",
+            "docs": [
+              "When this proxy was created"
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "lastUsed",
+            "docs": [
+              "Last time this proxy was used"
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "depositCount",
+            "docs": [
+              "Total number of deposits forwarded"
+            ],
+            "type": "u64"
           }
         ]
       }

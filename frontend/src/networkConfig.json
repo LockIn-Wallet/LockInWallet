@@ -1,0 +1,221 @@
+{
+  "constants": {
+    "ETH_ADDRESS": "0x0000000000000000000000000000000000000000",
+    "SOL_ADDRESS": "So11111111111111111111111111111111111111112"
+  },
+  "evm": {
+    "localhost": {
+      "chainId": 31337,
+      "name": "Localhost",
+      "nativeCurrency": {
+        "name": "Ethereum",
+        "symbol": "ETH",
+        "decimals": 18
+      },
+      "rpcUrls": [
+        "http://127.0.0.1:8545"
+      ],
+      "blockExplorerUrls": [
+        ""
+      ],
+      "savingsContract": "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512",
+      "tokens": {
+        "USDT": {
+          "address": "0xB7f8BC63BbcaD18155201308C8f3540b07f84F5e",
+          "symbol": "USDT",
+          "name": "Tether USD",
+          "decimals": 6,
+          "recommended": true
+        },
+        "USDC": {
+          "address": "0x0000000000000000000000000000000000000000",
+          "symbol": "USDC",
+          "name": "USD Coin",
+          "decimals": 6,
+          "recommended": true
+        },
+        "DAI": {
+          "address": "0x0000000000000000000000000000000000000000",
+          "symbol": "DAI",
+          "name": "Dai Stablecoin",
+          "decimals": 18,
+          "recommended": true
+        }
+      }
+    },
+    "ethereum": {
+      "chainId": 1,
+      "name": "Ethereum Mainnet",
+      "nativeCurrency": {
+        "name": "Ethereum",
+        "symbol": "ETH",
+        "decimals": 18
+      },
+      "rpcUrls": [
+        "https://eth-mainnet.g.alchemy.com/v2/demo"
+      ],
+      "blockExplorerUrls": [
+        "https://etherscan.io"
+      ],
+      "savingsContract": "0x0000000000000000000000000000000000000000",
+      "tokens": {
+        "USDT": {
+          "address": "0xdAC17F958D2ee523a2206206994597C13D831ec7",
+          "symbol": "USDT",
+          "name": "Tether USD",
+          "decimals": 6,
+          "recommended": true
+        },
+        "USDC": {
+          "address": "0xA0b86a33E6B6c3c3A3B8DBbc81b2B4C98B25C96f",
+          "symbol": "USDC",
+          "name": "USD Coin",
+          "decimals": 6,
+          "recommended": true
+        },
+        "DAI": {
+          "address": "0x6B175474E89094C44Da98b954EedeAC495271d0F",
+          "symbol": "DAI",
+          "name": "Dai Stablecoin",
+          "decimals": 18,
+          "recommended": true
+        }
+      }
+    },
+    "optimism": {
+      "chainId": 10,
+      "name": "Optimism",
+      "nativeCurrency": {
+        "name": "Ethereum",
+        "symbol": "ETH",
+        "decimals": 18
+      },
+      "rpcUrls": [
+        "https://opt-mainnet.g.alchemy.com/v2/demo"
+      ],
+      "blockExplorerUrls": [
+        "https://optimistic.etherscan.io"
+      ],
+      "savingsContract": "0x0000000000000000000000000000000000000000",
+      "tokens": {
+        "USDT": {
+          "address": "0x94b008aA00579c1307B0EF2c499aD98a8ce58e58",
+          "symbol": "USDT",
+          "name": "Tether USD",
+          "decimals": 6,
+          "recommended": true
+        },
+        "USDC": {
+          "address": "0x7F5c764cBc14f9669B88837ca1490cCa17c31607",
+          "symbol": "USDC",
+          "name": "USD Coin",
+          "decimals": 6,
+          "recommended": true
+        },
+        "DAI": {
+          "address": "0xDA10009cBd5D07dd0CeCc66161FC93D7c9000da1",
+          "symbol": "DAI",
+          "name": "Dai Stablecoin",
+          "decimals": 18,
+          "recommended": true
+        }
+      }
+    }
+  },
+  "solana": {
+    "localhost": {
+      "network": "devnet",
+      "name": "Solana Localhost",
+      "rpcUrl": "http://127.0.0.1:8899",
+      "programId": "HNi2JKTNeHvz2ENckdVBW1ncfkJUYppuYeBwNhWjkK7d",
+      "tokens": {
+        "USDT": {
+          "address": "4H4fx6MkTWAZFFd81EgG7QzmirmrPoeUMWNQtYdgfXuo",
+          "symbol": "USDT",
+          "name": "Test USDT",
+          "decimals": 6,
+          "recommended": true
+        },
+        "USDC": {
+          "address": "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU",
+          "symbol": "USDC",
+          "name": "Test USDC",
+          "decimals": 6,
+          "recommended": true
+        },
+        "DAI": {
+          "address": "EjmyN6qEC1Tf1JxioBo3j1VdTz8EBaRLPXP7Y5p3H5Ks",
+          "symbol": "DAI",
+          "name": "Test DAI",
+          "decimals": 18,
+          "recommended": true
+        },
+        "SOL": {
+          "address": "native",
+          "symbol": "SOL",
+          "name": "Solana",
+          "decimals": 9,
+          "recommended": false
+        }
+      }
+    },
+    "devnet": {
+      "network": "devnet",
+      "name": "Solana Devnet",
+      "rpcUrl": "https://api.devnet.solana.com",
+      "programId": "EYzR74ixPESkTn927Qmvp5H8TqMMeF1A1DKRc7g4DTFC",
+      "tokens": {
+        "USDT": {
+          "address": "6J3gqpfHM6aGYub7ojjAukBMVKVsvp3KT5eC6BDp5s8P",
+          "symbol": "USDT",
+          "name": "Tether USD",
+          "decimals": 6,
+          "recommended": true
+        },
+        "USDC": {
+          "address": "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU",
+          "symbol": "USDC",
+          "name": "USD Coin",
+          "decimals": 6,
+          "recommended": true
+        },
+        "DAI": {
+          "address": "EjmyN6qEC1Tf1JxioBo3j1VdTz8EBaRLPXP7Y5p3H5Ks",
+          "symbol": "DAI",
+          "name": "DAI Stablecoin",
+          "decimals": 18,
+          "recommended": true
+        },
+        "SOL": {
+          "address": "native",
+          "symbol": "SOL",
+          "name": "Solana",
+          "decimals": 9,
+          "recommended": false
+        }
+      }
+    },
+    "mainnet": {
+      "network": "mainnet-beta",
+      "name": "Solana Mainnet",
+      "rpcUrl": "https://api.mainnet-beta.solana.com",
+      "programId": "HNi2JKTNeHvz2ENckdVBW1ncfkJUYppuYeBwNhWjkK7d",
+      "tokens": {
+        "SOL": {
+          "address": "So11111111111111111111111111111111111111112",
+          "symbol": "SOL",
+          "name": "Solana",
+          "decimals": 9,
+          "recommended": true
+        },
+        "USDC": {
+          "address": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+          "symbol": "USDC",
+          "name": "USD Coin",
+          "decimals": 6,
+          "recommended": true
+        }
+      }
+    }
+  }
+}
