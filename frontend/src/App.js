@@ -269,6 +269,7 @@ function AppContentInner({ networkType, setNetworkType, selectedNetwork, setSele
   // Multi-blockchain transaction manager
   const [transactionManager, setTransactionManager] = useState(null);
 
+
   // Time-based spending limits state - unified interface
   const [spendingLimits, setSpendingLimits] = useState([]); // Array of all time periods
   const [pendingLimitProposals, setPendingLimitProposals] = useState([]); // Pending limit change proposals
@@ -1018,6 +1019,7 @@ function AppContentInner({ networkType, setNetworkType, selectedNetwork, setSele
     }
   };
 
+
   // Initialize TransactionManager when network type changes
   useEffect(() => {
     const initTxManager = async () => {
@@ -1537,7 +1539,7 @@ function AppContentInner({ networkType, setNetworkType, selectedNetwork, setSele
         setIsDeploying(false);
       }
     } else if (networkType === "solana") {
-      // Solana proxy deployment
+      // Solana proxy deployment with payment activation
       if (!transactionManager || !solanaConnected) {
         alert("Please connect your Solana wallet first");
         return;
@@ -1550,8 +1552,38 @@ function AppContentInner({ networkType, setNetworkType, selectedNetwork, setSele
 
       try {
         setIsDeploying(true);
-        console.log("Deploying Solana permanent deposit address...");
 
+        // Since no permanent address exists, user needs to pay first
+        console.log("Processing activation payment for permanent address...");
+        const fee = await transactionManager.currentAdapter.getActivationFee();
+        const sufficientBalance = await transactionManager.currentAdapter.hasSufficientBalanceForActivation();
+
+        if (!sufficientBalance) {
+          alert(`💳 Insufficient Balance\n\nTo generate your permanent deposit address, you need to pay a one-time activation fee of ${(fee / 1000000000).toFixed(3)} SOL (~$5 USD).\n\nPlease add more SOL to your wallet and try again.`);
+          setIsDeploying(false);
+          return;
+        }
+
+
+        // Initialize savings account if it doesn't exist (separate from spending limits account)
+        console.log("Ensuring savings account exists...");
+        const savingsAccountExists = await transactionManager.currentAdapter.isProxyDeployed(
+          solanaConnected ? solanaPublicKey?.toString() : evmAccount
+        );
+
+        if (!savingsAccountExists) {
+          console.log("Creating savings account...");
+          await transactionManager.currentAdapter.initializeSavingsAccount();
+          console.log("✅ Savings account created");
+        } else {
+          console.log("✅ Savings account already exists");
+        }
+
+        console.log("Processing activation payment...");
+        const paymentTxHash = await transactionManager.currentAdapter.activatePermanentAddressWithPayment();
+        console.log("✅ Payment completed:", paymentTxHash);
+
+        console.log("Deploying Solana permanent deposit address...");
         // Deploy proxy using transaction manager
         const result = await transactionManager.deployProxy();
         console.log("Solana proxy deployment result:", result);
@@ -1566,9 +1598,7 @@ function AppContentInner({ networkType, setNetworkType, selectedNetwork, setSele
           );
         }
 
-        alert(
-          "🎉 Permanent deposit address generated successfully! This address is permanently tied to your wallet and you can use it for all future deposits from exchanges."
-        );
+        alert("🎉 Payment completed & permanent deposit address generated successfully! This address is permanently tied to your wallet and you can use it for all future deposits from exchanges.");
       } catch (error) {
         console.error("Error deploying Solana proxy:", error);
 
@@ -4204,9 +4234,16 @@ function AppContentInner({ networkType, setNetworkType, selectedNetwork, setSele
         )}
       </div>
 
-      {!provider ? (
+      {!provider && networkType !== "solana" ? (
         <div style={layoutStyles.emptyState}>
-          <p>Please connect your wallet to access the savings features.</p>
+          <p>Please connect your MetaMask wallet to access the savings features.</p>
+        </div>
+      ) : networkType === "solana" && (!solanaConnected || !solanaWallet) ? (
+        <div style={layoutStyles.emptyState}>
+          <p>Please connect your Solana wallet to access the savings features.</p>
+          <div style={{ marginTop: spacing.md }}>
+            <WalletMultiButton />
+          </div>
         </div>
       ) : (
         <div>
@@ -4267,7 +4304,7 @@ function AppContentInner({ networkType, setNetworkType, selectedNetwork, setSele
                     margin: `0 0 ${spacing.md} 0`,
                   }}
                 >
-                  📱 From Currently Connected Wallet
+                  📱 From Connected Wallet
                 </h4>
                 <p
                   style={{
@@ -4449,6 +4486,14 @@ function AppContentInner({ networkType, setNetworkType, selectedNetwork, setSele
                           permanent deposit address
                         </strong>{" "}
                         to receive funds directly from exchanges
+                        {networkType === "solana" && (
+                          <>
+                            <br />
+                            <span style={{ color: colors.warning.main, fontSize: "0.85em" }}>
+                              💳 One-time $5 USD payment required (in SOL)
+                            </span>
+                          </>
+                        )}
                       </p>
                     </div>
 

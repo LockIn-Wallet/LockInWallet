@@ -193,7 +193,19 @@ pub fn deposit_sol(ctx: Context<DepositSol>, amount: u64) -> Result<()> {
         savings_account.spl_balances = Vec::new();
         savings_account.bump = ctx.bumps.savings_account;
         savings_account.created_at = clock.unix_timestamp;
+        savings_account.withdrawal_destinations = Vec::new();
+        savings_account.pending_withdrawal_destination_requests = Vec::new();
+        savings_account.pending_bypass_requests = Vec::new();
+        savings_account.permanent_address_activated = false;
+        savings_account.activation_payment_signature = Vec::new();
+        savings_account.activated_at = 0;
     }
+
+    // Check if permanent address is activated for deposits
+    require!(
+        savings_account.permanent_address_activated,
+        ErrorCode::PermanentAddressNotActivated
+    );
 
     // Transfer SOL from payer to savings account
     let cpi_context = CpiContext::new(
@@ -239,7 +251,19 @@ pub fn deposit_spl(ctx: Context<DepositSpl>, amount: u64) -> Result<()> {
         savings_account.spl_balances = Vec::new();
         savings_account.bump = ctx.bumps.savings_account;
         savings_account.created_at = clock.unix_timestamp;
+        savings_account.withdrawal_destinations = Vec::new();
+        savings_account.pending_withdrawal_destination_requests = Vec::new();
+        savings_account.pending_bypass_requests = Vec::new();
+        savings_account.permanent_address_activated = false;
+        savings_account.activation_payment_signature = Vec::new();
+        savings_account.activated_at = 0;
     }
+
+    // Check if permanent address is activated for deposits
+    require!(
+        savings_account.permanent_address_activated,
+        ErrorCode::PermanentAddressNotActivated
+    );
 
     // Transfer SPL tokens from source to savings account
     // The authority must be whoever owns the source_token_account
@@ -326,6 +350,12 @@ pub fn withdraw_sol(ctx: Context<WithdrawSol>, amount: u64) -> Result<()> {
     let savings_account = &mut ctx.accounts.savings_account;
     let user = &ctx.accounts.user;
 
+    // Check if permanent address is activated for withdrawals
+    require!(
+        savings_account.permanent_address_activated,
+        ErrorCode::PermanentAddressNotActivated
+    );
+
     // Check if user has sufficient balance
     require!(
         savings_account.sol_balance >= amount,
@@ -374,6 +404,12 @@ pub fn withdraw_spl(ctx: Context<WithdrawSpl>, amount: u64) -> Result<()> {
 
     let savings_account = &mut ctx.accounts.savings_account;
     let mint = &ctx.accounts.mint;
+
+    // Check if permanent address is activated for withdrawals
+    require!(
+        savings_account.permanent_address_activated,
+        ErrorCode::PermanentAddressNotActivated
+    );
 
     // Check if user has sufficient token balance
     let current_balance = savings_account.get_token_balance(mint.key());
@@ -432,7 +468,19 @@ pub fn deposit_sol_self(ctx: Context<DepositSolSelf>, amount: u64) -> Result<()>
         savings_account.spl_balances = Vec::new();
         savings_account.bump = ctx.bumps.savings_account;
         savings_account.created_at = clock.unix_timestamp;
+        savings_account.withdrawal_destinations = Vec::new();
+        savings_account.pending_withdrawal_destination_requests = Vec::new();
+        savings_account.pending_bypass_requests = Vec::new();
+        savings_account.permanent_address_activated = false;
+        savings_account.activation_payment_signature = Vec::new();
+        savings_account.activated_at = 0;
     }
+
+    // Check if permanent address is activated for deposits
+    require!(
+        savings_account.permanent_address_activated,
+        ErrorCode::PermanentAddressNotActivated
+    );
 
     // Transfer SOL from user to savings account
     let cpi_context = CpiContext::new(
@@ -477,7 +525,19 @@ pub fn deposit_spl_self(ctx: Context<DepositSplSelf>, amount: u64) -> Result<()>
         savings_account.spl_balances = Vec::new();
         savings_account.bump = ctx.bumps.savings_account;
         savings_account.created_at = clock.unix_timestamp;
+        savings_account.withdrawal_destinations = Vec::new();
+        savings_account.pending_withdrawal_destination_requests = Vec::new();
+        savings_account.pending_bypass_requests = Vec::new();
+        savings_account.permanent_address_activated = false;
+        savings_account.activation_payment_signature = Vec::new();
+        savings_account.activated_at = 0;
     }
+
+    // Check if permanent address is activated for deposits
+    require!(
+        savings_account.permanent_address_activated,
+        ErrorCode::PermanentAddressNotActivated
+    );
 
     // Transfer SPL tokens from user to savings account
     let cpi_accounts = Transfer {
@@ -1889,6 +1949,178 @@ pub fn forward_spl_deposit(ctx: Context<ForwardSplDeposit>, amount: u64) -> Resu
 
     msg!("Proxy SPL deposit recorded: {} tokens of mint {} from {} for {}",
          amount, mint.key(), depositor.key(), proxy_owner.key());
+
+    Ok(())
+}
+
+/// Initialize program configuration (admin only)
+#[derive(Accounts)]
+pub struct InitializeProgramConfig<'info> {
+    #[account(
+        init,
+        payer = admin,
+        space = 8 + ProgramConfig::INIT_SPACE,
+        seeds = [b"program_config"],
+        bump
+    )]
+    pub program_config: Account<'info, ProgramConfig>,
+
+    #[account(mut)]
+    pub admin: Signer<'info>,
+
+    /// CHECK: Treasury address can be any valid Pubkey
+    pub treasury_address: UncheckedAccount<'info>,
+
+    pub system_program: Program<'info, System>,
+}
+
+/// Update program configuration (admin only)
+#[derive(Accounts)]
+pub struct UpdateProgramConfig<'info> {
+    #[account(
+        mut,
+        seeds = [b"program_config"],
+        bump = program_config.bump,
+        constraint = program_config.admin == admin.key() @ ErrorCode::Unauthorized
+    )]
+    pub program_config: Account<'info, ProgramConfig>,
+
+    #[account(mut)]
+    pub admin: Signer<'info>,
+}
+
+/// Activate permanent address with payment
+#[derive(Accounts)]
+pub struct ActivatePermanentAddressWithPayment<'info> {
+    #[account(
+        mut,
+        seeds = [b"savings", user.key().as_ref()],
+        bump = savings_account.bump,
+        constraint = !savings_account.permanent_address_activated @ ErrorCode::AlreadyActivated
+    )]
+    pub savings_account: Account<'info, SavingsAccount>,
+
+    #[account(
+        seeds = [b"program_config"],
+        bump = program_config.bump
+    )]
+    pub program_config: Account<'info, ProgramConfig>,
+
+    #[account(mut)]
+    pub user: Signer<'info>,
+
+    /// CHECK: Treasury address from config - must match program_config.treasury_address
+    #[account(
+        mut,
+        constraint = treasury_address.key() == program_config.treasury_address @ ErrorCode::InvalidTreasuryAddress
+    )]
+    pub treasury_address: UncheckedAccount<'info>,
+
+    pub system_program: Program<'info, System>,
+}
+
+// ========== MONETIZATION INSTRUCTION IMPLEMENTATIONS ==========
+
+/// Initialize program configuration
+pub fn initialize_program_config(
+    ctx: Context<InitializeProgramConfig>,
+    permanent_address_fee_lamports: u64,
+) -> Result<()> {
+    let program_config = &mut ctx.accounts.program_config;
+    let admin = &ctx.accounts.admin;
+    let treasury_address = &ctx.accounts.treasury_address;
+    let clock = Clock::get()?;
+
+    // Initialize program config
+    program_config.treasury_address = treasury_address.key();
+    program_config.permanent_address_fee_lamports = permanent_address_fee_lamports;
+    program_config.admin = admin.key();
+    program_config.bump = ctx.bumps.program_config;
+    program_config.created_at = clock.unix_timestamp;
+    program_config.updated_at = clock.unix_timestamp;
+
+    msg!("Program config initialized - Treasury: {}, Fee: {} lamports, Admin: {}",
+         treasury_address.key(), permanent_address_fee_lamports, admin.key());
+
+    Ok(())
+}
+
+/// Update program configuration (admin only)
+pub fn update_program_config(
+    ctx: Context<UpdateProgramConfig>,
+    new_treasury_address: Option<Pubkey>,
+    new_fee_lamports: Option<u64>,
+) -> Result<()> {
+    let program_config = &mut ctx.accounts.program_config;
+    let clock = Clock::get()?;
+
+    // Update treasury address if provided
+    if let Some(treasury) = new_treasury_address {
+        program_config.treasury_address = treasury;
+        msg!("Treasury address updated to: {}", treasury);
+    }
+
+    // Update fee if provided
+    if let Some(fee) = new_fee_lamports {
+        program_config.permanent_address_fee_lamports = fee;
+        msg!("Permanent address fee updated to: {} lamports", fee);
+    }
+
+    program_config.updated_at = clock.unix_timestamp;
+
+    Ok(())
+}
+
+/// Activate permanent address with payment
+pub fn activate_permanent_address_with_payment(
+    ctx: Context<ActivatePermanentAddressWithPayment>,
+) -> Result<()> {
+    let savings_account = &mut ctx.accounts.savings_account;
+    let program_config = &ctx.accounts.program_config;
+    let user = &ctx.accounts.user;
+    let treasury_address = &ctx.accounts.treasury_address;
+    let system_program = &ctx.accounts.system_program;
+    let clock = Clock::get()?;
+
+    // Check user has sufficient funds
+    let user_balance = user.lamports();
+    let fee_amount = program_config.permanent_address_fee_lamports;
+
+    require!(
+        user_balance >= fee_amount,
+        ErrorCode::InsufficientFundsForActivation
+    );
+
+    // Transfer SOL from user to treasury
+    let transfer_instruction = anchor_lang::solana_program::system_instruction::transfer(
+        &user.key(),
+        &treasury_address.key(),
+        fee_amount,
+    );
+
+    anchor_lang::solana_program::program::invoke(
+        &transfer_instruction,
+        &[
+            user.to_account_info(),
+            treasury_address.to_account_info(),
+            system_program.to_account_info(),
+        ],
+    )?;
+
+    // Activate permanent address
+    savings_account.permanent_address_activated = true;
+    savings_account.activated_at = clock.unix_timestamp;
+
+    // Store transaction signature for verification (get from slot)
+    let slot = clock.slot;
+    let mut signature_bytes = [0u8; 64];
+    signature_bytes[..8].copy_from_slice(&slot.to_le_bytes());
+    savings_account.activation_payment_signature = Vec::from(signature_bytes);
+
+    savings_account.updated_at = clock.unix_timestamp;
+
+    msg!("Permanent address activated! User: {}, Fee paid: {} lamports, Treasury: {}",
+         user.key(), fee_amount, treasury_address.key());
 
     Ok(())
 }

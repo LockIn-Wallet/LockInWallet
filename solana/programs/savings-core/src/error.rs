@@ -75,4 +75,20 @@ pub enum ErrorCode {
 
     #[msg("Cross-program invocation failed")]
     CpiCallFailed,
+
+    // Payment activation related errors
+    #[msg("Permanent address already activated")]
+    AlreadyActivated,
+
+    #[msg("Invalid treasury address")]
+    InvalidTreasuryAddress,
+
+    #[msg("Unauthorized: only admin can perform this action")]
+    Unauthorized,
+
+    #[msg("Permanent address not activated - payment required")]
+    PermanentAddressNotActivated,
+
+    #[msg("Insufficient funds for activation fee")]
+    InsufficientFundsForActivation,
 }

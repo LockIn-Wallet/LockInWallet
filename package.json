@@ -29,6 +29,7 @@
     "frontend:test": "npm test --workspace=frontend",
 
     "dev:multi": "concurrently \"npm run node --workspace=ethereum\" \"npm run solana:localnet\"",
+    "dev:solana": "concurrently \"npm run solana:localnet\" \"npm run frontend:start\"",
     "dev:full": "concurrently \"npm run node --workspace=ethereum\" \"npm run solana:localnet\" \"npm run frontend:start\"",
 
     "deploy:full": "npm run deploy-modular --workspace=ethereum && npm run solana:deploy-reliable"

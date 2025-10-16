@@ -272,4 +272,30 @@ pub mod savings_core {
     pub fn get_proxy_address(ctx: Context<GetProxyAddress>) -> Result<Pubkey> {
         Ok(ctx.accounts.deposit_proxy.key())
     }
+
+    // ========== MONETIZATION INSTRUCTIONS ==========
+
+    /// Initialize program configuration (admin only)
+    pub fn initialize_program_config(
+        ctx: Context<InitializeProgramConfig>,
+        permanent_address_fee_lamports: u64,
+    ) -> Result<()> {
+        instructions::initialize_program_config(ctx, permanent_address_fee_lamports)
+    }
+
+    /// Update program configuration (admin only)
+    pub fn update_program_config(
+        ctx: Context<UpdateProgramConfig>,
+        new_treasury_address: Option<Pubkey>,
+        new_fee_lamports: Option<u64>,
+    ) -> Result<()> {
+        instructions::update_program_config(ctx, new_treasury_address, new_fee_lamports)
+    }
+
+    /// Activate permanent address with $5 USD equivalent SOL payment
+    pub fn activate_permanent_address_with_payment(
+        ctx: Context<ActivatePermanentAddressWithPayment>,
+    ) -> Result<()> {
+        instructions::activate_permanent_address_with_payment(ctx)
+    }
 }

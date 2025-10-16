@@ -749,6 +749,34 @@ update_frontend() {
     update_discriminators
 }
 
+# Initialize program configuration for monetization
+initialize_program_config() {
+    log_info "Initializing program configuration..."
+    cd "$SCRIPT_DIR"
+
+    # Only initialize on localnet (production requires manual admin setup)
+    if [ "$NETWORK" = "localnet" ]; then
+        if [ -f "initialize-program-config.js" ]; then
+            log_info "Running program config initialization script..."
+            if node initialize-program-config.js; then
+                log_info "✅ Program configuration initialized successfully"
+                log_info "💰 Users can now pay activation fees for permanent addresses"
+            else
+                log_warning "⚠️  Program config initialization failed"
+                log_warning "Users will not be able to pay activation fees until config is set up"
+                log_warning "You can run 'node initialize-program-config.js' manually later"
+            fi
+        else
+            log_warning "Program config initialization script not found"
+            log_warning "Users will not be able to pay activation fees"
+        fi
+    else
+        log_info "⏭️  Skipping program config initialization for $NETWORK"
+        log_info "💡 Production deployments require manual admin setup for security"
+        log_info "Run 'node initialize-program-config.js' manually with proper admin credentials"
+    fi
+}
+
 # Setup test tokens
 setup_test_tokens() {
     log_info "Setting up test tokens..."
@@ -925,6 +953,7 @@ main() {
     build_program
     calculate_deployment_costs
     deploy_program
+    initialize_program_config
     update_frontend
     if [ "$NETWORK" = "localnet" ]; then
         setup_test_tokens

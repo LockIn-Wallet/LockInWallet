@@ -14,6 +14,88 @@ export type SavingsCore = {
   },
   "instructions": [
     {
+      "name": "activatePermanentAddressWithPayment",
+      "docs": [
+        "Activate permanent address with $5 USD equivalent SOL payment"
+      ],
+      "discriminator": [
+        69,
+        22,
+        97,
+        109,
+        112,
+        159,
+        18,
+        60
+      ],
+      "accounts": [
+        {
+          "name": "savingsAccount",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  97,
+                  118,
+                  105,
+                  110,
+                  103,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "user"
+              }
+            ]
+          }
+        },
+        {
+          "name": "programConfig",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  103,
+                  114,
+                  97,
+                  109,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "user",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "treasuryAddress",
+          "writable": true
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "addTimePeriodLimit",
       "docs": [
         "Add or update a time period limit"
@@ -1666,6 +1748,69 @@ export type SavingsCore = {
       "args": []
     },
     {
+      "name": "initializeProgramConfig",
+      "docs": [
+        "Initialize program configuration (admin only)"
+      ],
+      "discriminator": [
+        6,
+        131,
+        61,
+        237,
+        40,
+        110,
+        83,
+        124
+      ],
+      "accounts": [
+        {
+          "name": "programConfig",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  103,
+                  114,
+                  97,
+                  109,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "admin",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "treasuryAddress"
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "permanentAddressFeeLamports",
+          "type": "u64"
+        }
+      ]
+    },
+    {
       "name": "initializeProxy",
       "docs": [
         "Initialize a deposit proxy for a user"
@@ -2159,6 +2304,70 @@ export type SavingsCore = {
         },
         {
           "name": "monthlyLimit",
+          "type": {
+            "option": "u64"
+          }
+        }
+      ]
+    },
+    {
+      "name": "updateProgramConfig",
+      "docs": [
+        "Update program configuration (admin only)"
+      ],
+      "discriminator": [
+        214,
+        3,
+        187,
+        98,
+        170,
+        106,
+        33,
+        45
+      ],
+      "accounts": [
+        {
+          "name": "programConfig",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  103,
+                  114,
+                  97,
+                  109,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "admin",
+          "writable": true,
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "newTreasuryAddress",
+          "type": {
+            "option": "pubkey"
+          }
+        },
+        {
+          "name": "newFeeLamports",
           "type": {
             "option": "u64"
           }
@@ -2823,6 +3032,19 @@ export type SavingsCore = {
       ]
     },
     {
+      "name": "programConfig",
+      "discriminator": [
+        196,
+        210,
+        90,
+        231,
+        144,
+        149,
+        140,
+        63
+      ]
+    },
+    {
       "name": "savingsAccount",
       "discriminator": [
         136,
@@ -2964,6 +3186,31 @@ export type SavingsCore = {
       "code": 6022,
       "name": "cpiCallFailed",
       "msg": "Cross-program invocation failed"
+    },
+    {
+      "code": 6023,
+      "name": "alreadyActivated",
+      "msg": "Permanent address already activated"
+    },
+    {
+      "code": 6024,
+      "name": "invalidTreasuryAddress",
+      "msg": "Invalid treasury address"
+    },
+    {
+      "code": 6025,
+      "name": "unauthorized",
+      "msg": "Unauthorized: only admin can perform this action"
+    },
+    {
+      "code": 6026,
+      "name": "permanentAddressNotActivated",
+      "msg": "Permanent address not activated - payment required"
+    },
+    {
+      "code": 6027,
+      "name": "insufficientFundsForActivation",
+      "msg": "Insufficient funds for activation fee"
     }
   ],
   "types": [
@@ -3231,6 +3478,59 @@ export type SavingsCore = {
       }
     },
     {
+      "name": "programConfig",
+      "docs": [
+        "Program configuration that stores treasury and fee settings"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "treasuryAddress",
+            "docs": [
+              "Treasury address where activation fees are sent"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "permanentAddressFeeLamports",
+            "docs": [
+              "Fee amount in lamports for permanent address activation ($5 USD equivalent)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "admin",
+            "docs": [
+              "Admin address that can update treasury and fee settings"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "bump",
+            "docs": [
+              "Bump seed for this PDA"
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "createdAt",
+            "docs": [
+              "When this config was created"
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "updatedAt",
+            "docs": [
+              "Last update timestamp"
+            ],
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
       "name": "savingsAccount",
       "docs": [
         "Main savings account that stores user's deposit information",
@@ -3325,6 +3625,27 @@ export type SavingsCore = {
                 }
               }
             }
+          },
+          {
+            "name": "permanentAddressActivated",
+            "docs": [
+              "Whether permanent address functionality has been activated with payment"
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "activationPaymentSignature",
+            "docs": [
+              "The transaction signature of the activation payment (for verification)"
+            ],
+            "type": "bytes"
+          },
+          {
+            "name": "activatedAt",
+            "docs": [
+              "When the permanent address was activated (Unix timestamp)"
+            ],
+            "type": "i64"
           }
         ]
       }

@@ -31,6 +31,15 @@ pub struct SavingsAccount {
 
     /// Pending bypass requests for withdrawals exceeding spending limits
     pub pending_bypass_requests: Vec<BypassRequest>,
+
+    /// Whether permanent address functionality has been activated with payment
+    pub permanent_address_activated: bool,
+
+    /// The transaction signature of the activation payment (for verification)
+    pub activation_payment_signature: Vec<u8>,
+
+    /// When the permanent address was activated (Unix timestamp)
+    pub activated_at: i64,
 }
 
 /// Represents a balance for a specific SPL token
@@ -168,7 +177,10 @@ impl SavingsAccount {
         + Self::I64_SIZE // updated_at
         + Self::VEC_OVERHEAD + (Self::WITHDRAWAL_DESTINATION_SIZE * Self::MAX_WITHDRAWAL_DESTINATIONS) // withdrawal_destinations
         + Self::VEC_OVERHEAD + (Self::PENDING_WITHDRAWAL_DESTINATION_REQUEST_SIZE * Self::MAX_PENDING_WITHDRAWAL_DESTINATION_REQUESTS) // pending_withdrawal_destination_requests
-        + Self::VEC_OVERHEAD + (Self::BYPASS_REQUEST_SIZE * Self::MAX_BYPASS_REQUESTS); // pending_bypass_requests
+        + Self::VEC_OVERHEAD + (Self::BYPASS_REQUEST_SIZE * Self::MAX_BYPASS_REQUESTS) // pending_bypass_requests
+        + Self::BOOL_SIZE // permanent_address_activated
+        + Self::VEC_OVERHEAD + 64 // activation_payment_signature (Vec<u8> with max 64 bytes)
+        + Self::I64_SIZE; // activated_at
 
     /// Update or add a token balance
     pub fn update_token_balance(&mut self, mint: Pubkey, amount: u64) -> Result<()> {
@@ -730,4 +742,44 @@ impl DepositProxy {
         self.deposit_count = self.deposit_count.saturating_add(1);
         Ok(())
     }
+}
+
+/// Program configuration that stores treasury and fee settings
+#[account]
+#[derive(Default)]
+pub struct ProgramConfig {
+    /// Treasury address where activation fees are sent
+    pub treasury_address: Pubkey,
+
+    /// Fee amount in lamports for permanent address activation ($5 USD equivalent)
+    pub permanent_address_fee_lamports: u64,
+
+    /// Admin address that can update treasury and fee settings
+    pub admin: Pubkey,
+
+    /// Bump seed for this PDA
+    pub bump: u8,
+
+    /// When this config was created
+    pub created_at: i64,
+
+    /// Last update timestamp
+    pub updated_at: i64,
+}
+
+impl ProgramConfig {
+    /// Size calculation for account space allocation
+    pub const DISCRIMINATOR_SIZE: usize = 8;
+    pub const PUBKEY_SIZE: usize = 32;
+    pub const U64_SIZE: usize = 8;
+    pub const U8_SIZE: usize = 1;
+    pub const I64_SIZE: usize = 8;
+
+    pub const INIT_SPACE: usize = Self::DISCRIMINATOR_SIZE
+        + Self::PUBKEY_SIZE // treasury_address
+        + Self::U64_SIZE // permanent_address_fee_lamports
+        + Self::PUBKEY_SIZE // admin
+        + Self::U8_SIZE // bump
+        + Self::I64_SIZE // created_at
+        + Self::I64_SIZE; // updated_at
 }
