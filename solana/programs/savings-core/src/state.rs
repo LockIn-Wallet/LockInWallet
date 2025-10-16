@@ -40,6 +40,22 @@ pub struct SavingsAccount {
 
     /// When the permanent address was activated (Unix timestamp)
     pub activated_at: i64,
+
+    // MERGED FROM SpendingLimitsAccount: Spending limits and proposal management
+    /// Array of time-based spending limits (Daily, Weekly, Monthly, Custom)
+    pub time_period_limits: Vec<TimePeriodLimit>,
+
+    /// Pending proposals for limit changes (mirrors EVM proposal system)
+    pub pending_proposals: Vec<PendingProposal>,
+
+    /// Track if user has committed initial setup (flattened from UserSetupData)
+    pub has_committed_setup: bool,
+
+    /// Total value locked across all periods (for validation)
+    pub total_locked_value: u64,
+
+    /// When setup was committed (Unix timestamp)
+    pub commit_timestamp: i64,
 }
 
 /// Represents a balance for a specific SPL token
@@ -142,6 +158,10 @@ impl SavingsAccount {
     pub const MAX_TITLE_LENGTH: usize = 64; // Max characters for destination title
     pub const MAX_PERIOD_NAME_LENGTH: usize = 32; // Max characters for period name
 
+    // MERGED FROM SpendingLimitsAccount: Additional constants for spending limits
+    pub const MAX_PERIODS: usize = 10; // Support up to 10 different time periods
+    pub const MAX_PROPOSALS: usize = 5; // Support up to 5 pending proposals
+
     // WithdrawalDestination size calculation
     pub const WITHDRAWAL_DESTINATION_SIZE: usize = Self::PUBKEY_SIZE // address
         + Self::STRING_OVERHEAD + Self::MAX_TITLE_LENGTH // title
@@ -168,6 +188,23 @@ impl SavingsAccount {
         + Self::BOOL_SIZE // cancelled
         + Self::I64_SIZE; // created_at
 
+    // MERGED FROM SpendingLimitsAccount: TimePeriodLimit size calculation
+    pub const TIME_PERIOD_LIMIT_SIZE: usize = Self::U64_SIZE // limit
+        + Self::U64_SIZE // spent
+        + Self::I64_SIZE // last_reset
+        + Self::U64_SIZE // duration
+        + Self::STRING_OVERHEAD + Self::MAX_PERIOD_NAME_LENGTH // name
+        + Self::BOOL_SIZE; // active
+
+    // MERGED FROM SpendingLimitsAccount: PendingProposal size calculation
+    pub const PENDING_PROPOSAL_SIZE: usize = 32 // proposal_id ([u8; 32])
+        + Self::STRING_OVERHEAD + Self::MAX_PERIOD_NAME_LENGTH // period_name
+        + Self::U64_SIZE // new_limit
+        + Self::I64_SIZE // execute_after
+        + Self::BOOL_SIZE // executed
+        + Self::BOOL_SIZE // is_increase
+        + Self::I64_SIZE; // created_at
+
     pub const INIT_SPACE: usize = Self::DISCRIMINATOR_SIZE
         + Self::PUBKEY_SIZE // owner
         + Self::U64_SIZE // sol_balance
@@ -180,7 +217,13 @@ impl SavingsAccount {
         + Self::VEC_OVERHEAD + (Self::BYPASS_REQUEST_SIZE * Self::MAX_BYPASS_REQUESTS) // pending_bypass_requests
         + Self::BOOL_SIZE // permanent_address_activated
         + Self::VEC_OVERHEAD + 64 // activation_payment_signature (Vec<u8> with max 64 bytes)
-        + Self::I64_SIZE; // activated_at
+        + Self::I64_SIZE // activated_at
+        // MERGED FROM SpendingLimitsAccount: New unified fields
+        + Self::VEC_OVERHEAD + (Self::TIME_PERIOD_LIMIT_SIZE * Self::MAX_PERIODS) // time_period_limits
+        + Self::VEC_OVERHEAD + (Self::PENDING_PROPOSAL_SIZE * Self::MAX_PROPOSALS) // pending_proposals
+        + Self::BOOL_SIZE // has_committed_setup
+        + Self::U64_SIZE // total_locked_value
+        + Self::I64_SIZE; // commit_timestamp
 
     /// Update or add a token balance
     pub fn update_token_balance(&mut self, mint: Pubkey, amount: u64) -> Result<()> {
@@ -420,147 +463,8 @@ impl SavingsAccount {
             .cloned()
             .collect()
     }
-}
 
-/// Spending limits account that stores user's spending control configuration
-/// Similar to the userSpendingLimits mapping in your EVM contract
-#[account]
-#[derive(Default)]
-pub struct SpendingLimitsAccount {
-    /// The owner of this spending limits account
-    pub owner: Pubkey,
-
-    /// Array of time-based spending limits (Daily, Weekly, Monthly, Custom)
-    pub time_period_limits: Vec<TimePeriodLimit>,
-
-    /// Pending proposals for limit changes (mirrors EVM proposal system)
-    pub pending_proposals: Vec<PendingProposal>,
-
-    /// Setup and configuration data
-    pub setup_data: UserSetupData,
-
-    /// Bump seed for this PDA
-    pub bump: u8,
-
-    /// When this account was created
-    pub created_at: i64,
-
-    /// Last update timestamp
-    pub updated_at: i64,
-}
-
-/// Represents a time-based spending limit (mirrors EVM TimePeriodLimit struct)
-#[derive(AnchorSerialize, AnchorDeserialize, Clone, Debug, PartialEq)]
-pub struct TimePeriodLimit {
-    /// Spending limit for this period (in lamports for SOL, token amount for SPL)
-    pub limit: u64,
-
-    /// Amount spent in current period
-    pub spent: u64,
-
-    /// When this period was last reset (Unix timestamp)
-    pub last_reset: i64,
-
-    /// Period duration in seconds (86400 for daily, 604800 for weekly, etc.)
-    pub duration: u64,
-
-    /// Period name ("Daily", "Weekly", "Monthly", "Custom Salary", etc.)
-    pub name: String,
-
-    /// Whether this limit is currently active
-    pub active: bool,
-}
-
-/// Pending proposal for spending limit changes (mirrors EVM proposal system)
-#[derive(AnchorSerialize, AnchorDeserialize, Clone, Debug, PartialEq)]
-pub struct PendingProposal {
-    /// Unique identifier for this proposal
-    pub proposal_id: [u8; 32],
-
-    /// Period name being modified ("Daily", "Weekly", "Monthly", etc.)
-    pub period_name: String,
-
-    /// New limit being proposed
-    pub new_limit: u64,
-
-    /// Unix timestamp when this proposal can be executed
-    pub execute_after: i64,
-
-    /// Whether this proposal has been executed
-    pub executed: bool,
-
-    /// Whether this is a limit increase (true) or decrease/removal (false)
-    pub is_increase: bool,
-
-    /// When this proposal was created
-    pub created_at: i64,
-}
-
-/// User setup and configuration data (mirrors EVM UserSetupData struct)
-#[derive(AnchorSerialize, AnchorDeserialize, Clone, Debug, PartialEq, Default)]
-pub struct UserSetupData {
-    /// Track if user has committed initial setup
-    pub has_committed_setup: bool,
-
-    /// Total value locked across all periods (for validation)
-    pub total_locked_value: u64,
-
-    /// When setup was committed (Unix timestamp)
-    pub commit_timestamp: i64,
-
-    /// Track period start for increase limits
-    pub last_increase_timestamp: i64,
-
-    /// Amount increased in current 7-day period
-    pub increases_in_period: u64,
-}
-
-impl SpendingLimitsAccount {
-    /// Size calculation for account space allocation
-    pub const DISCRIMINATOR_SIZE: usize = 8;
-    pub const PUBKEY_SIZE: usize = 32;
-    pub const U64_SIZE: usize = 8;
-    pub const U8_SIZE: usize = 1;
-    pub const I64_SIZE: usize = 8;
-    pub const BOOL_SIZE: usize = 1;
-    pub const VEC_OVERHEAD: usize = 4; // Vec length prefix
-    pub const STRING_OVERHEAD: usize = 4; // String length prefix
-    pub const MAX_NAME_LENGTH: usize = 32; // Max characters for period name
-    pub const MAX_PERIODS: usize = 10; // Support up to 10 different time periods
-    pub const MAX_PROPOSALS: usize = 5; // Support up to 5 pending proposals
-
-    // TimePeriodLimit size calculation
-    pub const TIME_PERIOD_LIMIT_SIZE: usize = Self::U64_SIZE // limit
-        + Self::U64_SIZE // spent
-        + Self::I64_SIZE // last_reset
-        + Self::U64_SIZE // duration
-        + Self::STRING_OVERHEAD + Self::MAX_NAME_LENGTH // name
-        + Self::BOOL_SIZE; // active
-
-    // PendingProposal size calculation
-    pub const PENDING_PROPOSAL_SIZE: usize = 32 // proposal_id ([u8; 32])
-        + Self::STRING_OVERHEAD + Self::MAX_NAME_LENGTH // period_name
-        + Self::U64_SIZE // new_limit
-        + Self::I64_SIZE // execute_after
-        + Self::BOOL_SIZE // executed
-        + Self::BOOL_SIZE // is_increase
-        + Self::I64_SIZE; // created_at
-
-    // UserSetupData size calculation
-    pub const USER_SETUP_DATA_SIZE: usize = Self::BOOL_SIZE // has_committed_setup
-        + Self::U64_SIZE // total_locked_value
-        + Self::I64_SIZE // commit_timestamp
-        + Self::I64_SIZE // last_increase_timestamp
-        + Self::U64_SIZE; // increases_in_period
-
-    pub const INIT_SPACE: usize = Self::DISCRIMINATOR_SIZE
-        + Self::PUBKEY_SIZE // owner
-        + Self::VEC_OVERHEAD + (Self::TIME_PERIOD_LIMIT_SIZE * Self::MAX_PERIODS) // time_period_limits
-        + Self::VEC_OVERHEAD + (Self::PENDING_PROPOSAL_SIZE * Self::MAX_PROPOSALS) // pending_proposals
-        + Self::USER_SETUP_DATA_SIZE // setup_data
-        + Self::U8_SIZE // bump
-        + Self::I64_SIZE // created_at
-        + Self::I64_SIZE; // updated_at
+    // MERGED FROM SpendingLimitsAccount: Spending limits management methods
 
     /// Add or update a time period limit
     pub fn add_time_period_limit(
@@ -572,7 +476,7 @@ impl SpendingLimitsAccount {
     ) -> Result<()> {
         require!(limit > 0, crate::error::ErrorCode::InvalidLimitParameters);
         require!(duration >= 3600, crate::error::ErrorCode::InvalidLimitParameters); // At least 1 hour
-        require!(!name.is_empty() && name.len() <= Self::MAX_NAME_LENGTH, crate::error::ErrorCode::InvalidLimitParameters);
+        require!(!name.is_empty() && name.len() <= Self::MAX_PERIOD_NAME_LENGTH, crate::error::ErrorCode::InvalidLimitParameters);
 
         // Check if period already exists
         for period in &mut self.time_period_limits {
@@ -709,6 +613,74 @@ impl SpendingLimitsAccount {
         Ok(())
     }
 }
+
+
+/// Represents a time-based spending limit (mirrors EVM TimePeriodLimit struct)
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Debug, PartialEq)]
+pub struct TimePeriodLimit {
+    /// Spending limit for this period (in lamports for SOL, token amount for SPL)
+    pub limit: u64,
+
+    /// Amount spent in current period
+    pub spent: u64,
+
+    /// When this period was last reset (Unix timestamp)
+    pub last_reset: i64,
+
+    /// Period duration in seconds (86400 for daily, 604800 for weekly, etc.)
+    pub duration: u64,
+
+    /// Period name ("Daily", "Weekly", "Monthly", "Custom Salary", etc.)
+    pub name: String,
+
+    /// Whether this limit is currently active
+    pub active: bool,
+}
+
+/// Pending proposal for spending limit changes (mirrors EVM proposal system)
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Debug, PartialEq)]
+pub struct PendingProposal {
+    /// Unique identifier for this proposal
+    pub proposal_id: [u8; 32],
+
+    /// Period name being modified ("Daily", "Weekly", "Monthly", etc.)
+    pub period_name: String,
+
+    /// New limit being proposed
+    pub new_limit: u64,
+
+    /// Unix timestamp when this proposal can be executed
+    pub execute_after: i64,
+
+    /// Whether this proposal has been executed
+    pub executed: bool,
+
+    /// Whether this is a limit increase (true) or decrease/removal (false)
+    pub is_increase: bool,
+
+    /// When this proposal was created
+    pub created_at: i64,
+}
+
+/// User setup and configuration data (mirrors EVM UserSetupData struct)
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Debug, PartialEq, Default)]
+pub struct UserSetupData {
+    /// Track if user has committed initial setup
+    pub has_committed_setup: bool,
+
+    /// Total value locked across all periods (for validation)
+    pub total_locked_value: u64,
+
+    /// When setup was committed (Unix timestamp)
+    pub commit_timestamp: i64,
+
+    /// Track period start for increase limits
+    pub last_increase_timestamp: i64,
+
+    /// Amount increased in current 7-day period
+    pub increases_in_period: u64,
+}
+
 
 /// Deposit proxy account that provides permanent addresses for exchange deposits
 /// This allows users to have deterministic deposit addresses that forward to their savings

@@ -15,6 +15,22 @@ import {
 } from '@solana/spl-token';
 import { BlockchainAdapter } from './BlockchainAdapter.js';
 
+// Treasury configuration for different environments
+const TREASURY_CONFIG = {
+  localhost: {
+    treasuryAddress: 'Aa1wdTb1h3NyRKVBZTahZhWBWMWKCS1bZgLJ7amVAzLd',
+    description: 'Random treasury address for localhost testing'
+  },
+  devnet: {
+    treasuryAddress: '4xo6a3qHYgtsDkKUAy1wMQhyN1zoXo3tKPR5foxa3hV4',
+    description: 'Production treasury address for devnet'
+  },
+  mainnet: {
+    treasuryAddress: '4xo6a3qHYgtsDkKUAy1wMQhyN1zoXo3tKPR5foxa3hV4',
+    description: 'Production treasury address for mainnet'
+  }
+};
+
 // Instruction discriminators from the IDL
 const INSTRUCTION_DISCRIMINATORS = {
   // Savings Core Program
@@ -46,6 +62,32 @@ export class SolanaAdapter extends BlockchainAdapter {
     if (this.wallet?.connected && this.wallet?.publicKey) {
       this.userAddress = this.wallet.publicKey.toString();
     }
+  }
+
+  /**
+   * Get treasury address based on current environment
+   * Detects environment from RPC URL (localhost vs devnet/mainnet)
+   * @returns {PublicKey} Treasury address for current environment
+   */
+  getTreasuryAddress() {
+    // Auto-detect environment based on RPC URL
+    const rpcUrl = this.connection?.rpcEndpoint || 'http://127.0.0.1:8899';
+
+    let environment = 'localhost';
+    if (rpcUrl.includes('devnet')) {
+      environment = 'devnet';
+    } else if (rpcUrl.includes('mainnet')) {
+      environment = 'mainnet';
+    }
+
+    const config = TREASURY_CONFIG[environment];
+    if (!config) {
+      console.warn(`Unknown environment for RPC ${rpcUrl}, defaulting to localhost treasury`);
+      return new PublicKey(TREASURY_CONFIG.localhost.treasuryAddress);
+    }
+
+    console.log(`🏦 Using ${environment} treasury: ${config.treasuryAddress} (${config.description})`);
+    return new PublicKey(config.treasuryAddress);
   }
 
   /**
@@ -1617,10 +1659,10 @@ export class SolanaAdapter extends BlockchainAdapter {
     return discriminators[methodName] || [0, 0, 0, 0, 0, 0, 0, 0];
   }
 
-  // Get spending limits PDA
+  // Get spending limits PDA (now unified with savings account)
   async getSpendingLimitsPDA(userPubkey) {
     return await PublicKey.findProgramAddress(
-      [Buffer.from("spending_limits"), userPubkey.toBuffer()],
+      [Buffer.from("savings"), userPubkey.toBuffer()],
       this.PROGRAM_ID
     );
   }
@@ -1703,14 +1745,14 @@ export class SolanaAdapter extends BlockchainAdapter {
         // Account exists, but check if it's properly formatted by trying to deserialize
         console.log('🔍 SolanaAdapter: Account exists, checking if data is valid...');
         try {
-          this.deserializeSpendingLimitsAccount(accountInfo.data);
+          this.deserializeSavingsAccount(accountInfo.data);
           console.log('✅ SolanaAdapter: Account data is valid');
         } catch (deserializeError) {
           console.log('⚠️ SolanaAdapter: Account data is corrupted/incompatible');
           console.log('💡 SolanaAdapter: The account exists but has incompatible data structure');
           console.log('🔧 SolanaAdapter: You may need to use a different wallet or reset the local validator');
           console.log('❌ SolanaAdapter: Cannot proceed with corrupted account data');
-          throw new Error('Spending limits account has corrupted data. Please use a different wallet or reset the validator.');
+          throw new Error('Savings account has corrupted data. Please use a different wallet or reset the validator.');
         }
       }
     } catch (error) {
@@ -1951,11 +1993,11 @@ export class SolanaAdapter extends BlockchainAdapter {
         // Account exists, check if it's properly formatted
         console.log('🔍 SolanaAdapter: Account exists, checking if data is valid...');
         try {
-          this.deserializeSpendingLimitsAccount(accountInfo.data);
+          this.deserializeSavingsAccount(accountInfo.data);
           console.log('✅ SolanaAdapter: Account data is valid');
         } catch (deserializeError) {
           console.log('⚠️ SolanaAdapter: Account data is corrupted/incompatible');
-          throw new Error('Spending limits account has corrupted data. Please use a different wallet or reset the validator.');
+          throw new Error('Savings account has corrupted data. Please use a different wallet or reset the validator.');
         }
       }
     } catch (error) {
@@ -2141,7 +2183,7 @@ export class SolanaAdapter extends BlockchainAdapter {
       console.log('📊 SolanaAdapter: Account data length:', accountInfo.data.length);
 
       // Deserialize the account data
-      const accountData = this.deserializeSpendingLimitsAccount(accountInfo.data);
+      const accountData = this.deserializeSavingsAccount(accountInfo.data);
       console.log('📋 SolanaAdapter: Deserialized account data:', accountData);
 
       // Convert Solana spending limits to frontend format
@@ -2161,14 +2203,12 @@ export class SolanaAdapter extends BlockchainAdapter {
     }
   }
 
-  // Deserialize spending limits account data from Solana
-  deserializeSpendingLimitsAccount(data) {
-    console.log('🔄 SolanaAdapter: Starting deserialization of account data');
+  // Deserialize unified SavingsAccount data from Solana
+  deserializeSavingsAccount(data) {
+    console.log('🔄 SolanaAdapter: Starting deserialization of unified SavingsAccount');
     console.log('📊 SolanaAdapter: Data buffer length:', data.length);
 
     try {
-      // Basic deserialization based on SpendingLimitsAccount struct
-      // Account data format: 8-byte discriminator + struct data
       let offset = 0;
 
       // Skip the 8-byte Anchor discriminator
@@ -2180,82 +2220,119 @@ export class SolanaAdapter extends BlockchainAdapter {
       console.log('👤 SolanaAdapter: Account owner:', owner.toString());
       offset += 32;
 
-      // Read time_period_limits vector
-      // First 4 bytes are vector length
-      const limitsCount = data.readUInt32LE(offset);
-      console.log('📊 SolanaAdapter: Time period limits count:', limitsCount);
+      // Read sol_balance (8 bytes)
+      const solBalance = data.readBigUInt64LE(offset);
+      offset += 8;
+
+      // Read spl_balances vector
+      const splBalancesCount = data.readUInt32LE(offset);
+      console.log('📊 SolanaAdapter: SPL balances count:', splBalancesCount);
       offset += 4;
 
-      // Sanity check: limit count should be reasonable (0-10 typically)
-      if (limitsCount > 100) {
-        console.error('❌ SolanaAdapter: Unreasonable limits count, data may be corrupted:', limitsCount);
-        throw new Error(`Invalid limits count: ${limitsCount}`);
+      const splBalances = [];
+      for (let i = 0; i < splBalancesCount; i++) {
+        const mint = new PublicKey(data.slice(offset, offset + 32));
+        offset += 32;
+        const amount = data.readBigUInt64LE(offset);
+        offset += 8;
+        splBalances.push({ mint, amount });
       }
 
+      // Read bump (1 byte)
+      const bump = data.readUInt8(offset);
+      offset += 1;
+
+      // Read created_at (8 bytes)
+      const createdAt = data.readBigInt64LE(offset);
+      offset += 8;
+
+      // Read updated_at (8 bytes)
+      const updatedAt = data.readBigInt64LE(offset);
+      offset += 8;
+
+      // Skip withdrawal_destinations vector
+      const withdrawalDestinationsCount = data.readUInt32LE(offset);
+      console.log('📊 SolanaAdapter: Withdrawal destinations count:', withdrawalDestinationsCount);
+      offset += 4;
+      for (let i = 0; i < withdrawalDestinationsCount; i++) {
+        offset += 32; // address (Pubkey)
+        const titleLength = data.readUInt32LE(offset);
+        offset += 4;
+        offset += titleLength; // title string
+        offset += 8; // added_at (i64)
+      }
+
+      // Skip pending_withdrawal_destination_requests vector
+      const pendingWithdrawalRequestsCount = data.readUInt32LE(offset);
+      console.log('📊 SolanaAdapter: Pending withdrawal requests count:', pendingWithdrawalRequestsCount);
+      offset += 4;
+      for (let i = 0; i < pendingWithdrawalRequestsCount; i++) {
+        offset += 32; // request_id
+        offset += 32; // address
+        const titleLength = data.readUInt32LE(offset);
+        offset += 4;
+        offset += titleLength; // title
+        offset += 8; // execute_after
+        offset += 8; // created_at
+      }
+
+      // Skip pending_bypass_requests vector
+      const pendingBypassRequestsCount = data.readUInt32LE(offset);
+      console.log('📊 SolanaAdapter: Pending bypass requests count:', pendingBypassRequestsCount);
+      offset += 4;
+      for (let i = 0; i < pendingBypassRequestsCount; i++) {
+        offset += 32; // request_id
+        offset += 8; // amount
+        offset += 32; // token_mint
+        const periodNameLength = data.readUInt32LE(offset);
+        offset += 4;
+        offset += periodNameLength; // bypassing_period
+        offset += 32; // destination
+        offset += 8; // execute_after
+        offset += 8; // created_at
+      }
+
+      // Read permanent_address_activated (1 byte)
+      const permanentAddressActivated = data.readUInt8(offset) === 1;
+      offset += 1;
+
+      // Skip activation_payment_signature vector
+      const signatureLength = data.readUInt32LE(offset);
+      offset += 4;
+      offset += signatureLength;
+
+      // Read activated_at (8 bytes)
+      const activatedAt = data.readBigInt64LE(offset);
+      offset += 8;
+
+      // ===== MERGED SPENDING LIMITS FIELDS =====
+
+      // Read time_period_limits vector
+      const timePeriodLimitsCount = data.readUInt32LE(offset);
+      console.log('📊 SolanaAdapter: Time period limits count:', timePeriodLimitsCount);
+      offset += 4;
+
       const timePeriodLimits = [];
-      for (let i = 0; i < limitsCount; i++) {
-        console.log(`🔄 SolanaAdapter: Reading limit ${i + 1}/${limitsCount}, current offset: ${offset}, remaining bytes: ${data.length - offset}`);
-
-        // Ensure we have enough bytes for fixed-size fields (33 bytes: 4*u64 + 1*i64 + 1*bool)
-        if (offset + 33 > data.length) {
-          console.error(`❌ SolanaAdapter: Not enough bytes for fixed fields at offset ${offset}`);
-          throw new Error(`Buffer underrun reading fixed fields for limit ${i}`);
-        }
-
+      for (let i = 0; i < timePeriodLimitsCount; i++) {
         // Read TimePeriodLimit struct fields in Rust order:
-        // 1. limit: u64
         const limit = data.readBigUInt64LE(offset);
         offset += 8;
-
-        // 2. spent: u64
         const currentSpent = data.readBigUInt64LE(offset);
         offset += 8;
-
-        // 3. last_reset: i64
         const lastReset = data.readBigInt64LE(offset);
         offset += 8;
-
-        // 4. duration: u64
         const duration = data.readBigUInt64LE(offset);
         offset += 8;
 
-        // 5. name: String (variable length)
-        // First read the string length (u32)
-        if (offset + 4 > data.length) {
-          console.error(`❌ SolanaAdapter: Not enough bytes for name length at offset ${offset}`);
-          throw new Error(`Buffer underrun reading name length for limit ${i}`);
-        }
-
+        // Read name string
         const nameLength = data.readUInt32LE(offset);
-        console.log(`📝 SolanaAdapter: Name length for limit ${i}: ${nameLength}`);
         offset += 4;
-
-        // Validate name length
-        if (nameLength > 1000) {
-          console.error(`❌ SolanaAdapter: Invalid name length: ${nameLength} at limit ${i}`);
-          throw new Error(`Invalid name length: ${nameLength}`);
-        }
-
-        // Read the string data
-        if (offset + nameLength > data.length) {
-          console.error(`❌ SolanaAdapter: Not enough bytes for name at offset ${offset}, need ${nameLength} bytes`);
-          throw new Error(`Buffer underrun reading name for limit ${i}`);
-        }
-
         const name = data.slice(offset, offset + nameLength).toString('utf8');
-        console.log(`📝 SolanaAdapter: Limit ${i} name: "${name}"`);
         offset += nameLength;
 
-        // 6. active: bool
-        if (offset + 1 > data.length) {
-          console.error(`❌ SolanaAdapter: Not enough bytes for active flag at offset ${offset}`);
-          throw new Error(`Buffer underrun reading active flag for limit ${i}`);
-        }
-
+        // Read active flag
         const active = data.readUInt8(offset) === 1;
         offset += 1;
-
-        console.log(`✅ SolanaAdapter: Limit ${i}: name="${name}", limit=${limit}, spent=${currentSpent}, duration=${duration}, active=${active}`);
 
         timePeriodLimits.push({
           name,
@@ -2267,68 +2344,85 @@ export class SolanaAdapter extends BlockchainAdapter {
         });
       }
 
-      // Read pending_proposals vector (comes before setup_data)
-      const proposalsCount = data.readUInt32LE(offset);
-      console.log('📋 SolanaAdapter: Pending proposals count:', proposalsCount);
+      // Read pending_proposals vector
+      const pendingProposalsCount = data.readUInt32LE(offset);
+      console.log('📊 SolanaAdapter: Pending proposals count:', pendingProposalsCount);
       offset += 4;
 
-      // Properly skip pending proposals data by reading actual structure
-      if (proposalsCount > 0) {
-        console.log('📋 SolanaAdapter: Reading and skipping', proposalsCount, 'pending proposals...');
+      const pendingProposals = [];
+      for (let i = 0; i < pendingProposalsCount; i++) {
+        const proposalId = Array.from(data.slice(offset, offset + 32));
+        offset += 32;
 
-        for (let i = 0; i < proposalsCount; i++) {
-          // Read proposal_id ([u8; 32])
-          offset += 32;
+        const periodNameLength = data.readUInt32LE(offset);
+        offset += 4;
+        const periodName = data.slice(offset, offset + periodNameLength).toString('utf8');
+        offset += periodNameLength;
 
-          // Read period_name (String: u32 length + bytes)
-          const nameLength = data.readUInt32LE(offset);
-          offset += 4;
-          offset += nameLength; // Skip the actual name bytes
+        const newLimit = data.readBigUInt64LE(offset);
+        offset += 8;
 
-          // Read new_limit (u64)
-          offset += 8;
+        const executeAfter = data.readBigInt64LE(offset);
+        offset += 8;
 
-          // Read execute_after (i64)
-          offset += 8;
+        const executed = data.readUInt8(offset) === 1;
+        offset += 1;
 
-          // Read executed (bool - 1 byte)
-          offset += 1;
+        const isIncrease = data.readUInt8(offset) === 1;
+        offset += 1;
 
-          // Read is_increase (bool - 1 byte)
-          offset += 1;
+        const createdAt = data.readBigInt64LE(offset);
+        offset += 8;
 
-          // Read created_at (i64)
-          offset += 8;
-
-          console.log(`📋 SolanaAdapter: Skipped proposal ${i + 1}/${proposalsCount}, offset now: ${offset}`);
-        }
+        pendingProposals.push({
+          proposalId,
+          periodName,
+          newLimit,
+          executeAfter,
+          executed,
+          isIncrease,
+          createdAt
+        });
       }
 
-      // Read setup_data (UserSetupData struct)
-      const isSetupCommitted = data.readUInt8(offset) === 1;
-      console.log('🔍 SolanaAdapter: Reading isSetupCommitted at offset', offset, ':', isSetupCommitted);
+      // Read has_committed_setup (1 byte)
+      const hasCommittedSetup = data.readUInt8(offset) === 1;
+      console.log('✅ SolanaAdapter: has_committed_setup:', hasCommittedSetup);
       offset += 1;
 
+      // Read total_locked_value (8 bytes)
       const totalLockedValue = data.readBigUInt64LE(offset);
       offset += 8;
 
-      // Skip commit_timestamp and other UserSetupData fields for now
-      // commit_timestamp: i64 (8 bytes)
+      // Read commit_timestamp (8 bytes)
+      const commitTimestamp = data.readBigInt64LE(offset);
       offset += 8;
 
+      console.log('✅ SolanaAdapter: Successfully deserialized unified SavingsAccount');
       return {
         owner,
+        solBalance,
+        splBalances,
         timePeriodLimits,
-        isSetupCommitted,
-        totalLockedValue
+        pendingProposals,
+        isSetupCommitted: hasCommittedSetup,
+        totalLockedValue,
+        permanentAddressActivated,
+        activatedAt,
+        createdAt,
+        updatedAt,
+        commitTimestamp
       };
+
     } catch (error) {
-      console.error('Error deserializing spending limits account:', error);
+      console.error('❌ SolanaAdapter: Error deserializing unified SavingsAccount:', error);
       return {
         owner: null,
         timePeriodLimits: [],
+        pendingProposals: [],
         isSetupCommitted: false,
-        totalLockedValue: 0n
+        totalLockedValue: 0n,
+        permanentAddressActivated: false
       };
     }
   }
@@ -2459,26 +2553,11 @@ export class SolanaAdapter extends BlockchainAdapter {
       throw new Error('Spending limits account not found. Please initialize spending limits first.');
     }
 
-    // Check if setup is committed by reading the account data
+    // Check if setup is committed by deserializing the unified account
     try {
-      const data = accountInfo.data;
-      let offset = 8; // Skip discriminator
-      offset += 32; // Skip owner
+      const accountData = this.deserializeSavingsAccount(accountInfo.data);
 
-      // Skip time_period_limits vector
-      const timePeriodLimitsLength = new DataView(data.buffer, data.byteOffset + offset, 4).getUint32(0, true);
-      offset += 4;
-      offset += timePeriodLimitsLength * 67; // Skip all time period limits
-
-      // Skip pending_proposals vector
-      const proposalsLength = new DataView(data.buffer, data.byteOffset + offset, 4).getUint32(0, true);
-      offset += 4;
-      offset += proposalsLength * 120; // Skip all proposals (approximate size)
-
-      // Read setup_data.has_committed_setup
-      const hasCommittedSetup = data[offset] !== 0;
-
-      if (!hasCommittedSetup) {
+      if (!accountData.isSetupCommitted) {
         throw new Error('Initial setup must be committed before creating proposals. Please commit your spending limits setup first.');
       }
 
@@ -2572,86 +2651,29 @@ export class SolanaAdapter extends BlockchainAdapter {
         return [];
       }
 
-      console.log('📋 Fetching proposals: Starting deserialization...');
-      const data = accountInfo.data;
-      let offset = 8; // Skip discriminator
-
-      // Skip owner (32 bytes)
-      offset += 32;
-
-      // Skip time_period_limits vector using CORRECT logic (same as deserializeSpendingLimitsAccount)
-      const timePeriodLimitsLength = data.readUInt32LE(offset);
-      console.log('📋 Fetching proposals: Skipping', timePeriodLimitsLength, 'time period limits...');
-      offset += 4;
-
-      for (let i = 0; i < timePeriodLimitsLength; i++) {
-        // Skip TimePeriodLimit fields in correct order:
-        offset += 8; // limit: u64
-        offset += 8; // spent: u64
-        offset += 8; // last_reset: i64
-        offset += 8; // duration: u64
-
-        // Skip name: String (u32 length + bytes)
-        const nameLength = data.readUInt32LE(offset);
-        offset += 4;
-        offset += nameLength;
-
-        // Skip active: bool
-        offset += 1;
-      }
-
-      // Read pending_proposals vector
-      const proposalsLength = new DataView(data.buffer, data.byteOffset + offset, 4).getUint32(0, true);
-      offset += 4;
+      console.log('📋 Fetching proposals: Using unified deserializer...');
+      const accountData = this.deserializeSavingsAccount(accountInfo.data);
 
       const proposals = [];
-      for (let i = 0; i < proposalsLength; i++) {
-        // Read proposal_id (32 bytes)
-        const proposalId = Array.from(data.slice(offset, offset + 32));
-        offset += 32;
-
-        // Read period_name (4 bytes length + string)
-        const periodNameLength = data.readUInt32LE(offset);
-        offset += 4;
-        const periodName = new TextDecoder().decode(data.slice(offset, offset + periodNameLength));
-        offset += periodNameLength; // Skip actual string length, not fixed size
-
-        // Read new_limit (8 bytes)
-        const newLimit = new DataView(data.buffer, data.byteOffset + offset, 8).getBigUint64(0, true);
-        offset += 8;
-
-        // Read execute_after (8 bytes)
-        const executeAfter = new DataView(data.buffer, data.byteOffset + offset, 8).getBigInt64(0, true);
-        offset += 8;
-
-        // Read executed (1 byte)
-        const executed = data[offset] !== 0;
-        offset += 1;
-
-        // Read is_increase (1 byte)
-        const isIncrease = data[offset] !== 0;
-        offset += 1;
-
-        // Read created_at (8 bytes)
-        const createdAt = new DataView(data.buffer, data.byteOffset + offset, 8).getBigInt64(0, true);
-        offset += 8;
+      for (let i = 0; i < accountData.pendingProposals.length; i++) {
+        const proposal = accountData.pendingProposals[i];
 
         // Calculate timelock info
-        const executeAfterTimestamp = Number(executeAfter);
+        const executeAfterTimestamp = Number(proposal.executeAfter);
         const currentTime = Math.floor(Date.now() / 1000);
         const timeRemaining = Math.max(0, executeAfterTimestamp - currentTime);
-        const canExecute = timeRemaining === 0 && !executed;
+        const canExecute = timeRemaining === 0 && !proposal.executed;
 
-        console.log(`📋 Proposal ${i + 1}: ${periodName} -> ${Number(newLimit) / Math.pow(10, 9)} SOL, executeAfter: ${executeAfterTimestamp}, timeRemaining: ${timeRemaining}s`);
+        console.log(`📋 Proposal ${i + 1}: ${proposal.periodName} -> ${Number(proposal.newLimit) / Math.pow(10, 9)} SOL, executeAfter: ${executeAfterTimestamp}, timeRemaining: ${timeRemaining}s`);
 
         proposals.push({
-          proposalId: Buffer.from(proposalId).toString('hex'), // Convert array to hex string for UI
-          periodName,
-          newLimit: (Number(newLimit) / Math.pow(10, 9)).toString(), // Convert from lamports to SOL
+          proposalId: Buffer.from(proposal.proposalId).toString('hex'), // Convert array to hex string for UI
+          periodName: proposal.periodName,
+          newLimit: (Number(proposal.newLimit) / Math.pow(10, 9)).toString(), // Convert from lamports to SOL
           executeAfter: executeAfterTimestamp,
-          executed,
-          isIncrease,
-          createdAt: Number(createdAt),
+          executed: proposal.executed,
+          isIncrease: proposal.isIncrease,
+          createdAt: Number(proposal.createdAt),
           action: 'change', // For compatibility with EVM format
           networkType: 'solana',
           timeRemaining, // Time in seconds until executable
@@ -4195,10 +4217,9 @@ export class SolanaAdapter extends BlockchainAdapter {
         this.PROGRAM_ID
       );
 
-      // Get program config to find treasury address
-      // For now, we'll use the deployer's address as treasury
-      // In production, you'd fetch this from the program config account
-      const treasuryAddress = new PublicKey("4xo6a3qHYgtsDkKUAy1wMQhyN1zoXo3tKPR5foxa3hV4"); // Using deployer as treasury for testing
+      // Get treasury address from environment configuration
+      // This must match the address used during program initialization
+      const treasuryAddress = this.getTreasuryAddress();
 
       // Build instruction data
       const discriminator = this._generateDiscriminator('ActivatePermanentAddressWithPayment');

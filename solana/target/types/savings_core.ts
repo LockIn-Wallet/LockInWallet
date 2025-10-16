@@ -112,7 +112,7 @@ export type SavingsCore = {
       ],
       "accounts": [
         {
-          "name": "spendingLimitsAccount",
+          "name": "savingsAccount",
           "writable": true,
           "pda": {
             "seeds": [
@@ -120,19 +120,11 @@ export type SavingsCore = {
                 "kind": "const",
                 "value": [
                   115,
-                  112,
-                  101,
-                  110,
-                  100,
+                  97,
+                  118,
                   105,
                   110,
                   103,
-                  95,
-                  108,
-                  105,
-                  109,
-                  105,
-                  116,
                   115
                 ]
               },
@@ -238,7 +230,7 @@ export type SavingsCore = {
       ],
       "accounts": [
         {
-          "name": "spendingLimitsAccount",
+          "name": "savingsAccount",
           "writable": true,
           "pda": {
             "seeds": [
@@ -246,19 +238,11 @@ export type SavingsCore = {
                 "kind": "const",
                 "value": [
                   115,
-                  112,
-                  101,
-                  110,
-                  100,
+                  97,
+                  118,
                   105,
                   110,
                   103,
-                  95,
-                  108,
-                  105,
-                  109,
-                  105,
-                  116,
                   115
                 ]
               },
@@ -420,7 +404,7 @@ export type SavingsCore = {
       ],
       "accounts": [
         {
-          "name": "spendingLimitsAccount",
+          "name": "savingsAccount",
           "writable": true,
           "pda": {
             "seeds": [
@@ -428,19 +412,11 @@ export type SavingsCore = {
                 "kind": "const",
                 "value": [
                   115,
-                  112,
-                  101,
-                  110,
-                  100,
+                  97,
+                  118,
                   105,
                   110,
                   103,
-                  95,
-                  108,
-                  105,
-                  109,
-                  105,
-                  116,
                   115
                 ]
               },
@@ -950,7 +926,7 @@ export type SavingsCore = {
       ],
       "accounts": [
         {
-          "name": "spendingLimitsAccount",
+          "name": "savingsAccount",
           "writable": true,
           "pda": {
             "seeds": [
@@ -958,19 +934,11 @@ export type SavingsCore = {
                 "kind": "const",
                 "value": [
                   115,
-                  112,
-                  101,
-                  110,
-                  100,
+                  97,
+                  118,
                   105,
                   110,
                   103,
-                  95,
-                  108,
-                  105,
-                  109,
-                  105,
-                  116,
                   115
                 ]
               },
@@ -1606,26 +1574,18 @@ export type SavingsCore = {
       ],
       "accounts": [
         {
-          "name": "spendingLimitsAccount",
+          "name": "savingsAccount",
           "pda": {
             "seeds": [
               {
                 "kind": "const",
                 "value": [
                   115,
-                  112,
-                  101,
-                  110,
-                  100,
+                  97,
+                  118,
                   105,
                   110,
                   103,
-                  95,
-                  108,
-                  105,
-                  109,
-                  105,
-                  116,
                   115
                 ]
               },
@@ -1891,7 +1851,7 @@ export type SavingsCore = {
       ],
       "accounts": [
         {
-          "name": "spendingLimitsAccount",
+          "name": "savingsAccount",
           "writable": true,
           "pda": {
             "seeds": [
@@ -1899,19 +1859,11 @@ export type SavingsCore = {
                 "kind": "const",
                 "value": [
                   115,
-                  112,
-                  101,
-                  110,
-                  100,
+                  97,
+                  118,
                   105,
                   110,
                   103,
-                  95,
-                  108,
-                  105,
-                  109,
-                  105,
-                  116,
                   115
                 ]
               },
@@ -1951,7 +1903,7 @@ export type SavingsCore = {
       ],
       "accounts": [
         {
-          "name": "spendingLimitsAccount",
+          "name": "savingsAccount",
           "writable": true,
           "pda": {
             "seeds": [
@@ -1959,19 +1911,11 @@ export type SavingsCore = {
                 "kind": "const",
                 "value": [
                   115,
-                  112,
-                  101,
-                  110,
-                  100,
+                  97,
+                  118,
                   105,
                   110,
                   103,
-                  95,
-                  108,
-                  105,
-                  109,
-                  105,
-                  116,
                   115
                 ]
               },
@@ -2016,7 +1960,7 @@ export type SavingsCore = {
       ],
       "accounts": [
         {
-          "name": "spendingLimitsAccount",
+          "name": "savingsAccount",
           "writable": true,
           "pda": {
             "seeds": [
@@ -2024,19 +1968,11 @@ export type SavingsCore = {
                 "kind": "const",
                 "value": [
                   115,
-                  112,
-                  101,
-                  110,
-                  100,
+                  97,
+                  118,
                   105,
                   110,
                   103,
-                  95,
-                  108,
-                  105,
-                  109,
-                  105,
-                  116,
                   115
                 ]
               },
@@ -2252,7 +2188,7 @@ export type SavingsCore = {
       ],
       "accounts": [
         {
-          "name": "spendingLimitsAccount",
+          "name": "savingsAccount",
           "writable": true,
           "pda": {
             "seeds": [
@@ -2260,19 +2196,11 @@ export type SavingsCore = {
                 "kind": "const",
                 "value": [
                   115,
-                  112,
-                  101,
-                  110,
-                  100,
+                  97,
+                  118,
                   105,
                   110,
                   103,
-                  95,
-                  108,
-                  105,
-                  109,
-                  105,
-                  116,
                   115
                 ]
               },
@@ -2522,38 +2450,6 @@ export type SavingsCore = {
                   105,
                   110,
                   103,
-                  115
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "user"
-              }
-            ]
-          }
-        },
-        {
-          "name": "spendingLimitsAccount",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  115,
-                  112,
-                  101,
-                  110,
-                  100,
-                  105,
-                  110,
-                  103,
-                  95,
-                  108,
-                  105,
-                  109,
-                  105,
-                  116,
                   115
                 ]
               },
@@ -2862,38 +2758,6 @@ export type SavingsCore = {
           }
         },
         {
-          "name": "spendingLimitsAccount",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  115,
-                  112,
-                  101,
-                  110,
-                  100,
-                  105,
-                  110,
-                  103,
-                  95,
-                  108,
-                  105,
-                  109,
-                  105,
-                  116,
-                  115
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "user"
-              }
-            ]
-          }
-        },
-        {
           "name": "user",
           "writable": true,
           "signer": true
@@ -3055,19 +2919,6 @@ export type SavingsCore = {
         51,
         51,
         116
-      ]
-    },
-    {
-      "name": "spendingLimitsAccount",
-      "discriminator": [
-        38,
-        33,
-        131,
-        233,
-        159,
-        154,
-        149,
-        66
       ]
     }
   ],
@@ -3646,25 +3497,6 @@ export type SavingsCore = {
               "When the permanent address was activated (Unix timestamp)"
             ],
             "type": "i64"
-          }
-        ]
-      }
-    },
-    {
-      "name": "spendingLimitsAccount",
-      "docs": [
-        "Spending limits account that stores user's spending control configuration",
-        "Similar to the userSpendingLimits mapping in your EVM contract"
-      ],
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "owner",
-            "docs": [
-              "The owner of this spending limits account"
-            ],
-            "type": "pubkey"
           },
           {
             "name": "timePeriodLimits",
@@ -3693,34 +3525,23 @@ export type SavingsCore = {
             }
           },
           {
-            "name": "setupData",
+            "name": "hasCommittedSetup",
             "docs": [
-              "Setup and configuration data"
+              "Track if user has committed initial setup (flattened from UserSetupData)"
             ],
-            "type": {
-              "defined": {
-                "name": "userSetupData"
-              }
-            }
+            "type": "bool"
           },
           {
-            "name": "bump",
+            "name": "totalLockedValue",
             "docs": [
-              "Bump seed for this PDA"
+              "Total value locked across all periods (for validation)"
             ],
-            "type": "u8"
+            "type": "u64"
           },
           {
-            "name": "createdAt",
+            "name": "commitTimestamp",
             "docs": [
-              "When this account was created"
-            ],
-            "type": "i64"
-          },
-          {
-            "name": "updatedAt",
-            "docs": [
-              "Last update timestamp"
+              "When setup was committed (Unix timestamp)"
             ],
             "type": "i64"
           }
@@ -3799,52 +3620,6 @@ export type SavingsCore = {
             "name": "amount",
             "docs": [
               "The amount of tokens deposited"
-            ],
-            "type": "u64"
-          }
-        ]
-      }
-    },
-    {
-      "name": "userSetupData",
-      "docs": [
-        "User setup and configuration data (mirrors EVM UserSetupData struct)"
-      ],
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "hasCommittedSetup",
-            "docs": [
-              "Track if user has committed initial setup"
-            ],
-            "type": "bool"
-          },
-          {
-            "name": "totalLockedValue",
-            "docs": [
-              "Total value locked across all periods (for validation)"
-            ],
-            "type": "u64"
-          },
-          {
-            "name": "commitTimestamp",
-            "docs": [
-              "When setup was committed (Unix timestamp)"
-            ],
-            "type": "i64"
-          },
-          {
-            "name": "lastIncreaseTimestamp",
-            "docs": [
-              "Track period start for increase limits"
-            ],
-            "type": "i64"
-          },
-          {
-            "name": "increasesInPeriod",
-            "docs": [
-              "Amount increased in current 7-day period"
             ],
             "type": "u64"
           }

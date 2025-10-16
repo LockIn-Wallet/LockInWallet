@@ -564,17 +564,17 @@ pub fn deposit_spl_self(ctx: Context<DepositSplSelf>, amount: u64) -> Result<()>
 
 // ========== SPENDING LIMITS INSTRUCTIONS ==========
 
-/// Initialize a new spending limits account for a user
+/// Initialize a new spending limits account for a user (now uses unified SavingsAccount)
 #[derive(Accounts)]
 pub struct InitializeSpendingLimits<'info> {
     #[account(
         init,
         payer = user,
-        space = 8 + SpendingLimitsAccount::INIT_SPACE,
-        seeds = [b"spending_limits", user.key().as_ref()],
+        space = 8 + SavingsAccount::INIT_SPACE,
+        seeds = [b"savings", user.key().as_ref()],
         bump
     )]
-    pub spending_limits_account: Account<'info, SpendingLimitsAccount>,
+    pub savings_account: Account<'info, SavingsAccount>,
 
     #[account(mut)]
     pub user: Signer<'info>,
@@ -587,11 +587,11 @@ pub struct InitializeSpendingLimits<'info> {
 pub struct AddTimePeriodLimit<'info> {
     #[account(
         mut,
-        seeds = [b"spending_limits", user.key().as_ref()],
-        bump = spending_limits_account.bump,
-        constraint = spending_limits_account.owner == user.key() @ ErrorCode::UnauthorizedAccess
+        seeds = [b"savings", user.key().as_ref()],
+        bump = savings_account.bump,
+        constraint = savings_account.owner == user.key() @ ErrorCode::UnauthorizedAccess
     )]
-    pub spending_limits_account: Account<'info, SpendingLimitsAccount>,
+    pub savings_account: Account<'info, SavingsAccount>,
 
     #[account(mut)]
     pub user: Signer<'info>,
@@ -602,11 +602,11 @@ pub struct AddTimePeriodLimit<'info> {
 pub struct RemoveTimePeriodLimit<'info> {
     #[account(
         mut,
-        seeds = [b"spending_limits", user.key().as_ref()],
-        bump = spending_limits_account.bump,
-        constraint = spending_limits_account.owner == user.key() @ ErrorCode::UnauthorizedAccess
+        seeds = [b"savings", user.key().as_ref()],
+        bump = savings_account.bump,
+        constraint = savings_account.owner == user.key() @ ErrorCode::UnauthorizedAccess
     )]
-    pub spending_limits_account: Account<'info, SpendingLimitsAccount>,
+    pub savings_account: Account<'info, SavingsAccount>,
 
     #[account(mut)]
     pub user: Signer<'info>,
@@ -617,11 +617,11 @@ pub struct RemoveTimePeriodLimit<'info> {
 pub struct SetCommonPeriodLimits<'info> {
     #[account(
         mut,
-        seeds = [b"spending_limits", user.key().as_ref()],
-        bump = spending_limits_account.bump,
-        constraint = spending_limits_account.owner == user.key() @ ErrorCode::UnauthorizedAccess
+        seeds = [b"savings", user.key().as_ref()],
+        bump = savings_account.bump,
+        constraint = savings_account.owner == user.key() @ ErrorCode::UnauthorizedAccess
     )]
-    pub spending_limits_account: Account<'info, SpendingLimitsAccount>,
+    pub savings_account: Account<'info, SavingsAccount>,
 
     #[account(mut)]
     pub user: Signer<'info>,
@@ -632,11 +632,11 @@ pub struct SetCommonPeriodLimits<'info> {
 pub struct CommitInitialSetup<'info> {
     #[account(
         mut,
-        seeds = [b"spending_limits", user.key().as_ref()],
-        bump = spending_limits_account.bump,
-        constraint = spending_limits_account.owner == user.key() @ ErrorCode::UnauthorizedAccess
+        seeds = [b"savings", user.key().as_ref()],
+        bump = savings_account.bump,
+        constraint = savings_account.owner == user.key() @ ErrorCode::UnauthorizedAccess
     )]
-    pub spending_limits_account: Account<'info, SpendingLimitsAccount>,
+    pub savings_account: Account<'info, SavingsAccount>,
 
     #[account(mut)]
     pub user: Signer<'info>,
@@ -646,10 +646,10 @@ pub struct CommitInitialSetup<'info> {
 #[derive(Accounts)]
 pub struct GetSpendingLimits<'info> {
     #[account(
-        seeds = [b"spending_limits", user.key().as_ref()],
-        bump = spending_limits_account.bump
+        seeds = [b"savings", user.key().as_ref()],
+        bump = savings_account.bump
     )]
-    pub spending_limits_account: Account<'info, SpendingLimitsAccount>,
+    pub savings_account: Account<'info, SavingsAccount>,
 
     pub user: Signer<'info>,
 }
@@ -664,14 +664,6 @@ pub struct WithdrawSolWithLimits<'info> {
         constraint = savings_account.owner == user.key() @ ErrorCode::UnauthorizedAccess
     )]
     pub savings_account: Account<'info, SavingsAccount>,
-
-    #[account(
-        mut,
-        seeds = [b"spending_limits", user.key().as_ref()],
-        bump = spending_limits_account.bump,
-        constraint = spending_limits_account.owner == user.key() @ ErrorCode::UnauthorizedAccess
-    )]
-    pub spending_limits_account: Account<'info, SpendingLimitsAccount>,
 
     #[account(mut)]
     pub user: Signer<'info>,
@@ -689,14 +681,6 @@ pub struct WithdrawSplWithLimits<'info> {
         constraint = savings_account.owner == user.key() @ ErrorCode::UnauthorizedAccess
     )]
     pub savings_account: Account<'info, SavingsAccount>,
-
-    #[account(
-        mut,
-        seeds = [b"spending_limits", user.key().as_ref()],
-        bump = spending_limits_account.bump,
-        constraint = spending_limits_account.owner == user.key() @ ErrorCode::UnauthorizedAccess
-    )]
-    pub spending_limits_account: Account<'info, SpendingLimitsAccount>,
 
     #[account(mut)]
     pub user: Signer<'info>,
@@ -727,17 +711,27 @@ pub struct WithdrawSplWithLimits<'info> {
 
 /// Initialize spending limits account instruction
 pub fn initialize_spending_limits(ctx: Context<InitializeSpendingLimits>) -> Result<()> {
-    let spending_limits_account = &mut ctx.accounts.spending_limits_account;
+    let savings_account = &mut ctx.accounts.savings_account;
     let user = &ctx.accounts.user;
     let clock = Clock::get()?;
 
-    spending_limits_account.owner = user.key();
-    spending_limits_account.time_period_limits = Vec::new();
-    spending_limits_account.pending_proposals = Vec::new();
-    spending_limits_account.setup_data = UserSetupData::default();
-    spending_limits_account.bump = ctx.bumps.spending_limits_account;
-    spending_limits_account.created_at = clock.unix_timestamp;
-    spending_limits_account.updated_at = clock.unix_timestamp;
+    savings_account.owner = user.key();
+    savings_account.sol_balance = 0;
+    savings_account.spl_balances = Vec::new();
+    savings_account.withdrawal_destinations = Vec::new();
+    savings_account.pending_withdrawal_destination_requests = Vec::new();
+    savings_account.pending_bypass_requests = Vec::new();
+    savings_account.permanent_address_activated = false;
+    savings_account.activation_payment_signature = Vec::new();
+    savings_account.activated_at = 0;
+    savings_account.time_period_limits = Vec::new();
+    savings_account.pending_proposals = Vec::new();
+    savings_account.has_committed_setup = false;
+    savings_account.total_locked_value = 0;
+    savings_account.commit_timestamp = 0;
+    savings_account.bump = ctx.bumps.savings_account;
+    savings_account.created_at = clock.unix_timestamp;
+    savings_account.updated_at = clock.unix_timestamp;
 
     msg!("Spending limits account initialized for user: {}", user.key());
 
@@ -751,11 +745,11 @@ pub fn add_time_period_limit(
     limit: u64,
     duration: u64,
 ) -> Result<()> {
-    let spending_limits_account = &mut ctx.accounts.spending_limits_account;
+    let savings_account = &mut ctx.accounts.savings_account;
     let clock = Clock::get()?;
 
-    spending_limits_account.add_time_period_limit(name.clone(), limit, duration, clock.unix_timestamp)?;
-    spending_limits_account.updated_at = clock.unix_timestamp;
+    savings_account.add_time_period_limit(name.clone(), limit, duration, clock.unix_timestamp)?;
+    savings_account.updated_at = clock.unix_timestamp;
 
     msg!(
         "Added time period limit: {} with limit {} and duration {}",
@@ -772,11 +766,11 @@ pub fn remove_time_period_limit(
     ctx: Context<RemoveTimePeriodLimit>,
     name: String,
 ) -> Result<()> {
-    let spending_limits_account = &mut ctx.accounts.spending_limits_account;
+    let savings_account = &mut ctx.accounts.savings_account;
     let clock = Clock::get()?;
 
-    spending_limits_account.remove_time_period_limit(&name)?;
-    spending_limits_account.updated_at = clock.unix_timestamp;
+    savings_account.remove_time_period_limit(&name)?;
+    savings_account.updated_at = clock.unix_timestamp;
 
     msg!("Removed time period limit: {}", name);
 
@@ -790,16 +784,16 @@ pub fn set_common_period_limits(
     weekly_limit: Option<u64>,
     monthly_limit: Option<u64>,
 ) -> Result<()> {
-    let spending_limits_account = &mut ctx.accounts.spending_limits_account;
+    let savings_account = &mut ctx.accounts.savings_account;
     let clock = Clock::get()?;
 
-    spending_limits_account.set_common_period_limits(
+    savings_account.set_common_period_limits(
         daily_limit,
         weekly_limit,
         monthly_limit,
         clock.unix_timestamp,
     )?;
-    spending_limits_account.updated_at = clock.unix_timestamp;
+    savings_account.updated_at = clock.unix_timestamp;
 
     msg!(
         "Set common period limits - Daily: {:?}, Weekly: {:?}, Monthly: {:?}",
@@ -813,22 +807,22 @@ pub fn set_common_period_limits(
 
 /// Commit initial setup instruction
 pub fn commit_initial_setup(ctx: Context<CommitInitialSetup>) -> Result<()> {
-    let spending_limits_account = &mut ctx.accounts.spending_limits_account;
+    let savings_account = &mut ctx.accounts.savings_account;
     let clock = Clock::get()?;
 
     // Calculate total locked value across all active periods
     let mut total_locked_value = 0u64;
-    for period in &spending_limits_account.time_period_limits {
+    for period in &savings_account.time_period_limits {
         if period.active {
             total_locked_value = total_locked_value.checked_add(period.limit)
                 .ok_or(ErrorCode::ArithmeticOverflow)?;
         }
     }
 
-    spending_limits_account.setup_data.has_committed_setup = true;
-    spending_limits_account.setup_data.total_locked_value = total_locked_value;
-    spending_limits_account.setup_data.commit_timestamp = clock.unix_timestamp;
-    spending_limits_account.updated_at = clock.unix_timestamp;
+    savings_account.has_committed_setup = true;
+    savings_account.total_locked_value = total_locked_value;
+    savings_account.commit_timestamp = clock.unix_timestamp;
+    savings_account.updated_at = clock.unix_timestamp;
 
     msg!(
         "Initial setup committed with total locked value: {}",
@@ -840,16 +834,16 @@ pub fn commit_initial_setup(ctx: Context<CommitInitialSetup>) -> Result<()> {
 
 /// Get spending limits information
 pub fn get_spending_limits(ctx: Context<GetSpendingLimits>) -> Result<()> {
-    let spending_limits_account = &ctx.accounts.spending_limits_account;
+    let savings_account = &ctx.accounts.savings_account;
     let clock = Clock::get()?;
 
     msg!("Spending limits for user: {}", ctx.accounts.user.key());
-    msg!("Setup committed: {}", spending_limits_account.setup_data.has_committed_setup);
-    msg!("Total locked value: {}", spending_limits_account.setup_data.total_locked_value);
+    msg!("Setup committed: {}", savings_account.has_committed_setup);
+    msg!("Total locked value: {}", savings_account.total_locked_value);
 
-    for (index, period) in spending_limits_account.time_period_limits.iter().enumerate() {
+    for (index, period) in savings_account.time_period_limits.iter().enumerate() {
         if period.active {
-            let (limit, spent, remaining, _) = spending_limits_account
+            let (limit, spent, remaining, _) = savings_account
                 .get_period_info(&period.name, clock.unix_timestamp)
                 .unwrap_or((0, 0, 0, false));
 
@@ -893,16 +887,16 @@ pub fn withdraw_sol_with_limits(ctx: Context<WithdrawSolWithLimits>, amount: u64
     );
 
     // Validate spending limits
-    let spending_limits_account = &mut ctx.accounts.spending_limits_account;
+    let savings_account = &mut ctx.accounts.savings_account;
 
     // Check if setup is committed (required for withdrawals)
     require!(
-        spending_limits_account.setup_data.has_committed_setup,
+        savings_account.has_committed_setup,
         ErrorCode::SetupNotCommitted
     );
 
     // Check spending limits
-    spending_limits_account.check_spending_limits(amount, clock.unix_timestamp)?;
+    savings_account.check_spending_limits(amount, clock.unix_timestamp)?;
 
     // Transfer SOL from savings account to user
     **savings_account.to_account_info().try_borrow_mut_lamports()? -= amount;
@@ -915,8 +909,8 @@ pub fn withdraw_sol_with_limits(ctx: Context<WithdrawSolWithLimits>, amount: u64
         .ok_or(crate::error::ErrorCode::ArithmeticOverflow)?;
 
     // Update spending tracking
-    spending_limits_account.update_spending(amount, clock.unix_timestamp)?;
-    spending_limits_account.updated_at = clock.unix_timestamp;
+    savings_account.update_spending(amount, clock.unix_timestamp)?;
+    savings_account.updated_at = clock.unix_timestamp;
 
     savings_account.updated_at = clock.unix_timestamp;
 
@@ -942,16 +936,16 @@ pub fn withdraw_spl_with_limits(ctx: Context<WithdrawSplWithLimits>, amount: u64
     require!(current_balance >= amount, ErrorCode::InsufficientBalance);
 
     // Validate spending limits
-    let spending_limits_account = &mut ctx.accounts.spending_limits_account;
+    let savings_account = &mut ctx.accounts.savings_account;
 
     // Check if setup is committed (required for withdrawals)
     require!(
-        spending_limits_account.setup_data.has_committed_setup,
+        savings_account.has_committed_setup,
         ErrorCode::SetupNotCommitted
     );
 
     // Check spending limits (for SPL tokens, we use the token amount directly)
-    spending_limits_account.check_spending_limits(amount, clock.unix_timestamp)?;
+    savings_account.check_spending_limits(amount, clock.unix_timestamp)?;
 
     // Create seeds for signing
     let user_key = savings_account.owner;
@@ -980,8 +974,8 @@ pub fn withdraw_spl_with_limits(ctx: Context<WithdrawSplWithLimits>, amount: u64
     }
 
     // Update spending tracking
-    spending_limits_account.update_spending(amount, clock.unix_timestamp)?;
-    spending_limits_account.updated_at = clock.unix_timestamp;
+    savings_account.update_spending(amount, clock.unix_timestamp)?;
+    savings_account.updated_at = clock.unix_timestamp;
 
     savings_account.updated_at = clock.unix_timestamp;
 
@@ -1001,11 +995,11 @@ pub fn withdraw_spl_with_limits(ctx: Context<WithdrawSplWithLimits>, amount: u64
 pub struct ProposeLimitChange<'info> {
     #[account(
         mut,
-        seeds = [b"spending_limits", user.key().as_ref()],
-        bump = spending_limits_account.bump,
-        constraint = spending_limits_account.owner == user.key() @ ErrorCode::UnauthorizedAccess
+        seeds = [b"savings", user.key().as_ref()],
+        bump = savings_account.bump,
+        constraint = savings_account.owner == user.key() @ ErrorCode::UnauthorizedAccess
     )]
-    pub spending_limits_account: Account<'info, SpendingLimitsAccount>,
+    pub savings_account: Account<'info, SavingsAccount>,
 
     #[account(mut)]
     pub user: Signer<'info>,
@@ -1016,11 +1010,11 @@ pub struct ProposeLimitChange<'info> {
 pub struct ExecuteLimitProposal<'info> {
     #[account(
         mut,
-        seeds = [b"spending_limits", user.key().as_ref()],
-        bump = spending_limits_account.bump,
-        constraint = spending_limits_account.owner == user.key() @ ErrorCode::UnauthorizedAccess
+        seeds = [b"savings", user.key().as_ref()],
+        bump = savings_account.bump,
+        constraint = savings_account.owner == user.key() @ ErrorCode::UnauthorizedAccess
     )]
-    pub spending_limits_account: Account<'info, SpendingLimitsAccount>,
+    pub savings_account: Account<'info, SavingsAccount>,
 
     #[account(mut)]
     pub user: Signer<'info>,
@@ -1031,11 +1025,11 @@ pub struct ExecuteLimitProposal<'info> {
 pub struct CancelLimitProposal<'info> {
     #[account(
         mut,
-        seeds = [b"spending_limits", user.key().as_ref()],
-        bump = spending_limits_account.bump,
-        constraint = spending_limits_account.owner == user.key() @ ErrorCode::UnauthorizedAccess
+        seeds = [b"savings", user.key().as_ref()],
+        bump = savings_account.bump,
+        constraint = savings_account.owner == user.key() @ ErrorCode::UnauthorizedAccess
     )]
-    pub spending_limits_account: Account<'info, SpendingLimitsAccount>,
+    pub savings_account: Account<'info, SavingsAccount>,
 
     #[account(mut)]
     pub user: Signer<'info>,
@@ -1049,21 +1043,21 @@ pub fn propose_limit_change(
     period_name: String,
     new_limit: u64,
 ) -> Result<()> {
-    require!(!period_name.is_empty() && period_name.len() <= SpendingLimitsAccount::MAX_NAME_LENGTH, ErrorCode::InvalidLimitParameters);
+    require!(!period_name.is_empty() && period_name.len() <= SavingsAccount::MAX_PERIOD_NAME_LENGTH, ErrorCode::InvalidLimitParameters);
     require!(new_limit > 0, ErrorCode::InvalidLimitParameters);
 
-    let spending_limits_account = &mut ctx.accounts.spending_limits_account;
+    let savings_account = &mut ctx.accounts.savings_account;
     let clock = Clock::get()?;
 
     // Check if setup is committed (required for proposals)
     require!(
-        spending_limits_account.setup_data.has_committed_setup,
+        savings_account.has_committed_setup,
         ErrorCode::SetupNotCommitted
     );
 
     // Check if period exists
     let mut period_exists = false;
-    for period in &spending_limits_account.time_period_limits {
+    for period in &savings_account.time_period_limits {
         if period.name == period_name && period.active {
             period_exists = true;
             break;
@@ -1072,12 +1066,12 @@ pub fn propose_limit_change(
     require!(period_exists, ErrorCode::InvalidLimitParameters);
 
     // Check if we have room for more proposals
-    if spending_limits_account.pending_proposals.len() >= SpendingLimitsAccount::MAX_PROPOSALS {
+    if savings_account.pending_proposals.len() >= SavingsAccount::MAX_PROPOSALS {
         return Err(ErrorCode::TokenLimitExceeded.into());
     }
 
     // Check if proposal already exists for this period
-    for proposal in &spending_limits_account.pending_proposals {
+    for proposal in &savings_account.pending_proposals {
         if proposal.period_name == period_name && !proposal.executed {
             return Err(ErrorCode::InvalidLimitParameters.into());
         }
@@ -1097,7 +1091,7 @@ pub fn propose_limit_change(
     let execute_after = clock.unix_timestamp + timelock_duration;
 
     // Determine if this is an increase
-    let current_limit = spending_limits_account.time_period_limits
+    let current_limit = savings_account.time_period_limits
         .iter()
         .find(|p| p.name == period_name && p.active)
         .map(|p| p.limit)
@@ -1114,8 +1108,8 @@ pub fn propose_limit_change(
         created_at: clock.unix_timestamp,
     };
 
-    spending_limits_account.pending_proposals.push(proposal);
-    spending_limits_account.updated_at = clock.unix_timestamp;
+    savings_account.pending_proposals.push(proposal);
+    savings_account.updated_at = clock.unix_timestamp;
 
     msg!(
         "Proposed limit change for {}: {} -> {} (execute after: {})",
@@ -1133,12 +1127,12 @@ pub fn execute_limit_proposal(
     ctx: Context<ExecuteLimitProposal>,
     proposal_id: [u8; 32],
 ) -> Result<()> {
-    let spending_limits_account = &mut ctx.accounts.spending_limits_account;
+    let savings_account = &mut ctx.accounts.savings_account;
     let clock = Clock::get()?;
 
     // Find the proposal
     let mut proposal_index = None;
-    for (index, proposal) in spending_limits_account.pending_proposals.iter().enumerate() {
+    for (index, proposal) in savings_account.pending_proposals.iter().enumerate() {
         if proposal.proposal_id == proposal_id {
             proposal_index = Some(index);
             break;
@@ -1149,7 +1143,7 @@ pub fn execute_limit_proposal(
 
     // Get proposal details before mutable borrow
     let (period_name, new_limit, executed, execute_after) = {
-        let proposal = &spending_limits_account.pending_proposals[proposal_index];
+        let proposal = &savings_account.pending_proposals[proposal_index];
         (
             proposal.period_name.clone(),
             proposal.new_limit,
@@ -1168,7 +1162,7 @@ pub fn execute_limit_proposal(
     );
 
     // Execute the proposal by updating the corresponding limit
-    for period in &mut spending_limits_account.time_period_limits {
+    for period in &mut savings_account.time_period_limits {
         if period.name == period_name && period.active {
             period.limit = new_limit;
             break;
@@ -1176,8 +1170,8 @@ pub fn execute_limit_proposal(
     }
 
     // Mark proposal as executed
-    spending_limits_account.pending_proposals[proposal_index].executed = true;
-    spending_limits_account.updated_at = clock.unix_timestamp;
+    savings_account.pending_proposals[proposal_index].executed = true;
+    savings_account.updated_at = clock.unix_timestamp;
 
     msg!(
         "Executed proposal for {}: new limit {}",
@@ -1193,12 +1187,12 @@ pub fn cancel_limit_proposal(
     ctx: Context<CancelLimitProposal>,
     proposal_id: [u8; 32],
 ) -> Result<()> {
-    let spending_limits_account = &mut ctx.accounts.spending_limits_account;
+    let savings_account = &mut ctx.accounts.savings_account;
     let clock = Clock::get()?;
 
     // Find and remove the proposal
     let mut proposal_index = None;
-    for (index, proposal) in spending_limits_account.pending_proposals.iter().enumerate() {
+    for (index, proposal) in savings_account.pending_proposals.iter().enumerate() {
         if proposal.proposal_id == proposal_id {
             proposal_index = Some(index);
             break;
@@ -1206,7 +1200,7 @@ pub fn cancel_limit_proposal(
     }
 
     let proposal_index = proposal_index.ok_or(ErrorCode::InvalidLimitParameters)?;
-    let proposal = &spending_limits_account.pending_proposals[proposal_index];
+    let proposal = &savings_account.pending_proposals[proposal_index];
 
     // Check if already executed
     require!(!proposal.executed, ErrorCode::InvalidLimitParameters);
@@ -1214,8 +1208,8 @@ pub fn cancel_limit_proposal(
     let period_name = proposal.period_name.clone();
 
     // Remove the proposal
-    spending_limits_account.pending_proposals.remove(proposal_index);
-    spending_limits_account.updated_at = clock.unix_timestamp;
+    savings_account.pending_proposals.remove(proposal_index);
+    savings_account.updated_at = clock.unix_timestamp;
 
     msg!("Cancelled proposal for {}", period_name);
 

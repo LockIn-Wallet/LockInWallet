@@ -13,10 +13,16 @@ const {
 
 const fs = require('fs');
 const path = require('path');
+const { getTreasuryConfig, detectEnvironment } = require('./config/treasury.js');
 
-const RPC_URL = 'http://127.0.0.1:8899';
-const DEPLOYER_ADDRESS = '4xo6a3qHYgtsDkKUAy1wMQhyN1zoXo3tKPR5foxa3hV4';
-const ACTIVATION_FEE_SOL = 0.1; // 0.1 SOL = ~$5 USD
+// Get environment from command line args or auto-detect
+const environment = process.argv.includes('--mainnet') ? 'mainnet' :
+                   process.argv.includes('--devnet') ? 'devnet' : 'localhost';
+
+const treasuryConfig = getTreasuryConfig(environment);
+const RPC_URL = treasuryConfig.rpcUrl;
+const DEPLOYER_ADDRESS = treasuryConfig.treasuryAddress;
+const ACTIVATION_FEE_SOL = treasuryConfig.activationFeeSol;
 
 // Read program ID from keypair file
 function readProgramId() {
@@ -39,6 +45,10 @@ function readProgramId() {
 async function initializeProgramConfig() {
   try {
     console.log('🚀 Initializing Solana program configuration...');
+    console.log(`🌐 Environment: ${environment.toUpperCase()}`);
+    console.log(`📍 Treasury: ${DEPLOYER_ADDRESS} (${treasuryConfig.description})`);
+    console.log(`🔗 RPC: ${RPC_URL}`);
+    console.log('');
 
     // Connect to validator
     const connection = new Connection(RPC_URL, 'confirmed');

@@ -106,7 +106,7 @@
       ],
       "accounts": [
         {
-          "name": "spending_limits_account",
+          "name": "savings_account",
           "writable": true,
           "pda": {
             "seeds": [
@@ -114,19 +114,11 @@
                 "kind": "const",
                 "value": [
                   115,
-                  112,
-                  101,
-                  110,
-                  100,
+                  97,
+                  118,
                   105,
                   110,
                   103,
-                  95,
-                  108,
-                  105,
-                  109,
-                  105,
-                  116,
                   115
                 ]
               },
@@ -232,7 +224,7 @@
       ],
       "accounts": [
         {
-          "name": "spending_limits_account",
+          "name": "savings_account",
           "writable": true,
           "pda": {
             "seeds": [
@@ -240,19 +232,11 @@
                 "kind": "const",
                 "value": [
                   115,
-                  112,
-                  101,
-                  110,
-                  100,
+                  97,
+                  118,
                   105,
                   110,
                   103,
-                  95,
-                  108,
-                  105,
-                  109,
-                  105,
-                  116,
                   115
                 ]
               },
@@ -414,7 +398,7 @@
       ],
       "accounts": [
         {
-          "name": "spending_limits_account",
+          "name": "savings_account",
           "writable": true,
           "pda": {
             "seeds": [
@@ -422,19 +406,11 @@
                 "kind": "const",
                 "value": [
                   115,
-                  112,
-                  101,
-                  110,
-                  100,
+                  97,
+                  118,
                   105,
                   110,
                   103,
-                  95,
-                  108,
-                  105,
-                  109,
-                  105,
-                  116,
                   115
                 ]
               },
@@ -944,7 +920,7 @@
       ],
       "accounts": [
         {
-          "name": "spending_limits_account",
+          "name": "savings_account",
           "writable": true,
           "pda": {
             "seeds": [
@@ -952,19 +928,11 @@
                 "kind": "const",
                 "value": [
                   115,
-                  112,
-                  101,
-                  110,
-                  100,
+                  97,
+                  118,
                   105,
                   110,
                   103,
-                  95,
-                  108,
-                  105,
-                  109,
-                  105,
-                  116,
                   115
                 ]
               },
@@ -1600,26 +1568,18 @@
       ],
       "accounts": [
         {
-          "name": "spending_limits_account",
+          "name": "savings_account",
           "pda": {
             "seeds": [
               {
                 "kind": "const",
                 "value": [
                   115,
-                  112,
-                  101,
-                  110,
-                  100,
+                  97,
+                  118,
                   105,
                   110,
                   103,
-                  95,
-                  108,
-                  105,
-                  109,
-                  105,
-                  116,
                   115
                 ]
               },
@@ -1885,7 +1845,7 @@
       ],
       "accounts": [
         {
-          "name": "spending_limits_account",
+          "name": "savings_account",
           "writable": true,
           "pda": {
             "seeds": [
@@ -1893,19 +1853,11 @@
                 "kind": "const",
                 "value": [
                   115,
-                  112,
-                  101,
-                  110,
-                  100,
+                  97,
+                  118,
                   105,
                   110,
                   103,
-                  95,
-                  108,
-                  105,
-                  109,
-                  105,
-                  116,
                   115
                 ]
               },
@@ -1945,7 +1897,7 @@
       ],
       "accounts": [
         {
-          "name": "spending_limits_account",
+          "name": "savings_account",
           "writable": true,
           "pda": {
             "seeds": [
@@ -1953,19 +1905,11 @@
                 "kind": "const",
                 "value": [
                   115,
-                  112,
-                  101,
-                  110,
-                  100,
+                  97,
+                  118,
                   105,
                   110,
                   103,
-                  95,
-                  108,
-                  105,
-                  109,
-                  105,
-                  116,
                   115
                 ]
               },
@@ -2010,7 +1954,7 @@
       ],
       "accounts": [
         {
-          "name": "spending_limits_account",
+          "name": "savings_account",
           "writable": true,
           "pda": {
             "seeds": [
@@ -2018,19 +1962,11 @@
                 "kind": "const",
                 "value": [
                   115,
-                  112,
-                  101,
-                  110,
-                  100,
+                  97,
+                  118,
                   105,
                   110,
                   103,
-                  95,
-                  108,
-                  105,
-                  109,
-                  105,
-                  116,
                   115
                 ]
               },
@@ -2246,7 +2182,7 @@
       ],
       "accounts": [
         {
-          "name": "spending_limits_account",
+          "name": "savings_account",
           "writable": true,
           "pda": {
             "seeds": [
@@ -2254,19 +2190,11 @@
                 "kind": "const",
                 "value": [
                   115,
-                  112,
-                  101,
-                  110,
-                  100,
+                  97,
+                  118,
                   105,
                   110,
                   103,
-                  95,
-                  108,
-                  105,
-                  109,
-                  105,
-                  116,
                   115
                 ]
               },
@@ -2516,38 +2444,6 @@
                   105,
                   110,
                   103,
-                  115
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "user"
-              }
-            ]
-          }
-        },
-        {
-          "name": "spending_limits_account",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  115,
-                  112,
-                  101,
-                  110,
-                  100,
-                  105,
-                  110,
-                  103,
-                  95,
-                  108,
-                  105,
-                  109,
-                  105,
-                  116,
                   115
                 ]
               },
@@ -2856,38 +2752,6 @@
           }
         },
         {
-          "name": "spending_limits_account",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  115,
-                  112,
-                  101,
-                  110,
-                  100,
-                  105,
-                  110,
-                  103,
-                  95,
-                  108,
-                  105,
-                  109,
-                  105,
-                  116,
-                  115
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "user"
-              }
-            ]
-          }
-        },
-        {
           "name": "user",
           "writable": true,
           "signer": true
@@ -3145,22 +3009,48 @@
               "When the permanent address was activated (Unix timestamp)"
             ],
             "type": "i64"
+          },
+          {
+            "name": "time_period_limits",
+            "docs": [
+              "Array of time-based spending limits (Daily, Weekly, Monthly, Custom)"
+            ],
+            "type": {
+              "vec": "TimePeriodLimit"
+            }
+          },
+          {
+            "name": "pending_proposals",
+            "docs": [
+              "Pending proposals for limit changes (mirrors EVM proposal system)"
+            ],
+            "type": {
+              "vec": "PendingProposal"
+            }
+          },
+          {
+            "name": "has_committed_setup",
+            "docs": [
+              "Track if user has committed initial setup (flattened from UserSetupData)"
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "total_locked_value",
+            "docs": [
+              "Total value locked across all periods (for validation)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "commit_timestamp",
+            "docs": [
+              "When setup was committed (Unix timestamp)"
+            ],
+            "type": "i64"
           }
         ]
       }
-    },
-    {
-      "name": "SpendingLimitsAccount",
-      "discriminator": [
-        38,
-        33,
-        131,
-        233,
-        159,
-        154,
-        149,
-        66
-      ]
     }
   ],
   "errors": [
@@ -3722,26 +3612,6 @@
               "When the permanent address was activated (Unix timestamp)"
             ],
             "type": "i64"
-          }
-        ]
-      },
-      "size": 469
-    },
-    {
-      "name": "SpendingLimitsAccount",
-      "docs": [
-        "Spending limits account that stores user's spending control configuration",
-        "Similar to the userSpendingLimits mapping in your EVM contract"
-      ],
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "owner",
-            "docs": [
-              "The owner of this spending limits account"
-            ],
-            "type": "pubkey"
           },
           {
             "name": "time_period_limits",
@@ -3762,39 +3632,29 @@
             }
           },
           {
-            "name": "setup_data",
+            "name": "has_committed_setup",
             "docs": [
-              "Setup and configuration data"
+              "Track if user has committed initial setup (flattened from UserSetupData)"
             ],
-            "type": {
-              "defined": {
-                "name": "UserSetupData"
-              }
-            }
+            "type": "bool"
           },
           {
-            "name": "bump",
+            "name": "total_locked_value",
             "docs": [
-              "Bump seed for this PDA"
+              "Total value locked across all periods (for validation)"
             ],
-            "type": "u8"
+            "type": "u64"
           },
           {
-            "name": "created_at",
+            "name": "commit_timestamp",
             "docs": [
-              "When this account was created"
-            ],
-            "type": "i64"
-          },
-          {
-            "name": "updated_at",
-            "docs": [
-              "Last update timestamp"
+              "When setup was committed (Unix timestamp)"
             ],
             "type": "i64"
           }
         ]
-      }
+      },
+      "size": 469
     },
     {
       "name": "TimePeriodLimit",
@@ -3868,52 +3728,6 @@
             "name": "amount",
             "docs": [
               "The amount of tokens deposited"
-            ],
-            "type": "u64"
-          }
-        ]
-      }
-    },
-    {
-      "name": "UserSetupData",
-      "docs": [
-        "User setup and configuration data (mirrors EVM UserSetupData struct)"
-      ],
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "has_committed_setup",
-            "docs": [
-              "Track if user has committed initial setup"
-            ],
-            "type": "bool"
-          },
-          {
-            "name": "total_locked_value",
-            "docs": [
-              "Total value locked across all periods (for validation)"
-            ],
-            "type": "u64"
-          },
-          {
-            "name": "commit_timestamp",
-            "docs": [
-              "When setup was committed (Unix timestamp)"
-            ],
-            "type": "i64"
-          },
-          {
-            "name": "last_increase_timestamp",
-            "docs": [
-              "Track period start for increase limits"
-            ],
-            "type": "i64"
-          },
-          {
-            "name": "increases_in_period",
-            "docs": [
-              "Amount increased in current 7-day period"
             ],
             "type": "u64"
           }
