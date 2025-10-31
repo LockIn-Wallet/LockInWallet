@@ -10,18 +10,10 @@ import { TransactionManager } from "./adapters/TransactionManager.js";
 // Solana imports
 import { Connection, PublicKey, clusterApiUrl } from "@solana/web3.js";
 import {
-  ConnectionProvider,
-  WalletProvider,
   useWallet,
   useConnection,
 } from "@solana/wallet-adapter-react";
-import { WalletAdapterNetwork } from "@solana/wallet-adapter-base";
 import {
-  PhantomWalletAdapter,
-  SolflareWalletAdapter,
-} from "@solana/wallet-adapter-wallets";
-import {
-  WalletModalProvider,
   WalletMultiButton,
   WalletDisconnectButton,
 } from "@solana/wallet-adapter-react-ui";
@@ -63,6 +55,9 @@ import {
   hasPendingProposalForPeriod,
 } from "./utils/walletUtils.js";
 
+// Import components
+import SolanaWalletProvider from "./components/SolanaWalletProvider.js";
+
 const ETH_ADDRESS = networkConfig.constants.ETH_ADDRESS; // ETH address (native token)
 const SOL_ADDRESS = networkConfig.constants.SOL_ADDRESS; // SOL address (native token)
 
@@ -70,49 +65,6 @@ const SOL_ADDRESS = networkConfig.constants.SOL_ADDRESS; // SOL address (native 
 // For backward compatibility
 const USDT_ADDRESS = "0x610178dA211FEF7D417bC0e6FeD39F05609AD788"; // Updated: 0x610178dA211FEF7D417bC0e6FeD39F05609AD788
 
-// Solana Wallet Provider Component
-function SolanaWalletProvider({ children, networkType, selectedNetwork }) {
-  const network =
-    networkType === "solana"
-      ? NETWORKS.solana[selectedNetwork]?.network || WalletAdapterNetwork.Devnet
-      : WalletAdapterNetwork.Devnet;
-  const endpoint =
-    networkType === "solana"
-      ? NETWORKS.solana[selectedNetwork]?.rpcUrl || "http://127.0.0.1:8899"
-      : "http://127.0.0.1:8899";
-
-  // Debug network configuration lookup
-  console.log('🔍 DEBUGGING: SolanaWalletProvider endpoint calculation:', {
-    networkType,
-    selectedNetwork,
-    availableNetworks: Object.keys(NETWORKS.solana),
-    networkConfig: NETWORKS.solana[selectedNetwork],
-    rpcUrl: NETWORKS.solana[selectedNetwork]?.rpcUrl,
-    endpoint,
-    network
-  });
-
-  // Add validation that endpoint is correctly calculated
-  if (networkType === "solana" && selectedNetwork === "devnet") {
-    if (endpoint === "http://127.0.0.1:8899") {
-      console.error('❌ ENDPOINT ERROR: Selected devnet but endpoint is still localhost!');
-      console.error('Expected: https://api.devnet.solana.com');
-      console.error('Got:', endpoint);
-    } else {
-      console.log('✅ ENDPOINT CORRECT: Devnet endpoint properly set to:', endpoint);
-    }
-  }
-
-  const wallets = [new PhantomWalletAdapter(), new SolflareWalletAdapter()];
-
-  return (
-    <ConnectionProvider key={`${networkType}-${selectedNetwork}`} endpoint={endpoint}>
-      <WalletProvider wallets={wallets} autoConnect>
-        <WalletModalProvider>{children}</WalletModalProvider>
-      </WalletProvider>
-    </ConnectionProvider>
-  );
-}
 
 // Main App Component with state management
 function AppContent() {
