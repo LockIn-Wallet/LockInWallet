@@ -67,6 +67,41 @@ Multi-blockchain savings system with identical functionality across EVM and Sola
 
 For detailed feature documentation, see component-specific folders.
 
+## Development Principles
+
+This project follows core software engineering principles to ensure maintainable, scalable, and robust code:
+
+### KISS (Keep It Simple, Stupid)
+- **Favor simplicity over complexity** - Choose the simplest solution that works
+- **Avoid over-engineering** - Don't add features or complexity until needed
+- **Write readable code** - Code should be self-documenting and easy to understand
+- **Use clear naming** - Variables, functions, and components should have descriptive names
+
+### DRY (Don't Repeat Yourself)
+- **No code duplication** - Extract common functionality into reusable components/functions
+- **Centralized configuration** - Use shared constants, configs, and design tokens
+- **Modular architecture** - Create reusable modules that can be shared across blockchain layers
+- **Component reuse** - Build composable UI components that work across different contexts
+
+### SOLID Principles
+- **Single Responsibility** - Each class/component should have one reason to change
+- **Open/Closed** - Open for extension, closed for modification
+- **Liskov Substitution** - Subtypes must be substitutable for their base types
+- **Interface Segregation** - Depend on abstractions, not concretions
+- **Dependency Inversion** - High-level modules shouldn't depend on low-level modules
+
+### Practical Applications
+- **Smart Contracts**: Modular contract architecture (EVM) and program separation (Solana)
+- **Frontend**: Unified style system, blockchain adapters, and reusable components
+- **Testing**: Shared test utilities and consistent testing patterns
+- **Documentation**: Clear, maintainable documentation that follows DRY principles
+
+### Code Quality Standards
+- **Follow existing patterns** - Maintain consistency with established codebase conventions
+- **Refactor when needed** - Improve code structure while maintaining functionality
+- **Test coverage** - Write tests for new features and maintain existing test suites
+- **Code reviews** - All changes should follow these principles
+
 ## Development Commands
 
 ### ⚡ Multi-Blockchain Development Startup
