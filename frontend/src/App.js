@@ -58,6 +58,16 @@ import {
 // Import components
 import SolanaWalletProvider from "./components/SolanaWalletProvider.js";
 
+// Import step validation utilities
+import {
+  validateStep1,
+  validateStep2,
+  validateStep3,
+  updateStepValidation as updateStepValidationUtil,
+  goToNextStep as goToNextStepUtil,
+  goToPreviousStep as goToPreviousStepUtil,
+} from "./utils/stepValidation.js";
+
 const ETH_ADDRESS = networkConfig.constants.ETH_ADDRESS; // ETH address (native token)
 const SOL_ADDRESS = networkConfig.constants.SOL_ADDRESS; // SOL address (native token)
 
@@ -393,62 +403,38 @@ function AppContentInner({ networkType, setNetworkType, selectedNetwork, setSele
     );
   };
 
-  // Helper functions for step management
-  const validateStep1 = () => {
-    // Step 1 is complete if user has entered any spending limit values or custom period
-
-    // Check if user entered numbers in any of the spending limit cards
-    const hasLimitInput = Object.values(limitEdits).some(
-      (edit) => edit.value && parseFloat(edit.value) > 0
-    );
-
-    // Check if user is creating/has created a custom period
-    const hasCustomPeriodInput =
-      customPeriodName.trim() ||
-      (customPeriodLimit && parseFloat(customPeriodLimit) > 0);
-
-    // Check if any existing limits are active (original logic)
-    const hasActiveLimits = spendingLimits.some(
-      (limit) => limit.isActive && parseFloat(limit.limit) > 0
-    );
-
-    return hasLimitInput || hasCustomPeriodInput || hasActiveLimits;
+  // Helper functions for step management - using extracted utilities
+  const validateStep1Wrapper = () => {
+    return validateStep1(spendingLimits, limitEdits, customPeriodName, customPeriodLimit);
   };
 
-  const validateStep2 = () => {
-    // Step 2 is complete if user added at least one custom withdrawal address (not just "My Wallet")
-    // My Wallet is automatically added, so we need more than just that
-    const hasCustomAddresses = withdrawalAddresses.some(
-      (addr) =>
-        addr.title !== "My Wallet" &&
-        addr.destination !== getCurrentUserAddress()
-    );
-    return hasCustomAddresses;
+  const validateStep2Wrapper = () => {
+    return validateStep2(withdrawalAddresses, getCurrentUserAddress);
   };
 
-  const validateStep3 = () => {
-    // Step 3 is complete when setup is committed
-    return isSetupCommitted;
+  const validateStep3Wrapper = () => {
+    return validateStep3(isSetupCommitted);
   };
 
   const updateStepValidation = () => {
-    setStepValidation({
-      step1Complete: validateStep1(),
-      step2Complete: validateStep2(),
-      step3Complete: validateStep3(),
-    });
+    const params = {
+      spendingLimits,
+      limitEdits,
+      customPeriodName,
+      customPeriodLimit,
+      withdrawalAddresses,
+      getCurrentUserAddress,
+      isSetupCommitted
+    };
+    updateStepValidationUtil(params, setStepValidation);
   };
 
   const goToNextStep = () => {
-    if (currentStep < 3) {
-      setCurrentStep(currentStep + 1);
-    }
+    goToNextStepUtil(currentStep, setCurrentStep);
   };
 
   const goToPreviousStep = () => {
-    if (currentStep > 1) {
-      setCurrentStep(currentStep - 1);
-    }
+    goToPreviousStepUtil(currentStep, setCurrentStep);
   };
 
   // Network detection and switching functions
