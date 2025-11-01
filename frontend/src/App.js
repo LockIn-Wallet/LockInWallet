@@ -9,10 +9,7 @@ import { TransactionManager } from "./adapters/TransactionManager.js";
 
 // Solana imports
 import { Connection, PublicKey, clusterApiUrl } from "@solana/web3.js";
-import {
-  useWallet,
-  useConnection,
-} from "@solana/wallet-adapter-react";
+import { useWallet, useConnection } from "@solana/wallet-adapter-react";
 import {
   WalletMultiButton,
   WalletDisconnectButton,
@@ -60,6 +57,8 @@ import {
 import SolanaWalletProvider from "./components/SolanaWalletProvider.js";
 import WithdrawalAddressSelector from "./components/WithdrawalAddressSelector.js";
 import StatusHeader from "./components/molecules/StatusHeader.js";
+import BalanceDisplay from "./components/molecules/BalanceDisplay.js";
+import WalletConnectionPrompt from "./components/molecules/WalletConnectionPrompt.js";
 
 // Import step validation utilities
 import {
@@ -74,10 +73,8 @@ import {
 const ETH_ADDRESS = networkConfig.constants.ETH_ADDRESS; // ETH address (native token)
 const SOL_ADDRESS = networkConfig.constants.SOL_ADDRESS; // SOL address (native token)
 
-
 // For backward compatibility
 const USDT_ADDRESS = "0x610178dA211FEF7D417bC0e6FeD39F05609AD788"; // Updated: 0x610178dA211FEF7D417bC0e6FeD39F05609AD788
-
 
 // Main App Component with state management
 function AppContent() {
@@ -95,7 +92,10 @@ function AppContent() {
   const [selectedNetwork, setSelectedNetwork] = useState("localhost"); // Current selected network
 
   return (
-    <SolanaWalletProvider networkType={networkType} selectedNetwork={selectedNetwork}>
+    <SolanaWalletProvider
+      networkType={networkType}
+      selectedNetwork={selectedNetwork}
+    >
       <AppContentInner
         networkType={networkType}
         setNetworkType={setNetworkType}
@@ -107,7 +107,12 @@ function AppContent() {
 }
 
 // Inner component that uses wallet hooks
-function AppContentInner({ networkType, setNetworkType, selectedNetwork, setSelectedNetwork }) {
+function AppContentInner({
+  networkType,
+  setNetworkType,
+  selectedNetwork,
+  setSelectedNetwork,
+}) {
   // EVM state
   const [provider, setProvider] = useState(null);
   const [signer, setSigner] = useState(null);
@@ -131,7 +136,6 @@ function AppContentInner({ networkType, setNetworkType, selectedNetwork, setSele
 
   // Multi-blockchain transaction manager
   const [transactionManager, setTransactionManager] = useState(null);
-
 
   // Time-based spending limits state - unified interface
   const [spendingLimits, setSpendingLimits] = useState([]); // Array of all time periods
@@ -203,11 +207,14 @@ function AppContentInner({ networkType, setNetworkType, selectedNetwork, setSele
     step3Complete: false, // Setup committed/locked
   });
 
-
-
   // Helper functions for step management - using extracted utilities
   const validateStep1Wrapper = () => {
-    return validateStep1(spendingLimits, limitEdits, customPeriodName, customPeriodLimit);
+    return validateStep1(
+      spendingLimits,
+      limitEdits,
+      customPeriodName,
+      customPeriodLimit
+    );
   };
 
   const validateStep2Wrapper = () => {
@@ -226,7 +233,7 @@ function AppContentInner({ networkType, setNetworkType, selectedNetwork, setSele
       customPeriodLimit,
       withdrawalAddresses,
       getCurrentUserAddress,
-      isSetupCommitted
+      isSetupCommitted,
     };
     updateStepValidationUtil(params, setStepValidation);
   };
@@ -390,7 +397,7 @@ function AppContentInner({ networkType, setNetworkType, selectedNetwork, setSele
       setStepValidation({
         step1Complete: false, // Spending limits configured
         step2Complete: false, // Withdrawal addresses configured
-        step3Complete: false  // Setup committed
+        step3Complete: false, // Setup committed
       });
 
       // Clear form state
@@ -407,20 +414,26 @@ function AppContentInner({ networkType, setNetworkType, selectedNetwork, setSele
       setCardStates({
         spendingLimits: { minimized: false },
         balanceCard: { minimized: false },
-        addWithdrawalAddress: { minimized: false }
+        addWithdrawalAddress: { minimized: false },
       });
 
-      console.log(`🔄 Solana network switching from ${selectedNetwork} to ${networkKey}`);
+      console.log(
+        `🔄 Solana network switching from ${selectedNetwork} to ${networkKey}`
+      );
       console.log(`📊 Spending limits cleared: ${spendingLimits.length} -> 0`);
       console.log(`🔧 Setup status reset: ${isSetupCommitted} -> false`);
 
       const newNetworkConfig = getCurrentNetwork(networkType, networkKey);
-      console.log(`🌐 Network endpoint changing to: ${newNetworkConfig?.rpcUrl}`);
+      console.log(
+        `🌐 Network endpoint changing to: ${newNetworkConfig?.rpcUrl}`
+      );
       console.log(`🔍 Network config:`, newNetworkConfig);
 
       // Small delay to allow ConnectionProvider to update
-      await new Promise(resolve => setTimeout(resolve, 500));
-      console.log(`✅ Network switch completed for ${networkKey} - ConnectionProvider should now use new endpoint`);
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      console.log(
+        `✅ Network switch completed for ${networkKey} - ConnectionProvider should now use new endpoint`
+      );
       return true;
     }
 
@@ -640,7 +653,6 @@ function AppContentInner({ networkType, setNetworkType, selectedNetwork, setSele
       }
     }
   };
-
 
   // Initialize TransactionManager when network type changes
   useEffect(() => {
@@ -1178,20 +1190,27 @@ function AppContentInner({ networkType, setNetworkType, selectedNetwork, setSele
         // Since no permanent address exists, user needs to pay first
         console.log("Processing activation payment for permanent address...");
         const fee = await transactionManager.currentAdapter.getActivationFee();
-        const sufficientBalance = await transactionManager.currentAdapter.hasSufficientBalanceForActivation();
+        const sufficientBalance =
+          await transactionManager.currentAdapter.hasSufficientBalanceForActivation();
 
         if (!sufficientBalance) {
-          alert(`💳 Insufficient Balance\n\nTo generate your permanent deposit address, you need to pay a one-time activation fee of ${(fee / 1000000000).toFixed(3)} SOL (~$5 USD).\n\nPlease add more SOL to your wallet and try again.`);
+          alert(
+            `💳 Insufficient Balance\n\nTo generate your permanent deposit address, you need to pay a one-time activation fee of ${(
+              fee / 1000000000
+            ).toFixed(
+              3
+            )} SOL (~$5 USD).\n\nPlease add more SOL to your wallet and try again.`
+          );
           setIsDeploying(false);
           return;
         }
 
-
         // Initialize savings account if it doesn't exist (separate from spending limits account)
         console.log("Ensuring savings account exists...");
-        const savingsAccountExists = await transactionManager.currentAdapter.isProxyDeployed(
-          solanaConnected ? solanaPublicKey?.toString() : evmAccount
-        );
+        const savingsAccountExists =
+          await transactionManager.currentAdapter.isProxyDeployed(
+            solanaConnected ? solanaPublicKey?.toString() : evmAccount
+          );
 
         if (!savingsAccountExists) {
           console.log("Creating savings account...");
@@ -1202,7 +1221,8 @@ function AppContentInner({ networkType, setNetworkType, selectedNetwork, setSele
         }
 
         console.log("Processing activation payment...");
-        const paymentTxHash = await transactionManager.currentAdapter.activatePermanentAddressWithPayment();
+        const paymentTxHash =
+          await transactionManager.currentAdapter.activatePermanentAddressWithPayment();
         console.log("✅ Payment completed:", paymentTxHash);
 
         console.log("Deploying Solana permanent deposit address...");
@@ -1220,7 +1240,9 @@ function AppContentInner({ networkType, setNetworkType, selectedNetwork, setSele
           );
         }
 
-        alert("🎉 Payment completed & permanent deposit address generated successfully! This address is permanently tied to your wallet and you can use it for all future deposits from exchanges.");
+        alert(
+          "🎉 Payment completed & permanent deposit address generated successfully! This address is permanently tied to your wallet and you can use it for all future deposits from exchanges."
+        );
       } catch (error) {
         console.error("Error deploying Solana proxy:", error);
 
@@ -1976,7 +1998,10 @@ function AppContentInner({ networkType, setNetworkType, selectedNetwork, setSele
 
         // Check if user is on the correct network
         if (!isCorrectNetwork()) {
-          const currentNetwork = getCurrentNetwork(networkType, selectedNetwork);
+          const currentNetwork = getCurrentNetwork(
+            networkType,
+            selectedNetwork
+          );
           alert(`Please switch to ${currentNetwork.name} to make withdrawals`);
           return;
         }
@@ -2288,9 +2313,15 @@ function AppContentInner({ networkType, setNetworkType, selectedNetwork, setSele
               let formattedAmount = req.amount;
               try {
                 // Use adapter's token-aware decimal conversion instead of hardcoded SOL decimals
-                formattedAmount = adapter.fromSmallestUnit(req.amount, req.tokenMint).toString();
+                formattedAmount = adapter
+                  .fromSmallestUnit(req.amount, req.tokenMint)
+                  .toString();
                 console.log(
-                  `🔍 Amount conversion: ${req.amount} -> ${formattedAmount} (${adapter.getTokenDecimals(req.tokenMint)} decimals for ${req.tokenMint})`
+                  `🔍 Amount conversion: ${
+                    req.amount
+                  } -> ${formattedAmount} (${adapter.getTokenDecimals(
+                    req.tokenMint
+                  )} decimals for ${req.tokenMint})`
                 );
               } catch (error) {
                 console.warn("Error formatting amount:", error);
@@ -2756,13 +2787,18 @@ function AppContentInner({ networkType, setNetworkType, selectedNetwork, setSele
     try {
       if (networkType === "solana") {
         // Solana withdrawal destination request execution
-        console.log("🔄 Executing Solana withdrawal destination request:", requestId);
+        console.log(
+          "🔄 Executing Solana withdrawal destination request:",
+          requestId
+        );
         const adapter = transactionManager.getCurrentAdapter();
         await adapter.executeWithdrawalDestinationRequest(requestId);
         alert("✅ Withdrawal address request executed successfully!");
       } else {
         // EVM withdrawal destination request execution
-        const tx = await savingsContract.executeWithdrawalAddressRequest(requestId);
+        const tx = await savingsContract.executeWithdrawalAddressRequest(
+          requestId
+        );
         await tx.wait();
         alert("✅ Withdrawal address request executed successfully!");
       }
@@ -2909,7 +2945,10 @@ function AppContentInner({ networkType, setNetworkType, selectedNetwork, setSele
         } else {
           // Withdraw SPL token to destination
           // Get the token mint address from network configuration
-          const currentNetwork = getCurrentNetwork(networkType, selectedNetwork);
+          const currentNetwork = getCurrentNetwork(
+            networkType,
+            selectedNetwork
+          );
           const token = currentNetwork.tokens[selectedToken];
           if (!token) {
             alert("Please select a valid token");
@@ -2943,7 +2982,10 @@ function AppContentInner({ networkType, setNetworkType, selectedNetwork, setSele
 
         // Check if user is on the correct network
         if (!isCorrectNetwork()) {
-          const currentNetwork = getCurrentNetwork(networkType, selectedNetwork);
+          const currentNetwork = getCurrentNetwork(
+            networkType,
+            selectedNetwork
+          );
           alert(`Please switch to ${currentNetwork.name} to make withdrawals`);
           return;
         }
@@ -3290,9 +3332,15 @@ function AppContentInner({ networkType, setNetworkType, selectedNetwork, setSele
           let formattedAmount = req.amount;
           try {
             // Use adapter's token-aware decimal conversion instead of hardcoded SOL decimals
-            formattedAmount = adapter.fromSmallestUnit(req.amount, req.tokenMint).toString();
+            formattedAmount = adapter
+              .fromSmallestUnit(req.amount, req.tokenMint)
+              .toString();
             console.log(
-              `🔍 Amount conversion: ${req.amount} -> ${formattedAmount} (${adapter.getTokenDecimals(req.tokenMint)} decimals for ${req.tokenMint})`
+              `🔍 Amount conversion: ${
+                req.amount
+              } -> ${formattedAmount} (${adapter.getTokenDecimals(
+                req.tokenMint
+              )} decimals for ${req.tokenMint})`
             );
           } catch (error) {
             console.warn("Error formatting amount:", error);
@@ -3484,16 +3532,16 @@ function AppContentInner({ networkType, setNetworkType, selectedNetwork, setSele
 
   return (
     <div style={styles.app.container}>
-      {/* Enhanced Status Header */}
+      {/* Status Header Component */}
       <StatusHeader
+        provider={provider}
         networkType={networkType}
         selectedNetwork={selectedNetwork}
         isNetworkSwitching={isNetworkSwitching}
-        provider={provider}
-        solanaWallet={solanaWallet}
-        solanaConnected={solanaConnected}
-        solanaPublicKey={solanaPublicKey}
         userAddress={userAddress}
+        solanaWallet={solanaWallet}
+        solanaPublicKey={solanaPublicKey}
+        solanaConnected={solanaConnected}
         isSetupCommitted={isSetupCommitted}
         currentStep={currentStep}
         switchNetworkType={switchNetworkType}
@@ -3502,184 +3550,30 @@ function AppContentInner({ networkType, setNetworkType, selectedNetwork, setSele
         isCorrectNetwork={isCorrectNetwork}
       />
 
-      {/* Multi-token balance display - ALWAYS SHOWN */}
-      <div
-        style={{
-          ...cardStyles.balanceCard,
-          border: !isSetupCommitted
-            ? `2px solid ${colors.success.main}`
-            : `2px solid ${colors.border.default}`, // Active green border during setup
-          opacity: 1, // Always fully visible
-          position: "relative",
-        }}
-      >
-        {/* Balances section now active during setup mode */}
+      {/* Wallet Connection Prompt Component */}
+      <WalletConnectionPrompt
+        provider={provider}
+        networkType={networkType}
+        solanaConnected={solanaConnected}
+        solanaWallet={solanaWallet}
+      />
 
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            marginBottom: "15px",
-          }}
-        >
-          <h3 style={{ color: "white", margin: 0 }}>💰 Your Balances</h3>
-          {(provider ||
-            (networkType === "solana" && solanaWallet?.connected)) && (
-            <button
-              onClick={() => refreshBalances()}
-              style={{
-                ...buttonStyles.primary,
-                padding: `${spacing.xs} ${spacing.md}`,
-                fontSize: fontSize.xs,
-              }}
-            >
-              🔄 Refresh
-            </button>
-          )}
-        </div>
-
-        {/* Educational Introduction for Setup Mode */}
-        {!isSetupCommitted && (
-          <div
-            style={{
-              marginBottom: "20px",
-              padding: "16px",
-              backgroundColor: "#1a365d",
-              border: "2px solid #48bb78",
-              borderRadius: "8px",
-              color: "white",
-            }}
-          >
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                marginBottom: "12px",
-                gap: "8px",
-              }}
-            >
-              <span style={{ fontSize: fontSize.xl }}>🛡️</span>
-              <h4
-                style={{
-                  margin: 0,
-                  color: "#9ae6b4",
-                  fontSize: "1.1em",
-                  fontWeight: "600",
-                }}
-              >
-                Protect your Bankroll/Savings/Profits even from yourself
-              </h4>
-            </div>
-            <div
-              style={{ fontSize: "0.9em", lineHeight: "1.6", color: "#e2e8f0" }}
-            >
-              <p style={{ margin: `0 0 ${spacing.sm} 0` }}>
-                <strong>🏦 No-trading & no-staking wallet:</strong> Designed for
-                storing stablecoins for your peace of mind.
-              </p>
-              <p style={{ margin: `0 0 ${spacing.sm} 0` }}>
-                <strong>🔐 Set up withdrawal allowance:</strong> Changes to
-                allowance or bypassing withdrawal limits are timelocked to combat spending/risking impulses.
-              </p>
-              <p style={{ margin: `0 0 ${spacing.sm} 0` }}>
-                <strong>🛡️ Compromise-Resistant:</strong> Funds are safe even
-                when your private key is compromised (coming soon)
-              </p>
-              <p style={{ margin: "0" }}>
-                <strong>⛓️ Fully On-Chain:</strong> No intermediaries
-              </p>
-            </div>
-          </div>
-        )}
-
-        {!provider ? (
-          <div style={layoutStyles.emptyState}>
-            <p>Connect your wallet to view balances</p>
-            <button
-              onClick={connectWallet}
-              style={{
-                padding: "12px 24px",
-                borderRadius: "6px",
-                border: "none",
-                backgroundColor: "#3182ce",
-                color: "white",
-                cursor: "pointer",
-                fontSize: "1em",
-                fontWeight: "bold",
-                marginTop: "10px",
-              }}
-            >
-              Connect Wallet
-            </button>
-          </div>
-        ) : (
-          // Show balance section immediately when wallet is connected, even if balances are empty
-          // This eliminates the "Loading balances..." state
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
-              gap: "10px",
-            }}
-          >
-            {/* Show stablecoins */}
-            {Object.entries(getCurrentNetwork(networkType, selectedNetwork).tokens)
-              .filter(([_, token]) => token.recommended) // Only show recommended tokens (excludes SOL)
-              .sort(([keyA], [keyB]) => {
-                // Sort by balance: non-zero balances first
-                const balanceA = parseFloat(balances[keyA] || "0");
-                const balanceB = parseFloat(balances[keyB] || "0");
-                if (balanceA > 0 && balanceB === 0) return -1;
-                if (balanceA === 0 && balanceB > 0) return 1;
-                return 0; // Keep original order for same balance status
-              })
-              .map(([key, token]) => (
-                <div
-                  key={key}
-                  style={{
-                    padding: "12px",
-                    backgroundColor: token.recommended ? "#2f855a" : "#4a5568",
-                    borderRadius: "6px",
-                    border: token.recommended ? "2px solid #48bb78" : "none",
-                    color: "white",
-                  }}
-                >
-                  <div
-                    style={{
-                      fontSize: "0.8em",
-                      color: token.recommended ? "#9ae6b4" : "#a0aec0",
-                      marginBottom: "4px",
-                    }}
-                  >
-                    {token.symbol}
-                    {token.recommended && (
-                      <span style={{ marginLeft: "5px" }}>✓</span>
-                    )}
-                  </div>
-                  <div style={{ fontSize: "1.2em", fontWeight: "bold" }}>
-                    {balances[key] || "0"}
-                  </div>
-                </div>
-              )
-            )}
-          </div>
-        )}
-      </div>
-
-      {!provider && networkType !== "solana" ? (
-        <div style={layoutStyles.emptyState}>
-          <p>Please connect your MetaMask wallet to access the savings features.</p>
-        </div>
-      ) : networkType === "solana" && (!solanaConnected || !solanaWallet) ? (
-        <div style={layoutStyles.emptyState}>
-          <p>Please connect your Solana wallet to access the savings features.</p>
-          <div style={{ marginTop: spacing.md }}>
-            <WalletMultiButton />
-          </div>
-        </div>
-      ) : (
+      {provider ||
+      (networkType === "solana" && solanaConnected && solanaWallet) ? (
         <div>
+          {/* Balance Display Component */}
+          <BalanceDisplay
+            isSetupCommitted={isSetupCommitted}
+            provider={provider}
+            networkType={networkType}
+            solanaWallet={solanaWallet}
+            balances={balances}
+            getCurrentNetwork={getCurrentNetwork}
+            selectedNetwork={selectedNetwork}
+            refreshBalances={refreshBalances}
+            connectWallet={connectWallet}
+          />
+
           {/* Combined Deposit Section - Hidden during onboarding */}
           {isSetupCommitted && (
             <div
@@ -3775,7 +3669,9 @@ function AppContentInner({ networkType, setNetworkType, selectedNetwork, setSele
 
                     {/* Recommended Stablecoins Section */}
                     <optgroup label="🌟 Recommended Stablecoins">
-                      {Object.entries(getCurrentNetwork(networkType, selectedNetwork).tokens)
+                      {Object.entries(
+                        getCurrentNetwork(networkType, selectedNetwork).tokens
+                      )
                         .filter(
                           ([_, token]) =>
                             token.recommended &&
@@ -3792,7 +3688,9 @@ function AppContentInner({ networkType, setNetworkType, selectedNetwork, setSele
                     {/* Other Tokens Section */}
                     <optgroup label="Other Tokens">
                       <option value="ETH">ETH - Ethereum</option>
-                      {Object.entries(getCurrentNetwork(networkType, selectedNetwork).tokens)
+                      {Object.entries(
+                        getCurrentNetwork(networkType, selectedNetwork).tokens
+                      )
                         .filter(
                           ([_, token]) =>
                             !token.recommended ||
@@ -3846,9 +3744,8 @@ function AppContentInner({ networkType, setNetworkType, selectedNetwork, setSele
                       backgroundColor: isDepositing
                         ? "#6b7280"
                         : selectedToken &&
-                          getCurrentNetwork(networkType, selectedNetwork).tokens[
-                            selectedToken
-                          ]?.recommended
+                          getCurrentNetwork(networkType, selectedNetwork)
+                            .tokens[selectedToken]?.recommended
                         ? "#28a745"
                         : "#3182ce",
                       color: "white",
@@ -3922,7 +3819,12 @@ function AppContentInner({ networkType, setNetworkType, selectedNetwork, setSele
                         {networkType === "solana" && (
                           <>
                             <br />
-                            <span style={{ color: colors.warning.main, fontSize: "0.85em" }}>
+                            <span
+                              style={{
+                                color: colors.warning.main,
+                                fontSize: "0.85em",
+                              }}
+                            >
                               💳 One-time $5 USD payment required (in SOL)
                             </span>
                           </>
@@ -4760,191 +4662,161 @@ function AppContentInner({ networkType, setNetworkType, selectedNetwork, setSele
 
             {/* Custom Periods Section - Hidden (not implemented) */}
             {false && (
-            <div style={layoutStyles.marginBottomLarge}>
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  marginBottom: "15px",
-                }}
-              >
-                <h4 style={{ color: "#fbb6ce", margin: 0 }}>
-                  ⚙️ Custom Time Periods
-                </h4>
-                <button
-                  onClick={() => setShowCustomPeriod(!showCustomPeriod)}
-                  style={{
-                    padding: "8px 16px",
-                    borderRadius: "4px",
-                    border: "1px solid #4a5568",
-                    backgroundColor: "transparent",
-                    color: "#e2e8f0",
-                    cursor: "pointer",
-                    fontSize: "0.9em",
-                  }}
-                >
-                  {showCustomPeriod ? "➖ Hide" : "➕ Add"} Custom Period
-                </button>
-              </div>
-
-              {/* Custom Periods List */}
-              {spendingLimits.filter(
-                (limit) => !["Daily", "Weekly", "Monthly"].includes(limit.name)
-              ).length > 0 && (
-                <div style={layoutStyles.marginBottom}>
-                  <div style={{ display: "grid", gap: "10px" }}>
-                    {spendingLimits
-                      .filter(
-                        (limit) =>
-                          !["Daily", "Weekly", "Monthly"].includes(limit.name)
-                      )
-                      .map((limit, index) => {
-                        const progressPercent =
-                          limit.limit > 0
-                            ? (parseFloat(limit.spent) /
-                                parseFloat(limit.limit)) *
-                              100
-                            : 0;
-                        const isNearLimit = progressPercent > 80;
-                        const isAtLimit = progressPercent >= 100;
-
-                        return (
-                          <div
-                            key={index}
-                            style={{
-                              padding: "12px",
-                              border: isAtLimit
-                                ? "1px solid #e53e3e"
-                                : isNearLimit
-                                ? "1px solid #ed8936"
-                                : "1px solid #48bb78",
-                              borderRadius: "6px",
-                              backgroundColor: "#1a202c",
-                              display: "flex",
-                              justifyContent: "space-between",
-                              alignItems: "center",
-                            }}
-                          >
-                            <div style={{ flex: 1 }}>
-                              <div
-                                style={{
-                                  display: "flex",
-                                  justifyContent: "space-between",
-                                  alignItems: "center",
-                                  marginBottom: "5px",
-                                }}
-                              >
-                                <span
-                                  style={{
-                                    color: colors.text.primary,
-                                    fontWeight: fontWeight.bold,
-                                  }}
-                                >
-                                  ⚙️ {limit.name}
-                                </span>
-                                <span
-                                  style={{
-                                    color: isAtLimit ? "#fc8181" : "#9ae6b4",
-                                    fontWeight: "bold",
-                                  }}
-                                >
-                                  {limit.remaining} USDT remaining
-                                </span>
-                              </div>
-                              <div
-                                style={{ fontSize: "0.8em", color: "#a0aec0" }}
-                              >
-                                Duration:{" "}
-                                {limit.durationDays > 0
-                                  ? `${limit.durationDays} days`
-                                  : `${limit.durationHours} hours`}{" "}
-                                • Limit: {limit.limit} USDT • Spent:{" "}
-                                {limit.spent} USDT
-                              </div>
-                            </div>
-                            <button
-                              onClick={() => removeLimitPeriod(limit.name)}
-                              style={{
-                                marginLeft: "10px",
-                                padding: "6px 12px",
-                                borderRadius: "4px",
-                                border: "1px solid #e53e3e",
-                                backgroundColor: "transparent",
-                                color: "#e53e3e",
-                                cursor: "pointer",
-                                fontSize: "0.8em",
-                              }}
-                            >
-                              🗑️ Remove
-                            </button>
-                          </div>
-                        );
-                      })}
-                  </div>
-                </div>
-              )}
-
-              {/* Custom Period Form */}
-              {showCustomPeriod && (
+              <div style={layoutStyles.marginBottomLarge}>
                 <div
                   style={{
-                    padding: "15px",
-                    backgroundColor: "#1a202c",
-                    borderRadius: "4px",
-                    border: "1px solid #4a5568",
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    marginBottom: "15px",
                   }}
                 >
-                  <p
+                  <h4 style={{ color: "#fbb6ce", margin: 0 }}>
+                    ⚙️ Custom Time Periods
+                  </h4>
+                  <button
+                    onClick={() => setShowCustomPeriod(!showCustomPeriod)}
                     style={{
-                      fontSize: "0.8em",
-                      color: "#a0aec0",
-                      marginBottom: "15px",
+                      padding: "8px 16px",
+                      borderRadius: "4px",
+                      border: "1px solid #4a5568",
+                      backgroundColor: "transparent",
+                      color: "#e2e8f0",
+                      cursor: "pointer",
+                      fontSize: "0.9em",
                     }}
                   >
-                    Create custom periods like "Salary Cycle", "Quarterly
-                    Budget", or any duration you need.
-                  </p>
+                    {showCustomPeriod ? "➖ Hide" : "➕ Add"} Custom Period
+                  </button>
+                </div>
 
+                {/* Custom Periods List */}
+                {spendingLimits.filter(
+                  (limit) =>
+                    !["Daily", "Weekly", "Monthly"].includes(limit.name)
+                ).length > 0 && (
+                  <div style={layoutStyles.marginBottom}>
+                    <div style={{ display: "grid", gap: "10px" }}>
+                      {spendingLimits
+                        .filter(
+                          (limit) =>
+                            !["Daily", "Weekly", "Monthly"].includes(limit.name)
+                        )
+                        .map((limit, index) => {
+                          const progressPercent =
+                            limit.limit > 0
+                              ? (parseFloat(limit.spent) /
+                                  parseFloat(limit.limit)) *
+                                100
+                              : 0;
+                          const isNearLimit = progressPercent > 80;
+                          const isAtLimit = progressPercent >= 100;
+
+                          return (
+                            <div
+                              key={index}
+                              style={{
+                                padding: "12px",
+                                border: isAtLimit
+                                  ? "1px solid #e53e3e"
+                                  : isNearLimit
+                                  ? "1px solid #ed8936"
+                                  : "1px solid #48bb78",
+                                borderRadius: "6px",
+                                backgroundColor: "#1a202c",
+                                display: "flex",
+                                justifyContent: "space-between",
+                                alignItems: "center",
+                              }}
+                            >
+                              <div style={{ flex: 1 }}>
+                                <div
+                                  style={{
+                                    display: "flex",
+                                    justifyContent: "space-between",
+                                    alignItems: "center",
+                                    marginBottom: "5px",
+                                  }}
+                                >
+                                  <span
+                                    style={{
+                                      color: colors.text.primary,
+                                      fontWeight: fontWeight.bold,
+                                    }}
+                                  >
+                                    ⚙️ {limit.name}
+                                  </span>
+                                  <span
+                                    style={{
+                                      color: isAtLimit ? "#fc8181" : "#9ae6b4",
+                                      fontWeight: "bold",
+                                    }}
+                                  >
+                                    {limit.remaining} USDT remaining
+                                  </span>
+                                </div>
+                                <div
+                                  style={{
+                                    fontSize: "0.8em",
+                                    color: "#a0aec0",
+                                  }}
+                                >
+                                  Duration:{" "}
+                                  {limit.durationDays > 0
+                                    ? `${limit.durationDays} days`
+                                    : `${limit.durationHours} hours`}{" "}
+                                  • Limit: {limit.limit} USDT • Spent:{" "}
+                                  {limit.spent} USDT
+                                </div>
+                              </div>
+                              <button
+                                onClick={() => removeLimitPeriod(limit.name)}
+                                style={{
+                                  marginLeft: "10px",
+                                  padding: "6px 12px",
+                                  borderRadius: "4px",
+                                  border: "1px solid #e53e3e",
+                                  backgroundColor: "transparent",
+                                  color: "#e53e3e",
+                                  cursor: "pointer",
+                                  fontSize: "0.8em",
+                                }}
+                              >
+                                🗑️ Remove
+                              </button>
+                            </div>
+                          );
+                        })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Custom Period Form */}
+                {showCustomPeriod && (
                   <div
                     style={{
-                      display: "grid",
-                      gap: "10px",
-                      marginBottom: "15px",
+                      padding: "15px",
+                      backgroundColor: "#1a202c",
+                      borderRadius: "4px",
+                      border: "1px solid #4a5568",
                     }}
                   >
-                    <div>
-                      <label
-                        style={{
-                          display: "block",
-                          fontSize: "0.9em",
-                          color: "#e2e8f0",
-                          marginBottom: "5px",
-                        }}
-                      >
-                        Period Name
-                      </label>
-                      <input
-                        type="text"
-                        placeholder="e.g., 'Salary Cycle', 'Quarterly Budget'"
-                        value={customPeriodName}
-                        onChange={(e) => setCustomPeriodName(e.target.value)}
-                        style={{
-                          width: "100%",
-                          padding: "8px",
-                          borderRadius: "4px",
-                          border: "1px solid #4a5568",
-                          backgroundColor: "#4a5568",
-                          color: "white",
-                        }}
-                      />
-                    </div>
+                    <p
+                      style={{
+                        fontSize: "0.8em",
+                        color: "#a0aec0",
+                        marginBottom: "15px",
+                      }}
+                    >
+                      Create custom periods like "Salary Cycle", "Quarterly
+                      Budget", or any duration you need.
+                    </p>
 
                     <div
                       style={{
                         display: "grid",
-                        gridTemplateColumns: "1fr 1fr",
                         gap: "10px",
+                        marginBottom: "15px",
                       }}
                     >
                       <div>
@@ -4956,13 +4828,13 @@ function AppContentInner({ networkType, setNetworkType, selectedNetwork, setSele
                             marginBottom: "5px",
                           }}
                         >
-                          Limit (USDT)
+                          Period Name
                         </label>
                         <input
                           type="text"
-                          placeholder="e.g., 2000"
-                          value={customPeriodLimit}
-                          onChange={(e) => setCustomPeriodLimit(e.target.value)}
+                          placeholder="e.g., 'Salary Cycle', 'Quarterly Budget'"
+                          value={customPeriodName}
+                          onChange={(e) => setCustomPeriodName(e.target.value)}
                           style={{
                             width: "100%",
                             padding: "8px",
@@ -4973,65 +4845,105 @@ function AppContentInner({ networkType, setNetworkType, selectedNetwork, setSele
                           }}
                         />
                       </div>
-                      <div>
-                        <label
-                          style={{
-                            display: "block",
-                            fontSize: "0.9em",
-                            color: "#e2e8f0",
-                            marginBottom: "5px",
-                          }}
-                        >
-                          Duration
-                        </label>
-                        <select
-                          value={customPeriodDuration}
-                          onChange={(e) =>
-                            setCustomPeriodDuration(e.target.value)
-                          }
-                          style={{
-                            width: "100%",
-                            padding: "8px",
-                            borderRadius: "4px",
-                            border: "1px solid #4a5568",
-                            backgroundColor: "#4a5568",
-                            color: "white",
-                          }}
-                        >
-                          <option value="3600">Per Hour</option>
-                          <option value="86400">Per Day</option>
-                          <option value="604800">Per Week</option>
-                          <option value="1209600">Bi-weekly (14 days)</option>
-                          <option value="2592000">Per Month (30 days)</option>
-                          <option value="7776000">Per Quarter (90 days)</option>
-                          <option value="15552000">
-                            Semi-annual (180 days)
-                          </option>
-                          <option value="31536000">Per Year (365 days)</option>
-                        </select>
+
+                      <div
+                        style={{
+                          display: "grid",
+                          gridTemplateColumns: "1fr 1fr",
+                          gap: "10px",
+                        }}
+                      >
+                        <div>
+                          <label
+                            style={{
+                              display: "block",
+                              fontSize: "0.9em",
+                              color: "#e2e8f0",
+                              marginBottom: "5px",
+                            }}
+                          >
+                            Limit (USDT)
+                          </label>
+                          <input
+                            type="text"
+                            placeholder="e.g., 2000"
+                            value={customPeriodLimit}
+                            onChange={(e) =>
+                              setCustomPeriodLimit(e.target.value)
+                            }
+                            style={{
+                              width: "100%",
+                              padding: "8px",
+                              borderRadius: "4px",
+                              border: "1px solid #4a5568",
+                              backgroundColor: "#4a5568",
+                              color: "white",
+                            }}
+                          />
+                        </div>
+                        <div>
+                          <label
+                            style={{
+                              display: "block",
+                              fontSize: "0.9em",
+                              color: "#e2e8f0",
+                              marginBottom: "5px",
+                            }}
+                          >
+                            Duration
+                          </label>
+                          <select
+                            value={customPeriodDuration}
+                            onChange={(e) =>
+                              setCustomPeriodDuration(e.target.value)
+                            }
+                            style={{
+                              width: "100%",
+                              padding: "8px",
+                              borderRadius: "4px",
+                              border: "1px solid #4a5568",
+                              backgroundColor: "#4a5568",
+                              color: "white",
+                            }}
+                          >
+                            <option value="3600">Per Hour</option>
+                            <option value="86400">Per Day</option>
+                            <option value="604800">Per Week</option>
+                            <option value="1209600">Bi-weekly (14 days)</option>
+                            <option value="2592000">Per Month (30 days)</option>
+                            <option value="7776000">
+                              Per Quarter (90 days)
+                            </option>
+                            <option value="15552000">
+                              Semi-annual (180 days)
+                            </option>
+                            <option value="31536000">
+                              Per Year (365 days)
+                            </option>
+                          </select>
+                        </div>
                       </div>
                     </div>
-                  </div>
 
-                  <button
-                    onClick={addCustomPeriod}
-                    style={{
-                      padding: "10px 20px",
-                      borderRadius: "4px",
-                      border: "none",
-                      backgroundColor: "#ed64a6",
-                      color: "white",
-                      cursor: "pointer",
-                      fontSize: "0.9em",
-                      fontWeight: "bold",
-                      width: "100%",
-                    }}
-                  >
-                    ⚙️ Add Custom Period
-                  </button>
-                </div>
-              )}
-            </div>
+                    <button
+                      onClick={addCustomPeriod}
+                      style={{
+                        padding: "10px 20px",
+                        borderRadius: "4px",
+                        border: "none",
+                        backgroundColor: "#ed64a6",
+                        color: "white",
+                        cursor: "pointer",
+                        fontSize: "0.9em",
+                        fontWeight: "bold",
+                        width: "100%",
+                      }}
+                    >
+                      ⚙️ Add Custom Period
+                    </button>
+                  </div>
+                )}
+              </div>
             )}
 
             {/* Pending Limit Proposals Section */}
@@ -5647,7 +5559,9 @@ function AppContentInner({ networkType, setNetworkType, selectedNetwork, setSele
                     }}
                   >
                     <option value="ETH">ETH</option>
-                    {Object.entries(getCurrentNetwork(networkType, selectedNetwork).tokens)
+                    {Object.entries(
+                      getCurrentNetwork(networkType, selectedNetwork).tokens
+                    )
                       .filter(
                         ([_, token]) =>
                           token.address !==
@@ -6232,8 +6146,8 @@ function AppContentInner({ networkType, setNetworkType, selectedNetwork, setSele
             </div>
           )}
         </div>
-      )}
-      </div>
+      ) : null}
+    </div>
   );
 }
 
