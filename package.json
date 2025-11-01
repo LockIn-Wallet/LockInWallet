@@ -3,13 +3,14 @@
   "version": "1.0.0",
   "description": "Multi-blockchain savings wallet DApp with EVM and Solana support",
   "main": "index.js",
-  "workspaces": ["ethereum", "solana", "frontend"],
+  "workspaces": [
+    "ethereum",
+    "solana",
+    "frontend"
+  ],
   "scripts": {
     "test": "echo \"Use workspace-specific test commands: cd ethereum && npm test, or cd solana && npm test\"",
-
     "install:all": "npm install && npm install --workspace=ethereum && npm install --workspace=solana && npm install --workspace=frontend",
-
-
     "solana:localnet": "solana-test-validator --reset --quiet",
     "solana:localnet:setup": "npm run solana:localnet & sleep 10 && node solana/setup-solana-tokens.js",
     "solana:setup-tokens": "node solana/setup-solana-tokens.js",
@@ -23,18 +24,22 @@
     "solana:setup": "npm run solana:build && npm run solana:deploy && npm run solana:update-frontend",
     "solana:deploy-reliable": "cd solana && npm run deploy-reliable",
     "solana:upgrade-reliable": "cd solana && npm run upgrade-reliable",
-
     "frontend:start": "npm start --workspace=frontend",
     "frontend:build": "npm run build --workspace=frontend",
     "frontend:test": "npm test --workspace=frontend",
-
     "dev:multi": "concurrently \"npm run node --workspace=ethereum\" \"npm run solana:localnet\"",
     "dev:solana": "concurrently \"npm run solana:localnet\" \"npm run frontend:start\"",
     "dev:full": "concurrently \"npm run node --workspace=ethereum\" \"npm run solana:localnet\" \"npm run frontend:start\"",
-
     "deploy:full": "npm run deploy-modular --workspace=ethereum && npm run solana:deploy-reliable"
   },
-  "keywords": ["blockchain", "defi", "savings", "ethereum", "solana", "multi-chain"],
+  "keywords": [
+    "blockchain",
+    "defi",
+    "savings",
+    "ethereum",
+    "solana",
+    "multi-chain"
+  ],
   "author": "",
   "license": "ISC",
   "devDependencies": {
