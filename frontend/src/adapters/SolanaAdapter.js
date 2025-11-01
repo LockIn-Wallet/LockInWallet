@@ -42,7 +42,7 @@ const INSTRUCTION_DISCRIMINATORS = {
   WithdrawSol: [145, 131, 74, 136, 65, 137, 42, 38],
   WithdrawSpl: [181, 154, 94, 86, 62, 115, 6, 186],
 
-  // Deposit Proxy Program (auto-generated on 2025-10-31)
+  // Deposit Proxy Program (auto-generated on 2025-11-01)
   InitializeProxy: [245, 74, 175, 136, 0, 146, 100, 224],
   ForwardSolDeposit: [29, 156, 48, 213, 90, 128, 229, 58],
   ForwardSplDeposit: [131, 71, 27, 250, 233, 24, 75, 240]
@@ -57,7 +57,7 @@ export class SolanaAdapter extends BlockchainAdapter {
     this.wallet = wallet;
     this.connection = connection;
     this.userAddress = null;
-    this.PROGRAM_ID = new PublicKey("9j511uJuYwoFRFiU1h5wy2oi1Xc8n1FdoK91QxoXHRh2"); // Updated 2025-10-31
+    this.PROGRAM_ID = new PublicKey("9j511uJuYwoFRFiU1h5wy2oi1Xc8n1FdoK91QxoXHRh2"); // Updated 2025-11-01
 
     if (this.wallet?.connected && this.wallet?.publicKey) {
       this.userAddress = this.wallet.publicKey.toString();

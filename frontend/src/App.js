@@ -59,6 +59,7 @@ import {
 // Import components
 import SolanaWalletProvider from "./components/SolanaWalletProvider.js";
 import WithdrawalAddressSelector from "./components/WithdrawalAddressSelector.js";
+import StatusHeader from "./components/molecules/StatusHeader.js";
 
 // Import step validation utilities
 import {
@@ -3484,211 +3485,22 @@ function AppContentInner({ networkType, setNetworkType, selectedNetwork, setSele
   return (
     <div style={styles.app.container}>
       {/* Enhanced Status Header */}
-      <div style={layoutStyles.headerSection}>
-        {/* Main Logo */}
-        <img
-          src={require("./assets/images/logo.png")}
-          alt="LockIn Wallet"
-          style={styles.app.logo}
-          onError={(e) => {
-            e.target.style.display = "none";
-            e.target.nextSibling.style.display = "block";
-          }}
-        />
-        <h1
-          style={{ ...styles.app.title, display: "none", textAlign: "center" }}
-        >
-          🔒 LockIn Wallet
-        </h1>
-
-        {/* Status Info Card */}
-        {(provider || (networkType === "solana" && solanaWallet)) && (
-          <div style={cardStyles.statusCard}>
-            {/* Top Row: Connection & Status */}
-            <div style={layoutStyles.flexBetweenWrap}>
-              {/* Connected Wallet Info */}
-              <div style={layoutStyles.flexAlignCenter}>
-                <span style={utilityStyles.statusText}>Connected:</span>
-                <span
-                  style={{
-                    ...utilityStyles.addressText,
-                    color: colors.success.light,
-                    backgroundColor: colors.background.darkBlue,
-                    padding: spacing.xs + " " + spacing.sm,
-                    borderRadius: borderRadius.sm,
-                  }}
-                >
-                  {networkType === "solana"
-                    ? solanaPublicKey
-                      ? `${solanaPublicKey
-                          .toString()
-                          .slice(0, 6)}...${solanaPublicKey
-                          .toString()
-                          .slice(-4)}`
-                      : "Loading..."
-                    : userAddress
-                    ? `${userAddress.slice(0, 6)}...${userAddress.slice(-4)}`
-                    : "Loading..."}
-                </span>
-                <span style={utilityStyles.caption}>
-                  ({networkType === "solana" ? "Phantom" : "MetaMask"})
-                </span>
-              </div>
-
-              {/* Wallet Buttons for Solana */}
-              {networkType === "solana" && (
-                <div style={layoutStyles.flexGap}>
-                  <WalletMultiButton />
-                  {solanaConnected && <WalletDisconnectButton />}
-                </div>
-              )}
-            </div>
-
-            {/* Second Row: Network & Status Badge */}
-            <div style={layoutStyles.flexBetweenWrap}>
-              {/* Network Selection */}
-              <div style={layoutStyles.networkSelection}>
-                <div style={layoutStyles.networkSelectionGroup}>
-                  <span style={utilityStyles.label}>Network:</span>
-                  <select
-                    value={networkType}
-                    onChange={(e) => switchNetworkType(e.target.value)}
-                    style={formStyles.select}
-                  >
-                    <option value="evm">Ethereum (EVM)</option>
-                    <option value="solana">Solana</option>
-                  </select>
-                </div>
-
-                <div style={layoutStyles.networkSelectionGroup}>
-                  <select
-                    value={selectedNetwork}
-                    onChange={(e) => switchNetwork(e.target.value)}
-                    disabled={isNetworkSwitching}
-                    style={{
-                      ...formStyles.select,
-                      cursor: isNetworkSwitching ? "not-allowed" : "pointer",
-                    }}
-                  >
-                    {networkType === "solana" ? (
-                      <>
-                        <option value="localhost">Solana Localhost</option>
-                        <option value="devnet">Solana Devnet</option>
-                        <option value="mainnet">Solana Mainnet</option>
-                      </>
-                    ) : (
-                      <>
-                        <option value="localhost">Localhost</option>
-                        <option value="ethereum">Ethereum Mainnet</option>
-                        <option value="optimism">Optimism</option>
-                      </>
-                    )}
-                  </select>
-                  {isNetworkSwitching && (
-                    <span style={{ color: "#fbb6ce", fontSize: "0.8em" }}>
-                      Switching...
-                    </span>
-                  )}
-                </div>
-              </div>
-
-              {/* Dynamic Status Badge */}
-              <div style={layoutStyles.statusBadge}>
-                <span style={utilityStyles.label}>Status:</span>
-                <div
-                  style={{
-                    ...layoutStyles.statusIndicator,
-                    padding: spacing.sm + " " + spacing.md,
-                    borderRadius: borderRadius.md,
-                    backgroundColor: isSetupCommitted
-                      ? colors.background.darkBlue
-                      : colors.warning.bg,
-                    border: `1px solid ${
-                      isSetupCommitted
-                        ? colors.success.border
-                        : colors.warning.dark
-                    }`,
-                    fontSize: fontSize.sm,
-                    fontWeight: fontWeight.semibold,
-                  }}
-                  title={
-                    isSetupCommitted
-                      ? "Your wallet is locked and secure. All features are active."
-                      : `You're in setup mode — configure limits & addresses before activating your wallet security. Step ${currentStep} of 3.`
-                  }
-                >
-                  <span
-                    style={{
-                      color: isSetupCommitted
-                        ? colors.success.light
-                        : colors.warning.light,
-                    }}
-                  >
-                    {!isSetupCommitted ? "⚙️ Setup Wallet" : "🔒 Locked-In"}
-                  </span>
-                  {/* Step counter removed per user request */}
-                </div>
-              </div>
-            </div>
-
-            {/* Connection Status Indicator */}
-            <div style={layoutStyles.connectionStatus}>
-              <div
-                style={{
-                  ...utilityStyles.statusIndicator,
-                  backgroundColor: isCorrectNetwork()
-                    ? colors.success.main
-                    : colors.error.main,
-                }}
-              />
-              <span
-                style={{
-                  fontSize: fontSize.xs,
-                  color: isCorrectNetwork()
-                    ? colors.success.light
-                    : colors.error.light,
-                }}
-              >
-                {isCorrectNetwork()
-                  ? `Connected to ${
-                      getCurrentNetwork(networkType, selectedNetwork).name
-                    }`
-                  : networkType === "solana"
-                  ? `Connect Solana wallet`
-                  : `Wrong network - Switch to ${
-                      getCurrentNetwork(networkType, selectedNetwork).name
-                    }`}
-              </span>
-            </div>
-          </div>
-        )}
-
-        {/* Contract Deployment Warning */}
-        {provider &&
-          getCurrentNetwork(networkType, selectedNetwork).savingsContract ===
-            "0x0000000000000000000000000000000000000000" && (
-            <div
-              style={{
-                ...cardStyles.warningCard,
-                marginTop: spacing.xl,
-              }}
-            >
-              <h4
-                style={{
-                  margin: `0 0 ${spacing.md} 0`,
-                  color: colors.error.main,
-                }}
-              >
-                ⚠️ Contract Not Deployed
-              </h4>
-              <p style={{ margin: 0, fontSize: fontSize.sm }}>
-                The Savings contract is not yet deployed on{" "}
-                {getCurrentNetwork(selectedNetwork).name}. Please switch to
-                Localhost for development or wait for mainnet deployment.
-              </p>
-            </div>
-          )}
-      </div>
+      <StatusHeader
+        networkType={networkType}
+        selectedNetwork={selectedNetwork}
+        isNetworkSwitching={isNetworkSwitching}
+        provider={provider}
+        solanaWallet={solanaWallet}
+        solanaConnected={solanaConnected}
+        solanaPublicKey={solanaPublicKey}
+        userAddress={userAddress}
+        isSetupCommitted={isSetupCommitted}
+        currentStep={currentStep}
+        switchNetworkType={switchNetworkType}
+        switchNetwork={switchNetwork}
+        getCurrentNetwork={getCurrentNetwork}
+        isCorrectNetwork={isCorrectNetwork}
+      />
 
       {/* Multi-token balance display - ALWAYS SHOWN */}
       <div
