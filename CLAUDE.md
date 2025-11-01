@@ -104,6 +104,27 @@ This project follows core software engineering principles to ensure maintainable
 
 ## Development Commands
 
+### 🚀 Quick Start Commands
+
+Common development scenarios for fast project startup:
+
+```bash
+# Start project for Solana development
+npm run solana:deploy-reliable && npm run frontend:start
+
+# Start project for EVM development
+npm run deploy-modular --workspace=ethereum && npm run frontend:start
+
+# Full multi-chain development (everything at once)
+npm run dev:full
+
+# Frontend-only restart (when contracts already deployed)
+npm run frontend:start
+
+# Quick multi-chain deployment
+npm run deploy:full && npm run frontend:start
+```
+
 ### ⚡ Multi-Blockchain Development Startup
 
 **Option 1: Workspace Commands (RECOMMENDED)**
