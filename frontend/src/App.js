@@ -51,6 +51,16 @@ import {
   detectExceedingPeriod,
 } from "./utils/walletUtils.js";
 
+// Import services
+import {
+  fetchUserBalances as fetchUserBalancesService,
+  fetchSpendingLimits as fetchSpendingLimitsService,
+  fetchPendingLimitProposals as fetchPendingLimitProposalsService,
+  fetchWithdrawalAddresses as fetchWithdrawalAddressesService,
+  fetchPendingWithdrawalRequests as fetchPendingWithdrawalRequestsService,
+  fetchPendingBypassRequests as fetchPendingBypassRequestsService,
+} from "./services";
+
 // Import components
 import SolanaWalletProvider from "./components/SolanaWalletProvider.js";
 import WithdrawalAddressSelector from "./components/WithdrawalAddressSelector.js";
@@ -612,26 +622,24 @@ function AppContentInner({
 
   // Unified balance refresh function for both EVM and Solana
   const refreshBalances = async (txManager = transactionManager) => {
-    if (networkType === "evm") {
-      await fetchAllBalances();
-    } else if (networkType === "solana" && txManager) {
-      try {
-        console.log("🔄 Refreshing Solana balances...");
-        const userAddress = await txManager.getAddress();
+    try {
+      const balances = await fetchUserBalancesService({
+        transactionManager: txManager,
+        savingsContract,
+        signer,
+        connection,
+        networkType,
+        selectedNetwork,
+        getCurrentNetwork,
+        userAddress,
+        solanaPublicKey
+      });
 
-        if (!userAddress) {
-          console.warn(
-            "❌ Cannot refresh Solana balances: wallet not connected or address unavailable"
-          );
-          return;
-        }
-
-        const solanaBalances = await txManager.getAllBalances(userAddress);
-        setBalances(solanaBalances);
-        console.log("✅ Solana balances refreshed:", solanaBalances);
-      } catch (error) {
-        console.error("❌ Error refreshing Solana balances:", error);
-      }
+      setBalances(balances);
+      console.log("✅ Balances refreshed:", balances);
+    } catch (error) {
+      console.error("❌ Error refreshing balances:", error);
+      setBalances({});
     }
   };
 
@@ -928,43 +936,24 @@ function AppContentInner({
     contract = savingsContract,
     userAddr = null
   ) => {
-    if (contract && signer) {
-      try {
-        const userAddress = userAddr || (await signer.getAddress());
-        const currentNetwork = getCurrentNetwork(networkType, selectedNetwork);
-        const newBalances = {};
+    try {
+      const balances = await fetchUserBalancesService({
+        transactionManager,
+        savingsContract: contract,
+        signer,
+        connection,
+        networkType,
+        selectedNetwork,
+        getCurrentNetwork,
+        userAddress: userAddr,
+        solanaPublicKey
+      });
 
-        // Skip ETH balance - only fetch stablecoins
-
-        // Fetch stablecoin balances using current network's token addresses
-        for (const [key, token] of Object.entries(currentNetwork.tokens)) {
-          if (token.address !== "0x0000000000000000000000000000000000000000") {
-            try {
-              const tokenBalance = await contract.getTokenBalance(
-                userAddress,
-                token.address
-              );
-              newBalances[key] = ethers.formatUnits(
-                tokenBalance,
-                token.decimals
-              );
-            } catch (err) {
-              console.log(
-                `Token ${key} not available on ${currentNetwork.name}:`,
-                err.message
-              );
-              newBalances[key] = "0";
-            }
-          } else {
-            newBalances[key] = "0";
-          }
-        }
-
-        setBalances(newBalances);
-      } catch (error) {
-        console.error("Error fetching balances:", error);
-        setBalances({});
-      }
+      setBalances(balances);
+      console.log("✅ All balances fetched:", balances);
+    } catch (error) {
+      console.error("Error fetching all balances:", error);
+      setBalances({});
     }
   };
 
@@ -1520,45 +1509,22 @@ function AppContentInner({
     txManager = transactionManager
   ) => {
     const currentUserAddress = getCurrentUserAddress();
-    if (!currentUserAddress) {
-      console.log(
-        `No user address available for fetching pending proposals on ${networkType} network`
-      );
-      return;
+
+    try {
+      const proposals = await fetchPendingLimitProposalsService({
+        transactionManager: txManager,
+        savingsContract,
+        networkType,
+        userAddress: currentUserAddress,
+        getCurrentUserAddress
+      });
+
+      setPendingLimitProposals(proposals);
+      console.log(`✅ Loaded ${proposals.length} pending proposals`);
+    } catch (error) {
+      console.error("Error fetching pending proposals:", error);
+      setPendingLimitProposals([]);
     }
-
-    if (networkType === "solana") {
-      // For Solana: Fetch proposals from the on-chain program
-      console.log("📋 Fetching Solana pending proposals from program...");
-      if (!txManager) {
-        console.log(
-          "❌ Transaction manager not available, skipping proposal fetch"
-        );
-        setPendingLimitProposals([]);
-        return;
-      }
-
-      try {
-        const adapter = txManager.getCurrentAdapter();
-        const proposals = await adapter.fetchPendingProposals(
-          currentUserAddress
-        );
-
-        console.log(
-          `✅ Found ${proposals.length} pending proposals for Solana`
-        );
-        setPendingLimitProposals(proposals);
-      } catch (error) {
-        console.error("❌ Error fetching Solana proposals:", error);
-        setPendingLimitProposals([]);
-      }
-      return;
-    }
-
-    // EVM: For now, no proposals since we removed localStorage
-    // TODO: Implement proper EVM on-chain proposal fetching
-    console.log("📋 EVM proposals not yet implemented for on-chain fetching");
-    setPendingLimitProposals([]);
   };
 
 
@@ -1783,162 +1749,36 @@ function AppContentInner({
       "🚀 fetchSpendingLimitsWithTxManager called for network:",
       networkType
     );
-    console.log("🔗 txManager available:", !!txManager);
-    console.log(
-      "📋 getSpendingLimits method available:",
-      !!txManager?.getSpendingLimits
-    );
 
     if (networkType === "solana") {
-      console.log(
-        "🔵 Processing Solana spending limits with direct txManager..."
-      );
-      // Solana spending limits fetching
       try {
-        if (!txManager?.getSpendingLimits) {
-          console.log(
-            "❌ Solana spending limits method not available in passed txManager"
-          );
-          console.log("txManager state:", {
-            exists: !!txManager,
-            methods: txManager ? Object.keys(txManager) : "none",
-          });
-          setSpendingLimits([]);
-          setLimitsLoaded(true);
-          return;
-        }
+        // Fetch spending limits using service
+        const spendingData = await fetchSpendingLimitsService({
+          transactionManager: txManager,
+          networkType
+        });
 
-        console.log("🔄 Calling txManager.getSpendingLimits()...");
-        const spendingData = await txManager.getSpendingLimits();
-        console.log("✅ Fetched Solana spending limits:", spendingData);
-        console.log(
-          "📊 Limits array length:",
-          spendingData?.limits?.length || 0
-        );
-
-        // Convert Solana format to unified format (values are already in SOL)
-        const fetchedLimits = spendingData.limits.map((limit) => ({
-          name: limit.name,
-          limit: limit.limit.toString(), // Already converted to SOL in SolanaAdapter
-          spent: limit.spent.toString(),
-          remaining: Math.max(0, limit.remaining),
-          duration: limit.duration.toString(),
-          active: limit.active,
-          durationHours: Math.floor(Number(limit.duration) / 3600),
-          durationDays: Math.floor(Number(limit.duration) / 86400),
-        }));
-
-        console.log("🔄 Converted limits for frontend:", fetchedLimits);
-        console.log(
-          "📊 Setup committed status:",
-          spendingData.isSetupCommitted
-        );
-
-        setSpendingLimits(fetchedLimits);
+        setSpendingLimits(spendingData.limits);
+        setIsSetupCommitted(spendingData.isSetupCommitted);
         setLimitsLoaded(true);
 
         // Also fetch bypass requests since txManager is working
-        console.log(
-          "🔄 Fetching bypass requests after successful spending limits load..."
-        );
+        console.log("🔄 Fetching bypass requests after successful spending limits load...");
         try {
-          const adapter = txManager.getCurrentAdapter();
-          let solanaUserAddress;
-          if (adapter && adapter.wallet?.publicKey) {
-            solanaUserAddress = adapter.wallet.publicKey.toString();
-          } else {
-            solanaUserAddress = solanaPublicKey?.toString();
-          }
+          const bypassRequests = await fetchPendingBypassRequestsService({
+            transactionManager: txManager,
+            networkType,
+            userAddress: getCurrentUserAddress(),
+            solanaPublicKey
+          });
 
-          console.log(
-            `🔍 [Init Bypass Requests] Using Solana address: ${solanaUserAddress}`
-          );
-
-          if (
-            solanaUserAddress &&
-            !solanaUserAddress.startsWith("0x") &&
-            solanaUserAddress.length === 44
-          ) {
-            const bypassRequests = await adapter.fetchPendingBypassRequests(
-              solanaUserAddress
-            );
-
-            console.log(
-              "🔍 DEBUG: Raw bypass requests from adapter:",
-              bypassRequests
-            );
-
-            // Transform to match EVM format
-            const formattedRequests = bypassRequests.map((req) => {
-              // Format amount properly - convert from token base units to decimal using token-aware decimals
-              let formattedAmount = req.amount;
-              try {
-                // Use adapter's token-aware decimal conversion instead of hardcoded SOL decimals
-                formattedAmount = adapter
-                  .fromSmallestUnit(req.amount, req.tokenMint)
-                  .toString();
-                console.log(
-                  `🔍 Amount conversion: ${
-                    req.amount
-                  } -> ${formattedAmount} (${adapter.getTokenDecimals(
-                    req.tokenMint
-                  )} decimals for ${req.tokenMint})`
-                );
-              } catch (error) {
-                console.warn("Error formatting amount:", error);
-              }
-
-              return {
-                requestId: req.requestId,
-                title: `${req.bypassingPeriod} Bypass`,
-                destination: req.destination,
-                executeAfter: req.executeAfter,
-                submittedDate: (() => {
-                  try {
-                    // Handle different timestamp formats
-                    let timestamp = req.createdAt;
-                    // If timestamp is too large, it might be in milliseconds already
-                    if (timestamp > 10000000000) {
-                      timestamp = timestamp / 1000;
-                    }
-                    const date = new Date(timestamp * 1000);
-                    console.log(
-                      `🔍 Date conversion: ${
-                        req.createdAt
-                      } -> ${date.toLocaleDateString()}`
-                    );
-                    return date.toLocaleDateString();
-                  } catch (error) {
-                    console.warn("Error formatting date:", error);
-                    return "Unknown date";
-                  }
-                })(),
-                amount: formattedAmount,
-                tokenMint: req.tokenMint,
-                bypassingPeriod: req.bypassingPeriod,
-                canExecute: req.canExecute,
-                status: req.status,
-              };
-            });
-
-            setPendingBypassRequests(formattedRequests);
-            console.log(
-              `📋 Loaded ${formattedRequests.length} Solana bypass requests for ${solanaUserAddress}`
-            );
-          }
+          setPendingBypassRequests(bypassRequests);
+          console.log(`📋 Loaded ${bypassRequests.length} bypass requests`);
         } catch (error) {
-          console.error(
-            "❌ Error fetching bypass requests after spending limits:",
-            error
-          );
+          console.error("❌ Error fetching bypass requests after spending limits:", error);
         }
-        setIsSetupCommitted(spendingData.isSetupCommitted);
 
-        console.log("✅ Solana spending limits state updated!");
-        console.log("📋 Final spending limits count:", fetchedLimits.length);
-
-        // Note: Limit editing state is now managed internally by SpendingLimitsSetup component
-        console.log("🎯 Spending limits fetched for Solana");
+        console.log("✅ Solana spending limits and bypass requests loaded!");
       } catch (error) {
         console.error("Error fetching Solana spending limits:", error);
         setSpendingLimits([]);
@@ -1952,58 +1792,30 @@ function AppContentInner({
     userSigner = signer
   ) => {
     console.log("🚀 fetchSpendingLimits called for network:", networkType);
-    console.log("🔗 transactionManager available:", !!transactionManager);
-    console.log(
-      "📋 getSpendingLimits method available:",
-      !!transactionManager?.getSpendingLimits
-    );
 
     if (networkType === "solana") {
-      console.log(
-        "🔵 Delegating Solana spending limits to dedicated function..."
-      );
+      console.log("🔵 Delegating Solana spending limits to dedicated function...");
       // Delegate to the dedicated Solana function to avoid duplication and race conditions
       await fetchSpendingLimitsWithTxManager(transactionManager);
       return;
-    } else if (contract && userSigner) {
-      // EVM spending limits fetching (existing logic)
-      try {
-        const userAddress = await userSigner.getAddress();
+    }
 
-        // Get all user's spending limits from the smart contract
-        const spendingData = await contract.getUserSpendingLimits(userAddress);
+    try {
+      const spendingData = await fetchSpendingLimitsService({
+        transactionManager,
+        savingsContract: contract,
+        signer: userSigner,
+        networkType
+      });
 
-        const fetchedLimits = [];
-        const [names, limits, spent, remaining, durations, active] =
-          spendingData;
+      setSpendingLimits(spendingData.limits);
+      setIsSetupCommitted(spendingData.isSetupCommitted);
+      setLimitsLoaded(true);
 
-        for (let i = 0; i < names.length; i++) {
-          if (active[i]) {
-            fetchedLimits.push({
-              name: names[i],
-              limit: ethers.formatUnits(limits[i], 6),
-              spent: ethers.formatUnits(spent[i], 6),
-              remaining: Number(ethers.formatUnits(remaining[i], 6)),
-              duration: durations[i].toString(),
-              active: active[i],
-              // Helper fields for display
-              durationHours: Math.floor(Number(durations[i]) / 3600),
-              durationDays: Math.floor(Number(durations[i]) / 86400),
-            });
-          }
-        }
-
-        setSpendingLimits(fetchedLimits);
-        setLimitsLoaded(true);
-
-        // Note: Limit editing state is now managed internally by SpendingLimitsSetup component
-      } catch (error) {
-        console.error("Error fetching EVM spending limits:", error);
-        // If the function doesn't exist, user hasn't set any limits yet
-        setSpendingLimits([]);
-        setLimitsLoaded(true);
-      }
-    } else {
+      console.log(`✅ Loaded ${spendingData.limits.length} spending limits`);
+    } catch (error) {
+      console.error("Error fetching spending limits:", error);
+      setSpendingLimits([]);
       setLimitsLoaded(true);
     }
   };
@@ -2017,98 +1829,18 @@ function AppContentInner({
     const currentUserAddress = userAddr || userAddress;
 
     try {
-      if (networkType === "solana") {
-        // Fetch Solana withdrawal destinations
-        if (!transactionManager) {
-          console.log(
-            `⏭️ Skipping fetchWithdrawalAddresses for Solana - no transaction manager`
-          );
-          setWithdrawalAddresses([]);
-          return;
-        }
+      const addresses = await fetchWithdrawalAddressesService({
+        transactionManager,
+        savingsContract: contract || savingsContract,
+        networkType,
+        userAddress: currentUserAddress,
+        solanaPublicKey
+      });
 
-        const adapter = transactionManager.getCurrentAdapter();
-        // For Solana, get the address directly from the Solana adapter to ensure we get the Solana address
-        let solanaUserAddress = userAddr;
-        if (!solanaUserAddress) {
-          if (adapter && adapter.wallet?.publicKey) {
-            solanaUserAddress = adapter.wallet.publicKey.toString();
-          } else {
-            solanaUserAddress = solanaPublicKey?.toString();
-          }
-        }
-
-        console.log(
-          `🔍 [Withdrawal Addresses] Using Solana address: ${solanaUserAddress}`
-        );
-
-        // Double-check we have a valid Solana address before proceeding
-        if (
-          solanaUserAddress &&
-          (solanaUserAddress.startsWith("0x") ||
-            solanaUserAddress.length !== 44)
-        ) {
-          console.error(
-            `❌ [Withdrawal Addresses] Invalid Solana address format detected: ${solanaUserAddress}`
-          );
-          console.log(
-            "📭 Skipping fetchWithdrawalAddresses - wrong address format"
-          );
-          setWithdrawalAddresses([]);
-          return;
-        }
-
-        const addresses = await adapter.fetchWithdrawalAddresses(
-          solanaUserAddress
-        );
-
-        // Transform to match EVM format
-        const formattedAddresses = addresses.map((addr) => ({
-          title: addr.title,
-          destination: addr.destination,
-          addedTimestamp: addr.addedAt,
-          addedDate: new Date(addr.addedAt * 1000).toLocaleDateString(),
-        }));
-
-        setWithdrawalAddresses(formattedAddresses);
-        console.log(
-          `📋 Loaded ${formattedAddresses.length} Solana withdrawal addresses for ${solanaUserAddress}`
-        );
-      } else {
-        // Fetch EVM withdrawal addresses
-        if (!contract || !currentUserAddress) {
-          console.log(
-            `⏭️ Skipping fetchWithdrawalAddresses for EVM - missing contract or user`
-          );
-          setWithdrawalAddresses([]);
-          return;
-        }
-
-        const addressData = await contract.getUserWithdrawalAddresses();
-        const [titles, destinations, timestamps] = addressData;
-
-        const addresses = [];
-        for (let i = 0; i < titles.length; i++) {
-          addresses.push({
-            title: titles[i],
-            destination: destinations[i],
-            addedTimestamp: Number(timestamps[i]),
-            addedDate: new Date(
-              Number(timestamps[i]) * 1000
-            ).toLocaleDateString(),
-          });
-        }
-
-        setWithdrawalAddresses(addresses);
-        console.log(
-          `📋 Loaded ${addresses.length} EVM withdrawal addresses for ${currentUserAddress}`
-        );
-      }
+      setWithdrawalAddresses(addresses);
+      console.log(`✅ Loaded ${addresses.length} withdrawal addresses`);
     } catch (error) {
-      console.error(
-        `❌ Error fetching ${networkType} withdrawal addresses:`,
-        error
-      );
+      console.error("Error fetching withdrawal addresses:", error);
       setWithdrawalAddresses([]);
     }
   };
@@ -2121,101 +1853,18 @@ function AppContentInner({
     let currentUserAddress = userAddr || getCurrentUserAddress();
 
     try {
-      if (networkType === "solana") {
-        // Fetch Solana withdrawal destination requests
-        if (!txManager) {
-          console.log(
-            `⏭️ Skipping fetchPendingWithdrawalRequests for Solana - missing adapter`
-          );
-          setPendingWithdrawalRequests([]);
-          return;
-        }
+      const requests = await fetchPendingWithdrawalRequestsService({
+        transactionManager: txManager,
+        savingsContract: contract || savingsContract,
+        networkType,
+        userAddress: currentUserAddress,
+        getCurrentUserAddress
+      });
 
-        // Check if we have a valid user address
-        if (!currentUserAddress) {
-          console.log(
-            `⏭️ Skipping fetchPendingWithdrawalRequests for Solana - no user address available`
-          );
-          setPendingWithdrawalRequests([]);
-          return;
-        }
-
-        console.log(
-          `🔍 [Withdrawal Requests] Using Solana address: ${currentUserAddress}`
-        );
-
-        // Double-check we have a valid Solana address before proceeding
-        if (
-          currentUserAddress &&
-          (currentUserAddress.startsWith("0x") ||
-            currentUserAddress.length !== 44)
-        ) {
-          console.error(
-            `❌ Invalid Solana address format detected: ${currentUserAddress}`
-          );
-          console.log(
-            "📭 Skipping fetchPendingWithdrawalRequests - wrong address format"
-          );
-          setPendingWithdrawalRequests([]);
-          return;
-        }
-
-        const solanaAdapter = txManager.getCurrentAdapter();
-        const requests =
-          await solanaAdapter.getPendingWithdrawalDestinationRequests(
-            currentUserAddress
-          );
-
-        // Format Solana requests to match EVM format
-        const formattedRequests = requests.map((request) => ({
-          requestId: request.requestId,
-          title: request.title,
-          destination: request.address,
-          executeAfter: request.executeAfter,
-          submittedDate: new Date(
-            request.createdAt * 1000
-          ).toLocaleDateString(),
-        }));
-
-        setPendingWithdrawalRequests(formattedRequests);
-        console.log(
-          `📋 Loaded ${formattedRequests.length} Solana pending withdrawal destination requests for ${currentUserAddress}`
-        );
-        return;
-      } else {
-        // Fetch EVM withdrawal requests
-        if (!contract || !currentUserAddress) {
-          console.log(
-            `⏭️ Skipping fetchPendingWithdrawalRequests for EVM - missing contract or user`
-          );
-          setPendingWithdrawalRequests([]);
-          return;
-        }
-
-        const requestData = await contract.getUserPendingWithdrawalRequests();
-        const [requestIds, titles, destinations, executeAfters] = requestData;
-
-        const requests = [];
-        for (let i = 0; i < requestIds.length; i++) {
-          requests.push({
-            requestId: requestIds[i],
-            title: titles[i],
-            destination: destinations[i],
-            executeAfter: Number(executeAfters[i]),
-            submittedDate: new Date().toLocaleDateString(), // Approximate
-          });
-        }
-
-        setPendingWithdrawalRequests(requests);
-        console.log(
-          `📋 Loaded ${requests.length} EVM pending withdrawal requests for ${currentUserAddress}`
-        );
-      }
+      setPendingWithdrawalRequests(requests);
+      console.log(`✅ Loaded ${requests.length} withdrawal requests`);
     } catch (error) {
-      console.error(
-        `❌ Error fetching ${networkType} pending withdrawal requests:`,
-        error
-      );
+      console.error("Error fetching withdrawal requests:", error);
       setPendingWithdrawalRequests([]);
     }
   };
@@ -2840,169 +2489,16 @@ function AppContentInner({
     const currentUserAddress = userAddr || userAddress;
 
     try {
-      if (networkType === "solana") {
-        // Fetch Solana bypass requests
-        if (!transactionManager) {
-          console.log(
-            `⏭️ Skipping fetchPendingBypassRequests for Solana - no transaction manager`
-          );
-          setPendingBypassRequests([]);
-          return;
-        }
+      const requests = await fetchPendingBypassRequestsService({
+        transactionManager,
+        savingsContract: contract || savingsContract,
+        networkType,
+        userAddress: currentUserAddress,
+        solanaPublicKey
+      });
 
-        const adapter = transactionManager.getCurrentAdapter();
-        // For Solana, get the address directly from the Solana adapter to ensure we get the Solana address
-        let solanaUserAddress = userAddr;
-        if (!solanaUserAddress) {
-          if (adapter && adapter.wallet?.publicKey) {
-            solanaUserAddress = adapter.wallet.publicKey.toString();
-          } else {
-            solanaUserAddress = solanaPublicKey?.toString();
-          }
-        }
-
-        console.log(
-          `🔍 [Bypass Requests] Using Solana address: ${solanaUserAddress}`
-        );
-
-        // Double-check we have a valid Solana address before proceeding
-        if (
-          solanaUserAddress &&
-          (solanaUserAddress.startsWith("0x") ||
-            solanaUserAddress.length !== 44)
-        ) {
-          console.error(
-            `❌ [Bypass Requests] Invalid Solana address format detected: ${solanaUserAddress}`
-          );
-          console.log(
-            "📭 Skipping fetchPendingBypassRequests - wrong address format"
-          );
-          setPendingBypassRequests([]);
-          return;
-        }
-
-        const bypassRequests = await adapter.fetchPendingBypassRequests(
-          solanaUserAddress
-        );
-
-        // Transform to match EVM format
-        const formattedRequests = bypassRequests.map((req) => {
-          // Format amount properly - convert from token base units to decimal using token-aware decimals
-          let formattedAmount = req.amount;
-          try {
-            // Use adapter's token-aware decimal conversion instead of hardcoded SOL decimals
-            formattedAmount = adapter
-              .fromSmallestUnit(req.amount, req.tokenMint)
-              .toString();
-            console.log(
-              `🔍 Amount conversion: ${
-                req.amount
-              } -> ${formattedAmount} (${adapter.getTokenDecimals(
-                req.tokenMint
-              )} decimals for ${req.tokenMint})`
-            );
-          } catch (error) {
-            console.warn("Error formatting amount:", error);
-          }
-
-          return {
-            requestId: req.requestId,
-            title: `${req.bypassingPeriod} Bypass`, // Use bypassing period as title
-            destination: req.destination,
-            executeAfter: req.executeAfter,
-            submittedDate: (() => {
-              try {
-                // Handle different timestamp formats
-                let timestamp = req.createdAt;
-                // If timestamp is too large, it might be in milliseconds already
-                if (timestamp > 10000000000) {
-                  timestamp = timestamp / 1000;
-                }
-                const date = new Date(timestamp * 1000);
-                console.log(
-                  `🔍 Date conversion: ${
-                    req.createdAt
-                  } -> ${date.toLocaleDateString()}`
-                );
-                return date.toLocaleDateString();
-              } catch (error) {
-                console.warn("Error formatting date:", error);
-                return "Unknown date";
-              }
-            })(),
-            amount: formattedAmount,
-            tokenMint: req.tokenMint,
-            bypassingPeriod: req.bypassingPeriod,
-            canExecute: req.canExecute,
-            status: req.status,
-          };
-        });
-
-        setPendingBypassRequests(formattedRequests);
-        console.log(
-          `📋 Loaded ${formattedRequests.length} Solana bypass requests for ${solanaUserAddress}`
-        );
-        return;
-      }
-
-      // EVM bypass requests
-      const currentContract = contract || savingsContract;
-      if (!currentUserAddress || !currentContract) return;
-      console.log("🔍 Fetching bypass requests for:", currentUserAddress);
-
-      // Get active bypass requests directly from contract
-      const bypassData = await currentContract.getUserActiveBypassRequests();
-      console.log("📊 Raw bypass data:", bypassData);
-
-      const [requestIds, amounts, skipPeriods, tokens, executeAfters] =
-        bypassData;
-      console.log("📊 Request IDs length:", requestIds.length);
-
-      const requests = [];
-      for (let i = 0; i < requestIds.length; i++) {
-        // Determine token info for display
-        let tokenSymbol = "Unknown";
-        let tokenDecimals = 18;
-
-        const tokenAddress = tokens[i];
-        if (tokenAddress === "0x0000000000000000000000000000000000000000") {
-          tokenSymbol = "ETH";
-          tokenDecimals = 18;
-        } else {
-          // Check if it's USDT or other known tokens
-          const moduleAddresses = await import("./moduleAddresses.json");
-          if (
-            tokenAddress.toLowerCase() ===
-            moduleAddresses.tokens.usdt.toLowerCase()
-          ) {
-            tokenSymbol = "USDT";
-            tokenDecimals = 6;
-          }
-        }
-
-        requests.push({
-          requestId: requestIds[i],
-          amount: ethers.formatUnits(amounts[i], tokenDecimals),
-          period: skipPeriods[i],
-          token: tokenSymbol,
-          tokenAddress: tokenAddress,
-          tokenDecimals: tokenDecimals,
-          executeAfter: Number(executeAfters[i]),
-          executed: false,
-          exists: true,
-        });
-      }
-
-      console.log(
-        `Found ${requests.length} active bypass requests for ${currentUserAddress}`
-      );
-      console.log("📋 Requests array:", requests);
       setPendingBypassRequests(requests);
-      console.log(
-        "✅ setPendingBypassRequests called with",
-        requests.length,
-        "requests"
-      );
+      console.log(`✅ Loaded ${requests.length} bypass requests`);
     } catch (error) {
       console.error("Error fetching bypass requests:", error);
       setPendingBypassRequests([]);
