@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 
 // Import styles
 import {
@@ -12,6 +12,9 @@ import {
   fontWeight,
 } from "../../styles";
 
+// Import utility functions
+import { getCurrentNetwork } from "../../utils/walletUtils.js";
+
 /**
  * DepositInterface component - Complete deposit interface for multi-token deposits
  * Handles deposits from connected wallet and direct deposits from exchanges
@@ -22,13 +25,12 @@ const DepositInterface = ({
   selectedNetwork,
   userAddress,
   solanaPublicKey,
-  getCurrentNetwork,
 
-  // Token and deposit state
+  // Token state from parent (shared with withdrawal)
   selectedToken,
   setSelectedToken,
-  depositAmount,
-  setDepositAmount,
+
+  // Deposit state from parent
   isDepositing,
 
   // Deposit functions
@@ -39,6 +41,13 @@ const DepositInterface = ({
   depositAddress,
   deployDepositAddress,
 }) => {
+  // Internal state for deposit amount only
+  const [depositAmount, setDepositAmount] = useState("");
+
+  // Wrapper function to call parent deposit function with local amount
+  const handleDeposit = () => {
+    depositToSavings(selectedToken, depositAmount);
+  };
   return (
     <div
       style={{
@@ -155,7 +164,7 @@ const DepositInterface = ({
           />
 
           <button
-            onClick={depositToSavings}
+            onClick={handleDeposit}
             disabled={
               !selectedToken ||
               !depositAmount ||

@@ -10,6 +10,9 @@ import {
   fontSize,
 } from "../../styles";
 
+// Import utility functions
+import { getCurrentNetwork } from "../../utils/walletUtils.js";
+
 /**
  * BalanceDisplay component - Shows token balances and educational content
  * Displays user's token balances with refresh functionality and setup mode education
@@ -24,7 +27,6 @@ const BalanceDisplay = ({
   // Balance state
   balances,
   // Network data
-  getCurrentNetwork,
   selectedNetwork,
   // Functions
   refreshBalances,

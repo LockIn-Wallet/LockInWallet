@@ -47,10 +47,8 @@ import {
   getCurrentNetwork,
   isSolanaNetwork,
   formatCountdown,
-  formatTimeRemaining,
   calculateInstantWithdrawableAmount,
   detectExceedingPeriod,
-  hasPendingProposalForPeriod,
 } from "./utils/walletUtils.js";
 
 // Import components
@@ -144,26 +142,8 @@ function AppContentInner({
   const [pendingLimitProposals, setPendingLimitProposals] = useState([]); // Pending limit change proposals
   const [limitsLoaded, setLimitsLoaded] = useState(false); // Track if limits have been fetched
 
-  // Unified limit editing state
-  const [limitEdits, setLimitEdits] = useState({
-    Daily: { value: "", isActive: false, isEditing: false },
-    Weekly: { value: "", isActive: false, isEditing: false },
-    Monthly: { value: "", isActive: false, isEditing: false },
-  });
+  // Unified limit editing state - moved to SpendingLimitsSetup component
 
-  // Custom period state
-  const [showCustomPeriod, setShowCustomPeriod] = useState(false);
-  const [customPeriodName, setCustomPeriodName] = useState("");
-  const [customPeriodLimit, setCustomPeriodLimit] = useState("");
-  const [customPeriodDuration, setCustomPeriodDuration] = useState("86400"); // Default 1 day
-
-  // Card interaction state for hover and focus
-  const [cardStates, setCardStates] = useState({
-    Daily: { isHovered: false, isFocused: false },
-    Weekly: { isHovered: false, isFocused: false },
-    Monthly: { isHovered: false, isFocused: false },
-  });
-  const [depositAmount, setDepositAmount] = useState(""); // New state for deposit amount
   const [isDepositing, setIsDepositing] = useState(false); // Loading state for deposit button
   const [selectedToken, setSelectedToken] = useState("USDT"); // Default to USDT
   const [userAddress, setUserAddress] = useState(""); // Store user address
@@ -213,9 +193,9 @@ function AppContentInner({
   const validateStep1Wrapper = () => {
     return validateStep1(
       spendingLimits,
-      limitEdits,
-      customPeriodName,
-      customPeriodLimit
+      {}, // limitEdits - empty since state moved to component
+      "", // customPeriodName - empty since feature is hidden
+      "" // customPeriodLimit - empty since feature is hidden
     );
   };
 
@@ -230,9 +210,9 @@ function AppContentInner({
   const updateStepValidation = () => {
     const params = {
       spendingLimits,
-      limitEdits,
-      customPeriodName,
-      customPeriodLimit,
+      limitEdits: {}, // Empty since state moved to component
+      customPeriodName: "", // Empty since feature is hidden
+      customPeriodLimit: "", // Empty since feature is hidden
       withdrawalAddresses,
       getCurrentUserAddress,
       isSetupCommitted,
@@ -403,7 +383,6 @@ function AppContentInner({
       });
 
       // Clear form state
-      setDepositAmount("");
       setWithdrawalAmount("");
 
       // Clear custom period state
@@ -928,9 +907,6 @@ function AppContentInner({
     spendingLimits,
     withdrawalAddresses,
     isSetupCommitted,
-    limitEdits,
-    customPeriodName,
-    customPeriodLimit,
   ]);
 
   // Auto-advance steps when setup is not committed and during guided flow
@@ -1393,9 +1369,9 @@ function AppContentInner({
     }
   };
 
-  const deposit = async () => {
+  const deposit = async (selectedTokenParam = selectedToken, amount) => {
     // Validate basic requirements
-    if (!selectedToken || !depositAmount) {
+    if (!selectedTokenParam || !amount) {
       alert("Please select a token and enter an amount");
       return;
     }
@@ -1434,12 +1410,12 @@ function AppContentInner({
 
       if (networkType === "evm") {
         // EVM token logic
-        if (selectedToken === "ETH") {
+        if (selectedTokenParam === "ETH") {
           tokenAddress = ETH_ADDRESS;
           decimals = 18;
           tokenSymbol = "ETH";
-        } else if (currentNetwork.tokens[selectedToken]) {
-          const token = currentNetwork.tokens[selectedToken];
+        } else if (currentNetwork.tokens[selectedTokenParam]) {
+          const token = currentNetwork.tokens[selectedTokenParam];
           if (token.address === "0x0000000000000000000000000000000000000000") {
             alert(`${token.symbol} is not available on ${currentNetwork.name}`);
             return;
@@ -1453,15 +1429,15 @@ function AppContentInner({
         }
       } else if (networkType === "solana") {
         // Solana token logic
-        if (selectedToken === "SOL") {
+        if (selectedTokenParam === "SOL") {
           tokenAddress = "native"; // Solana native token
           decimals = 9;
           tokenSymbol = "SOL";
         } else if (
           currentNetwork.tokens &&
-          currentNetwork.tokens[selectedToken]
+          currentNetwork.tokens[selectedTokenParam]
         ) {
-          const token = currentNetwork.tokens[selectedToken];
+          const token = currentNetwork.tokens[selectedTokenParam];
           tokenAddress = token.address; // Unified token address field
           decimals = token.decimals;
           tokenSymbol = token.symbol;
@@ -1475,15 +1451,15 @@ function AppContentInner({
       }
 
       // Validate amount
-      const numAmount = parseFloat(depositAmount);
+      const numAmount = parseFloat(amount);
       if (isNaN(numAmount) || numAmount <= 0) {
         alert("Please enter a valid deposit amount");
         return;
       }
 
       console.log(`🚀 Starting ${networkType.toUpperCase()} deposit:`, {
-        tokenSymbol,
-        amount: depositAmount,
+        tokenSymbol: selectedTokenParam,
+        amount: amount,
         tokenAddress,
         decimals,
       });
@@ -1491,7 +1467,7 @@ function AppContentInner({
       // Execute deposit through TransactionManager
       const result = await transactionManager.deposit(
         tokenAddress,
-        depositAmount,
+        amount,
         decimals
       );
 
@@ -1501,14 +1477,12 @@ function AppContentInner({
       );
 
       // Show success message
-      const message = `Deposit of ${depositAmount} ${tokenSymbol} successful!${
+      const message = `Deposit of ${amount} ${selectedTokenParam} successful!${
         result.hash ? `\nTransaction: ${result.hash}` : ""
       }`;
       alert(message);
 
       // Clear form and refresh balances
-      setDepositAmount("");
-
       // Refresh balances using unified method
       await refreshBalances();
     } catch (error) {
@@ -1535,263 +1509,11 @@ function AppContentInner({
     }
   };
 
-  // Unified spending limits functions
-  const updateLimitEdit = (periodName, value) => {
-    setLimitEdits((prev) => ({
-      ...prev,
-      [periodName]: {
-        ...prev[periodName],
-        value: value,
-        isActive: value && parseFloat(value) > 0,
-      },
-    }));
-  };
+  // Unified spending limits functions - functions moved to SpendingLimitsSetup component
 
-  const toggleEditMode = (periodName) => {
-    setLimitEdits((prev) => ({
-      ...prev,
-      [periodName]: {
-        ...prev[periodName],
-        isEditing: !prev[periodName].isEditing,
-      },
-    }));
-  };
 
-  const saveLimitChanges = async () => {
-    // Check connection for both networks
-    if (networkType === "solana" && (!transactionManager || !solanaConnected)) {
-      alert("Please connect your Solana wallet first");
-      return;
-    }
-    if (networkType === "evm" && !savingsContract) {
-      alert("Please connect your wallet first");
-      return;
-    }
 
-    try {
-      // Extract limits from limitEdits - check for any valid input
-      const daily = limitEdits.Daily.value
-        ? parseFloat(limitEdits.Daily.value)
-        : 0;
-      const weekly = limitEdits.Weekly.value
-        ? parseFloat(limitEdits.Weekly.value)
-        : 0;
-      const monthly = limitEdits.Monthly.value
-        ? parseFloat(limitEdits.Monthly.value)
-        : 0;
 
-      // Check if user has entered any spending limit values
-      if (daily === 0 && weekly === 0 && monthly === 0) {
-        alert("Please set at least one spending limit");
-        return;
-      }
-
-      // Validate limit ordering
-      if (daily > 0 && weekly > 0 && daily * 7 > weekly) {
-        alert("Daily limit × 7 cannot exceed weekly limit");
-        return;
-      }
-      if (weekly > 0 && monthly > 0 && weekly * 4 > monthly) {
-        alert("Weekly limit × 4 cannot exceed monthly limit");
-        return;
-      }
-      if (daily > 0 && monthly > 0 && daily * 30 > monthly) {
-        alert("Daily limit × 30 cannot exceed monthly limit");
-        return;
-      }
-
-      // For setup mode only - bulk changes
-      if (!isSetupCommitted) {
-        if (networkType === "solana") {
-          // Solana implementation
-          const dailyLimit = daily > 0 ? daily : null;
-          const weeklyLimit = weekly > 0 ? weekly : null;
-          const monthlyLimit = monthly > 0 ? monthly : null;
-
-          const txHash = await transactionManager.setCommonPeriodLimits(
-            dailyLimit,
-            weeklyLimit,
-            monthlyLimit
-          );
-          console.log("Solana spending limits transaction:", txHash);
-          alert("Spending limits set successfully!");
-        } else {
-          // EVM implementation (existing logic)
-          const dailyLimitWei =
-            daily > 0 ? ethers.parseUnits(daily.toString(), 6) : 0;
-          const weeklyLimitWei =
-            weekly > 0 ? ethers.parseUnits(weekly.toString(), 6) : 0;
-          const monthlyLimitWei =
-            monthly > 0 ? ethers.parseUnits(monthly.toString(), 6) : 0;
-
-          const tx = await savingsContract.setCommonPeriodLimits(
-            dailyLimitWei,
-            weeklyLimitWei,
-            monthlyLimitWei
-          );
-          await tx.wait();
-          alert("Spending limits set successfully!");
-        }
-
-        // Reset edit modes
-        setLimitEdits((prev) => {
-          const updated = { ...prev };
-          Object.keys(updated).forEach((key) => {
-            updated[key] = { ...updated[key], isEditing: false };
-          });
-          return updated;
-        });
-
-        // Refresh spending limits
-        await fetchSpendingLimits();
-      } else {
-        if (networkType === "solana") {
-          alert(
-            "After setup lock, you can still add individual limits or remove existing ones on Solana"
-          );
-        } else {
-          alert(
-            "After setup lock, use individual Edit buttons for each limit to submit separate proposals"
-          );
-        }
-      }
-    } catch (error) {
-      console.error("Error saving limit changes:", error);
-      if (error.message.includes("Daily limit too high")) {
-        alert("Daily limit is too high for the weekly limit");
-      } else if (error.message.includes("Weekly limit too high")) {
-        alert("Weekly limit is too high for the monthly limit");
-      } else {
-        alert(`Failed to save limit changes: ${error.message}`);
-      }
-    }
-  };
-
-  const submitIndividualProposal = async (periodName) => {
-    // Check connection for both networks
-    if (networkType === "solana" && (!transactionManager || !solanaConnected)) {
-      alert("Please connect your Solana wallet first");
-      return;
-    }
-    if (networkType === "evm" && !savingsContract) {
-      alert("Please connect your wallet first");
-      return;
-    }
-
-    const edit = limitEdits[periodName];
-    if (!edit?.value || parseFloat(edit.value) <= 0) {
-      alert("Please enter a valid limit amount");
-      return;
-    }
-
-    try {
-      const newLimit = parseFloat(edit.value);
-
-      if (networkType === "solana") {
-        // For Solana: Create proposal using the new proposal system
-        console.log("📝 Solana: Creating limit change proposal...");
-        const adapter = transactionManager.getCurrentAdapter();
-        await adapter.proposeLimitChange(periodName, newLimit);
-
-        // Exit edit mode for this specific limit
-        setLimitEdits((prev) => ({
-          ...prev,
-          [periodName]: {
-            ...prev[periodName],
-            isEditing: false,
-          },
-        }));
-
-        // Refresh proposals
-        await fetchPendingLimitProposals();
-
-        alert(
-          `✅ Proposal submitted for ${periodName} limit! It will be executable after the timelock period.`
-        );
-        return;
-      }
-
-      // EVM path (existing logic)
-      const limitWei = ethers.parseUnits(newLimit.toString(), 6);
-      const tx = await savingsContract.proposeLimitChange(periodName, limitWei);
-      await tx.wait();
-
-      console.log(`✅ EVM proposal submitted for ${periodName}: ${newLimit}`);
-
-      alert(
-        `✅ ${periodName} limit change proposal submitted! It will be executable after the timelock period.`
-      );
-
-      // Reset edit mode for this specific period
-      setLimitEdits((prev) => ({
-        ...prev,
-        [periodName]: { ...prev[periodName], isEditing: false, value: "" },
-      }));
-
-      // Refresh data
-      await fetchPendingLimitProposals();
-      await fetchSpendingLimits();
-    } catch (error) {
-      console.error(`Error proposing ${periodName} limit:`, error);
-      alert(`Failed to submit ${periodName} limit proposal: ${error.message}`);
-    }
-  };
-
-  const removeLimitPeriod = async (periodName) => {
-    // Network-aware connection check
-    if (networkType === "solana" && (!transactionManager || !solanaConnected)) {
-      alert("Please connect your Solana wallet first");
-      return;
-    }
-    if (networkType === "evm" && !savingsContract) {
-      alert("Please connect your MetaMask wallet first");
-      return;
-    }
-
-    try {
-      if (networkType === "solana") {
-        // Solana removal logic
-        console.log("🗑️ Solana: Removing limit for", periodName);
-
-        if (isSetupCommitted) {
-          // After setup is committed, removal requires a proposal
-          // For now, we'll inform the user that this feature is coming soon
-          alert(
-            "🚧 Solana limit removal proposals are coming soon!\n\nFor now, you can:\n• Edit limits (proposals work)\n• Remove limits only before setup is committed\n\nRemoval proposals will be implemented in the next update."
-          );
-          return;
-        } else {
-          // Direct removal before setup is committed
-          const adapter = transactionManager.getCurrentAdapter();
-          const txHash = await adapter.removeTimePeriodLimit(periodName);
-          console.log("Solana limit removed:", txHash);
-          alert(`✅ ${periodName} limit removed successfully!`);
-        }
-      } else {
-        // EVM removal logic (existing)
-        console.log("🗑️ EVM: Removing limit for", periodName);
-
-        if (isSetupCommitted) {
-          const tx = await savingsContract.proposeLimitRemoval(periodName);
-          await tx.wait();
-          alert(
-            `✅ Removal proposal submitted for ${periodName}! It will be executable after review.`
-          );
-          await fetchPendingLimitProposals();
-        } else {
-          const tx = await savingsContract.removeTimePeriodLimit(periodName);
-          await tx.wait();
-          alert(`✅ ${periodName} limit removed successfully!`);
-        }
-      }
-
-      // Refresh data for both networks
-      await fetchSpendingLimits();
-    } catch (error) {
-      console.error("Error removing limit:", error);
-      alert(`Failed to remove ${periodName} limit: ${error.message}`);
-    }
-  };
 
   const fetchPendingLimitProposals = async (
     userAddr = null,
@@ -1839,106 +1561,7 @@ function AppContentInner({
     setPendingLimitProposals([]);
   };
 
-  const executeProposal = async (proposal) => {
-    // Check connection for both networks
-    if (networkType === "solana" && (!transactionManager || !solanaConnected)) {
-      alert("Please connect your Solana wallet first");
-      return;
-    }
-    if (networkType === "evm" && !savingsContract) {
-      alert("Please connect your wallet first");
-      return;
-    }
 
-    try {
-      if (proposal.networkType === "solana") {
-        // For Solana: Execute proposal through adapter
-        console.log("🔄 Executing Solana proposal:", proposal);
-        const adapter = transactionManager.getCurrentAdapter();
-        await adapter.executeLimitProposal(proposal.proposalId);
-        alert(
-          `✅ Executed ${proposal.action} proposal for ${proposal.periodName}!`
-        );
-      } else {
-        // EVM execution: Call contract method (placeholder for now)
-        console.log("🔄 Executing EVM proposal:", proposal);
-        alert(
-          `✅ Executing ${proposal.action} proposal for ${proposal.periodName}...`
-        );
-        // TODO: Add actual EVM contract execution when implemented
-      }
-
-      // localStorage removed - proposals now fetched from chain
-
-      // Refresh data
-      await fetchPendingLimitProposals();
-      await fetchSpendingLimits();
-
-      alert(
-        `✅ ${
-          proposal.action === "change" ? "Limit update" : "Limit removal"
-        } executed successfully!`
-      );
-    } catch (error) {
-      console.error("Error executing proposal:", error);
-      alert(`Failed to execute proposal: ${error.message}`);
-    }
-  };
-
-  const cancelProposal = async (proposal) => {
-    try {
-      // For Solana: Use adapter to cancel proposal
-      if (networkType === "solana" && transactionManager) {
-        const adapter = transactionManager.getCurrentAdapter();
-        await adapter.cancelLimitProposal(proposal.proposalId);
-      } else if (networkType === "evm") {
-        // EVM cancellation not implemented yet
-        console.log("EVM proposal cancellation not implemented");
-      }
-
-      // Refresh proposals
-      await fetchPendingLimitProposals();
-
-      alert(`Proposal for ${proposal.periodName} cancelled successfully`);
-    } catch (error) {
-      console.error("Error cancelling proposal:", error);
-      alert(`Failed to cancel proposal: ${error.message}`);
-    }
-  };
-
-  const addCustomPeriod = async () => {
-    if (savingsContract) {
-      try {
-        if (!customPeriodName || !customPeriodLimit || !customPeriodDuration) {
-          alert("Please fill in all custom period fields");
-          return;
-        }
-
-        const limitWei = ethers.parseUnits(customPeriodLimit, 6);
-        const durationSeconds = parseInt(customPeriodDuration, 10);
-
-        const tx = await savingsContract.addTimePeriodLimit(
-          customPeriodName.trim(),
-          limitWei,
-          durationSeconds
-        );
-        await tx.wait();
-        alert(`Custom period "${customPeriodName}" added successfully!`);
-
-        // Clear custom form
-        setCustomPeriodName("");
-        setCustomPeriodLimit("");
-        setCustomPeriodDuration("86400");
-        setShowCustomPeriod(false);
-
-        // Refresh spending limits
-        await fetchSpendingLimits();
-      } catch (error) {
-        console.error("Error adding custom period:", error);
-        alert("Failed to add custom period. Please try again.");
-      }
-    }
-  };
 
   const addApprover = async () => {
     if (savingsContract) {
@@ -2054,72 +1677,28 @@ function AppContentInner({
     }
 
     try {
-      // Extract configured limits
-      const daily = limitEdits.Daily.value
-        ? parseFloat(limitEdits.Daily.value)
-        : 0;
-      const weekly = limitEdits.Weekly.value
-        ? parseFloat(limitEdits.Weekly.value)
-        : 0;
-      const monthly = limitEdits.Monthly.value
-        ? parseFloat(limitEdits.Monthly.value)
-        : 0;
+      // Note: Spending limits should have been set earlier through SpendingLimitsSetup component
+      // This commit step just locks the setup - limits are already saved
 
-      // Validate limit ordering if any limits are set
-      if (daily > 0 || weekly > 0 || monthly > 0) {
-        if (daily > 0 && weekly > 0 && daily * 7 > weekly) {
-          alert("Daily limit × 7 cannot exceed weekly limit");
-          return;
-        }
-        if (weekly > 0 && monthly > 0 && weekly * 4 > monthly) {
-          alert("Weekly limit × 4 cannot exceed monthly limit");
-          return;
-        }
-        if (daily > 0 && monthly > 0 && daily * 30 > monthly) {
-          alert("Daily limit × 30 cannot exceed monthly limit");
-          return;
-        }
-      }
-
-      // Prepare limits for the batched transaction
-      const dailyLimit = daily > 0 ? daily : null;
-      const weeklyLimit = weekly > 0 ? weekly : null;
-      const monthlyLimit = monthly > 0 ? monthly : null;
-
-      // Commit setup with limits in a single batched transaction
+      // Commit setup (limits should have been set earlier)
       if (networkType === "solana") {
-        console.log(
-          "Committing Solana setup with limits in batched transaction..."
-        );
-        const txHash = await transactionManager.commitSetupWithLimits(
-          dailyLimit,
-          weeklyLimit,
-          monthlyLimit
-        );
-        console.log("Solana setup committed with batched transaction:", txHash);
+        console.log("Committing Solana setup...");
+        const txHash = await transactionManager.commitSetup();
+        console.log("Solana setup committed:", txHash);
         alert(
-          "Setup locked in successfully! Your spending limits are now active."
+          "Setup locked in successfully! Your savings wallet is now active."
         );
       } else {
-        // EVM fallback (will handle limits + commit separately if needed)
+        // EVM setup commit
         console.log("Committing EVM setup...");
-        const txHash = await transactionManager.commitSetupWithLimits(
-          dailyLimit,
-          weeklyLimit,
-          monthlyLimit
-        );
+        const txHash = await transactionManager.commitSetup();
         console.log("EVM setup committed:", txHash);
         alert(
           "Setup locked in successfully! You are now in secured mode with timelock protection."
         );
       }
 
-      // Reset edit modes since we're now locked
-      setLimitEdits({
-        Daily: { value: "", isActive: false, isEditing: false },
-        Weekly: { value: "", isActive: false, isEditing: false },
-        Monthly: { value: "", isActive: false, isEditing: false },
-      });
+      // Note: Edit modes are now managed internally by SpendingLimitsSetup component
 
       // Refresh setup status
       if (networkType === "solana") {
@@ -2197,27 +1776,7 @@ function AppContentInner({
     }
   };
 
-  // Helper function to update limitEdits state from fetched limits (DRY)
-  const updateLimitEditsFromFetchedLimits = (fetchedLimits) => {
-    const newLimitEdits = {
-      Daily: { value: "", isActive: false, isEditing: false },
-      Weekly: { value: "", isActive: false, isEditing: false },
-      Monthly: { value: "", isActive: false, isEditing: false },
-    };
-
-    fetchedLimits.forEach((limit) => {
-      if (["Daily", "Weekly", "Monthly"].includes(limit.name)) {
-        newLimitEdits[limit.name] = {
-          value: limit.limit,
-          isActive: true,
-          isEditing: false,
-        };
-      }
-    });
-
-    setLimitEdits(newLimitEdits);
-    console.log("🎯 Limit editing state updated for", networkType);
-  };
+  // Helper function to update limitEdits state - removed since state moved to SpendingLimitsSetup component
 
   const fetchSpendingLimitsWithTxManager = async (txManager) => {
     console.log(
@@ -2378,9 +1937,8 @@ function AppContentInner({
         console.log("✅ Solana spending limits state updated!");
         console.log("📋 Final spending limits count:", fetchedLimits.length);
 
-        // Update unified limit editing state using shared helper function
-        updateLimitEditsFromFetchedLimits(fetchedLimits);
-        console.log("🎯 Limit editing state updated for Solana");
+        // Note: Limit editing state is now managed internally by SpendingLimitsSetup component
+        console.log("🎯 Spending limits fetched for Solana");
       } catch (error) {
         console.error("Error fetching Solana spending limits:", error);
         setSpendingLimits([]);
@@ -2438,8 +1996,7 @@ function AppContentInner({
         setSpendingLimits(fetchedLimits);
         setLimitsLoaded(true);
 
-        // Update unified limit editing state using shared helper function
-        updateLimitEditsFromFetchedLimits(fetchedLimits);
+        // Note: Limit editing state is now managed internally by SpendingLimitsSetup component
       } catch (error) {
         console.error("Error fetching EVM spending limits:", error);
         // If the function doesn't exist, user hasn't set any limits yet
@@ -3540,6 +3097,7 @@ function AppContentInner({
         networkType={networkType}
         selectedNetwork={selectedNetwork}
         isNetworkSwitching={isNetworkSwitching}
+        currentChainId={currentChainId}
         userAddress={userAddress}
         solanaWallet={solanaWallet}
         solanaPublicKey={solanaPublicKey}
@@ -3548,8 +3106,6 @@ function AppContentInner({
         currentStep={currentStep}
         switchNetworkType={switchNetworkType}
         switchNetwork={switchNetwork}
-        getCurrentNetwork={getCurrentNetwork}
-        isCorrectNetwork={isCorrectNetwork}
       />
 
       {/* Wallet Connection Prompt Component */}
@@ -3570,7 +3126,6 @@ function AppContentInner({
             networkType={networkType}
             solanaWallet={solanaWallet}
             balances={balances}
-            getCurrentNetwork={getCurrentNetwork}
             selectedNetwork={selectedNetwork}
             refreshBalances={refreshBalances}
             connectWallet={connectWallet}
@@ -3583,11 +3138,8 @@ function AppContentInner({
               selectedNetwork={selectedNetwork}
               userAddress={userAddress}
               solanaPublicKey={solanaPublicKey}
-              getCurrentNetwork={getCurrentNetwork}
               selectedToken={selectedToken}
               setSelectedToken={setSelectedToken}
-              depositAmount={depositAmount}
-              setDepositAmount={setDepositAmount}
               isDepositing={isDepositing}
               depositToSavings={deposit}
               isDeploying={isDeploying}
@@ -3604,28 +3156,16 @@ function AppContentInner({
             stepValidation={stepValidation}
             goToNextStep={goToNextStep}
             spendingLimits={spendingLimits}
-            limitEdits={limitEdits}
-            cardStates={cardStates}
-            setCardStates={setCardStates}
             pendingLimitProposals={pendingLimitProposals}
             currentTime={currentTime}
             networkType={networkType}
-            showCustomPeriod={showCustomPeriod}
-            setShowCustomPeriod={setShowCustomPeriod}
-            customPeriodName={customPeriodName}
-            setCustomPeriodName={setCustomPeriodName}
-            customPeriodLimit={customPeriodLimit}
-            setCustomPeriodLimit={setCustomPeriodLimit}
-            customPeriodDuration={customPeriodDuration}
-            setCustomPeriodDuration={setCustomPeriodDuration}
-            updateLimitEdit={updateLimitEdit}
-            toggleEditMode={toggleEditMode}
-            saveLimitChanges={saveLimitChanges}
-            submitIndividualProposal={submitIndividualProposal}
-            removeLimitPeriod={removeLimitPeriod}
-            executeProposal={executeProposal}
-            cancelProposal={cancelProposal}
-            addCustomPeriod={addCustomPeriod}
+            transactionManager={transactionManager}
+            solanaConnected={solanaConnected}
+            savingsContract={savingsContract}
+            onDataRefresh={async () => {
+              await fetchSpendingLimits();
+              await fetchPendingLimitProposals();
+            }}
           />
 
           {/* Step 2: Withdrawal Addresses Management - Hidden when setup is committed */}

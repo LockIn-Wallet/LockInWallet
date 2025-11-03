@@ -61,7 +61,7 @@ const formatCountdown = (executeAfter, currentTime) => {
 };
 
 // Helper function to format time remaining (matches SolanaAdapter)
-export const formatTimeRemaining = (seconds) => {
+const formatTimeRemaining = (seconds) => {
   if (seconds <= 0) return "Ready to execute";
 
   const hours = Math.floor(seconds / 3600);
@@ -135,6 +135,18 @@ const hasPendingProposalForPeriod = (periodName, pendingLimitProposals) => {
   );
 };
 
+// Check if user is on the correct network
+const isCorrectNetwork = (networkType, selectedNetwork, solanaConnected, currentChainId) => {
+  if (networkType === "solana") {
+    // For Solana, consider connected if wallet is connected
+    return solanaConnected;
+  }
+
+  // For EVM networks
+  const expectedNetwork = getCurrentNetwork(networkType, selectedNetwork);
+  return currentChainId === expectedNetwork.chainId;
+};
+
 // Export all utility functions
 export {
   NETWORKS,
@@ -142,7 +154,9 @@ export {
   getCurrentNetwork,
   isSolanaNetwork,
   formatCountdown,
+  formatTimeRemaining,
   calculateInstantWithdrawableAmount,
   detectExceedingPeriod,
   hasPendingProposalForPeriod,
+  isCorrectNetwork,
 };

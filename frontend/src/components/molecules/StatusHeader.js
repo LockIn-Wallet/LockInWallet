@@ -13,6 +13,9 @@ import {
   fontWeight,
 } from "../../styles";
 
+// Import utility functions
+import { getCurrentNetwork, isCorrectNetwork } from "../../utils/walletUtils.js";
+
 // Import other components
 import NetworkSelector from "./NetworkSelector.js";
 import WalletConnector from "./WalletConnector.js";
@@ -26,6 +29,7 @@ const StatusHeader = ({
   networkType,
   selectedNetwork,
   isNetworkSwitching,
+  currentChainId,
   // Wallet state
   provider,
   solanaWallet,
@@ -38,9 +42,10 @@ const StatusHeader = ({
   // Functions
   switchNetworkType,
   switchNetwork,
-  getCurrentNetwork,
-  isCorrectNetwork,
 }) => {
+  // Local wrapper functions using imported utilities
+  const getNetworkInfo = () => getCurrentNetwork(networkType, selectedNetwork);
+  const checkCorrectNetwork = () => isCorrectNetwork(networkType, selectedNetwork, solanaConnected, currentChainId);
   return (
     <div style={layoutStyles.headerSection}>
       {/* Main Logo */}
@@ -128,7 +133,7 @@ const StatusHeader = ({
             <div
               style={{
                 ...utilityStyles.statusIndicator,
-                backgroundColor: isCorrectNetwork()
+                backgroundColor: checkCorrectNetwork()
                   ? colors.success.main
                   : colors.error.main,
               }}
@@ -136,20 +141,16 @@ const StatusHeader = ({
             <span
               style={{
                 fontSize: fontSize.xs,
-                color: isCorrectNetwork()
+                color: checkCorrectNetwork()
                   ? colors.success.light
                   : colors.error.light,
               }}
             >
-              {isCorrectNetwork()
-                ? `Connected to ${
-                    getCurrentNetwork(networkType, selectedNetwork).name
-                  }`
+              {checkCorrectNetwork()
+                ? `Connected to ${getNetworkInfo().name}`
                 : networkType === "solana"
                 ? `Connect Solana wallet`
-                : `Wrong network - Switch to ${
-                    getCurrentNetwork(networkType, selectedNetwork).name
-                  }`}
+                : `Wrong network - Switch to ${getNetworkInfo().name}`}
             </span>
           </div>
         </div>
