@@ -48,8 +48,6 @@ import {
   fetchUserBalances as fetchUserBalancesService,
   fetchSpendingLimits as fetchSpendingLimitsService,
   fetchPendingLimitProposals as fetchPendingLimitProposalsService,
-  fetchWithdrawalAddresses as fetchWithdrawalAddressesService,
-  fetchPendingWithdrawalRequests as fetchPendingWithdrawalRequestsService,
   fetchPendingBypassRequests as fetchPendingBypassRequestsService,
 } from "./services";
 
@@ -66,10 +64,6 @@ import WithdrawalAddressSetupStep from "./components/organisms/WithdrawalAddress
 
 // Import step validation utilities
 import {
-  validateStep1,
-  validateStep2,
-  validateStep3,
-  updateStepValidation as updateStepValidationUtil,
   goToNextStep as goToNextStepUtil,
   goToPreviousStep as goToPreviousStepUtil,
 } from "./utils/stepValidation.js";
@@ -162,11 +156,7 @@ function AppContentInner({
   // Bypass system state
   const [currentTime, setCurrentTime] = useState(Math.floor(Date.now() / 1000));
 
-  // Withdrawal address management state
-  const [withdrawalAddresses, setWithdrawalAddresses] = useState([]);
-  const [pendingWithdrawalRequests, setPendingWithdrawalRequests] = useState(
-    []
-  );
+  // Bypass system state (still used by App.js for data coordination)
   const [pendingBypassRequests, setPendingBypassRequests] = useState([]);
   const [approvalModule, setApprovalModule] = useState(null);
 
@@ -185,36 +175,7 @@ function AppContentInner({
     step3Complete: false, // Setup committed/locked
   });
 
-  // Helper functions for step management - using extracted utilities
-  const validateStep1Wrapper = () => {
-    return validateStep1(
-      spendingLimits,
-      {}, // limitEdits - empty since state moved to component
-      "", // customPeriodName - empty since feature is hidden
-      "" // customPeriodLimit - empty since feature is hidden
-    );
-  };
-
-  const validateStep2Wrapper = () => {
-    return validateStep2(withdrawalAddresses, getCurrentUserAddress);
-  };
-
-  const validateStep3Wrapper = () => {
-    return validateStep3(isSetupCommitted);
-  };
-
-  const updateStepValidation = () => {
-    const params = {
-      spendingLimits,
-      limitEdits: {}, // Empty since state moved to component
-      customPeriodName: "", // Empty since feature is hidden
-      customPeriodLimit: "", // Empty since feature is hidden
-      withdrawalAddresses,
-      getCurrentUserAddress,
-      isSetupCommitted,
-    };
-    updateStepValidationUtil(params, setStepValidation);
-  };
+  // Note: Step validation functions moved to individual components for encapsulation
 
   const goToNextStep = () => {
     goToNextStepUtil(currentStep, setCurrentStep);
@@ -305,7 +266,6 @@ function AppContentInner({
     setIsSetupCommitted(false); // Reset setup status
     setBalances({}); // Clear balances
     setPendingBypassRequests([]); // Clear bypass requests
-    setPendingWithdrawalRequests([]); // Clear withdrawal requests
 
     if (newNetworkType === "solana") {
       // Disconnect EVM wallet when switching to Solana
@@ -357,8 +317,6 @@ function AppContentInner({
       setSpendingLimits([]); // Clear spending limits from previous network
       setPendingLimitProposals([]); // Clear proposals from previous network
       setPendingBypassRequests([]); // Clear bypass requests from previous network
-      setPendingWithdrawalRequests([]); // Clear withdrawal requests from previous network
-      setWithdrawalAddresses([]); // Clear withdrawal addresses from previous network
       setBalances({}); // Clear balances from previous network
       setLimitsLoaded(false); // Reset limits loaded state
 
@@ -715,12 +673,10 @@ function AppContentInner({
           await fetchPendingLimitProposals();
           console.log("✅ Solana pending proposals loading completed");
 
-          // Load withdrawal addresses and pending requests for Solana
-          console.log("📋 Loading Solana withdrawal data...");
-          await fetchWithdrawalAddresses();
-          await fetchPendingWithdrawalRequests(null, null, newTxManager);
+          // Load bypass requests for Solana (withdrawal data handled by components)
+          console.log("📋 Loading Solana bypass requests...");
           await fetchPendingBypassRequests();
-          console.log("✅ Solana withdrawal data loading completed");
+          console.log("✅ Solana bypass requests loading completed");
         }
       } else if (networkType === "solana") {
         console.log("❌ Solana wallet not ready yet:", {
@@ -894,14 +850,7 @@ function AppContentInner({
     }
   }, [networkType, balances]);
 
-  // Update step validation when relevant data changes
-  useEffect(() => {
-    updateStepValidation();
-  }, [
-    spendingLimits,
-    withdrawalAddresses,
-    isSetupCommitted,
-  ]);
+  // Note: Step validation moved to individual components
 
   // Auto-advance steps when setup is not committed and during guided flow
   useEffect(() => {
@@ -1174,8 +1123,7 @@ function AppContentInner({
       await fetchSpendingLimits(savings, web3Signer);
       await fetchPendingBypassRequests(savings, userAddress);
       await fetchPendingLimitProposals(userAddress);
-      await fetchWithdrawalAddresses(savings, userAddress);
-      await fetchPendingWithdrawalRequests(savings, userAddress);
+      // Note: Withdrawal data now handled by components
 
       // Check setup status
       const setupCommitted = await savings.isSetupCommitted();
@@ -1525,197 +1473,11 @@ function AppContentInner({
     }
   };
 
-  // ========== WITHDRAWAL ADDRESS MANAGEMENT ==========
-
-  const fetchWithdrawalAddresses = async (
-    contract = savingsContract,
-    userAddr = null
-  ) => {
-    const currentUserAddress = userAddr || userAddress;
-
-    try {
-      const addresses = await fetchWithdrawalAddressesService({
-        transactionManager,
-        savingsContract: contract || savingsContract,
-        networkType,
-        userAddress: currentUserAddress,
-        solanaPublicKey
-      });
-
-      setWithdrawalAddresses(addresses);
-      console.log(`✅ Loaded ${addresses.length} withdrawal addresses`);
-    } catch (error) {
-      console.error("Error fetching withdrawal addresses:", error);
-      setWithdrawalAddresses([]);
-    }
-  };
-
-  const fetchPendingWithdrawalRequests = async (
-    contract = savingsContract,
-    userAddr = null,
-    txManager = transactionManager
-  ) => {
-    let currentUserAddress = userAddr || getCurrentUserAddress();
-
-    try {
-      const requests = await fetchPendingWithdrawalRequestsService({
-        transactionManager: txManager,
-        savingsContract: contract || savingsContract,
-        networkType,
-        userAddress: currentUserAddress,
-        getCurrentUserAddress
-      });
-
-      setPendingWithdrawalRequests(requests);
-      console.log(`✅ Loaded ${requests.length} withdrawal requests`);
-    } catch (error) {
-      console.error("Error fetching withdrawal requests:", error);
-      setPendingWithdrawalRequests([]);
-    }
-  };
-
-  const requestWithdrawalAddress = async (title, address) => {
-    // Network-aware validation
-    if (
-      networkType === "solana" &&
-      (!transactionManager || !title || !address)
-    ) {
-      alert("Please fill in all fields and connect your Solana wallet");
-      return;
-    }
-    if (
-      networkType === "evm" &&
-      (!savingsContract || !title || !address)
-    ) {
-      alert("Please fill in all fields and connect your MetaMask wallet");
-      return;
-    }
-
-    try {
-      if (networkType === "solana") {
-        // Solana address request logic (with timelock, same as EVM)
-        // Basic Solana address validation (44 characters, base58)
-        if (address.length !== 44) {
-          alert("Please enter a valid Solana address (44 characters)");
-          return;
-        }
-
-        const adapter = transactionManager.getCurrentAdapter();
-        const txHash = await adapter.addWithdrawalDestination(
-          address,
-          title
-        );
-
-        alert(
-          `✅ Solana withdrawal address processed successfully!\n\n` +
-            `Title: ${title}\n` +
-            `Address: ${address}\n` +
-            `Transaction: ${txHash}\n\n` +
-            `The address has been processed based on your contract lock status. Check the withdrawal destinations or pending requests sections.`
-        );
-      } else {
-        // EVM address request logic (existing - requires timelock)
-        // Validate address format
-        if (!ethers.isAddress(address)) {
-          alert("Please enter a valid Ethereum address");
-          return;
-        }
-
-        const tx = await savingsContract.requestWithdrawalAddress(
-          title,
-          address
-        );
-        await tx.wait();
-
-        alert(
-          `✅ EVM withdrawal address request submitted successfully!\n\n` +
-            `Title: ${title}\n` +
-            `Address: ${address}\n` +
-            `Executable after: 24 hours\n\n` +
-            `You can execute this request from the "Pending Withdrawal Requests" section once the waiting period is over.`
-        );
-      }
-
-
-      // Refresh data for both networks
-      if (networkType === "solana") {
-        // Add a small delay to ensure transaction is fully processed
-        console.log("⏳ Waiting for account data to update...");
-        await new Promise((resolve) => setTimeout(resolve, 1000)); // 1 second delay
-
-        await fetchWithdrawalAddresses();
-        await fetchPendingWithdrawalRequests(); // Fetch pending requests for Solana timelock
-      } else {
-        await fetchPendingWithdrawalRequests();
-      }
-    } catch (error) {
-      console.error(
-        `Error requesting ${networkType} withdrawal address:`,
-        error
-      );
-
-      // Network-aware error handling
-      if (networkType === "solana") {
-        if (error.message.includes("already exists")) {
-          alert(
-            "This Solana address is already in your withdrawal destinations"
-          );
-        } else if (error.message.includes("own address")) {
-          alert(
-            "You cannot add your own Solana wallet address as a withdrawal destination"
-          );
-        } else {
-          alert(`Failed to add Solana withdrawal address: ${error.message}`);
-        }
-      } else {
-        // EVM error handling
-        if (error.message.includes("Address already exists")) {
-          alert("This address is already in your withdrawal addresses");
-        } else if (error.message.includes("Cannot set own address")) {
-          alert(
-            "You cannot add your own wallet address as a withdrawal destination"
-          );
-        } else {
-          alert(`Failed to request withdrawal address: ${error.message}`);
-        }
-      }
-    }
-  };
+  // Note: Withdrawal address management moved to WithdrawalInterface and WithdrawalAddressSetupStep components
 
 
 
-  const removeWithdrawalAddress = async (destination) => {
-    try {
-      if (networkType === "solana") {
-        // Solana implementation
-        if (!transactionManager) {
-          throw new Error("Transaction manager not initialized");
-        }
 
-        const solanaAdapter = transactionManager.getCurrentAdapter();
-        const txHash = await solanaAdapter.removeWithdrawalDestination(
-          destination
-        );
-        console.log("Solana withdrawal address removal transaction:", txHash);
-        alert("Withdrawal address removed successfully!");
-      } else {
-        // EVM implementation
-        if (!savingsContract) {
-          throw new Error("Savings contract not initialized");
-        }
-
-        const tx = await savingsContract.removeWithdrawalAddress(destination);
-        await tx.wait();
-        alert("Withdrawal address removed successfully!");
-      }
-
-      // Refresh data for both networks
-      await fetchWithdrawalAddresses();
-    } catch (error) {
-      console.error("Error removing withdrawal address:", error);
-      alert(`Failed to remove withdrawal address: ${error.message}`);
-    }
-  };
 
 
 
@@ -1840,17 +1602,15 @@ function AppContentInner({
               stepValidation={stepValidation}
               spendingLimits={spendingLimits}
 
-              // Withdrawal data
-              withdrawalAddresses={withdrawalAddresses}
-              pendingWithdrawalRequests={pendingWithdrawalRequests}
+              // Blockchain services (dependency injection)
+              transactionManager={transactionManager}
+              savingsContract={savingsContract}
 
               // Network context
               networkType={networkType}
-
-              // Withdrawal actions
-              getCurrentUserAddress={getCurrentUserAddress}
-              removeWithdrawalAddress={removeWithdrawalAddress}
-              requestWithdrawalAddress={requestWithdrawalAddress}
+              solanaConnected={solanaConnected}
+              solanaPublicKey={solanaPublicKey}
+              userAddress={userAddress}
 
               // Step navigation
               goToNextStep={goToNextStep}
