@@ -162,7 +162,6 @@ function AppContentInner({
   const [setupInfo, setSetupInfo] = useState(null);
 
   // Bypass system state
-  const [pendingBypassRequests, setPendingBypassRequests] = useState([]);
   const [currentTime, setCurrentTime] = useState(Math.floor(Date.now() / 1000));
 
   // Withdrawal address management state
@@ -170,8 +169,6 @@ function AppContentInner({
   const [pendingWithdrawalRequests, setPendingWithdrawalRequests] = useState(
     []
   );
-  const [selectedWithdrawalDestination, setSelectedWithdrawalDestination] =
-    useState("self");
   const [approvalModule, setApprovalModule] = useState(null);
 
   // Enhanced withdrawal system state
@@ -1967,86 +1964,7 @@ function AppContentInner({
     }
   };
 
-  const executeWithdrawalRequest = async (requestId) => {
-    // Check connection for both networks
-    if (networkType === "solana" && (!transactionManager || !solanaConnected)) {
-      alert("Please connect your Solana wallet first");
-      return;
-    }
-    if (networkType === "evm" && !savingsContract) {
-      alert("Please connect your wallet first");
-      return;
-    }
 
-    try {
-      if (networkType === "solana") {
-        // Solana withdrawal destination request execution
-        console.log(
-          "🔄 Executing Solana withdrawal destination request:",
-          requestId
-        );
-        const adapter = transactionManager.getCurrentAdapter();
-        await adapter.executeWithdrawalDestinationRequest(requestId);
-        alert("✅ Withdrawal address request executed successfully!");
-      } else {
-        // EVM withdrawal destination request execution
-        const tx = await savingsContract.executeWithdrawalAddressRequest(
-          requestId
-        );
-        await tx.wait();
-        alert("✅ Withdrawal address request executed successfully!");
-      }
-
-      // Refresh data
-      await fetchWithdrawalAddresses();
-      await fetchPendingWithdrawalRequests();
-    } catch (error) {
-      console.error("Error executing withdrawal request:", error);
-      if (error.message.includes("Request still in timelock")) {
-        alert("Request is still in 24-hour timelock period");
-      } else {
-        alert(`Failed to execute withdrawal request: ${error.message}`);
-      }
-    }
-  };
-
-  const cancelWithdrawalRequest = async (requestId) => {
-    try {
-      if (networkType === "solana") {
-        // Solana implementation
-        if (!transactionManager) {
-          throw new Error("Transaction manager not initialized");
-        }
-
-        const solanaAdapter = transactionManager.getCurrentAdapter();
-        const txHash = await solanaAdapter.cancelWithdrawalDestinationRequest(
-          requestId
-        );
-        console.log(
-          "Solana withdrawal request cancellation transaction:",
-          txHash
-        );
-        alert("Withdrawal address request cancelled successfully!");
-      } else {
-        // EVM implementation
-        if (!savingsContract) {
-          throw new Error("Savings contract not initialized");
-        }
-
-        const tx = await savingsContract.cancelWithdrawalAddressRequest(
-          requestId
-        );
-        await tx.wait();
-        alert("Withdrawal address request cancelled successfully!");
-      }
-
-      // Refresh data for both networks
-      await fetchPendingWithdrawalRequests();
-    } catch (error) {
-      console.error("Error cancelling withdrawal request:", error);
-      alert(`Failed to cancel withdrawal request: ${error.message}`);
-    }
-  };
 
   const removeWithdrawalAddress = async (destination) => {
     try {
@@ -2081,392 +1999,7 @@ function AppContentInner({
     }
   };
 
-  const withdrawToDestination = async () => {
-    // Network-aware connection check
-    if (networkType === "solana" && (!transactionManager || !solanaConnected)) {
-      alert("Please connect your Solana wallet first");
-      return;
-    }
-    if (
-      networkType === "evm" &&
-      (!savingsContract || !selectedToken || !withdrawalAmount)
-    ) {
-      alert("Please connect your MetaMask wallet first");
-      return;
-    }
 
-    // Validate inputs
-    if (
-      !withdrawalAmount ||
-      isNaN(withdrawalAmount) ||
-      parseFloat(withdrawalAmount) <= 0
-    ) {
-      alert("Please enter a valid withdrawal amount");
-      return;
-    }
-
-    try {
-      if (networkType === "solana") {
-        // Solana withdrawal to destination logic
-        console.log(
-          "💸 Solana: Withdrawing to destination",
-          withdrawalAmount,
-          selectedToken,
-          selectedWithdrawalDestination
-        );
-
-        const adapter = transactionManager.getCurrentAdapter();
-        const amountValue = parseFloat(withdrawalAmount);
-        let destinationAddress = selectedWithdrawalDestination;
-
-        // Handle "self" destination - use user's wallet address
-        if (selectedWithdrawalDestination === "self") {
-          if (!solanaPublicKey) {
-            throw new Error("Solana wallet not connected");
-          }
-          destinationAddress = solanaPublicKey.toString();
-        }
-
-        let txHash;
-        if (selectedToken === "SOL") {
-          // Withdraw SOL to destination
-          const amountLamports = Math.floor(amountValue * Math.pow(10, 9)); // Convert to lamports
-          txHash = await adapter.withdrawSolToDestination(
-            amountLamports,
-            destinationAddress
-          );
-          console.log("Solana SOL withdrawal to destination:", txHash);
-        } else {
-          // Withdraw SPL token to destination
-          // Get the token mint address from network configuration
-          const currentNetwork = getCurrentNetwork(
-            networkType,
-            selectedNetwork
-          );
-          const token = currentNetwork.tokens[selectedToken];
-          if (!token) {
-            alert("Please select a valid token");
-            return;
-          }
-
-          const tokenMint = token.address; // Unified token address field
-          const decimals = token.decimals;
-
-          // Convert to token's base units
-          const amountTokenUnits = Math.floor(
-            amountValue * Math.pow(10, decimals)
-          );
-          txHash = await adapter.withdrawSplToDestination(
-            amountTokenUnits,
-            tokenMint,
-            destinationAddress
-          );
-          console.log("Solana SPL withdrawal to destination:", txHash);
-        }
-
-        alert(
-          `✅ Withdrawal of ${withdrawalAmount} ${selectedToken} to destination successful!`
-        );
-      } else {
-        // EVM withdrawal to destination logic (existing)
-        if (!savingsContract || !selectedToken || !withdrawalAmount) {
-          alert("Missing required data for EVM withdrawal");
-          return;
-        }
-
-        // Check if user is on the correct network
-        if (!isCorrectNetwork()) {
-          const currentNetwork = getCurrentNetwork(
-            networkType,
-            selectedNetwork
-          );
-          alert(`Please switch to ${currentNetwork.name} to make withdrawals`);
-          return;
-        }
-
-        const currentNetwork = getCurrentNetwork(networkType, selectedNetwork);
-        let tokenAddress;
-        let decimals;
-        let tokenSymbol;
-
-        // Determine token details based on selection
-        if (selectedToken === "ETH") {
-          tokenAddress = ETH_ADDRESS;
-          decimals = 18;
-          tokenSymbol = "ETH";
-        } else if (currentNetwork.tokens[selectedToken]) {
-          const token = currentNetwork.tokens[selectedToken];
-          // Check availability based on network type
-          const networkTokenAddress = token.address;
-          if (
-            !networkTokenAddress ||
-            token.address === "0x0000000000000000000000000000000000000000"
-          ) {
-            alert(`${token.symbol} is not available on ${currentNetwork.name}`);
-            return;
-          }
-          tokenAddress = networkTokenAddress;
-          decimals = token.decimals;
-          tokenSymbol = token.symbol;
-        } else {
-          alert("Please select a valid token");
-          return;
-        }
-
-        const amount = ethers.parseUnits(withdrawalAmount, decimals);
-
-        let tx;
-        if (selectedWithdrawalDestination === "self") {
-          // Use original withdraw function
-          tx = await savingsContract.withdraw(amount, tokenAddress);
-        } else {
-          // Use withdrawTo function with selected destination
-          tx = await savingsContract.withdrawTo(
-            amount,
-            tokenAddress,
-            selectedWithdrawalDestination
-          );
-        }
-
-        await tx.wait();
-        alert(`Withdrawal of ${withdrawalAmount} ${tokenSymbol} successful!`);
-
-        // Clear form and refresh balances and spending limits
-        setWithdrawalAmount("");
-        await refreshBalances();
-        await fetchSpendingLimits();
-      }
-
-      // Clear form and refresh data for both networks
-      setWithdrawalAmount("");
-
-      // For Solana, add a small delay to ensure account state is updated
-      if (networkType === "solana") {
-        console.log("⏳ Waiting for Solana account state to update...");
-        await new Promise((resolve) => setTimeout(resolve, 1000)); // 1 second delay
-      }
-
-      await refreshBalances();
-      if (networkType === "evm") {
-        await fetchSpendingLimits();
-      }
-      if (networkType === "solana") {
-        await fetchPendingBypassRequests();
-        await fetchWithdrawalAddresses();
-      }
-    } catch (error) {
-      console.error("Withdrawal error:", error);
-
-      // Network-aware error handling
-      if (networkType === "solana") {
-        if (error.message.includes("Destination not approved")) {
-          alert("Selected withdrawal destination is not approved for Solana");
-        } else if (error.message.includes("Insufficient")) {
-          alert("Insufficient balance for this withdrawal");
-        } else {
-          alert(`Solana withdrawal failed: ${error.message}`);
-        }
-      } else {
-        // EVM error handling
-        if (error.message.includes("Exceeds")) {
-          alert(`Withdrawal blocked: ${error.message}`);
-        } else if (error.message.includes("Insufficient balance")) {
-          alert("Insufficient balance for this withdrawal");
-        } else if (error.message.includes("Destination not approved")) {
-          alert("Selected withdrawal destination is not approved");
-        } else {
-          alert("Failed to withdraw. Please try again.");
-        }
-      }
-    }
-  };
-
-  // Function to request bypass for withdrawal
-  const requestBypassForWithdrawal = async () => {
-    // Network-aware validation
-    if (
-      networkType === "solana" &&
-      (!transactionManager ||
-        !solanaConnected ||
-        !withdrawalAmount ||
-        !exceedingPeriod)
-    ) {
-      alert(
-        "Invalid withdrawal request - please connect Solana wallet and enter withdrawal details"
-      );
-      return;
-    }
-    if (
-      networkType === "evm" &&
-      (!savingsContract || !withdrawalAmount || !exceedingPeriod)
-    ) {
-      alert(
-        "Invalid withdrawal request - please connect MetaMask and enter withdrawal details"
-      );
-      return;
-    }
-
-    // Show confirmation dialog
-    const confirmed = window.confirm(
-      `Request withdrawal of ${withdrawalAmount} ${selectedToken} above ${exceedingPeriod} limit?\n\n` +
-        `This will require a 24-hour waiting period before you can execute the withdrawal.\n\n` +
-        `Click OK to submit the request.`
-    );
-
-    if (!confirmed) return;
-
-    try {
-      if (networkType === "solana") {
-        // Solana bypass request logic
-        console.log(
-          "🔒 Solana: Requesting bypass for",
-          withdrawalAmount,
-          selectedToken,
-          exceedingPeriod
-        );
-
-        const adapter = transactionManager.getCurrentAdapter();
-        let tokenAddress;
-        let destination = selectedWithdrawalDestination;
-
-        // Handle "self" destination
-        if (selectedWithdrawalDestination === "self") {
-          if (!solanaPublicKey) {
-            throw new Error("Solana wallet not connected");
-          }
-          destination = solanaPublicKey.toString();
-        }
-
-        // Determine token address
-        if (selectedToken === "SOL") {
-          tokenAddress = "So11111111111111111111111111111111111111112"; // SOL mint (System Program ID)
-        } else {
-          // Get current USDT or other SPL token address from network config
-          const currentNetwork = getCurrentNetwork(
-            networkType,
-            selectedNetwork
-          );
-          console.log("🔍 DEBUG: Network selection:", {
-            selectedNetwork,
-            currentNetwork: currentNetwork.name,
-            networkType,
-            tokenConfig: currentNetwork.tokens[selectedToken],
-          });
-
-          const token = currentNetwork.tokens[selectedToken];
-          if (token) {
-            // Unified token address field for both Solana and EVM
-            tokenAddress = token.address;
-            console.log("🔍 DEBUG: Token resolution:", {
-              tokenAddress: token.address,
-              finalTokenAddress: tokenAddress,
-            });
-          } else {
-            alert("Please select a valid token");
-            return;
-          }
-        }
-
-        console.log("🔍 DEBUG: Requesting bypass with params:", {
-          amount: withdrawalAmount,
-          tokenAddress,
-          period: exceedingPeriod,
-          destination,
-          selectedToken,
-          networkType,
-        });
-
-        const txHash = await adapter.requestWithdrawalBypass(
-          withdrawalAmount,
-          tokenAddress,
-          exceedingPeriod,
-          destination
-        );
-
-        alert(
-          `✅ Solana bypass request submitted successfully!\n\n` +
-            `Amount: ${withdrawalAmount} ${selectedToken}\n` +
-            `Period: ${exceedingPeriod}\n` +
-            `Destination: ${destination.slice(0, 8)}...${destination.slice(
-              -4
-            )}\n` +
-            `Executable after: 24 hours\n\n` +
-            `Transaction: ${txHash}\n\n` +
-            `You can execute this request from the "Pending Bypass Requests" section once the waiting period is over.`
-        );
-      } else {
-        // EVM bypass request logic (existing)
-        const currentNetwork = getCurrentNetwork(networkType, selectedNetwork);
-        let tokenAddress;
-        let decimals;
-
-        // Determine token details
-        if (selectedToken === "ETH") {
-          tokenAddress = ETH_ADDRESS;
-          decimals = 18;
-        } else if (currentNetwork.tokens[selectedToken]) {
-          const token = currentNetwork.tokens[selectedToken];
-          tokenAddress = token.address; // Unified token address field
-          decimals = token.decimals;
-        } else {
-          alert("Please select a valid token");
-          return;
-        }
-
-        const amount = ethers.parseUnits(withdrawalAmount, decimals);
-
-        const tx = await savingsContract.requestLimitBypass(
-          amount,
-          exceedingPeriod,
-          tokenAddress
-        );
-        await tx.wait();
-
-        alert(
-          `✅ EVM bypass request submitted successfully!\n\n` +
-            `Amount: ${withdrawalAmount} ${selectedToken}\n` +
-            `Period: ${exceedingPeriod}\n` +
-            `Executable after: 24 hours\n\n` +
-            `You can execute this request from the "Pending Bypass Requests" section once the waiting period is over.`
-        );
-      }
-
-      // Clear form and refresh data for both networks
-      setWithdrawalAmount("");
-      if (networkType === "evm") {
-        await fetchPendingBypassRequests();
-        await fetchSpendingLimits();
-      }
-      if (networkType === "solana") {
-        await fetchPendingBypassRequests();
-        await fetchSpendingLimits();
-      }
-    } catch (error) {
-      console.error("Error requesting bypass:", error);
-
-      // Network-aware error handling
-      if (networkType === "solana") {
-        if (error.message.includes("Destination not approved")) {
-          alert("Selected withdrawal destination is not approved for Solana");
-        } else if (error.message.includes("Insufficient")) {
-          alert("Insufficient balance for this withdrawal");
-        } else {
-          alert(`Solana bypass request failed: ${error.message}`);
-        }
-      } else {
-        // EVM error handling
-        if (error.message.includes("Insufficient balance")) {
-          alert("Insufficient balance for this withdrawal");
-        } else if (error.message.includes("Amount within limits")) {
-          alert(
-            "This amount is within your spending limits - use instant withdrawal instead"
-          );
-        } else {
-          alert(`Failed to request bypass: ${error.message}`);
-        }
-      }
-    }
-  };
 
   const fetchPendingBypassRequests = async (
     contract = savingsContract,
@@ -2491,85 +2024,7 @@ function AppContentInner({
     }
   };
 
-  const executeBypassRequest = async (requestId) => {
-    // Check connection for both networks
-    if (networkType === "solana" && (!transactionManager || !solanaConnected)) {
-      alert("Please connect your Solana wallet first");
-      return;
-    }
-    if (networkType === "evm" && !savingsContract) {
-      alert("Please connect your wallet first");
-      return;
-    }
 
-    try {
-      if (networkType === "solana") {
-        // Solana bypass execution
-        console.log("🔄 Executing Solana bypass request:", requestId);
-        const adapter = transactionManager.getCurrentAdapter();
-        await adapter.executeWithdrawalBypass(requestId);
-        alert("✅ Bypass withdrawal executed successfully!");
-      } else {
-        // EVM bypass execution
-        const tx = await savingsContract.executeBypassWithdrawal(requestId);
-        await tx.wait();
-        alert("✅ Bypass withdrawal executed successfully!");
-      }
-
-      // Refresh data
-      await refreshBalances();
-      await fetchSpendingLimits();
-      await fetchPendingBypassRequests();
-    } catch (error) {
-      console.error("Execute bypass error:", error);
-      if (error.message.includes("Request still in timelock")) {
-        alert("Request is still in 24-hour timelock period");
-      } else if (error.message.includes("Request does not exist")) {
-        alert("Request not found");
-      } else if (error.message.includes("Request already executed")) {
-        alert("Request has already been executed");
-      } else if (error.message.includes("Insufficient balance")) {
-        alert("Insufficient balance for this withdrawal");
-      } else if (error.message.includes("Exceeds")) {
-        alert(`Withdrawal blocked: ${error.message}`);
-      } else {
-        alert(`Failed to execute bypass: ${error.message}`);
-      }
-    }
-  };
-
-  const cancelBypassRequest = async (requestId) => {
-    // Check connection for both networks
-    if (networkType === "solana" && (!transactionManager || !solanaConnected)) {
-      alert("Please connect your Solana wallet first");
-      return;
-    }
-    if (networkType === "evm" && !savingsContract) {
-      alert("Please connect your wallet first");
-      return;
-    }
-
-    try {
-      if (networkType === "solana") {
-        // Solana bypass cancellation
-        console.log("🔄 Cancelling Solana bypass request:", requestId);
-        const adapter = transactionManager.getCurrentAdapter();
-        await adapter.cancelWithdrawalBypass(requestId);
-        alert("Bypass request cancelled successfully!");
-      } else {
-        // EVM bypass cancellation
-        const tx = await savingsContract.cancelBypassRequest(requestId);
-        await tx.wait();
-        alert("Bypass request cancelled successfully!");
-      }
-
-      // Refresh pending requests
-      await fetchPendingBypassRequests();
-    } catch (error) {
-      console.error("Cancel bypass error:", error);
-      alert(`Failed to cancel bypass request: ${error.message}`);
-    }
-  };
 
   return (
     <div style={styles.app.container}>
@@ -2687,40 +2142,46 @@ function AppContentInner({
           {/* Withdrawal Interface Component */}
           {isSetupCommitted && (
             <WithdrawalInterface
+              // Blockchain services (dependency injection)
+              transactionManager={transactionManager}
+              savingsContract={savingsContract}
+              signer={signer}
+              connection={connection}
+
               // Network & config
               networkType={networkType}
               selectedNetwork={selectedNetwork}
               getCurrentUserAddress={getCurrentUserAddress}
               getCurrentNetwork={getCurrentNetwork}
 
-              // Withdrawal state
+              // Wallet state
+              solanaConnected={solanaConnected}
+              solanaPublicKey={solanaPublicKey}
+              userAddress={userAddress}
+
+              // Shared token state (shared with DepositInterface)
               selectedToken={selectedToken}
               setSelectedToken={setSelectedToken}
-              withdrawalAmount={withdrawalAmount}
-              setWithdrawalAmount={setWithdrawalAmount}
-              selectedWithdrawalDestination={selectedWithdrawalDestination}
-              setSelectedWithdrawalDestination={setSelectedWithdrawalDestination}
 
-              // Calculated values
+              // Calculated values (computed in App.js)
               instantWithdrawableAmount={instantWithdrawableAmount}
               limitingPeriod={limitingPeriod}
               exceedsInstantLimit={exceedsInstantLimit}
               exceedingPeriod={exceedingPeriod}
 
-              // Data arrays
-              withdrawalAddresses={withdrawalAddresses}
-              pendingWithdrawalRequests={pendingWithdrawalRequests}
-              pendingBypassRequests={pendingBypassRequests}
-
-
-              // Action handlers
-              withdrawToDestination={withdrawToDestination}
-              requestBypassForWithdrawal={requestBypassForWithdrawal}
-              removeWithdrawalAddress={removeWithdrawalAddress}
-              executeWithdrawalRequest={executeWithdrawalRequest}
-              cancelWithdrawalRequest={cancelWithdrawalRequest}
-              executeBypassRequest={executeBypassRequest}
-              cancelBypassRequest={cancelBypassRequest}
+              // Callbacks for App.js state updates
+              onBalanceUpdate={refreshBalances}
+              onSpendingLimitsUpdate={fetchSpendingLimits}
+              onWithdrawalDataUpdate={(type, data) => {
+                // Handle withdrawal data updates from component
+                if (type === 'addresses') {
+                  setWithdrawalAddresses(data);
+                } else if (type === 'requests') {
+                  setPendingWithdrawalRequests(data);
+                } else if (type === 'bypasses') {
+                  setPendingBypassRequests(data);
+                }
+              }}
 
               // Utilities
               currentTime={currentTime}
