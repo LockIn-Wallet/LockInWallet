@@ -1,4 +1,5 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
+import PropTypes from "prop-types";
 
 // Import styles
 import {
@@ -13,25 +14,101 @@ import {
 // Import utility functions
 import { getCurrentNetwork } from "../../utils/walletUtils.js";
 
+// Import services
+import {
+  fetchUserBalances as fetchUserBalancesService,
+} from "../../services";
+
 /**
  * BalanceDisplay component - Shows token balances and educational content
  * Displays user's token balances with refresh functionality and setup mode education
+ * Now with encapsulated balance domain logic and service injection pattern
  */
 const BalanceDisplay = ({
+  // Blockchain services (dependency injection)
+  transactionManager,
+  savingsContract,
+  signer,
+  connection,
+
+  // Network and wallet props
+  networkType,
+  selectedNetwork,
+  userAddress,
+  solanaPublicKey,
+  solanaConnected,
+
   // Setup state
   isSetupCommitted,
   // Wallet state
   provider,
-  networkType,
   solanaWallet,
-  // Balance state
-  balances,
-  // Network data
-  selectedNetwork,
-  // Functions
-  refreshBalances,
+
+  // Callbacks for App.js state updates
+  onBalanceUpdate,
   connectWallet,
 }) => {
+  // Internal balance state (moved from App.js)
+  const [balances, setBalances] = useState({});
+
+  // Unified balance refresh function (moved from App.js)
+  const refreshBalances = async (txManager = transactionManager) => {
+    try {
+      const fetchedBalances = await fetchUserBalancesService({
+        transactionManager: txManager,
+        savingsContract,
+        signer,
+        connection,
+        networkType,
+        selectedNetwork,
+        getCurrentNetwork,
+        userAddress,
+        solanaPublicKey
+      });
+
+      setBalances(fetchedBalances);
+      console.log("✅ BalanceDisplay: Balances refreshed:", fetchedBalances);
+
+      // Notify parent component of balance update
+      if (onBalanceUpdate) {
+        onBalanceUpdate(fetchedBalances);
+      }
+    } catch (error) {
+      console.error("❌ BalanceDisplay: Error refreshing balances:", error);
+      setBalances({});
+
+      // Still notify parent even on error (with empty balances)
+      if (onBalanceUpdate) {
+        onBalanceUpdate({});
+      }
+    }
+  };
+
+  // Load balances when dependencies change
+  useEffect(() => {
+    const loadBalances = async () => {
+      if (networkType === "solana") {
+        // For Solana, check if wallet is connected and transaction manager is available
+        if (solanaConnected && transactionManager) {
+          await refreshBalances();
+        }
+      } else {
+        // For EVM, check if provider and signer are available
+        if (provider && signer && savingsContract) {
+          await refreshBalances();
+        }
+      }
+    };
+
+    loadBalances();
+  }, [transactionManager, savingsContract, signer, provider, solanaConnected, networkType, selectedNetwork]);
+
+  // Set default balances for immediate display
+  useEffect(() => {
+    if (networkType === "solana" && Object.keys(balances).length === 0) {
+      setBalances({ SOL: 0 });
+    }
+  }, [networkType, balances]);
   return (
     <>
       {/* Multi-token balance display - ALWAYS SHOWN */}
@@ -200,6 +277,31 @@ const BalanceDisplay = ({
       </div>
     </>
   );
+};
+
+BalanceDisplay.propTypes = {
+  // Blockchain services (dependency injection)
+  transactionManager: PropTypes.object,
+  savingsContract: PropTypes.object,
+  signer: PropTypes.object,
+  connection: PropTypes.object,
+
+  // Network and wallet props
+  networkType: PropTypes.string.isRequired,
+  selectedNetwork: PropTypes.string.isRequired,
+  userAddress: PropTypes.string,
+  solanaPublicKey: PropTypes.object,
+  solanaConnected: PropTypes.bool,
+
+  // Setup state
+  isSetupCommitted: PropTypes.bool.isRequired,
+  // Wallet state
+  provider: PropTypes.object,
+  solanaWallet: PropTypes.object,
+
+  // Callbacks for App.js state updates
+  onBalanceUpdate: PropTypes.func,
+  connectWallet: PropTypes.func.isRequired,
 };
 
 export default BalanceDisplay;

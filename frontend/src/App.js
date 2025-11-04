@@ -45,7 +45,6 @@ import {
 
 // Import services
 import {
-  fetchUserBalances as fetchUserBalancesService,
   fetchSpendingLimits as fetchSpendingLimitsService,
   fetchPendingLimitProposals as fetchPendingLimitProposalsService,
   fetchPendingBypassRequests as fetchPendingBypassRequestsService,
@@ -283,7 +282,7 @@ function AppContentInner({
           selectedNetwork
         );
         if (newTxManager) {
-          await refreshBalances(newTxManager);
+          // Balance loading now handled by BalanceDisplay component
           // Check proxy status for Solana
           const userAddress = await newTxManager.getAddress();
           if (userAddress) {
@@ -518,12 +517,7 @@ function AppContentInner({
     }
   }, []); // Run once on mount
 
-  // Refresh balances when network changes (EVM only)
-  useEffect(() => {
-    if (networkType === "evm" && savingsContract && signer) {
-      fetchAllBalances();
-    }
-  }, [selectedNetwork, savingsContract, signer, networkType]);
+  // Balance loading when network changes now handled by BalanceDisplay component
 
   // Detect existing Solana connection on page load
   useEffect(() => {
@@ -564,28 +558,7 @@ function AppContentInner({
     );
   }, [withdrawalAmount, spendingLimits, instantWithdrawableAmount]);
 
-  // Unified balance refresh function for both EVM and Solana
-  const refreshBalances = async (txManager = transactionManager) => {
-    try {
-      const balances = await fetchUserBalancesService({
-        transactionManager: txManager,
-        savingsContract,
-        signer,
-        connection,
-        networkType,
-        selectedNetwork,
-        getCurrentNetwork,
-        userAddress,
-        solanaPublicKey
-      });
-
-      setBalances(balances);
-      console.log("✅ Balances refreshed:", balances);
-    } catch (error) {
-      console.error("❌ Error refreshing balances:", error);
-      setBalances({});
-    }
-  };
+  // Balance refresh function moved to BalanceDisplay component
 
   // Initialize TransactionManager when network type changes
   useEffect(() => {
@@ -652,7 +625,7 @@ function AppContentInner({
           setTransactionManager(newTxManager);
           console.log("✅ TransactionManager state updated");
 
-          await refreshBalances(newTxManager);
+          // Balance loading now handled by BalanceDisplay component
           // Check proxy status for Solana
           const userAddress = await newTxManager.getAddress();
           if (userAddress) {
@@ -734,7 +707,7 @@ function AppContentInner({
             );
             setTransactionManager(newTxManager);
 
-            await refreshBalances(newTxManager);
+            // Balance loading now handled by BalanceDisplay component
             const userAddress = await newTxManager.getAddress();
             if (userAddress) {
               await checkSolanaProxyStatus(newTxManager, userAddress);
@@ -805,7 +778,7 @@ function AppContentInner({
             );
             if (newTxManager) {
               setTransactionManager(newTxManager);
-              await refreshBalances(newTxManager);
+              // Balance loading now handled by BalanceDisplay component
               return; // Success, exit early
             }
           }
@@ -867,30 +840,7 @@ function AppContentInner({
 
   // Note: Balance loading when switching networks is now handled directly in switchNetworkType()
 
-  const fetchAllBalances = async (
-    contract = savingsContract,
-    userAddr = null
-  ) => {
-    try {
-      const balances = await fetchUserBalancesService({
-        transactionManager,
-        savingsContract: contract,
-        signer,
-        connection,
-        networkType,
-        selectedNetwork,
-        getCurrentNetwork,
-        userAddress: userAddr,
-        solanaPublicKey
-      });
-
-      setBalances(balances);
-      console.log("✅ All balances fetched:", balances);
-    } catch (error) {
-      console.error("Error fetching all balances:", error);
-      setBalances({});
-    }
-  };
+  // Balance fetching function moved to BalanceDisplay component
 
   const checkProxyStatusWithSigner = async (
     contract,
@@ -1076,7 +1026,7 @@ function AppContentInner({
     const web3Signer = await web3Provider.getSigner();
 
     // Get current network and use its contract address
-    const currentNetwork = getCurrentNetwork(selectedNetwork);
+    const currentNetwork = getCurrentNetwork(networkType, selectedNetwork);
     const contractAddress = currentNetwork.savingsContract;
 
     if (contractAddress === "0x0000000000000000000000000000000000000000") {
@@ -1114,7 +1064,7 @@ function AppContentInner({
     try {
       const userAddress = await web3Signer.getAddress();
       console.log(`Connecting wallet for user: ${userAddress}`);
-      await fetchAllBalances(savings, userAddress);
+      // Balance loading now handled by BalanceDisplay component
       console.log(`About to check proxy status...`);
       if (networkType === "evm") {
         await checkProxyStatusWithSigner(savings, web3Signer, userAddress);
@@ -1267,7 +1217,7 @@ function AppContentInner({
         await new Promise((resolve) => setTimeout(resolve, 1000)); // 1 second delay
       }
 
-      await refreshBalances();
+      // Balance and spending limits updates now handled by individual components
       await fetchSpendingLimits();
     } catch (error) {
       console.error("Withdrawal error:", error);
@@ -1531,6 +1481,7 @@ function AppContentInner({
         networkType={networkType}
         solanaConnected={solanaConnected}
         solanaWallet={solanaWallet}
+        connectWallet={connectWallet}
       />
 
       {provider ||
@@ -1538,13 +1489,30 @@ function AppContentInner({
         <div>
           {/* Balance Display Component */}
           <BalanceDisplay
-            isSetupCommitted={isSetupCommitted}
-            provider={provider}
+            // Blockchain services (dependency injection)
+            transactionManager={transactionManager}
+            savingsContract={savingsContract}
+            signer={signer}
+            connection={connection}
+
+            // Network and wallet props
             networkType={networkType}
-            solanaWallet={solanaWallet}
-            balances={balances}
             selectedNetwork={selectedNetwork}
-            refreshBalances={refreshBalances}
+            userAddress={userAddress}
+            solanaPublicKey={solanaPublicKey}
+            solanaConnected={solanaConnected}
+
+            // Setup state
+            isSetupCommitted={isSetupCommitted}
+            // Wallet state
+            provider={provider}
+            solanaWallet={solanaWallet}
+
+            // Callbacks for App.js state updates
+            onBalanceUpdate={(newBalances) => {
+              // Update parent state for other components that might need balance data
+              setBalances(newBalances);
+            }}
             connectWallet={connectWallet}
           />
 

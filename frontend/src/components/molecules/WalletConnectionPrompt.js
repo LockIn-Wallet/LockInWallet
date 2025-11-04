@@ -7,6 +7,7 @@ import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 import {
   layoutStyles,
   spacing,
+  buttonStyles,
 } from "../../styles";
 
 /**
@@ -18,12 +19,21 @@ const WalletConnectionPrompt = ({
   networkType,
   solanaConnected,
   solanaWallet,
+  connectWallet,
 }) => {
   // Show EVM wallet connection prompt
   if (!provider && networkType !== "solana") {
     return (
       <div style={layoutStyles.emptyState}>
         <p>Please connect your MetaMask wallet to access the savings features.</p>
+        <div style={{ marginTop: spacing.md }}>
+          <button
+            onClick={connectWallet}
+            style={buttonStyles.primary}
+          >
+            Connect MetaMask
+          </button>
+        </div>
       </div>
     );
   }
