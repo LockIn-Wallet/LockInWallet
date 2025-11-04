@@ -357,260 +357,15 @@ function AppContentInner({
 
   // Balance refresh function moved to BalanceDisplay component
 
-  // Initialize TransactionManager when network type changes
-  useEffect(() => {
-    const initTxManager = async () => {
-      console.log("🔄 TransactionManager useEffect triggered:", {
-        networkType,
-        selectedNetwork,
-      });
+  // TransactionManager initialization now handled by useNetworkManager hook
 
-      if (networkType === "solana") {
-        console.log(
-          "🟡 Solana network selected, TransactionManager will be initialized when wallet connects"
-        );
-        // For Solana, we'll wait for wallet connection in separate useEffect
-      } else if (networkType === "evm") {
-        console.log("🔵 Initializing EVM TransactionManager...");
-        // EVM TransactionManager will be initialized when MetaMask connects
-        // For now, we'll initialize it when switching to EVM even without connection
-        const newTxManager = await initializeTransactionManager(
-          "evm",
-          selectedNetwork
-        );
-        // For EVM, balances will be loaded when wallet connects
-      }
-    };
+  // Note: Solana data loading now handled by individual components
+  // (SpendingLimitsSetup, WithdrawalInterface, BalanceDisplay, etc.)
 
-    initTxManager().catch((error) => {
-      console.error("Failed to initialize TransactionManager:", error);
-    });
-  }, [networkType, selectedNetwork]);
+  // Note: TransactionManager initialization now handled by useNetworkManager hook
+  // Data loading is handled by individual components (BalanceDisplay, WithdrawalInterface, etc.)
 
-  // Separate useEffect for Solana wallet connection - loads data after wallet is connected
-  useEffect(() => {
-    const initSolanaWallet = async () => {
-      console.log("🔄 Solana wallet useEffect triggered:", {
-        networkType,
-        solanaConnected,
-        solanaPublicKey: !!solanaPublicKey,
-        connection: !!connection,
-        selectedNetwork,
-      });
-
-      if (
-        networkType === "solana" &&
-        solanaConnected &&
-        solanaPublicKey &&
-        connection
-      ) {
-        console.log(
-          "✅ All Solana conditions met, initializing TransactionManager..."
-        );
-        const newTxManager = await initializeTransactionManager(
-          "solana",
-          selectedNetwork
-        );
-
-        // Load balances and check proxy status after TransactionManager is initialized
-        if (newTxManager) {
-          console.log(
-            "🔄 Solana TransactionManager initialized, loading data..."
-          );
-
-          // Set the TransactionManager state BEFORE loading data
-          setTransactionManager(newTxManager);
-          console.log("✅ TransactionManager state updated");
-
-          // Balance loading now handled by BalanceDisplay component
-          // Check proxy status for Solana
-          const userAddress = await newTxManager.getAddress();
-          if (userAddress) {
-            await checkSolanaProxyStatus(newTxManager, userAddress);
-          } else {
-            console.warn(
-              "❌ Cannot check Solana proxy status: wallet not connected or address unavailable"
-            );
-          }
-
-          // Load spending limits for Solana (pass txManager directly to avoid state timing issues)
-          console.log("📋 Loading Solana spending limits...");
-          await fetchSpendingLimitsWithTxManager(newTxManager);
-          console.log("✅ Solana spending limits loading completed");
-
-          // Load pending proposals for Solana
-          console.log("📋 Loading Solana pending proposals...");
-          await fetchPendingLimitProposals();
-          console.log("✅ Solana pending proposals loading completed");
-
-          // Load bypass requests for Solana (withdrawal data handled by components)
-          console.log("📋 Loading Solana bypass requests...");
-          await fetchPendingBypassRequests();
-          console.log("✅ Solana bypass requests loading completed");
-        }
-      } else if (networkType === "solana") {
-        console.log("❌ Solana wallet not ready yet:", {
-          solanaConnected,
-          solanaPublicKey: !!solanaPublicKey,
-          connection: !!connection,
-        });
-      }
-    };
-
-    // Only run this effect for Solana network
-    if (networkType === "solana") {
-      initSolanaWallet().catch((error) => {
-        console.error("Failed to initialize Solana wallet:", error);
-      });
-    }
-  }, [
-    networkType,
-    selectedNetwork,
-    solanaConnected,
-    solanaPublicKey,
-    connection,
-  ]);
-
-  // Additional useEffect to handle page reload initialization with retry logic
-  useEffect(() => {
-    let retryTimeout;
-
-    const retryInitialization = async () => {
-      console.log(
-        "🔄 Retry initialization triggered for Solana on page reload"
-      );
-
-      // Check if we should initialize Solana but haven't loaded data yet
-      if (
-        networkType === "solana" &&
-        solanaConnected &&
-        solanaPublicKey &&
-        connection &&
-        !limitsLoaded &&
-        !transactionManager
-      ) {
-        console.log(
-          "🔄 Retrying Solana initialization (data not loaded on page reload)"
-        );
-
-        try {
-          const newTxManager = await initializeTransactionManager(
-            "solana",
-            selectedNetwork
-          );
-          if (newTxManager) {
-            console.log(
-              "🔄 Retry: Solana TransactionManager initialized, loading data..."
-            );
-            setTransactionManager(newTxManager);
-
-            // Balance loading now handled by BalanceDisplay component
-            const userAddress = await newTxManager.getAddress();
-            if (userAddress) {
-              await checkSolanaProxyStatus(newTxManager, userAddress);
-            } else {
-              console.warn(
-                "❌ Retry: Cannot check Solana proxy status: wallet not connected or address unavailable"
-              );
-            }
-
-            console.log("📋 Retry: Loading Solana spending limits...");
-            await fetchSpendingLimitsWithTxManager(newTxManager);
-            console.log("✅ Retry: Solana spending limits loading completed");
-
-            await fetchPendingLimitProposals();
-
-            // Load withdrawal data in retry initialization
-            console.log("📋 Retry: Loading Solana withdrawal data...");
-            await fetchWithdrawalAddresses();
-            await fetchPendingWithdrawalRequests(null, null, newTxManager);
-            await fetchPendingBypassRequests();
-            console.log("✅ Retry: Solana initialization retry successful");
-          }
-        } catch (error) {
-          console.error("❌ Retry initialization failed:", error);
-        }
-      }
-    };
-
-    // Set up retry after a short delay to allow all state to settle
-    if (networkType === "solana" && solanaConnected && !limitsLoaded) {
-      retryTimeout = setTimeout(retryInitialization, 1000);
-    }
-
-    return () => {
-      if (retryTimeout) {
-        clearTimeout(retryTimeout);
-      }
-    };
-  }, [
-    networkType,
-    selectedNetwork, // Add selectedNetwork to trigger on network switch
-    solanaConnected,
-    solanaPublicKey,
-    connection,
-    limitsLoaded,
-    transactionManager,
-  ]);
-
-  // Aggressive balance loading - load immediately when any Solana condition becomes available
-  useEffect(() => {
-    const loadBalancesImmediately = async () => {
-      // Try to load balances as soon as we have a Solana wallet, even if not fully "connected"
-      if (
-        networkType === "solana" &&
-        solanaWallet &&
-        Object.keys(balances).length === 0
-      ) {
-        console.log(
-          "🚀 Immediate: Attempting to load balances with available wallet..."
-        );
-
-        try {
-          // Try with current connection first
-          if (connection) {
-            const newTxManager = await initializeTransactionManager(
-              "solana",
-              selectedNetwork
-            );
-            if (newTxManager) {
-              setTransactionManager(newTxManager);
-              // Balance loading now handled by BalanceDisplay component
-              return; // Success, exit early
-            }
-          }
-
-          // Fallback: try to get balances directly from wallet/connection without waiting
-          if (solanaPublicKey && connection) {
-            console.log(
-              "🚀 Immediate: Loading balances directly from connection..."
-            );
-
-            // Quick SOL balance check
-            try {
-              const solBalance = await connection.getBalance(solanaPublicKey);
-              const quickBalances = {
-                SOL: solBalance / 1000000000, // Convert lamports to SOL
-              };
-              setBalances(quickBalances);
-              console.log(
-                "✅ Immediate: Quick balances loaded:",
-                quickBalances
-              );
-            } catch (error) {
-              console.log(
-                "⚠️ Quick balance loading failed, will retry with full setup"
-              );
-            }
-          }
-        } catch (error) {
-          console.log("⚠️ Immediate balance loading failed:", error.message);
-        }
-      }
-    };
-
-    loadBalancesImmediately();
-  }, [networkType, solanaWallet, solanaPublicKey, connection, balances]);
+  // Note: Balance loading now handled by BalanceDisplay component
 
   // Set default balances immediately when switching to Solana to avoid empty state
   useEffect(() => {
@@ -840,13 +595,23 @@ function AppContentInner({
     );
 
     // Set up approval module contract
-    const moduleAddresses = await import("./moduleAddresses.json");
-    const approvalModuleAddress = moduleAddresses.modules.approvalSystem;
-    const approval = new ethers.Contract(
-      approvalModuleAddress,
-      ApprovalSystemModuleABI,
-      web3Signer
-    );
+    let approval = null;
+    try {
+      const moduleAddresses = await import("./moduleAddresses.json");
+      const approvalModuleAddress = moduleAddresses.modules?.approvalSystem;
+
+      if (approvalModuleAddress && approvalModuleAddress !== "0x0000000000000000000000000000000000000000") {
+        approval = new ethers.Contract(
+          approvalModuleAddress,
+          ApprovalSystemModuleABI,
+          web3Signer
+        );
+      } else {
+        console.log("Approval module not deployed on this network yet");
+      }
+    } catch (error) {
+      console.warn("Could not load module addresses:", error);
+    }
 
     setProvider(web3Provider);
     setSigner(web3Signer);
@@ -1221,10 +986,6 @@ function AppContentInner({
   };
 
   // Note: Withdrawal address management moved to WithdrawalInterface and WithdrawalAddressSetupStep components
-
-
-
-
 
 
 

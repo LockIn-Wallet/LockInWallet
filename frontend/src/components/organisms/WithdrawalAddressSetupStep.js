@@ -71,7 +71,7 @@ const WithdrawalAddressSetupStep = ({
 
   // Calculate step validation for this step
   const step2Validation = {
-    step1Complete: Object.keys(spendingLimits).length > 0,
+    step1Complete: Array.isArray(spendingLimits) ? spendingLimits.length > 0 : Object.keys(spendingLimits).length > 0,
   };
 
   // Helper function to get current user address based on network
@@ -489,7 +489,7 @@ WithdrawalAddressSetupStep.propTypes = {
   stepValidation: PropTypes.shape({
     step2Complete: PropTypes.bool,
   }).isRequired,
-  spendingLimits: PropTypes.object.isRequired,
+  spendingLimits: PropTypes.oneOfType([PropTypes.array, PropTypes.object]).isRequired,
 
   // Blockchain services (dependency injection)
   transactionManager: PropTypes.object,
