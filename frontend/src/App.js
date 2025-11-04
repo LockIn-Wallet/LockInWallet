@@ -4,8 +4,8 @@ import SavingsABI from "./SavingsABI.json";
 import MockUSDT_ABI from "./MockUSDT_ABI.json";
 import ApprovalSystemModuleABI from "./ApprovalSystemModuleABI.json";
 
-// Import our new blockchain adapters
-import { TransactionManager } from "./adapters/TransactionManager.js";
+// Import custom hooks
+import { useNetworkManager } from "./hooks/useNetworkManager.js";
 
 // Solana imports
 import { Connection, PublicKey, clusterApiUrl } from "@solana/web3.js";
@@ -184,251 +184,48 @@ function AppContentInner({
     goToPreviousStepUtil(currentStep, setCurrentStep);
   };
 
-  // Network detection and switching functions
-  const detectCurrentNetwork = async () => {
-    if (window.ethereum) {
-      try {
-        const chainId = await window.ethereum.request({
-          method: "eth_chainId",
-        });
-        const numericChainId = parseInt(chainId, 16);
-        setCurrentChainId(numericChainId);
-
-        const network = getNetworkByChainId(numericChainId);
-        if (network) {
-          const networkKey = Object.keys(NETWORKS).find(
-            (key) => NETWORKS[key].chainId === numericChainId
-          );
-          if (networkKey) {
-            setSelectedNetwork(networkKey);
-          }
-        }
-        return numericChainId;
-      } catch (error) {
-        console.error("Error detecting network:", error);
-        return null;
-      }
-    }
-    return null;
-  };
-
-  // Initialize TransactionManager for the current network
-  const initializeTransactionManager = async (networkType, selectedNetwork) => {
-    try {
-      const txManager = new TransactionManager();
-      const networkConfig = getCurrentNetwork(networkType, selectedNetwork);
-
-      if (networkType === "evm") {
-        await txManager.initialize("evm", networkConfig);
-      } else if (networkType === "solana") {
-        console.log("Solana wallet info:", {
-          connected: solanaConnected,
-          publicKey: solanaPublicKey?.toString(),
-          wallet: solanaWallet,
-        });
-
-        const walletConfig = {
-          wallet: {
-            connected: solanaConnected,
-            publicKey: solanaPublicKey,
-            sendTransaction: solanaSendTransaction,
-            signTransaction: solanaSignTransaction,
-            signAllTransactions: solanaSignAllTransactions,
-            disconnect: solanaDisconnect,
-          },
-          connection: connection,
-        };
-        await txManager.initialize("solana", networkConfig, walletConfig);
-      }
-
-      setTransactionManager(txManager);
-      console.log(`TransactionManager initialized for ${networkType}`);
-      return txManager;
-    } catch (error) {
-      console.error("Error initializing TransactionManager:", error);
-      return null;
-    }
-  };
-
-  // Network type switching (EVM vs Solana)
-
-  const switchNetworkType = async (newNetworkType) => {
-    setNetworkType(newNetworkType);
-    // Persist user's network type preference
-    localStorage.setItem("preferredNetworkType", newNetworkType);
-
-    // Clear all state when switching networks to prevent cached data
+  // State clearing function for network switches
+  const clearAllState = () => {
     setIsProxyDeployed(false);
     setProxyAddress("");
-    setPendingLimitProposals([]); // Clear proposals to load new network's proposals
-    setSpendingLimits([]); // Clear spending limits to prevent cached cards
-    setIsSetupCommitted(false); // Reset setup status
-    setBalances({}); // Clear balances
-    setPendingBypassRequests([]); // Clear bypass requests
-
-    if (newNetworkType === "solana") {
-      // Disconnect EVM wallet when switching to Solana
-      if (provider) {
-        setProvider(null);
-        setSigner(null);
-        setSavingsContract(null);
-        setUserAddress("");
-      }
-      // DON'T disconnect Solana wallet - let it stay connected
-      // Initialize Solana TransactionManager if Solana wallet is connected
-      if (solanaConnected && solanaPublicKey && connection) {
-        const newTxManager = await initializeTransactionManager(
-          "solana",
-          selectedNetwork
-        );
-        if (newTxManager) {
-          // Balance loading now handled by BalanceDisplay component
-          // Check proxy status for Solana
-          const userAddress = await newTxManager.getAddress();
-          if (userAddress) {
-            await checkSolanaProxyStatus(newTxManager, userAddress);
-          } else {
-            console.warn(
-              "❌ Cannot check Solana proxy status: wallet not connected or address unavailable"
-            );
-          }
-          // Load spending limits and proposals
-          await fetchSpendingLimitsWithTxManager(newTxManager);
-          await fetchPendingLimitProposals();
-        }
-      }
-    } else {
-      // Keep Solana wallet connected when switching to EVM
-      // if (solanaConnected) {
-      //   solanaDisconnect();
-      // }
-      // Initialize EVM TransactionManager
-      await initializeTransactionManager("evm", selectedNetwork);
-    }
+    setPendingLimitProposals([]);
+    setSpendingLimits([]);
+    setIsSetupCommitted(false);
+    setBalances({});
+    setPendingBypassRequests([]);
   };
 
-  const switchNetwork = async (networkKey) => {
-    if (networkType === "solana") {
-      // For Solana networks, update the selected network and clear cached data
-      setSelectedNetwork(networkKey);
+  // Network management hook
+  const {
+    detectCurrentNetwork,
+    initializeTransactionManager,
+    switchNetworkType,
+    switchNetwork,
+  } = useNetworkManager({
+    // Solana wallet context
+    solanaConnected,
+    solanaPublicKey,
+    solanaSendTransaction,
+    solanaSignTransaction,
+    solanaSignAllTransactions,
+    solanaDisconnect,
+    connection,
 
-      // Clear ALL cached data when switching Solana networks
-      setSpendingLimits([]); // Clear spending limits from previous network
-      setPendingLimitProposals([]); // Clear proposals from previous network
-      setPendingBypassRequests([]); // Clear bypass requests from previous network
-      setBalances({}); // Clear balances from previous network
-      setLimitsLoaded(false); // Reset limits loaded state
+    // State setters
+    setNetworkType,
+    setSelectedNetwork,
+    setCurrentChainId,
+    setTransactionManager,
+    setIsNetworkSwitching,
 
-      // Clear spending limit editing state
-      setLimitEdits({
-        Daily: { value: "", isActive: false, isEditing: false },
-        Weekly: { value: "", isActive: false, isEditing: false },
-        Monthly: { value: "", isActive: false, isEditing: false },
-      });
+    // State clearing function
+    clearAllState,
+  });
 
-      // Reset setup state to initial values - will be updated from blockchain
-      setIsSetupCommitted(false); // Will be set from blockchain data when loaded
-      setCurrentStep(1); // Reset to first step of setup wizard
-      setStepValidation({
-        step1Complete: false, // Spending limits configured
-        step2Complete: false, // Withdrawal addresses configured
-        step3Complete: false, // Setup committed
-      });
+  // Network functions are now provided by useNetworkManager hook
 
-      // Clear form state
-      setWithdrawalAmount("");
 
-      // Clear custom period state
-      setShowCustomPeriod(false);
-      setCustomPeriodName("");
-      setCustomPeriodLimit("");
-      setCustomPeriodDuration("86400");
 
-      // Reset card states
-      setCardStates({
-        spendingLimits: { minimized: false },
-        balanceCard: { minimized: false },
-        addWithdrawalAddress: { minimized: false },
-      });
-
-      console.log(
-        `🔄 Solana network switching from ${selectedNetwork} to ${networkKey}`
-      );
-      console.log(`📊 Spending limits cleared: ${spendingLimits.length} -> 0`);
-      console.log(`🔧 Setup status reset: ${isSetupCommitted} -> false`);
-
-      const newNetworkConfig = getCurrentNetwork(networkType, networkKey);
-      console.log(
-        `🌐 Network endpoint changing to: ${newNetworkConfig?.rpcUrl}`
-      );
-      console.log(`🔍 Network config:`, newNetworkConfig);
-
-      // Small delay to allow ConnectionProvider to update
-      await new Promise((resolve) => setTimeout(resolve, 500));
-      console.log(
-        `✅ Network switch completed for ${networkKey} - ConnectionProvider should now use new endpoint`
-      );
-      return true;
-    }
-
-    // EVM network switching logic
-    if (!window.ethereum) {
-      alert("Please install MetaMask!");
-      return false;
-    }
-
-    const network = NETWORKS.evm[networkKey];
-    if (!network) {
-      alert("Unsupported network");
-      return false;
-    }
-
-    setIsNetworkSwitching(true);
-
-    try {
-      // Try to switch to the network
-      await window.ethereum.request({
-        method: "wallet_switchEthereumChain",
-        params: [{ chainId: `0x${network.chainId.toString(16)}` }],
-      });
-
-      setSelectedNetwork(networkKey);
-      setCurrentChainId(network.chainId);
-      return true;
-    } catch (switchError) {
-      // If the network is not added to MetaMask, add it
-      if (switchError.code === 4902) {
-        try {
-          await window.ethereum.request({
-            method: "wallet_addEthereumChain",
-            params: [
-              {
-                chainId: `0x${network.chainId.toString(16)}`,
-                chainName: network.name,
-                nativeCurrency: network.nativeCurrency,
-                rpcUrls: network.rpcUrls,
-                blockExplorerUrls: network.blockExplorerUrls,
-              },
-            ],
-          });
-
-          setSelectedNetwork(networkKey);
-          setCurrentChainId(network.chainId);
-          return true;
-        } catch (addError) {
-          console.error("Error adding network:", addError);
-          alert(`Failed to add ${network.name} to MetaMask`);
-          return false;
-        }
-      } else {
-        console.error("Error switching network:", switchError);
-        alert(`Failed to switch to ${network.name}`);
-        return false;
-      }
-    } finally {
-      setIsNetworkSwitching(false);
-    }
-  };
 
   const isCorrectNetwork = () => {
     if (networkType === "solana") {
