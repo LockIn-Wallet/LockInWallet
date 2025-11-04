@@ -148,14 +148,12 @@ function AppContentInner({
 
   // Unified limit editing state - moved to SpendingLimitsSetup component
 
-  const [isDepositing, setIsDepositing] = useState(false); // Loading state for deposit button
   const [selectedToken, setSelectedToken] = useState("USDT"); // Default to USDT
   const [userAddress, setUserAddress] = useState(""); // Store user address
 
-  // Proxy deployment state
-  const [proxyAddress, setProxyAddress] = useState("");
+  // Proxy deployment state (still used by setup components)
   const [isProxyDeployed, setIsProxyDeployed] = useState(false);
-  const [isDeploying, setIsDeploying] = useState(false);
+  const [proxyAddress, setProxyAddress] = useState("");
 
   // Two-phase system state
   const [isSetupCommitted, setIsSetupCommitted] = useState(false);
@@ -169,6 +167,7 @@ function AppContentInner({
   const [pendingWithdrawalRequests, setPendingWithdrawalRequests] = useState(
     []
   );
+  const [pendingBypassRequests, setPendingBypassRequests] = useState([]);
   const [approvalModule, setApprovalModule] = useState(null);
 
   // Enhanced withdrawal system state
@@ -1087,148 +1086,6 @@ function AppContentInner({
     }
   };
 
-  const deployProxy = async () => {
-    if (networkType === "evm") {
-      // EVM proxy deployment
-      if (!savingsContract || !signer) {
-        alert("Please connect your wallet first");
-        return;
-      }
-
-      if (isProxyDeployed) {
-        alert("Proxy already deployed!");
-        return;
-      }
-
-      try {
-        setIsDeploying(true);
-        console.log("Deploying EVM user proxy...");
-
-        // Call the deployUserProxy function
-        const tx = await savingsContract.deployUserProxy();
-        console.log("Transaction sent:", tx.hash);
-
-        // Wait for transaction confirmation
-        const receipt = await tx.wait();
-        console.log("Transaction confirmed:", receipt);
-
-        // Refresh proxy status (only for EVM)
-        if (networkType === "evm") {
-          await checkProxyStatus();
-        }
-
-        alert(
-          "🎉 Permanent deposit address generated successfully! This address is permanently tied to your wallet and you can use it for all future deposits from exchanges."
-        );
-      } catch (error) {
-        console.error("Error deploying EVM proxy:", error);
-        alert(`Failed to deploy proxy: ${error.message}`);
-      } finally {
-        setIsDeploying(false);
-      }
-    } else if (networkType === "solana") {
-      // Solana proxy deployment with payment activation
-      if (!transactionManager || !solanaConnected) {
-        alert("Please connect your Solana wallet first");
-        return;
-      }
-
-      if (isProxyDeployed) {
-        alert("Permanent deposit address already deployed!");
-        return;
-      }
-
-      try {
-        setIsDeploying(true);
-
-        // Since no permanent address exists, user needs to pay first
-        console.log("Processing activation payment for permanent address...");
-        const fee = await transactionManager.currentAdapter.getActivationFee();
-        const sufficientBalance =
-          await transactionManager.currentAdapter.hasSufficientBalanceForActivation();
-
-        if (!sufficientBalance) {
-          alert(
-            `💳 Insufficient Balance\n\nTo generate your permanent deposit address, you need to pay a one-time activation fee of ${(
-              fee / 1000000000
-            ).toFixed(
-              3
-            )} SOL (~$5 USD).\n\nPlease add more SOL to your wallet and try again.`
-          );
-          setIsDeploying(false);
-          return;
-        }
-
-        // Initialize savings account if it doesn't exist (separate from spending limits account)
-        console.log("Ensuring savings account exists...");
-        const savingsAccountExists =
-          await transactionManager.currentAdapter.isProxyDeployed(
-            solanaConnected ? solanaPublicKey?.toString() : evmAccount
-          );
-
-        if (!savingsAccountExists) {
-          console.log("Creating savings account...");
-          await transactionManager.currentAdapter.initializeSavingsAccount();
-          console.log("✅ Savings account created");
-        } else {
-          console.log("✅ Savings account already exists");
-        }
-
-        console.log("Processing activation payment...");
-        const paymentTxHash =
-          await transactionManager.currentAdapter.activatePermanentAddressWithPayment();
-        console.log("✅ Payment completed:", paymentTxHash);
-
-        console.log("Deploying Solana permanent deposit address...");
-        // Deploy proxy using transaction manager
-        const result = await transactionManager.deployProxy();
-        console.log("Solana proxy deployment result:", result);
-
-        // Refresh proxy status
-        const userAddress = await transactionManager.getAddress();
-        if (userAddress) {
-          await checkSolanaProxyStatus(transactionManager, userAddress);
-        } else {
-          console.warn(
-            "❌ Cannot refresh Solana proxy status: wallet not connected or address unavailable"
-          );
-        }
-
-        alert(
-          "🎉 Payment completed & permanent deposit address generated successfully! This address is permanently tied to your wallet and you can use it for all future deposits from exchanges."
-        );
-      } catch (error) {
-        console.error("Error deploying Solana proxy:", error);
-
-        // Handle specific error cases
-        if (
-          error.message.includes("already exists") ||
-          error.message.includes("already deployed")
-        ) {
-          console.log(
-            "Solana proxy was already deployed, refreshing status..."
-          );
-          const userAddress = await transactionManager.getAddress();
-          if (userAddress) {
-            await checkSolanaProxyStatus(transactionManager, userAddress);
-          } else {
-            console.warn(
-              "❌ Cannot refresh Solana proxy status after deployment: wallet not connected or address unavailable"
-            );
-          }
-          alert(
-            "✅ Your permanent deposit address is ready! This address is permanently tied to your wallet and you can use it for all deposits from exchanges."
-          );
-        } else if (error.message.includes("user rejected")) {
-          alert("Transaction cancelled by user");
-        } else {
-          alert(`Failed to deploy Solana proxy: ${error.message}`);
-        }
-      } finally {
-        setIsDeploying(false);
-      }
-    }
-  };
 
   const autoConnectWallet = async () => {
     if (window.ethereum) {
@@ -1345,145 +1202,6 @@ function AppContentInner({
     }
   };
 
-  const deposit = async (selectedTokenParam = selectedToken, amount) => {
-    // Validate basic requirements
-    if (!selectedTokenParam || !amount) {
-      alert("Please select a token and enter an amount");
-      return;
-    }
-
-    // Set loading state
-    setIsDepositing(true);
-
-    try {
-      // Get current network configuration
-      const currentNetwork = getCurrentNetwork(networkType, selectedNetwork);
-
-      // Check if we have a transaction manager
-      if (!transactionManager) {
-        alert(
-          "Transaction manager not initialized. Please refresh the page and try again."
-        );
-        return;
-      }
-
-      // Check network connection
-      if (!(await transactionManager.isCorrectNetwork())) {
-        alert(`Please switch to ${currentNetwork.name} to make deposits`);
-        return;
-      }
-
-      // Check wallet connection
-      if (!(await transactionManager.isConnected())) {
-        alert("Please connect your wallet first");
-        return;
-      }
-
-      // Determine token details based on blockchain type and selection
-      let tokenAddress;
-      let decimals;
-      let tokenSymbol;
-
-      if (networkType === "evm") {
-        // EVM token logic
-        if (selectedTokenParam === "ETH") {
-          tokenAddress = ETH_ADDRESS;
-          decimals = 18;
-          tokenSymbol = "ETH";
-        } else if (currentNetwork.tokens[selectedTokenParam]) {
-          const token = currentNetwork.tokens[selectedTokenParam];
-          if (token.address === "0x0000000000000000000000000000000000000000") {
-            alert(`${token.symbol} is not available on ${currentNetwork.name}`);
-            return;
-          }
-          tokenAddress = token.address;
-          decimals = token.decimals;
-          tokenSymbol = token.symbol;
-        } else {
-          alert("Please select a valid token");
-          return;
-        }
-      } else if (networkType === "solana") {
-        // Solana token logic
-        if (selectedTokenParam === "SOL") {
-          tokenAddress = "native"; // Solana native token
-          decimals = 9;
-          tokenSymbol = "SOL";
-        } else if (
-          currentNetwork.tokens &&
-          currentNetwork.tokens[selectedTokenParam]
-        ) {
-          const token = currentNetwork.tokens[selectedTokenParam];
-          tokenAddress = token.address; // Unified token address field
-          decimals = token.decimals;
-          tokenSymbol = token.symbol;
-        } else {
-          alert("Please select a valid token");
-          return;
-        }
-      } else {
-        alert("Unsupported network type");
-        return;
-      }
-
-      // Validate amount
-      const numAmount = parseFloat(amount);
-      if (isNaN(numAmount) || numAmount <= 0) {
-        alert("Please enter a valid deposit amount");
-        return;
-      }
-
-      console.log(`🚀 Starting ${networkType.toUpperCase()} deposit:`, {
-        tokenSymbol: selectedTokenParam,
-        amount: amount,
-        tokenAddress,
-        decimals,
-      });
-
-      // Execute deposit through TransactionManager
-      const result = await transactionManager.deposit(
-        tokenAddress,
-        amount,
-        decimals
-      );
-
-      console.log(
-        `✅ ${networkType.toUpperCase()} deposit successful:`,
-        result
-      );
-
-      // Show success message
-      const message = `Deposit of ${amount} ${selectedTokenParam} successful!${
-        result.hash ? `\nTransaction: ${result.hash}` : ""
-      }`;
-      alert(message);
-
-      // Clear form and refresh balances
-      // Refresh balances using unified method
-      await refreshBalances();
-    } catch (error) {
-      console.error(`${networkType.toUpperCase()} deposit error:`, error);
-
-      // Provide user-friendly error messages
-      let errorMessage = "Failed to deposit. ";
-      if (error.message.includes("User rejected")) {
-        errorMessage += "Transaction was rejected.";
-      } else if (error.message.includes("insufficient funds")) {
-        errorMessage += "Insufficient funds.";
-      } else if (error.message.includes("network")) {
-        errorMessage += "Network error. Please check your connection.";
-      } else if (error.message.includes("not connected")) {
-        errorMessage += "Wallet not connected.";
-      } else {
-        errorMessage += "Please check the token selection and amount.";
-      }
-
-      alert(errorMessage);
-    } finally {
-      // Always reset loading state
-      setIsDepositing(false);
-    }
-  };
 
   // Unified spending limits functions - functions moved to SpendingLimitsSetup component
 
@@ -2071,17 +1789,25 @@ function AppContentInner({
           {/* Deposit Interface Component */}
           {isSetupCommitted && (
             <DepositInterface
+              // Blockchain services (dependency injection)
+              transactionManager={transactionManager}
+              savingsContract={savingsContract}
+              signer={signer}
+              connection={connection}
+
+              // Network and wallet props
               networkType={networkType}
               selectedNetwork={selectedNetwork}
               userAddress={userAddress}
               solanaPublicKey={solanaPublicKey}
+              solanaConnected={solanaConnected}
+
+              // Token state from parent (shared with withdrawal)
               selectedToken={selectedToken}
               setSelectedToken={setSelectedToken}
-              isDepositing={isDepositing}
-              depositToSavings={deposit}
-              isDeploying={isDeploying}
-              depositAddress={proxyAddress}
-              deployDepositAddress={deployProxy}
+
+              // Callbacks for App.js state updates
+              onBalanceUpdate={refreshBalances}
             />
           )}
 
