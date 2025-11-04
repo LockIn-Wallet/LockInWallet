@@ -24,17 +24,9 @@ import {
   buttonStyles,
   cardStyles,
   formStyles,
-  stepStyles,
-  layoutStyles,
-  utilityStyles,
   spacingUtilities,
-  getStepContainerStyle,
-  getStepTitleColor,
-  colors,
-  spacing,
   borderRadius,
   fontSize,
-  fontWeight,
 } from "./styles";
 
 // Import network configuration
@@ -63,7 +55,6 @@ import {
 
 // Import components
 import SolanaWalletProvider from "./components/SolanaWalletProvider.js";
-import WithdrawalAddressSelector from "./components/WithdrawalAddressSelector.js";
 import StatusHeader from "./components/molecules/StatusHeader.js";
 import BalanceDisplay from "./components/molecules/BalanceDisplay.js";
 import WalletConnectionPrompt from "./components/molecules/WalletConnectionPrompt.js";
@@ -71,6 +62,7 @@ import DepositInterface from "./components/molecules/DepositInterface.js";
 import SpendingLimitsSetup from "./components/organisms/SpendingLimitsSetup.js";
 import WithdrawalInterface from "./components/organisms/WithdrawalInterface.js";
 import SetupCommitStep from "./components/organisms/SetupCommitStep.js";
+import WithdrawalAddressSetupStep from "./components/organisms/WithdrawalAddressSetupStep.js";
 
 // Import step validation utilities
 import {
@@ -178,10 +170,6 @@ function AppContentInner({
   const [pendingWithdrawalRequests, setPendingWithdrawalRequests] = useState(
     []
   );
-  const [showWithdrawalAddressForm, setShowWithdrawalAddressForm] =
-    useState(false);
-  const [newWithdrawalTitle, setNewWithdrawalTitle] = useState("");
-  const [newWithdrawalAddress, setNewWithdrawalAddress] = useState("");
   const [selectedWithdrawalDestination, setSelectedWithdrawalDestination] =
     useState("self");
   const [approvalModule, setApprovalModule] = useState(null);
@@ -1871,18 +1859,18 @@ function AppContentInner({
     }
   };
 
-  const requestWithdrawalAddress = async () => {
+  const requestWithdrawalAddress = async (title, address) => {
     // Network-aware validation
     if (
       networkType === "solana" &&
-      (!transactionManager || !newWithdrawalTitle || !newWithdrawalAddress)
+      (!transactionManager || !title || !address)
     ) {
       alert("Please fill in all fields and connect your Solana wallet");
       return;
     }
     if (
       networkType === "evm" &&
-      (!savingsContract || !newWithdrawalTitle || !newWithdrawalAddress)
+      (!savingsContract || !title || !address)
     ) {
       alert("Please fill in all fields and connect your MetaMask wallet");
       return;
@@ -1892,51 +1880,47 @@ function AppContentInner({
       if (networkType === "solana") {
         // Solana address request logic (with timelock, same as EVM)
         // Basic Solana address validation (44 characters, base58)
-        if (newWithdrawalAddress.length !== 44) {
+        if (address.length !== 44) {
           alert("Please enter a valid Solana address (44 characters)");
           return;
         }
 
         const adapter = transactionManager.getCurrentAdapter();
         const txHash = await adapter.addWithdrawalDestination(
-          newWithdrawalAddress,
-          newWithdrawalTitle
+          address,
+          title
         );
 
         alert(
           `✅ Solana withdrawal address processed successfully!\n\n` +
-            `Title: ${newWithdrawalTitle}\n` +
-            `Address: ${newWithdrawalAddress}\n` +
+            `Title: ${title}\n` +
+            `Address: ${address}\n` +
             `Transaction: ${txHash}\n\n` +
             `The address has been processed based on your contract lock status. Check the withdrawal destinations or pending requests sections.`
         );
       } else {
         // EVM address request logic (existing - requires timelock)
         // Validate address format
-        if (!ethers.isAddress(newWithdrawalAddress)) {
+        if (!ethers.isAddress(address)) {
           alert("Please enter a valid Ethereum address");
           return;
         }
 
         const tx = await savingsContract.requestWithdrawalAddress(
-          newWithdrawalTitle,
-          newWithdrawalAddress
+          title,
+          address
         );
         await tx.wait();
 
         alert(
           `✅ EVM withdrawal address request submitted successfully!\n\n` +
-            `Title: ${newWithdrawalTitle}\n` +
-            `Address: ${newWithdrawalAddress}\n` +
+            `Title: ${title}\n` +
+            `Address: ${address}\n` +
             `Executable after: 24 hours\n\n` +
             `You can execute this request from the "Pending Withdrawal Requests" section once the waiting period is over.`
         );
       }
 
-      // Clear form
-      setNewWithdrawalTitle("");
-      setNewWithdrawalAddress("");
-      setShowWithdrawalAddressForm(false);
 
       // Refresh data for both networks
       if (networkType === "solana") {
@@ -2666,300 +2650,30 @@ function AppContentInner({
             }}
           />
 
-          {/* Step 2: Withdrawal Addresses Management - Hidden when setup is committed */}
+          {/* Step 2: Withdrawal Addresses Setup Component */}
           {!isSetupCommitted && (
-            <div
-              style={getStepContainerStyle(2, currentStep, isSetupCommitted, {
-                step1Complete: Object.keys(spendingLimits).length > 0,
-              })}
-            >
-              {/* Step Header */}
-              <div style={stepStyles.stepHeader}>
-                <div style={layoutStyles.flexAlignCenter}>
-                  <h3
-                    style={{
-                      ...stepStyles.step2Title,
-                      color: getStepTitleColor(2, isSetupCommitted, {
-                        step1Complete: Object.keys(spendingLimits).length > 0,
-                      }),
-                    }}
-                  >
-                    🔑 Step 2: Add Withdrawal Addresses
-                  </h3>
-                  {/* Status label removed - Step 2 always active */}
-                </div>
+            <WithdrawalAddressSetupStep
+              // Step wizard state
+              currentStep={currentStep}
+              isSetupCommitted={isSetupCommitted}
+              stepValidation={stepValidation}
+              spendingLimits={spendingLimits}
 
-                {!isSetupCommitted &&
-                  stepValidation.step2Complete &&
-                  currentStep === 2 && (
-                    <button
-                      onClick={goToNextStep}
-                      style={{
-                        padding: "8px 16px",
-                        borderRadius: "6px",
-                        border: "1px solid #3182ce",
-                        backgroundColor: "#3182ce",
-                        color: "white",
-                        cursor: "pointer",
-                        fontSize: "0.9em",
-                        fontWeight: "600",
-                        transition: "all 0.2s ease",
-                      }}
-                      onMouseOver={(e) => {
-                        e.target.style.backgroundColor = "#2c5aa0";
-                      }}
-                      onMouseOut={(e) => {
-                        e.target.style.backgroundColor = "#3182ce";
-                      }}
-                    >
-                      Proceed to Lock-In →
-                    </button>
-                  )}
-              </div>
+              // Withdrawal data
+              withdrawalAddresses={withdrawalAddresses}
+              pendingWithdrawalRequests={pendingWithdrawalRequests}
 
-              {/* Step Description */}
-              <p
-                style={{
-                  fontSize: "0.9em",
-                  color: "#cbd5e0",
-                  marginBottom: "15px",
-                  lineHeight: "1.5",
-                }}
-              >
-                {isSetupCommitted
-                  ? "Manage your approved withdrawal addresses. New addresses require 24-48 hour approval after wallet is locked."
-                  : "Add addresses where you'll be able to withdraw funds. After lock-in, new addresses will require 24-48 hour approval for security."}
-              </p>
+              // Network context
+              networkType={networkType}
 
-              {/* Progress Tips for Setup Mode */}
-              {!isSetupCommitted && currentStep === 2 && (
-                <div
-                  style={{
-                    fontSize: "0.8em",
-                    color: "#a0aec0",
-                    backgroundColor: "#1a202c",
-                    padding: "10px",
-                    borderRadius: "4px",
-                    marginBottom: "15px",
-                    borderLeft: "3px solid #f6ad55",
-                  }}
-                >
-                  💡 <strong>Tip:</strong> "My Wallet" is automatically added.
-                  Add other addresses you'll withdraw to (exchanges, hardware
-                  wallets, etc.).
-                </div>
-              )}
+              // Withdrawal actions
+              getCurrentUserAddress={getCurrentUserAddress}
+              removeWithdrawalAddress={removeWithdrawalAddress}
+              requestWithdrawalAddress={requestWithdrawalAddress}
 
-              {/* Step 2 Address Management Component */}
-              {!isSetupCommitted && (
-                <div>
-                  <WithdrawalAddressSelector
-                    mode="management"
-                    title="Your Withdrawal Addresses:"
-                    withdrawalAddresses={withdrawalAddresses}
-                    getCurrentUserAddress={getCurrentUserAddress}
-                    removeWithdrawalAddress={removeWithdrawalAddress}
-                    showWithdrawalAddressForm={showWithdrawalAddressForm}
-                    setShowWithdrawalAddressForm={setShowWithdrawalAddressForm}
-                  />
-
-                  {/* Add New Withdrawal Address Form */}
-                  {showWithdrawalAddressForm && (
-                    <div
-                      style={{
-                        padding: "15px",
-                        backgroundColor: "#1a202c",
-                        borderRadius: "6px",
-                        border: "1px solid #4a5568",
-                        marginTop: "15px",
-                      }}
-                    >
-                      <h5 style={{ color: "#f6ad55", margin: "0 0 15px 0" }}>
-                        📍 Add New Withdrawal Address
-                      </h5>
-
-                      <div
-                        style={{
-                          display: "grid",
-                          gap: "12px",
-                          marginBottom: "15px",
-                        }}
-                      >
-                        <div>
-                          <label
-                            style={{
-                              display: "block",
-                              fontSize: "0.9em",
-                              color: "#e2e8f0",
-                              marginBottom: "5px",
-                            }}
-                          >
-                            Address Title
-                          </label>
-                          <input
-                            type="text"
-                            placeholder="e.g., 'Hardware Wallet', 'Exchange Account'"
-                            value={newWithdrawalTitle}
-                            onChange={(e) =>
-                              setNewWithdrawalTitle(e.target.value)
-                            }
-                            style={{
-                              width: "100%",
-                              padding: "10px",
-                              borderRadius: "4px",
-                              border: "1px solid #4a5568",
-                              backgroundColor: "#4a5568",
-                              color: "white",
-                              fontSize: "0.9em",
-                            }}
-                          />
-                        </div>
-                        <div>
-                          <label
-                            style={{
-                              display: "block",
-                              fontSize: "0.9em",
-                              color: "#e2e8f0",
-                              marginBottom: "5px",
-                            }}
-                          >
-                            {networkType === "solana"
-                              ? "Solana Address"
-                              : "Ethereum Address"}
-                          </label>
-                          <input
-                            type="text"
-                            placeholder={
-                              networkType === "solana"
-                                ? "Solana address..."
-                                : "0x..."
-                            }
-                            value={newWithdrawalAddress}
-                            onChange={(e) =>
-                              setNewWithdrawalAddress(e.target.value)
-                            }
-                            style={{
-                              width: "100%",
-                              padding: "10px",
-                              borderRadius: "4px",
-                              border: "1px solid #4a5568",
-                              backgroundColor: "#4a5568",
-                              color: "white",
-                              fontFamily: "monospace",
-                              fontSize: "0.9em",
-                            }}
-                          />
-                        </div>
-                      </div>
-
-                      <button
-                        onClick={requestWithdrawalAddress}
-                        disabled={
-                          !newWithdrawalTitle.trim() ||
-                          !newWithdrawalAddress.trim()
-                        }
-                        style={{
-                          padding: "10px 20px",
-                          borderRadius: "4px",
-                          border: "none",
-                          backgroundColor:
-                            !newWithdrawalTitle.trim() ||
-                            !newWithdrawalAddress.trim()
-                              ? "#4a5568"
-                              : "#ed8936",
-                          color: "white",
-                          cursor:
-                            !newWithdrawalTitle.trim() ||
-                            !newWithdrawalAddress.trim()
-                              ? "not-allowed"
-                              : "pointer",
-                          fontSize: "0.9em",
-                          fontWeight: "bold",
-                          width: "100%",
-                          opacity:
-                            !newWithdrawalTitle.trim() ||
-                            !newWithdrawalAddress.trim()
-                              ? 0.5
-                              : 1,
-                        }}
-                      >
-                        📍 Add Withdrawal Address
-                      </button>
-                    </div>
-                  )}
-
-                  {/* Pending Withdrawal Address Requests */}
-                  {pendingWithdrawalRequests.length > 0 && (
-                    <div style={{ marginTop: "15px" }}>
-                      <h5
-                        style={{
-                          color: colors.warning.light,
-                          margin: `0 0 ${spacing.md} 0`,
-                        }}
-                      >
-                        ⏳ Pending New Addresses (
-                        {pendingWithdrawalRequests.length})
-                      </h5>
-                      <div style={{ ...utilityStyles.grid, gap: spacing.sm }}>
-                        {pendingWithdrawalRequests.map((request, index) => (
-                          <div
-                            key={index}
-                            style={{
-                              padding: "10px",
-                              backgroundColor: "#2a1810",
-                              borderRadius: "6px",
-                              border: "1px solid #ed8936",
-                            }}
-                          >
-                            <div
-                              style={{
-                                display: "flex",
-                                justifyContent: "space-between",
-                                alignItems: "center",
-                              }}
-                            >
-                              <div>
-                                <div
-                                  style={{
-                                    color: colors.text.primary,
-                                    fontWeight: fontWeight.bold,
-                                  }}
-                                >
-                                  📍 {request.title}
-                                </div>
-                                <div
-                                  style={{
-                                    fontSize: "0.8em",
-                                    color: "#a0aec0",
-                                    fontFamily: "monospace",
-                                  }}
-                                >
-                                  {request.destination.length > 50
-                                    ? `${request.destination.slice(
-                                        0,
-                                        25
-                                      )}...${request.destination.slice(-15)}`
-                                    : request.destination}
-                                </div>
-                                <div
-                                  style={{
-                                    fontSize: "0.7em",
-                                    color: "#ed8936",
-                                    marginTop: "4px",
-                                  }}
-                                >
-                                  ⏰ Will be available after setup is locked
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
+              // Step navigation
+              goToNextStep={goToNextStep}
+            />
           )}
           {/* Step 3: Setup Commit Step Component */}
           {!isSetupCommitted && (
@@ -2998,9 +2712,6 @@ function AppContentInner({
               pendingWithdrawalRequests={pendingWithdrawalRequests}
               pendingBypassRequests={pendingBypassRequests}
 
-              // Form state for address management
-              showWithdrawalAddressForm={showWithdrawalAddressForm}
-              setShowWithdrawalAddressForm={setShowWithdrawalAddressForm}
 
               // Action handlers
               withdrawToDestination={withdrawToDestination}

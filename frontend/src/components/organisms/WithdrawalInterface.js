@@ -51,9 +51,6 @@ const WithdrawalInterface = ({
   pendingWithdrawalRequests,
   pendingBypassRequests,
 
-  // Form state for address management
-  showWithdrawalAddressForm,
-  setShowWithdrawalAddressForm,
 
   // Action handlers
   withdrawToDestination,
@@ -220,13 +217,11 @@ const WithdrawalInterface = ({
         mode="selection"
         selectedDestination={selectedWithdrawalDestination}
         onDestinationChange={setSelectedWithdrawalDestination}
-        showAddButton={true}
+        showAddButton={false}
         title="Withdraw To:"
         withdrawalAddresses={withdrawalAddresses}
         getCurrentUserAddress={getCurrentUserAddress}
         removeWithdrawalAddress={removeWithdrawalAddress}
-        showWithdrawalAddressForm={showWithdrawalAddressForm}
-        setShowWithdrawalAddressForm={setShowWithdrawalAddressForm}
       />
 
       {/* Dynamic Withdrawal Buttons */}
@@ -592,9 +587,6 @@ WithdrawalInterface.propTypes = {
   pendingWithdrawalRequests: PropTypes.array.isRequired,
   pendingBypassRequests: PropTypes.array.isRequired,
 
-  // Form state for address management
-  showWithdrawalAddressForm: PropTypes.bool.isRequired,
-  setShowWithdrawalAddressForm: PropTypes.func.isRequired,
 
   // Action handlers
   withdrawToDestination: PropTypes.func.isRequired,
