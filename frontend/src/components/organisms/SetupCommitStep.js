@@ -1,5 +1,6 @@
 import React from "react";
 import PropTypes from "prop-types";
+import { ethers } from "ethers";
 
 // Import styles
 import {
@@ -20,6 +21,7 @@ import {
  * - Lock-in button functionality
  * - Setup committed confirmation
  * - Conditional rendering based on setup state
+ * - Internal setup commit logic (moved from App.js)
  */
 const SetupCommitStep = ({
   // Setup state
@@ -27,9 +29,92 @@ const SetupCommitStep = ({
   stepValidation,
   currentStep,
 
-  // Action handlers
-  commitSetup,
+  // Blockchain services (dependency injection)
+  transactionManager,
+  savingsContract,
+  networkType,
+  solanaConnected,
+
+  // Callbacks for parent state updates
+  onSetupCommitted,
+  onSetupInfoUpdate,
+  onSpendingLimitsRefresh,
 }) => {
+  // Internal commit setup function (moved from App.js)
+  const commitSetup = async () => {
+    // Check connection for both networks
+    if (networkType === "solana" && (!transactionManager || !solanaConnected)) {
+      alert("Please connect your Solana wallet first");
+      return;
+    }
+    if (networkType === "evm" && !savingsContract) {
+      alert("Please connect your wallet first");
+      return;
+    }
+
+    try {
+      // Note: Spending limits should have been set earlier through SpendingLimitsSetup component
+      // This commit step just locks the setup - limits are already saved
+
+      // Commit setup (limits should have been set earlier)
+      if (networkType === "solana") {
+        console.log("Committing Solana setup...");
+        const txHash = await transactionManager.commitSetup();
+        console.log("Solana setup committed:", txHash);
+        alert(
+          "Setup locked in successfully! Your savings wallet is now active."
+        );
+      } else {
+        // EVM setup commit
+        console.log("Committing EVM setup...");
+        const txHash = await transactionManager.commitSetup();
+        console.log("EVM setup committed:", txHash);
+        alert(
+          "Setup locked in successfully! You are now in secured mode with timelock protection."
+        );
+      }
+
+      // Note: Edit modes are now managed internally by SpendingLimitsSetup component
+
+      // Refresh setup status
+      if (networkType === "solana") {
+        // For Solana, we'll get the setup status when we fetch spending limits
+        onSetupCommitted(true);
+      } else {
+        const setupCommitted = await savingsContract.isSetupCommitted();
+        onSetupCommitted(setupCommitted);
+
+        if (setupCommitted) {
+          const info = await savingsContract.getSetupInfo();
+          onSetupInfoUpdate({
+            committed: info.committed,
+            totalLockedValue: ethers.formatUnits(info.totalLockedValue, 6),
+            commitTimestamp: new Date(
+              Number(info.commitTimestamp) * 1000
+            ).toLocaleDateString(),
+            increasesInPeriod: ethers.formatUnits(info.increasesInPeriod, 6),
+            lastIncreaseTimestamp: new Date(
+              Number(info.lastIncreaseTimestamp) * 1000
+            ).toLocaleDateString(),
+          });
+        }
+      }
+
+      // Refresh spending limits to show the saved values
+      if (onSpendingLimitsRefresh) {
+        await onSpendingLimitsRefresh();
+      }
+    } catch (error) {
+      console.error("Error committing setup:", error);
+      if (error.message.includes("Daily limit too high")) {
+        alert("Daily limit is too high for the weekly limit");
+      } else if (error.message.includes("Weekly limit too high")) {
+        alert("Weekly limit is too high for the monthly limit");
+      } else {
+        alert(`Failed to lock in setup: ${error.message}`);
+      }
+    }
+  };
   return (
     <div
       style={getStepContainerStyle(

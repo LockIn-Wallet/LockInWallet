@@ -47,7 +47,6 @@ import {
 import {
   fetchSpendingLimits as fetchSpendingLimitsService,
   fetchPendingLimitProposals as fetchPendingLimitProposalsService,
-  fetchPendingBypassRequests as fetchPendingBypassRequestsService,
 } from "./services";
 
 // Import components
@@ -115,7 +114,6 @@ function AppContentInner({
   const [signer, setSigner] = useState(null);
   const [savingsContract, setSavingsContract] = useState(null);
   const [balances, setBalances] = useState({}); // Multi-token balances
-  const [approver, setApprover] = useState("");
 
   // Solana wallet hooks (now safely inside provider)
   const {
@@ -155,8 +153,7 @@ function AppContentInner({
   // Bypass system state
   const [currentTime, setCurrentTime] = useState(Math.floor(Date.now() / 1000));
 
-  // Bypass system state (still used by App.js for data coordination)
-  const [pendingBypassRequests, setPendingBypassRequests] = useState([]);
+  // Note: Bypass system state now managed by WithdrawalInterface component
   const [approvalModule, setApprovalModule] = useState(null);
 
   // Enhanced withdrawal system state
@@ -192,7 +189,7 @@ function AppContentInner({
     setSpendingLimits([]);
     setIsSetupCommitted(false);
     setBalances({});
-    setPendingBypassRequests([]);
+    // Note: Bypass requests now cleared by WithdrawalInterface component
   };
 
   // Network management hook
@@ -283,7 +280,7 @@ function AppContentInner({
           setUserAddress("");
           setIsSetupCommitted(false);
           setSetupInfo(null);
-          setPendingBypassRequests([]);
+          // Note: Bypass requests now cleared by WithdrawalInterface component
           setPendingLimitProposals([]);
           setIsProxyDeployed(false);
           setProxyAddress("");
@@ -356,6 +353,11 @@ function AppContentInner({
   }, [withdrawalAmount, spendingLimits, instantWithdrawableAmount]);
 
   // Balance refresh function moved to BalanceDisplay component
+  // Note: This is a placeholder function for components that still expect refreshBalances
+  // Actual balance refreshing is handled by BalanceDisplay component internally
+  const refreshBalances = () => {
+    console.log("⚠️ refreshBalances called - balance refreshing is now handled by BalanceDisplay component");
+  };
 
   // TransactionManager initialization now handled by useNetworkManager hook
 
@@ -469,73 +471,6 @@ function AppContentInner({
     }
   };
 
-  const checkProxyStatus = async (
-    contract = savingsContract,
-    userAddr = null
-  ) => {
-    console.log("🔍 checkProxyStatus called with:", {
-      contract: !!contract,
-      signer: !!signer,
-      userAddr,
-    });
-
-    if (!contract) {
-      console.log("❌ No contract provided to checkProxyStatus");
-      return;
-    }
-    if (!signer) {
-      console.log("❌ No signer available for checkProxyStatus");
-      return;
-    }
-
-    // Delegate to the version that takes explicit signer parameter
-    await checkProxyStatusWithSigner(contract, signer, userAddr);
-  };
-
-  const checkSolanaProxyStatus = async (txManager, userAddress) => {
-    console.log("🔍 checkSolanaProxyStatus called with:", {
-      txManager: !!txManager,
-      userAddress,
-    });
-
-    if (!txManager) {
-      console.log(
-        "❌ No transaction manager provided to checkSolanaProxyStatus"
-      );
-      return;
-    }
-
-    try {
-      console.log(`🔍 Checking Solana proxy status for user: ${userAddress}`);
-
-      // Check if proxy is already deployed
-      console.log("🔍 Calling txManager.isProxyDeployed...");
-      const proxyDeployed = await txManager.isProxyDeployed(userAddress);
-      console.log(`🔍 isProxyDeployed result: ${proxyDeployed}`);
-
-      // Get the calculated deposit address (whether deployed or not)
-      console.log("🔍 Calling txManager.getDepositAddress...");
-      const depositAddress = await txManager.getDepositAddress(userAddress);
-      console.log(`🔍 getDepositAddress result: ${depositAddress}`);
-
-      console.log(`✅ Solana proxy status for ${userAddress}:`);
-      console.log(`- Deployed: ${proxyDeployed}`);
-      console.log(`- Deposit Address: ${depositAddress}`);
-
-      // Update UI state
-      setIsProxyDeployed(proxyDeployed);
-      setProxyAddress(depositAddress);
-
-      console.log(
-        `✅ Solana state updated: isProxyDeployed=${proxyDeployed}, proxyAddress=${depositAddress}`
-      );
-    } catch (error) {
-      console.error("❌ Error checking Solana proxy status:", error);
-      // Set default values on error
-      setIsProxyDeployed(false);
-      setProxyAddress("");
-    }
-  };
 
 
   const autoConnectWallet = async () => {
@@ -633,7 +568,6 @@ function AppContentInner({
         console.log(`Proxy status check completed`);
       }
       await fetchSpendingLimits(savings, web3Signer);
-      await fetchPendingBypassRequests(savings, userAddress);
       await fetchPendingLimitProposals(userAddress);
       // Note: Withdrawal data now handled by components
 
@@ -670,7 +604,6 @@ function AppContentInner({
 
 
   const fetchPendingLimitProposals = async (
-    userAddr = null,
     txManager = transactionManager
   ) => {
     const currentUserAddress = getCurrentUserAddress();
@@ -694,207 +627,10 @@ function AppContentInner({
 
 
 
-  const addApprover = async () => {
-    if (savingsContract) {
-      const tx = await savingsContract.addApprovalAddress(approver);
-      await tx.wait();
-      alert("Approver added successfully!");
-    }
-  };
 
-  const withdrawFunds = async () => {
-    // Network-aware connection check
-    if (networkType === "solana" && (!transactionManager || !solanaConnected)) {
-      alert("Please connect your Solana wallet first");
-      return;
-    }
-    if (networkType === "evm" && !savingsContract) {
-      alert("Please connect your MetaMask wallet first");
-      return;
-    }
 
-    // Validate withdrawal amount
-    if (
-      !withdrawalAmount ||
-      isNaN(withdrawalAmount) ||
-      parseFloat(withdrawalAmount) <= 0
-    ) {
-      alert("Please enter a valid withdrawal amount");
-      return;
-    }
+  // Note: Setup commit logic moved to SetupCommitStep component
 
-    try {
-      if (networkType === "solana") {
-        // Solana withdrawal logic
-        console.log("💸 Solana: Withdrawing", withdrawalAmount, selectedToken);
-
-        const adapter = transactionManager.getCurrentAdapter();
-        const amountValue = parseFloat(withdrawalAmount);
-
-        let txHash;
-        if (selectedToken === "SOL") {
-          // Withdraw SOL (native token)
-          const amountLamports = Math.floor(amountValue * Math.pow(10, 9)); // Convert to lamports
-          txHash = await adapter.withdrawSol(amountLamports);
-          console.log("Solana SOL withdrawal:", txHash);
-        } else {
-          // Withdraw SPL token (e.g., USDT)
-          // Convert to token's base units (USDT has 6 decimals)
-          const amountTokenUnits = Math.floor(amountValue * Math.pow(10, 6));
-          txHash = await adapter.withdrawSpl(amountTokenUnits);
-          console.log("Solana SPL withdrawal:", txHash);
-        }
-
-        alert(
-          `✅ Withdrawal of ${withdrawalAmount} ${selectedToken} successful!`
-        );
-      } else {
-        // EVM withdrawal logic (existing)
-        console.log("💸 EVM: Withdrawing", withdrawalAmount, selectedToken);
-
-        // Check if user is on the correct network
-        if (!isCorrectNetwork()) {
-          const currentNetwork = getCurrentNetwork(
-            networkType,
-            selectedNetwork
-          );
-          alert(`Please switch to ${currentNetwork.name} to make withdrawals`);
-          return;
-        }
-
-        const currentNetwork = getCurrentNetwork(networkType, selectedNetwork);
-        const usdtToken = currentNetwork.tokens.USDT;
-        const amount = ethers.parseUnits(withdrawalAmount, usdtToken.decimals);
-        const tx = await savingsContract.withdraw(amount, usdtToken.address);
-        await tx.wait();
-        alert(`✅ Withdrawal of ${withdrawalAmount} USDT successful!`);
-      }
-
-      // Clear form and refresh balances and spending limits for both networks
-      setWithdrawalAmount("");
-
-      // For Solana, add a small delay to ensure account state is updated
-      if (networkType === "solana") {
-        console.log("⏳ Waiting for Solana account state to update...");
-        await new Promise((resolve) => setTimeout(resolve, 1000)); // 1 second delay
-      }
-
-      // Balance and spending limits updates now handled by individual components
-      await fetchSpendingLimits();
-    } catch (error) {
-      console.error("Withdrawal error:", error);
-      if (error.message.includes("Exceeds")) {
-        // Extract which limit was exceeded from error message
-        alert(`Withdrawal blocked: ${error.message}`);
-      } else if (error.message.includes("Insufficient balance")) {
-        alert("Insufficient balance for this withdrawal");
-      } else if (error.message.includes("Insufficient SOL balance")) {
-        alert("Insufficient SOL balance for this withdrawal");
-      } else {
-        alert(`Failed to withdraw. Please try again. Error: ${error.message}`);
-      }
-    }
-  };
-
-  const commitSetup = async () => {
-    // Check connection for both networks
-    if (networkType === "solana" && (!transactionManager || !solanaConnected)) {
-      alert("Please connect your Solana wallet first");
-      return;
-    }
-    if (networkType === "evm" && !savingsContract) {
-      alert("Please connect your wallet first");
-      return;
-    }
-
-    try {
-      // Note: Spending limits should have been set earlier through SpendingLimitsSetup component
-      // This commit step just locks the setup - limits are already saved
-
-      // Commit setup (limits should have been set earlier)
-      if (networkType === "solana") {
-        console.log("Committing Solana setup...");
-        const txHash = await transactionManager.commitSetup();
-        console.log("Solana setup committed:", txHash);
-        alert(
-          "Setup locked in successfully! Your savings wallet is now active."
-        );
-      } else {
-        // EVM setup commit
-        console.log("Committing EVM setup...");
-        const txHash = await transactionManager.commitSetup();
-        console.log("EVM setup committed:", txHash);
-        alert(
-          "Setup locked in successfully! You are now in secured mode with timelock protection."
-        );
-      }
-
-      // Note: Edit modes are now managed internally by SpendingLimitsSetup component
-
-      // Refresh setup status
-      if (networkType === "solana") {
-        // For Solana, we'll get the setup status when we fetch spending limits
-        setIsSetupCommitted(true);
-      } else {
-        const setupCommitted = await savingsContract.isSetupCommitted();
-        setIsSetupCommitted(setupCommitted);
-
-        if (setupCommitted) {
-          const info = await savingsContract.getSetupInfo();
-          setSetupInfo({
-            committed: info.committed,
-            totalLockedValue: ethers.formatUnits(info.totalLockedValue, 6),
-            commitTimestamp: new Date(
-              Number(info.commitTimestamp) * 1000
-            ).toLocaleDateString(),
-            increasesInPeriod: ethers.formatUnits(info.increasesInPeriod, 6),
-            lastIncreaseTimestamp: new Date(
-              Number(info.lastIncreaseTimestamp) * 1000
-            ).toLocaleDateString(),
-          });
-        }
-      }
-
-      // Refresh spending limits to show the saved values
-      await fetchSpendingLimits();
-    } catch (error) {
-      console.error("Error committing setup:", error);
-      if (error.message.includes("Daily limit too high")) {
-        alert("Daily limit is too high for the weekly limit");
-      } else if (error.message.includes("Weekly limit too high")) {
-        alert("Weekly limit is too high for the monthly limit");
-      } else {
-        alert(`Failed to lock in setup: ${error.message}`);
-      }
-    }
-  };
-
-  const recalculateTotalLockedValue = async () => {
-    if (savingsContract) {
-      try {
-        const tx = await savingsContract.recalculateTotalLockedValue();
-        await tx.wait();
-        alert("✅ Total locked value recalculated successfully!");
-
-        // Refresh setup status to show updated value
-        const info = await savingsContract.getSetupInfo();
-        setSetupInfo({
-          committed: info.committed,
-          totalLockedValue: ethers.formatUnits(info.totalLockedValue, 6),
-          commitTimestamp: new Date(
-            Number(info.commitTimestamp) * 1000
-          ).toLocaleDateString(),
-          increasesInPeriod: ethers.formatUnits(info.increasesInPeriod, 6),
-          lastIncreaseTimestamp: new Date(
-            Number(info.lastIncreaseTimestamp) * 1000
-          ).toLocaleDateString(),
-        });
-      } catch (error) {
-        console.error("Error recalculating total locked value:", error);
-        alert("Failed to recalculate total locked value. Please try again.");
-      }
-    }
-  };
 
   // Helper function that accepts TransactionManager directly (for initialization)
   // Helper function to get current user address based on network (DRY)
@@ -927,21 +663,7 @@ function AppContentInner({
         setIsSetupCommitted(spendingData.isSetupCommitted);
         setLimitsLoaded(true);
 
-        // Also fetch bypass requests since txManager is working
-        console.log("🔄 Fetching bypass requests after successful spending limits load...");
-        try {
-          const bypassRequests = await fetchPendingBypassRequestsService({
-            transactionManager: txManager,
-            networkType,
-            userAddress: getCurrentUserAddress(),
-            solanaPublicKey
-          });
-
-          setPendingBypassRequests(bypassRequests);
-          console.log(`📋 Loaded ${bypassRequests.length} bypass requests`);
-        } catch (error) {
-          console.error("❌ Error fetching bypass requests after spending limits:", error);
-        }
+        // Note: Bypass requests now handled by WithdrawalInterface component
 
         console.log("✅ Solana spending limits and bypass requests loaded!");
       } catch (error) {
@@ -989,28 +711,6 @@ function AppContentInner({
 
 
 
-  const fetchPendingBypassRequests = async (
-    contract = savingsContract,
-    userAddr = null
-  ) => {
-    const currentUserAddress = userAddr || userAddress;
-
-    try {
-      const requests = await fetchPendingBypassRequestsService({
-        transactionManager,
-        savingsContract: contract || savingsContract,
-        networkType,
-        userAddress: currentUserAddress,
-        solanaPublicKey
-      });
-
-      setPendingBypassRequests(requests);
-      console.log(`✅ Loaded ${requests.length} bypass requests`);
-    } catch (error) {
-      console.error("Error fetching bypass requests:", error);
-      setPendingBypassRequests([]);
-    }
-  };
 
 
 
@@ -1106,17 +806,12 @@ function AppContentInner({
             isSetupCommitted={isSetupCommitted}
             stepValidation={stepValidation}
             goToNextStep={goToNextStep}
-            spendingLimits={spendingLimits}
-            pendingLimitProposals={pendingLimitProposals}
             currentTime={currentTime}
             networkType={networkType}
             transactionManager={transactionManager}
             solanaConnected={solanaConnected}
             savingsContract={savingsContract}
-            onDataRefresh={async () => {
-              await fetchSpendingLimits();
-              await fetchPendingLimitProposals();
-            }}
+            getCurrentUserAddress={getCurrentUserAddress}
           />
 
           {/* Step 2: Withdrawal Addresses Setup Component */}
@@ -1148,7 +843,15 @@ function AppContentInner({
               isSetupCommitted={isSetupCommitted}
               stepValidation={stepValidation}
               currentStep={currentStep}
-              commitSetup={commitSetup}
+              // Blockchain services (dependency injection)
+              transactionManager={transactionManager}
+              savingsContract={savingsContract}
+              networkType={networkType}
+              solanaConnected={solanaConnected}
+              // Callbacks for parent state updates
+              onSetupCommitted={setIsSetupCommitted}
+              onSetupInfoUpdate={setSetupInfo}
+              onSpendingLimitsRefresh={fetchSpendingLimits}
             />
           )}
           {/* Withdrawal Interface Component */}
@@ -1184,40 +887,11 @@ function AppContentInner({
               // Callbacks for App.js state updates
               onBalanceUpdate={refreshBalances}
               onSpendingLimitsUpdate={fetchSpendingLimits}
-              onWithdrawalDataUpdate={(type, data) => {
-                // Handle withdrawal data updates from component
-                if (type === 'addresses') {
-                  setWithdrawalAddresses(data);
-                } else if (type === 'requests') {
-                  setPendingWithdrawalRequests(data);
-                } else if (type === 'bypasses') {
-                  setPendingBypassRequests(data);
-                }
-              }}
+              // Note: All withdrawal data (addresses, requests, bypasses) now managed by WithdrawalInterface component internally
 
               // Utilities
               currentTime={currentTime}
             />
-          )}
-          {/* Add Approver Section - Hidden for now (not implemented) */}
-          {false && isSetupCommitted && (
-            <div
-              style={{
-                marginTop: "20px",
-                padding: "15px",
-                backgroundColor: "#2d3748",
-                color: "white",
-              }}
-            >
-              <h3>Add Emergency Approver</h3>
-              <input
-                type="text"
-                placeholder="Enter approver address..."
-                value={approver}
-                onChange={(e) => setApprover(e.target.value)}
-              />
-              <button onClick={addApprover}>Add Approver</button>
-            </div>
           )}
         </div>
       ) : null}

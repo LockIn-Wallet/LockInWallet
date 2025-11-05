@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 
 // Import styles directly from theme and components
 import { colors, fontWeight } from "../../styles/theme.js";
@@ -10,6 +10,12 @@ import {
   formatTimeRemaining,
   hasPendingProposalForPeriod,
 } from "../../utils/walletUtils.js";
+
+// Import services for data fetching
+import {
+  fetchSpendingLimits as fetchSpendingLimitsService,
+  fetchPendingLimitProposals as fetchPendingLimitProposalsService,
+} from "../../services";
 
 /**
  * SpendingLimitsSetup - Step 1 of the setup wizard
@@ -23,8 +29,6 @@ const SpendingLimitsSetup = ({
   goToNextStep,
 
   // Core data
-  spendingLimits,
-  pendingLimitProposals,
   currentTime,
   networkType,
 
@@ -33,9 +37,13 @@ const SpendingLimitsSetup = ({
   solanaConnected,
   savingsContract,
 
-  // Data refresh callback
-  onDataRefresh,
+  // Helper functions (provided by parent)
+  getCurrentUserAddress: getUserAddress,
 }) => {
+  // Internal state for spending limits data (moved from App.js)
+  const [spendingLimits, setSpendingLimits] = useState([]);
+  const [pendingLimitProposals, setPendingLimitProposals] = useState([]);
+  const [limitsLoaded, setLimitsLoaded] = useState(false);
   // Internal state for card interactions (hover and focus)
   const [cardStates, setCardStates] = useState({
     Daily: { isHovered: false, isFocused: false },
@@ -48,6 +56,45 @@ const SpendingLimitsSetup = ({
   const [customPeriodName, setCustomPeriodName] = useState("");
   const [customPeriodLimit, setCustomPeriodLimit] = useState("");
   const [customPeriodDuration, setCustomPeriodDuration] = useState("86400"); // Default 1 day
+
+  // Data fetching functions (moved from App.js)
+  const fetchSpendingLimits = async () => {
+    try {
+      const spendingData = await fetchSpendingLimitsService({
+        transactionManager,
+        savingsContract,
+        networkType
+      });
+
+      setSpendingLimits(spendingData.limits);
+      setLimitsLoaded(true);
+
+      console.log(`✅ SpendingLimitsSetup: Loaded ${spendingData.limits.length} spending limits`);
+    } catch (error) {
+      console.error("Error fetching spending limits:", error);
+      setSpendingLimits([]);
+      setLimitsLoaded(true);
+    }
+  };
+
+  const fetchPendingLimitProposals = async () => {
+    const currentUserAddress = getUserAddress();
+
+    try {
+      const proposals = await fetchPendingLimitProposalsService({
+        transactionManager,
+        savingsContract,
+        networkType,
+        userAddress: currentUserAddress
+      });
+
+      setPendingLimitProposals(proposals);
+      console.log(`✅ SpendingLimitsSetup: Loaded ${proposals.length} pending proposals`);
+    } catch (error) {
+      console.error("Error fetching pending proposals:", error);
+      setPendingLimitProposals([]);
+    }
+  };
 
   // Internal state for limit edits
   const [limitEdits, setLimitEdits] = useState({
@@ -78,11 +125,23 @@ const SpendingLimitsSetup = ({
     }));
   };
 
-  // Internal data refresh helper
+  // Load data when dependencies change
+  useEffect(() => {
+    const loadData = async () => {
+      if ((networkType === "solana" && transactionManager && solanaConnected) ||
+          (networkType === "evm" && savingsContract)) {
+        await fetchSpendingLimits();
+        await fetchPendingLimitProposals();
+      }
+    };
+
+    loadData();
+  }, [transactionManager, savingsContract, solanaConnected, networkType]);
+
+  // Internal data refresh helper (updated to use internal functions)
   const refreshData = async () => {
-    if (onDataRefresh) {
-      await onDataRefresh();
-    }
+    await fetchSpendingLimits();
+    await fetchPendingLimitProposals();
   };
 
   // Import ethers for EVM operations
