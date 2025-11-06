@@ -43,6 +43,27 @@ import {
   detectExceedingPeriod,
 } from "./utils/walletUtils.js";
 
+// Import contract verification utilities
+import {
+  verifyEVMContractDeployment,
+  createDeploymentErrorMessage,
+} from "./utils/contractVerification.js";
+
+// Import circuit breaker utilities
+import {
+  createCircuitBreakers,
+  safeContractCall,
+  debounce,
+} from "./utils/circuitBreaker.js";
+
+// Import error handling utilities
+import {
+  createErrorHandler,
+  retryWithErrorHandling,
+  getNetworkErrorMessage,
+  getDevErrorDetails,
+} from "./utils/errorHandling.js";
+
 // Import services
 import {
   fetchSpendingLimits as fetchSpendingLimitsService,
@@ -87,18 +108,31 @@ function AppContent() {
   }); // "evm" or "solana"
   const [selectedNetwork, setSelectedNetwork] = useState("localhost"); // Current selected network
 
-  return (
-    <SolanaWalletProvider
-      networkType={networkType}
-      selectedNetwork={selectedNetwork}
-    >
-      <AppContentInner
+  // Conditionally render SolanaWalletProvider only for Solana network
+  if (networkType === "solana") {
+    return (
+      <SolanaWalletProvider
         networkType={networkType}
-        setNetworkType={setNetworkType}
         selectedNetwork={selectedNetwork}
-        setSelectedNetwork={setSelectedNetwork}
-      />
-    </SolanaWalletProvider>
+      >
+        <AppContentInner
+          networkType={networkType}
+          setNetworkType={setNetworkType}
+          selectedNetwork={selectedNetwork}
+          setSelectedNetwork={setSelectedNetwork}
+        />
+      </SolanaWalletProvider>
+    );
+  }
+
+  // EVM mode - no Solana provider needed
+  return (
+    <AppContentInner
+      networkType={networkType}
+      setNetworkType={setNetworkType}
+      selectedNetwork={selectedNetwork}
+      setSelectedNetwork={setSelectedNetwork}
+    />
   );
 }
 
@@ -115,22 +149,58 @@ function AppContentInner({
   const [savingsContract, setSavingsContract] = useState(null);
   const [balances, setBalances] = useState({}); // Multi-token balances
 
-  // Solana wallet hooks (now safely inside provider)
-  const {
-    connected: solanaConnected,
-    publicKey: solanaPublicKey,
-    disconnect: solanaDisconnect,
-    wallet: solanaWallet,
-    sendTransaction: solanaSendTransaction,
-    signTransaction: solanaSignTransaction,
-    signAllTransactions: solanaSignAllTransactions,
-  } = useWallet();
-  const { connection } = useConnection();
+  // Solana wallet state - only use hooks when in Solana mode
+  let solanaConnected = false;
+  let solanaPublicKey = null;
+  let solanaDisconnect = () => {};
+  let solanaWallet = null;
+  let solanaSendTransaction = () => {};
+  let solanaSignTransaction = () => {};
+  let solanaSignAllTransactions = () => {};
+  let connection = null;
+
+  // Only use Solana hooks when networkType is 'solana' and provider is available
+  if (networkType === "solana") {
+    try {
+      const walletState = useWallet();
+      const connectionState = useConnection();
+
+      solanaConnected = walletState.connected;
+      solanaPublicKey = walletState.publicKey;
+      solanaDisconnect = walletState.disconnect;
+      solanaWallet = walletState.wallet;
+      solanaSendTransaction = walletState.sendTransaction;
+      solanaSignTransaction = walletState.signTransaction;
+      solanaSignAllTransactions = walletState.signAllTransactions;
+      connection = connectionState.connection;
+    } catch (error) {
+      console.warn("Solana wallet hooks not available:", error);
+    }
+  }
   const [currentChainId, setCurrentChainId] = useState(null); // MetaMask's current chain ID
   const [isNetworkSwitching, setIsNetworkSwitching] = useState(false);
 
   // Multi-blockchain transaction manager
   const [transactionManager, setTransactionManager] = useState(null);
+
+  // Circuit breaker protection
+  const [circuitBreakers] = useState(() => createCircuitBreakers());
+
+  // Error handling
+  const [lastError, setLastError] = useState(null);
+  const contractErrorHandler = createErrorHandler(
+    "contract_interaction",
+    (error) => {
+      setLastError(error);
+      // Display user-friendly error message
+      if (error.severity === "error") {
+        console.error(
+          "Contract Error:",
+          error.userMessage + getDevErrorDetails(error)
+        );
+      }
+    }
+  );
 
   // Time-based spending limits state - unified interface
   const [spendingLimits, setSpendingLimits] = useState([]); // Array of all time periods
@@ -220,9 +290,6 @@ function AppContentInner({
   });
 
   // Network functions are now provided by useNetworkManager hook
-
-
-
 
   const isCorrectNetwork = () => {
     if (networkType === "solana") {
@@ -356,7 +423,9 @@ function AppContentInner({
   // Note: This is a placeholder function for components that still expect refreshBalances
   // Actual balance refreshing is handled by BalanceDisplay component internally
   const refreshBalances = () => {
-    console.log("⚠️ refreshBalances called - balance refreshing is now handled by BalanceDisplay component");
+    console.log(
+      "⚠️ refreshBalances called - balance refreshing is now handled by BalanceDisplay component"
+    );
   };
 
   // TransactionManager initialization now handled by useNetworkManager hook
@@ -420,14 +489,20 @@ function AppContentInner({
       const userAddress = userAddr || (await signerParam.getAddress());
       console.log(`🔍 Checking proxy status for user: ${userAddress}`);
 
-      // Check if proxy is already deployed
+      // Check if proxy is already deployed (with circuit breaker protection)
       console.log("🔍 Calling contract.isProxyDeployed...");
-      const proxyDeployed = await contract.isProxyDeployed(userAddress);
+      const proxyDeployed = await safeContractCall(
+        () => contract.isProxyDeployed(userAddress),
+        circuitBreakers.contracts
+      );
       console.log(`🔍 isProxyDeployed result: ${proxyDeployed}`);
 
       // Get the calculated deposit address (whether deployed or not)
       console.log("🔍 Calling contract.getUserDepositAddress...");
-      const depositAddress = await contract.getUserDepositAddress(userAddress);
+      const depositAddress = await safeContractCall(
+        () => contract.getUserDepositAddress(userAddress),
+        circuitBreakers.contracts
+      );
       console.log(`🔍 getUserDepositAddress result: ${depositAddress}`);
 
       console.log(`✅ Proxy status for ${userAddress}:`);
@@ -442,14 +517,15 @@ function AppContentInner({
         `✅ State updated: isProxyDeployed=${proxyDeployed}, proxyAddress=${depositAddress}`
       );
     } catch (error) {
-      console.error("❌ Error checking proxy status:", error);
+      const formattedError = contractErrorHandler(error);
 
       // If there's an error checking proxy status, try a fallback approach
       // The error might be because the function doesn't exist or the proxy is in an unexpected state
       try {
         const userAddress = userAddr || (await signerParam.getAddress());
-        const depositAddress = await contract.getUserDepositAddress(
-          userAddress
+        const depositAddress = await safeContractCall(
+          () => contract.getUserDepositAddress(userAddress),
+          circuitBreakers.contracts
         );
 
         // If we can get a deposit address, assume proxy exists if it's not the zero address
@@ -464,16 +540,14 @@ function AppContentInner({
         setIsProxyDeployed(hasValidAddress);
         setProxyAddress(hasValidAddress ? depositAddress : "");
       } catch (fallbackError) {
-        console.error("Fallback proxy check also failed:", fallbackError);
+        contractErrorHandler(fallbackError);
         setIsProxyDeployed(false);
         setProxyAddress("");
       }
     }
   };
 
-
-
-  const autoConnectWallet = async () => {
+  const autoConnectWallet = debounce(async () => {
     if (window.ethereum) {
       try {
         // Check if already connected
@@ -485,28 +559,30 @@ function AppContentInner({
           await connectWalletInternal();
         }
       } catch (error) {
+        // Auto-connect failures are expected on first visit - use info level
         console.log(
           "Auto-connect failed (expected on first visit):",
           error.message
         );
       }
     }
-  };
+  }, 2000); // 2 second debounce to prevent rapid reconnection
 
-  const connectWallet = async () => {
+  const connectWallet = debounce(async () => {
     if (window.ethereum) {
       try {
         // Request account access
         await window.ethereum.request({ method: "eth_requestAccounts" });
         await connectWalletInternal();
       } catch (error) {
-        console.error("Failed to connect wallet:", error);
-        alert("Failed to connect wallet. Please try again.");
+        const walletErrorHandler = createErrorHandler("wallet_connection");
+        const formattedError = walletErrorHandler(error);
+        alert(formattedError.userMessage + getDevErrorDetails(formattedError));
       }
     } else {
       alert("Please install MetaMask!");
     }
-  };
+  }, 1000); // 1 second debounce for manual connections
 
   const connectWalletInternal = async () => {
     const web3Provider = new ethers.BrowserProvider(window.ethereum);
@@ -523,6 +599,26 @@ function AppContentInner({
       return;
     }
 
+    // Verify contract is actually deployed before making any calls
+    const isContractDeployed = await verifyEVMContractDeployment(
+      web3Provider,
+      contractAddress
+    );
+    if (!isContractDeployed) {
+      const deploymentError = getNetworkErrorMessage(
+        "CONTRACT_NOT_DEPLOYED",
+        networkType
+      );
+      console.error(
+        "Contract deployment verification failed:",
+        deploymentError
+      );
+      alert(
+        `⚠️ Contract Not Deployed\n\n${deploymentError}\n\nCurrent contract address: ${contractAddress}`
+      );
+      return;
+    }
+
     const savings = new ethers.Contract(
       contractAddress,
       SavingsABI,
@@ -535,7 +631,10 @@ function AppContentInner({
       const moduleAddresses = await import("./moduleAddresses.json");
       const approvalModuleAddress = moduleAddresses.modules?.approvalSystem;
 
-      if (approvalModuleAddress && approvalModuleAddress !== "0x0000000000000000000000000000000000000000") {
+      if (
+        approvalModuleAddress &&
+        approvalModuleAddress !== "0x0000000000000000000000000000000000000000"
+      ) {
         approval = new ethers.Contract(
           approvalModuleAddress,
           ApprovalSystemModuleABI,
@@ -571,12 +670,18 @@ function AppContentInner({
       await fetchPendingLimitProposals(userAddress);
       // Note: Withdrawal data now handled by components
 
-      // Check setup status
-      const setupCommitted = await savings.isSetupCommitted();
+      // Check setup status (with circuit breaker protection)
+      const setupCommitted = await safeContractCall(
+        () => savings.isSetupCommitted(),
+        circuitBreakers.contracts
+      );
       setIsSetupCommitted(setupCommitted);
 
       if (setupCommitted) {
-        const info = await savings.getSetupInfo();
+        const info = await safeContractCall(
+          () => savings.getSetupInfo(),
+          circuitBreakers.contracts
+        );
         setSetupInfo({
           committed: info.committed,
           totalLockedValue: ethers.formatUnits(info.totalLockedValue, 6),
@@ -590,22 +695,20 @@ function AppContentInner({
         });
       }
     } catch (error) {
-      console.error("Error fetching initial data:", error);
+      const dataErrorHandler = createErrorHandler("initial_data_fetch");
+      const formattedError = dataErrorHandler(error);
+
       // Still set empty balances to show the balance section
       setBalances({});
+
+      // Set error state for user feedback
+      setLastError(formattedError);
     }
   };
 
-
   // Unified spending limits functions - functions moved to SpendingLimitsSetup component
 
-
-
-
-
-  const fetchPendingLimitProposals = async (
-    txManager = transactionManager
-  ) => {
+  const fetchPendingLimitProposals = async (txManager = transactionManager) => {
     const currentUserAddress = getCurrentUserAddress();
 
     try {
@@ -614,7 +717,7 @@ function AppContentInner({
         savingsContract,
         networkType,
         userAddress: currentUserAddress,
-        getCurrentUserAddress
+        getCurrentUserAddress,
       });
 
       setPendingLimitProposals(proposals);
@@ -625,12 +728,7 @@ function AppContentInner({
     }
   };
 
-
-
-
-
   // Note: Setup commit logic moved to SetupCommitStep component
-
 
   // Helper function that accepts TransactionManager directly (for initialization)
   // Helper function to get current user address based on network (DRY)
@@ -656,7 +754,7 @@ function AppContentInner({
         // Fetch spending limits using service
         const spendingData = await fetchSpendingLimitsService({
           transactionManager: txManager,
-          networkType
+          networkType,
         });
 
         setSpendingLimits(spendingData.limits);
@@ -681,7 +779,9 @@ function AppContentInner({
     console.log("🚀 fetchSpendingLimits called for network:", networkType);
 
     if (networkType === "solana") {
-      console.log("🔵 Delegating Solana spending limits to dedicated function...");
+      console.log(
+        "🔵 Delegating Solana spending limits to dedicated function..."
+      );
       // Delegate to the dedicated Solana function to avoid duplication and race conditions
       await fetchSpendingLimitsWithTxManager(transactionManager);
       return;
@@ -692,7 +792,7 @@ function AppContentInner({
         transactionManager,
         savingsContract: contract,
         signer: userSigner,
-        networkType
+        networkType,
       });
 
       setSpendingLimits(spendingData.limits);
@@ -709,13 +809,41 @@ function AppContentInner({
 
   // Note: Withdrawal address management moved to WithdrawalInterface and WithdrawalAddressSetupStep components
 
-
-
-
-
-
   return (
     <div style={styles.app.container}>
+      {/* Error Display */}
+      {lastError && lastError.severity === "error" && (
+        <div
+          style={{
+            backgroundColor: "#fed7d7",
+            border: "1px solid #fc8181",
+            borderRadius: "6px",
+            padding: "12px",
+            margin: "10px 0",
+            color: "#9b2c2c",
+          }}
+        >
+          <div style={{ fontWeight: "bold", marginBottom: "4px" }}>
+            ❌ Error
+          </div>
+          <div style={{ marginBottom: "8px" }}>{lastError.userMessage}</div>
+          <button
+            onClick={() => setLastError(null)}
+            style={{
+              backgroundColor: "#fc8181",
+              color: "white",
+              border: "none",
+              borderRadius: "4px",
+              padding: "4px 8px",
+              fontSize: "12px",
+              cursor: "pointer",
+            }}
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
+
       {/* Status Header Component */}
       <StatusHeader
         provider={provider}
@@ -752,20 +880,17 @@ function AppContentInner({
             savingsContract={savingsContract}
             signer={signer}
             connection={connection}
-
             // Network and wallet props
             networkType={networkType}
             selectedNetwork={selectedNetwork}
             userAddress={userAddress}
             solanaPublicKey={solanaPublicKey}
             solanaConnected={solanaConnected}
-
             // Setup state
             isSetupCommitted={isSetupCommitted}
             // Wallet state
             provider={provider}
             solanaWallet={solanaWallet}
-
             // Callbacks for App.js state updates
             onBalanceUpdate={(newBalances) => {
               // Update parent state for other components that might need balance data
@@ -782,23 +907,19 @@ function AppContentInner({
               savingsContract={savingsContract}
               signer={signer}
               connection={connection}
-
               // Network and wallet props
               networkType={networkType}
               selectedNetwork={selectedNetwork}
               userAddress={userAddress}
               solanaPublicKey={solanaPublicKey}
               solanaConnected={solanaConnected}
-
               // Token state from parent (shared with withdrawal)
               selectedToken={selectedToken}
               setSelectedToken={setSelectedToken}
-
               // Callbacks for App.js state updates
               onBalanceUpdate={refreshBalances}
             />
           )}
-
 
           {/* Step 1: Spending Limits Setup / Management */}
           <SpendingLimitsSetup
@@ -822,17 +943,14 @@ function AppContentInner({
               isSetupCommitted={isSetupCommitted}
               stepValidation={stepValidation}
               spendingLimits={spendingLimits}
-
               // Blockchain services (dependency injection)
               transactionManager={transactionManager}
               savingsContract={savingsContract}
-
               // Network context
               networkType={networkType}
               solanaConnected={solanaConnected}
               solanaPublicKey={solanaPublicKey}
               userAddress={userAddress}
-
               // Step navigation
               goToNextStep={goToNextStep}
             />
@@ -862,28 +980,23 @@ function AppContentInner({
               savingsContract={savingsContract}
               signer={signer}
               connection={connection}
-
               // Network & config
               networkType={networkType}
               selectedNetwork={selectedNetwork}
               getCurrentUserAddress={getCurrentUserAddress}
               getCurrentNetwork={getCurrentNetwork}
-
               // Wallet state
               solanaConnected={solanaConnected}
               solanaPublicKey={solanaPublicKey}
               userAddress={userAddress}
-
               // Shared token state (shared with DepositInterface)
               selectedToken={selectedToken}
               setSelectedToken={setSelectedToken}
-
               // Calculated values (computed in App.js)
               instantWithdrawableAmount={instantWithdrawableAmount}
               limitingPeriod={limitingPeriod}
               exceedsInstantLimit={exceedsInstantLimit}
               exceedingPeriod={exceedingPeriod}
-
               // Callbacks for App.js state updates
               onBalanceUpdate={refreshBalances}
               onSpendingLimitsUpdate={fetchSpendingLimits}

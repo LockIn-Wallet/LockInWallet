@@ -8,6 +8,14 @@ import {
   getCurrentNetwork,
 } from "../utils/walletUtils.js";
 
+// Import network isolation utilities
+import {
+  validateNetworkConfig,
+  validateNetworkCompatibility,
+  createNetworkStateCleaner,
+  clearNetworkStorage,
+} from "../utils/networkIsolation.js";
+
 /**
  * useNetworkManager - Custom hook for network management
  *
@@ -71,8 +79,14 @@ export const useNetworkManager = ({
   // Initialize TransactionManager for the current network
   const initializeTransactionManager = useCallback(async (networkType, selectedNetwork) => {
     try {
-      const txManager = new TransactionManager();
       const networkConfig = getCurrentNetwork(networkType, selectedNetwork);
+
+      // Validate network configuration
+      if (!validateNetworkConfig(networkType, networkConfig)) {
+        throw new Error(`Invalid network configuration for ${networkType}:${selectedNetwork}`);
+      }
+
+      const txManager = new TransactionManager();
 
       if (networkType === "evm") {
         await txManager.initialize("evm", networkConfig);
@@ -94,13 +108,15 @@ export const useNetworkManager = ({
           connection: connection,
         };
         await txManager.initialize("solana", networkConfig, walletConfig);
+      } else {
+        throw new Error(`Unsupported network type: ${networkType}`);
       }
 
       setTransactionManager(txManager);
-      console.log(`TransactionManager initialized for ${networkType}`);
+      console.log(`✅ TransactionManager initialized for ${networkType}:${selectedNetwork}`);
       return txManager;
     } catch (error) {
-      console.error("Error initializing TransactionManager:", error);
+      console.error("❌ Error initializing TransactionManager:", error);
       return null;
     }
   }, [
@@ -116,29 +132,63 @@ export const useNetworkManager = ({
 
   // Network type switching (EVM vs Solana)
   const switchNetworkType = useCallback(async (newNetworkType, selectedNetwork) => {
+    console.log(`🔄 Switching network type to: ${newNetworkType}`);
+
+    // Validate network compatibility before switching
+    const currentState = {
+      networkType: localStorage.getItem("preferredNetworkType"),
+      provider: !!window.ethereum,
+      solanaConnected,
+      solanaPublicKey,
+    };
+
+    const compatibility = validateNetworkCompatibility(newNetworkType, currentState);
+
+    if (!compatibility.canProceed) {
+      console.error("❌ Cannot switch to network:", compatibility.issues);
+      throw new Error(`Network switch failed: ${compatibility.issues.join(', ')}`);
+    }
+
+    if (compatibility.warnings.length > 0) {
+      console.warn("⚠️ Network switch warnings:", compatibility.warnings);
+    }
+
+    // Create network-isolated state cleaner
+    const currentNetworkType = currentState.networkType;
+    const stateCleaner = createNetworkStateCleaner(currentNetworkType, newNetworkType);
+
+    // Clear state using isolated cleaner
+    stateCleaner(clearAllState);
+
+    // Update network type and persist preference
     setNetworkType(newNetworkType);
-    // Persist user's network type preference
     localStorage.setItem("preferredNetworkType", newNetworkType);
 
-    // Clear all state when switching networks to prevent cached data
-    if (clearAllState) {
-      clearAllState();
-    }
-
-    if (newNetworkType === "solana") {
-      // Initialize Solana TransactionManager if Solana wallet is connected
-      if (solanaConnected && solanaPublicKey && connection) {
-        const newTxManager = await initializeTransactionManager(
-          "solana",
-          selectedNetwork
-        );
+    // Initialize TransactionManager for new network
+    try {
+      if (newNetworkType === "solana") {
+        // Initialize Solana TransactionManager if Solana wallet is connected
+        if (solanaConnected && solanaPublicKey && connection) {
+          const newTxManager = await initializeTransactionManager(
+            "solana",
+            selectedNetwork
+          );
+          console.log(`✅ Successfully switched to Solana network: ${selectedNetwork}`);
+          return newTxManager;
+        } else {
+          console.log("⏳ Solana network selected but wallet not connected yet");
+        }
+      } else {
+        // Initialize EVM TransactionManager
+        const newTxManager = await initializeTransactionManager("evm", selectedNetwork);
+        console.log(`✅ Successfully switched to EVM network: ${selectedNetwork}`);
         return newTxManager;
       }
-    } else {
-      // Initialize EVM TransactionManager
-      const newTxManager = await initializeTransactionManager("evm", selectedNetwork);
-      return newTxManager;
+    } catch (error) {
+      console.error("❌ Failed to initialize TransactionManager after network switch:", error);
+      // Don't throw here - let the user continue and try to connect wallet
     }
+
     return null;
   }, [
     setNetworkType,

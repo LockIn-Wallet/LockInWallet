@@ -237,8 +237,16 @@ SetupCommitStep.propTypes = {
   }).isRequired,
   currentStep: PropTypes.number.isRequired,
 
-  // Action handlers
-  commitSetup: PropTypes.func.isRequired,
+  // Blockchain services (dependency injection)
+  transactionManager: PropTypes.object,
+  savingsContract: PropTypes.object,
+  networkType: PropTypes.oneOf(['evm', 'solana']).isRequired,
+  solanaConnected: PropTypes.bool,
+
+  // Callbacks for parent state updates
+  onSetupCommitted: PropTypes.func.isRequired,
+  onSetupInfoUpdate: PropTypes.func.isRequired,
+  onSpendingLimitsRefresh: PropTypes.func,
 };
 
 export default SetupCommitStep;
