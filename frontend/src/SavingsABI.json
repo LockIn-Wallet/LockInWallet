@@ -263,6 +263,29 @@
     "type": "function"
   },
   {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "dailyLimit",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "weeklyLimit",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "monthlyLimit",
+        "type": "uint256"
+      }
+    ],
+    "name": "commitSetup",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
     "inputs": [],
     "name": "deployUserProxy",
     "outputs": [

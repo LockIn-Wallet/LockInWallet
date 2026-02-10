@@ -108,30 +108,43 @@ async function fetchEvmSpendingLimits(params) {
   const [names, limits, spent, remaining, durations, active] = spendingData;
 
   for (let i = 0; i < names.length; i++) {
-    if (active[i]) {
-      fetchedLimits.push({
-        name: names[i],
-        limit: ethers.formatUnits(limits[i], 6),
-        spent: ethers.formatUnits(spent[i], 6),
-        remaining: Number(ethers.formatUnits(remaining[i], 6)),
-        duration: durations[i].toString(),
-        active: active[i],
-        // Helper fields for display
-        durationHours: Math.floor(Number(durations[i]) / 3600),
-        durationDays: Math.floor(Number(durations[i]) / 86400),
-      });
-    }
+    console.log(`📊 Limit ${i}: name="${names[i]}", active=${active[i]}, limit=${ethers.formatUnits(limits[i], 6)}`);
+
+    // For debugging, include ALL limits (both active and inactive)
+    fetchedLimits.push({
+      name: names[i],
+      limit: ethers.formatUnits(limits[i], 6),
+      spent: ethers.formatUnits(spent[i], 6),
+      remaining: Number(ethers.formatUnits(remaining[i], 6)),
+      duration: durations[i].toString(),
+      active: active[i], // Include active status for debugging
+      // Helper fields for display
+      durationHours: Math.floor(Number(durations[i]) / 3600),
+      durationDays: Math.floor(Number(durations[i]) / 86400),
+    });
   }
 
   // For EVM, we might need to check setup committed status separately
   // This would require an additional contract call if such a method exists
   let isSetupCommitted = false;
   try {
+    console.log('🔍 Checking if savingsContract has isSetupCommitted method...');
+    console.log('Contract methods available:', Object.getOwnPropertyNames(savingsContract));
+
     if (savingsContract.isSetupCommitted) {
+      console.log('🔍 Calling isSetupCommitted()...');
       isSetupCommitted = await savingsContract.isSetupCommitted();
+      console.log('✅ isSetupCommitted result:', isSetupCommitted);
+    } else {
+      console.log('❌ isSetupCommitted method not found on contract');
     }
   } catch (error) {
-    console.warn('Could not fetch setup committed status:', error);
+    console.error('❌ Error fetching setup committed status:', error);
+    console.error('Error details:', {
+      message: error.message,
+      code: error.code,
+      reason: error.reason
+    });
   }
 
   return {

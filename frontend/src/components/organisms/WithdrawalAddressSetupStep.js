@@ -30,21 +30,17 @@ import {
 /**
  * WithdrawalAddressSetupStep Component
  *
- * Handles Step 2 of the setup wizard - "Add Withdrawal Addresses"
- * This component manages withdrawal destination setup before wallet commitment
+ * Manages withdrawal destination setup before wallet commitment
  *
  * Features:
  * - Withdrawal address management during setup
  * - Add new withdrawal address form
  * - Pending withdrawal address requests display
  * - Network-aware address validation (Ethereum vs Solana)
- * - Integration with step wizard validation
  */
 const WithdrawalAddressSetupStep = ({
-  // Step wizard state
-  currentStep,
+  // Setup state
   isSetupCommitted,
-  stepValidation,
   spendingLimits,
 
   // Blockchain services (dependency injection)
@@ -56,9 +52,6 @@ const WithdrawalAddressSetupStep = ({
   solanaConnected,
   solanaPublicKey,
   userAddress,
-
-  // Step navigation
-  goToNextStep,
 }) => {
   // Component-specific form state
   const [showWithdrawalAddressForm, setShowWithdrawalAddressForm] = useState(false);
@@ -68,11 +61,6 @@ const WithdrawalAddressSetupStep = ({
   // Internal data state (moved from App.js props)
   const [withdrawalAddresses, setWithdrawalAddresses] = useState([]);
   const [pendingWithdrawalRequests, setPendingWithdrawalRequests] = useState([]);
-
-  // Calculate step validation for this step
-  const step2Validation = {
-    step1Complete: Array.isArray(spendingLimits) ? spendingLimits.length > 0 : Object.keys(spendingLimits).length > 0,
-  };
 
   // Helper function to get current user address based on network
   const getCurrentUserAddress = () => {
@@ -266,40 +254,27 @@ const WithdrawalAddressSetupStep = ({
 
   return (
     <div
-      style={getStepContainerStyle(2, currentStep, isSetupCommitted, step2Validation)}
+      style={{
+        backgroundColor: "#2d3748",
+        borderRadius: "8px",
+        padding: "20px",
+        margin: "20px 0",
+        border: "1px solid #4a5568",
+      }}
     >
-      {/* Step Header */}
+      {/* Header */}
       <div style={stepStyles.stepHeader}>
-        <div style={layoutStyles.flexAlignCenter}>
-          <h3
-            style={{
-              ...stepStyles.step2Title,
-              color: getStepTitleColor(2, isSetupCommitted, step2Validation),
-            }}
-          >
-            🔑 Step 2: Add Withdrawal Addresses
-          </h3>
-        </div>
-
-        {!isSetupCommitted &&
-          stepValidation.step2Complete &&
-          currentStep === 2 && (
-            <button
-              onClick={goToNextStep}
-              style={buttonStyles.primary}
-              onMouseOver={(e) => {
-                e.target.style.backgroundColor = colors.primary.dark;
-              }}
-              onMouseOut={(e) => {
-                e.target.style.backgroundColor = colors.primary.main;
-              }}
-            >
-              Proceed to Lock-In →
-            </button>
-          )}
+        <h3
+          style={{
+            ...stepStyles.step2Title,
+            color: colors.primary?.light || "#63b3ed",
+          }}
+        >
+          🔑 Withdrawal Addresses
+        </h3>
       </div>
 
-      {/* Step Description */}
+      {/* Description */}
       <p style={stepStyles.stepDescription}>
         {isSetupCommitted
           ? "Manage your approved withdrawal addresses. New addresses require 24-48 hour approval after wallet is locked."
@@ -307,12 +282,11 @@ const WithdrawalAddressSetupStep = ({
       </p>
 
       {/* Progress Tips for Setup Mode */}
-      {!isSetupCommitted && currentStep === 2 && (
+      {!isSetupCommitted && (
         <div
           style={{
-            ...cardStyles.warningCard,
+            ...cardStyles.progressTipCard,
             marginBottom: spacing.md,
-            borderLeft: `3px solid ${colors.warning.light}`,
           }}
         >
           <span style={{ fontSize: fontSize.sm, color: colors.text.secondary }}>
@@ -483,12 +457,8 @@ const WithdrawalAddressSetupStep = ({
 };
 
 WithdrawalAddressSetupStep.propTypes = {
-  // Step wizard state
-  currentStep: PropTypes.number.isRequired,
+  // Setup state
   isSetupCommitted: PropTypes.bool.isRequired,
-  stepValidation: PropTypes.shape({
-    step2Complete: PropTypes.bool,
-  }).isRequired,
   spendingLimits: PropTypes.oneOfType([PropTypes.array, PropTypes.object]).isRequired,
 
   // Blockchain services (dependency injection)
@@ -500,9 +470,6 @@ WithdrawalAddressSetupStep.propTypes = {
   solanaConnected: PropTypes.bool,
   solanaPublicKey: PropTypes.object,
   userAddress: PropTypes.string,
-
-  // Step navigation
-  goToNextStep: PropTypes.func.isRequired,
 };
 
 export default WithdrawalAddressSetupStep;

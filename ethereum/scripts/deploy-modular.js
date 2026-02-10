@@ -202,21 +202,24 @@ async function main() {
       }
     }
 
-    // Update frontend addresses
+    // Update frontend addresses in networkConfig.json
     console.log("\n🔄 Updating frontend addresses...");
-    const frontendPath = path.join(__dirname, "../../frontend/src/App.js");
+    const networkConfigPath = path.join(__dirname, "../../frontend/src/networkConfig.json");
 
     try {
-      let frontendContent = fs.readFileSync(frontendPath, "utf8");
+      // Read and parse networkConfig.json
+      const networkConfigContent = fs.readFileSync(networkConfigPath, "utf8");
+      const networkConfig = JSON.parse(networkConfigContent);
+
       let addressChanged = false;
 
-      // Update Savings contract address (keeping the same pattern)
-      const currentSavingsMatch = frontendContent.match(/savingsContract: "([^"]+)"/);
-      if (!currentSavingsMatch || currentSavingsMatch[1] !== savingsAddress) {
-        frontendContent = frontendContent.replace(
-          /savingsContract: "[^"]*"/,
-          `savingsContract: "${savingsAddress}"`
-        );
+      // Update Savings contract address for localhost
+      const currentSavingsAddress = networkConfig.evm?.localhost?.savingsContract;
+      if (currentSavingsAddress !== savingsAddress) {
+        if (!networkConfig.evm) networkConfig.evm = {};
+        if (!networkConfig.evm.localhost) networkConfig.evm.localhost = {};
+
+        networkConfig.evm.localhost.savingsContract = savingsAddress;
         addressChanged = true;
         console.log(`   Updated Savings address: ${savingsAddress}`);
       } else {
@@ -225,12 +228,12 @@ async function main() {
 
       // Update USDT address only if we have a new one
       if (usdtAddress) {
-        const currentUsdtMatch = frontendContent.match(/(USDT: {[^}]*address: ")[^"]*(",)/);
-        if (!currentUsdtMatch || !currentUsdtMatch[0].includes(usdtAddress)) {
-          frontendContent = frontendContent.replace(
-            /(USDT: {[^}]*address: ")[^"]*(",)/,
-            `$1${usdtAddress}$2`
-          );
+        const currentUsdtAddress = networkConfig.evm?.localhost?.tokens?.USDT?.address;
+        if (currentUsdtAddress !== usdtAddress) {
+          if (!networkConfig.evm.localhost.tokens) networkConfig.evm.localhost.tokens = {};
+          if (!networkConfig.evm.localhost.tokens.USDT) networkConfig.evm.localhost.tokens.USDT = {};
+
+          networkConfig.evm.localhost.tokens.USDT.address = usdtAddress;
           addressChanged = true;
           console.log(`   Updated USDT address: ${usdtAddress}`);
         } else {
@@ -239,15 +242,21 @@ async function main() {
       }
 
       if (addressChanged) {
-        fs.writeFileSync(frontendPath, frontendContent);
-        console.log("✅ Frontend addresses updated successfully");
+        // Write back the updated config with proper formatting
+        fs.writeFileSync(networkConfigPath, JSON.stringify(networkConfig, null, 2));
+        console.log("✅ Frontend networkConfig.json updated successfully");
       } else {
         console.log("✅ Frontend addresses already up to date");
       }
 
     } catch (error) {
-      console.log("⚠️  Warning: Could not update frontend addresses automatically");
+      console.log("⚠️  Warning: Could not update frontend networkConfig.json automatically");
       console.log(`   Error: ${error.message}`);
+      console.log(`   Please manually update ${networkConfigPath}:`);
+      console.log(`   - savingsContract: "${savingsAddress}"`);
+      if (usdtAddress) {
+        console.log(`   - USDT address: "${usdtAddress}"`);
+      }
     }
 
     // Create module addresses config file for frontend

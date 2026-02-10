@@ -21,6 +21,8 @@ export class TransactionManager {
     try {
       if (networkType === 'evm') {
         const adapter = new EVMAdapter(networkConfig);
+        // Connect the adapter to get provider/signer access
+        await adapter.connect();
         this.adapters.set('evm', adapter);
         this.currentAdapter = adapter;
       } else if (networkType === 'solana') {
@@ -304,6 +306,41 @@ export class TransactionManager {
 
     } catch (error) {
       console.error(`${this.networkType} setup commit with limits error:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Unified method that sets spending limits and commits setup in a single transaction
+   * This method provides the clean adapter interface that components expect
+   * @param {number} dailyLimit Daily spending limit (0 to disable)
+   * @param {number} weeklyLimit Weekly spending limit (0 to disable)
+   * @param {number} monthlyLimit Monthly spending limit (0 to disable)
+   * @returns {Promise<string>} Transaction hash/signature
+   */
+  async commitSetup(dailyLimit, weeklyLimit, monthlyLimit) {
+    try {
+      const adapter = this.getCurrentAdapter();
+
+      if (!(await adapter.isConnected())) {
+        throw new Error('Wallet not connected');
+      }
+
+      // Check if adapter has the unified commitSetup method
+      if (typeof adapter.commitSetup === 'function') {
+        // Use adapter's unified method (both EVM and Solana should have this)
+        const result = await adapter.commitSetup(dailyLimit, weeklyLimit, monthlyLimit);
+        console.log(`${this.networkType} setup committed via unified method:`, result);
+        return result;
+      } else {
+        // Fallback to the existing commitSetupWithLimits method
+        const result = await this.commitSetupWithLimits(dailyLimit, weeklyLimit, monthlyLimit);
+        console.log(`${this.networkType} setup committed via fallback method:`, result);
+        return result;
+      }
+
+    } catch (error) {
+      console.error(`${this.networkType} setup commit error:`, error);
       throw error;
     }
   }

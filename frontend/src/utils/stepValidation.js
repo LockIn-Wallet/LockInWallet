@@ -1,5 +1,6 @@
-// Step validation utilities for the savings wallet setup wizard
-// These functions validate completion of each step in the 3-step setup process
+// DEPRECATED: Step validation utilities for the savings wallet setup wizard
+// These functions are no longer used - setup now uses simplified validation
+// Kept for reference purposes only
 
 /**
  * Validates Step 1: Spending Limits Configuration

@@ -1,6 +1,5 @@
 import React from "react";
 import PropTypes from "prop-types";
-import { ethers } from "ethers";
 
 // Import styles
 import {
@@ -15,19 +14,19 @@ import {
 /**
  * SetupCommitStep Component
  *
- * Handles Step 3 of the setup wizard - "Lock In Your Wallet"
+ * Handles "Lock In Your Wallet" functionality
  * Includes:
- * - Prerequisites validation display
+ * - Simple spending limits validation
  * - Lock-in button functionality
  * - Setup committed confirmation
  * - Conditional rendering based on setup state
- * - Internal setup commit logic (moved from App.js)
+ * - Internal setup commit logic
  */
 const SetupCommitStep = ({
   // Setup state
   isSetupCommitted,
-  stepValidation,
-  currentStep,
+  spendingLimits,
+  limitEdits,
 
   // Blockchain services (dependency injection)
   transactionManager,
@@ -37,73 +36,82 @@ const SetupCommitStep = ({
 
   // Callbacks for parent state updates
   onSetupCommitted,
-  onSetupInfoUpdate,
   onSpendingLimitsRefresh,
+  // onSaveSpendingLimits, // Temporarily disabled to prevent auto-triggering transactions
 }) => {
+  // Check for both saved spending limits AND unsaved changes in limit edits
+  const hasSavedSpendingLimits = spendingLimits &&
+    spendingLimits.length > 0 &&
+    spendingLimits.some(limit => limit.isActive && parseFloat(limit.limit) > 0);
+
+  // Check for unsaved changes in limit edits (when user types values but hasn't saved yet)
+  const hasUnsavedLimitEdits = limitEdits &&
+    Object.values(limitEdits).some(edit =>
+      edit.value &&
+      edit.value.trim() !== "" &&
+      !isNaN(parseFloat(edit.value)) &&
+      parseFloat(edit.value) > 0
+    );
+
+  // Button should be enabled if there are either saved limits OR unsaved edits
+  const hasSpendingLimits = hasSavedSpendingLimits || hasUnsavedLimitEdits;
+
+  // Debug logging removed - button activation issue resolved
+  // Flag to prevent multiple simultaneous commit attempts
+  const [isCommitting, setIsCommitting] = React.useState(false);
+
   // Internal commit setup function (moved from App.js)
   const commitSetup = async () => {
+    if (isCommitting) {
+      console.log("🔒 Commit already in progress, ignoring duplicate call");
+      return;
+    }
+    setIsCommitting(true);
     // Check connection for both networks
     if (networkType === "solana" && (!transactionManager || !solanaConnected)) {
       alert("Please connect your Solana wallet first");
+      setIsCommitting(false);
       return;
     }
     if (networkType === "evm" && !savingsContract) {
       alert("Please connect your wallet first");
+      setIsCommitting(false);
       return;
     }
 
     try {
-      // Note: Spending limits should have been set earlier through SpendingLimitsSetup component
-      // This commit step just locks the setup - limits are already saved
+      // Extract spending limit values from user input
+      const daily = limitEdits.Daily?.value ? parseFloat(limitEdits.Daily.value) : 0;
+      const weekly = limitEdits.Weekly?.value ? parseFloat(limitEdits.Weekly.value) : 0;
+      const monthly = limitEdits.Monthly?.value ? parseFloat(limitEdits.Monthly.value) : 0;
 
-      // Commit setup (limits should have been set earlier)
-      if (networkType === "solana") {
-        console.log("Committing Solana setup...");
-        const txHash = await transactionManager.commitSetup();
-        console.log("Solana setup committed:", txHash);
-        alert(
-          "Setup locked in successfully! Your savings wallet is now active."
-        );
-      } else {
-        // EVM setup commit
-        console.log("Committing EVM setup...");
-        const txHash = await transactionManager.commitSetup();
-        console.log("EVM setup committed:", txHash);
-        alert(
-          "Setup locked in successfully! You are now in secured mode with timelock protection."
-        );
+      // Validate that at least one spending limit is set
+      if (daily === 0 && weekly === 0 && monthly === 0) {
+        alert("Please set at least one spending limit");
+        setIsCommitting(false);
+        return;
       }
 
-      // Note: Edit modes are now managed internally by SpendingLimitsSetup component
+      console.log("🔄 Committing setup with spending limits...");
 
-      // Refresh setup status
-      if (networkType === "solana") {
-        // For Solana, we'll get the setup status when we fetch spending limits
-        onSetupCommitted(true);
-      } else {
-        const setupCommitted = await savingsContract.isSetupCommitted();
-        onSetupCommitted(setupCommitted);
+      // Single unified call that sets limits AND commits setup
+      const txHash = await transactionManager.commitSetup(daily, weekly, monthly);
 
-        if (setupCommitted) {
-          const info = await savingsContract.getSetupInfo();
-          onSetupInfoUpdate({
-            committed: info.committed,
-            totalLockedValue: ethers.formatUnits(info.totalLockedValue, 6),
-            commitTimestamp: new Date(
-              Number(info.commitTimestamp) * 1000
-            ).toLocaleDateString(),
-            increasesInPeriod: ethers.formatUnits(info.increasesInPeriod, 6),
-            lastIncreaseTimestamp: new Date(
-              Number(info.lastIncreaseTimestamp) * 1000
-            ).toLocaleDateString(),
-          });
-        }
-      }
+      console.log("✅ Setup committed successfully:", txHash);
+      alert("Setup locked in successfully! Your savings wallet is now active with spending limit protection.")
 
-      // Refresh spending limits to show the saved values
+      // Mark setup as committed
+      onSetupCommitted(true);
+
+      // Refresh spending limits to reflect the changes (with small delay)
       if (onSpendingLimitsRefresh) {
+        console.log('🔄 Waiting 2 seconds before refreshing spending limits...');
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        console.log('🔄 Now refreshing spending limits...');
         await onSpendingLimitsRefresh();
       }
+
+      setIsCommitting(false);
     } catch (error) {
       console.error("Error committing setup:", error);
       if (error.message.includes("Daily limit too high")) {
@@ -113,22 +121,31 @@ const SetupCommitStep = ({
       } else {
         alert(`Failed to lock in setup: ${error.message}`);
       }
+      setIsCommitting(false);
     }
   };
   return (
     <div
-      style={getStepContainerStyle(
-        3,
-        currentStep,
-        isSetupCommitted,
-        stepValidation
-      )}
+      style={{
+        backgroundColor: "#2d3748",
+        borderRadius: "8px",
+        padding: "20px",
+        margin: "20px 0",
+        border: "1px solid #4a5568",
+      }}
     >
-      <h3 style={stepStyles.step3Title}>
-        🧩 Step 3: Lock In Your Wallet
+      <h3 style={{
+        ...stepStyles.step3Title,
+        fontSize: fontSize.lg,
+        marginBottom: spacing.md,
+      }}>
+        🔒 Lock In Your Wallet
       </h3>
 
-      <p style={stepStyles.stepDescription}>
+      <p style={{
+        ...stepStyles.stepDescription,
+        marginBottom: spacing.lg,
+      }}>
         {isSetupCommitted
           ? "Your wallet is locked and all security features are active."
           : "Ready to activate your wallet security? This will enable all spending limits and withdrawal controls."}
@@ -136,52 +153,28 @@ const SetupCommitStep = ({
 
       {!isSetupCommitted ? (
         <div>
-          <div
-            style={{
-              backgroundColor: "#1a1a1a",
-              border: "1px solid #ed8936",
-              borderRadius: "6px",
-              padding: "12px",
-              marginBottom: "15px",
-            }}
-          >
-            <h5
-              style={{
-                ...stepStyles.prerequisitesTitle,
-                color: stepValidation.step1Complete
-                  ? colors.success.light
-                  : colors.warning.light,
-              }}
-            >
-              📝 Prerequisites
-            </h5>
+          {!hasSpendingLimits && (
             <div
               style={{
-                fontSize: fontSize.xs,
-                color: colors.text.muted,
+                backgroundColor: "#744210",
+                border: "1px solid #d69e2e",
+                borderRadius: "6px",
+                padding: "12px",
+                marginBottom: "15px",
+                color: "#faf089",
               }}
             >
-              <div
-                style={{
-                  ...stepStyles.prerequisitesItem,
-                  ...(stepValidation.step1Complete
-                    ? stepStyles.prerequisitesItemComplete
-                    : stepStyles.prerequisitesItemIncomplete),
-                }}
-              >
-                {stepValidation.step1Complete ? "✅" : "❌"}
-                Set at least one spending limit
-              </div>
+              ⚠️ Please set at least one spending limit before locking in your wallet.
             </div>
-          </div>
+          )}
 
           <div style={layoutStyles.textCenter}>
             <button
               onClick={commitSetup}
-              disabled={!stepValidation.step1Complete}
+              disabled={!hasSpendingLimits || isCommitting}
               style={{
                 ...stepStyles.lockInButton,
-                ...(stepValidation.step1Complete
+                ...(hasSpendingLimits
                   ? stepStyles.lockInButtonActive
                   : stepStyles.lockInButtonDisabled),
               }}
@@ -232,10 +225,11 @@ const SetupCommitStep = ({
 SetupCommitStep.propTypes = {
   // Setup state
   isSetupCommitted: PropTypes.bool.isRequired,
-  stepValidation: PropTypes.shape({
-    step1Complete: PropTypes.bool.isRequired,
-  }).isRequired,
-  currentStep: PropTypes.number.isRequired,
+  spendingLimits: PropTypes.arrayOf(PropTypes.shape({
+    isActive: PropTypes.bool,
+    limit: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
+  })).isRequired,
+  limitEdits: PropTypes.object,
 
   // Blockchain services (dependency injection)
   transactionManager: PropTypes.object,
@@ -245,8 +239,8 @@ SetupCommitStep.propTypes = {
 
   // Callbacks for parent state updates
   onSetupCommitted: PropTypes.func.isRequired,
-  onSetupInfoUpdate: PropTypes.func.isRequired,
   onSpendingLimitsRefresh: PropTypes.func,
+  // onSaveSpendingLimits: PropTypes.func, // Temporarily disabled
 };
 
 export default SetupCommitStep;

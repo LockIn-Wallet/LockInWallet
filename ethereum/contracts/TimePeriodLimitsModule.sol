@@ -78,6 +78,54 @@ contract TimePeriodLimitsModule is ITimePeriodLimitsModule {
         emit CategorySet(user, periodName, limit, durationInSeconds);
     }
 
+    // Internal version of addTimePeriodLimit without external authorization check
+    function _addTimePeriodLimitInternal(
+        address user,
+        string memory periodName,
+        uint256 limit,
+        uint256 durationInSeconds
+    ) internal {
+        require(bytes(periodName).length > 0 && limit > 0 && durationInSeconds >= 3600, "Invalid input");
+
+        UserSpendingLimits storage userLimits = userSpendingLimits[user];
+
+        // Check if period already exists
+        bool periodExists = false;
+        uint256 existingIndex = 0;
+
+        for (uint256 i = 0; i < userLimits.periods.length; i++) {
+            if (keccak256(bytes(userLimits.periods[i].name)) == keccak256(bytes(periodName))) {
+                periodExists = true;
+                existingIndex = i;
+                break;
+            }
+        }
+
+        if (periodExists) {
+            // Update existing period
+            TimePeriodLimit storage existing = userLimits.periods[existingIndex];
+            existing.limit = limit;
+            existing.duration = durationInSeconds;
+            existing.active = true;
+        } else {
+            // Add new period
+            userLimits.periods.push(TimePeriodLimit({
+                limit: limit,
+                spent: 0,
+                lastReset: block.timestamp,
+                duration: durationInSeconds,
+                name: periodName,
+                active: true
+            }));
+
+            // Update index mapping (store actual index)
+            userLimits.periodIndexes[periodName] = userLimits.periods.length - 1;
+            userLimits.periodCount++;
+        }
+
+        emit CategorySet(user, periodName, limit, durationInSeconds);
+    }
+
     function removeTimePeriodLimit(address user, string calldata periodName) external onlyAuthorized {
         require(bytes(periodName).length > 0, "Period name cannot be empty");
 
@@ -345,15 +393,15 @@ contract TimePeriodLimitsModule is ITimePeriodLimitsModule {
             require(dailyLimit * 30 <= monthlyLimit, "Daily limit too high for monthly limit");
         }
 
-        // Add or update common periods
+        // Add or update common periods - use internal calls to avoid authorization issues
         if (dailyLimit > 0) {
-            this.addTimePeriodLimit(user, "Daily", dailyLimit, 86400); // 1 day
+            _addTimePeriodLimitInternal(user, "Daily", dailyLimit, 86400); // 1 day
         }
         if (weeklyLimit > 0) {
-            this.addTimePeriodLimit(user, "Weekly", weeklyLimit, 604800); // 7 days
+            _addTimePeriodLimitInternal(user, "Weekly", weeklyLimit, 604800); // 7 days
         }
         if (monthlyLimit > 0) {
-            this.addTimePeriodLimit(user, "Monthly", monthlyLimit, 2592000); // 30 days
+            _addTimePeriodLimitInternal(user, "Monthly", monthlyLimit, 2592000); // 30 days
         }
     }
 }

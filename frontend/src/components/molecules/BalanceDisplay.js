@@ -44,14 +44,16 @@ const BalanceDisplay = ({
   provider,
   solanaWallet,
 
+  // Balance state from parent (App.js)
+  balances,
+
   // Callbacks for App.js state updates
   onBalanceUpdate,
   connectWallet,
 }) => {
-  // Internal balance state (moved from App.js)
-  const [balances, setBalances] = useState({});
+  // No internal balance state - using balances from props
 
-  // Unified balance refresh function (moved from App.js)
+  // Unified balance refresh function - updates parent state via onBalanceUpdate
   const refreshBalances = async (txManager = transactionManager) => {
     try {
       const fetchedBalances = await fetchUserBalancesService({
@@ -66,18 +68,16 @@ const BalanceDisplay = ({
         solanaPublicKey
       });
 
-      setBalances(fetchedBalances);
       console.log("✅ BalanceDisplay: Balances refreshed:", fetchedBalances);
 
-      // Notify parent component of balance update
+      // Update parent component state
       if (onBalanceUpdate) {
         onBalanceUpdate(fetchedBalances);
       }
     } catch (error) {
       console.error("❌ BalanceDisplay: Error refreshing balances:", error);
-      setBalances({});
 
-      // Still notify parent even on error (with empty balances)
+      // Notify parent even on error (with empty balances)
       if (onBalanceUpdate) {
         onBalanceUpdate({});
       }
@@ -103,12 +103,7 @@ const BalanceDisplay = ({
     loadBalances();
   }, [transactionManager, savingsContract, signer, provider, solanaConnected, networkType, selectedNetwork]);
 
-  // Set default balances for immediate display
-  useEffect(() => {
-    if (networkType === "solana" && Object.keys(balances).length === 0) {
-      setBalances({ SOL: 0 });
-    }
-  }, [networkType, balances]);
+  // No default balance setting needed - balances come from parent props
   return (
     <>
       {/* Multi-token balance display - ALWAYS SHOWN */}
@@ -184,7 +179,7 @@ const BalanceDisplay = ({
               style={{ fontSize: "0.9em", lineHeight: "1.6", color: "#e2e8f0" }}
             >
               <p style={{ margin: `0 0 ${spacing.sm} 0` }}>
-                <strong>🏦 No-trading & no-staking wallet:</strong> Designed for
+                <strong>🏦 No-trading wallet:</strong> Designed for
                 storing stablecoins for your peace of mind.
               </p>
               <p style={{ margin: `0 0 ${spacing.sm} 0` }}>
@@ -298,6 +293,9 @@ BalanceDisplay.propTypes = {
   // Wallet state
   provider: PropTypes.object,
   solanaWallet: PropTypes.object,
+
+  // Balance state from parent
+  balances: PropTypes.object.isRequired,
 
   // Callbacks for App.js state updates
   onBalanceUpdate: PropTypes.func,

@@ -130,6 +130,7 @@ contract ProposalSystemModule is IProposalSystemModule {
     function commitInitialSetup(address user) external onlyAuthorized {
         UserSetupData storage userData = userSetupData[user];
         require(!userData.hasCommittedSetup, "Already committed");
+        require(address(timePeriodLimitsModule) != address(0), "TimePeriodLimitsModule not set");
 
         // Calculate maximum spending limit across all time periods
         (,uint256[] memory limits,,,,bool[] memory active) = timePeriodLimitsModule.getUserSpendingLimits(user);

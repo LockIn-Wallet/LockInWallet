@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 
 // Import styles directly from theme and components
 import { colors, fontWeight } from "../../styles/theme.js";
@@ -18,19 +18,15 @@ import {
 } from "../../services";
 
 /**
- * SpendingLimitsSetup - Step 1 of the setup wizard
+ * SpendingLimitsSetup - Spending limits configuration component
  * Complete spending limits configuration component preserving all original styling
  */
 const SpendingLimitsSetup = ({
-  // Step management
-  currentStep,
-  isSetupCommitted,
-  stepValidation,
-  goToNextStep,
-
   // Core data
   currentTime,
   networkType,
+  isSetupCommitted,
+  spendingLimits: parentSpendingLimits,
 
   // Blockchain access
   transactionManager,
@@ -39,11 +35,29 @@ const SpendingLimitsSetup = ({
 
   // Helper functions (provided by parent)
   getCurrentUserAddress: getUserAddress,
+  onSpendingLimitsUpdate,
+  onSetSaveCallback, // New callback to set save function
 }) => {
-  // Internal state for spending limits data (moved from App.js)
-  const [spendingLimits, setSpendingLimits] = useState([]);
+  // Use parent spending limits when available, otherwise internal state for loading
+  const [spendingLimits, setSpendingLimits] = useState(parentSpendingLimits || []);
   const [pendingLimitProposals, setPendingLimitProposals] = useState([]);
   const [limitsLoaded, setLimitsLoaded] = useState(false);
+
+  // Update local state when parent spending limits change
+  useEffect(() => {
+    if (parentSpendingLimits && parentSpendingLimits.length > 0) {
+      setSpendingLimits(parentSpendingLimits);
+      setLimitsLoaded(true);
+    }
+  }, [parentSpendingLimits]);
+
+  // Notify parent whenever local spending limits change
+  useEffect(() => {
+    if (limitsLoaded && spendingLimits.length > 0 && onSpendingLimitsUpdate) {
+      onSpendingLimitsUpdate(spendingLimits, limitEdits);
+    }
+  }, [spendingLimits, limitsLoaded, onSpendingLimitsUpdate]);
+
   // Internal state for card interactions (hover and focus)
   const [cardStates, setCardStates] = useState({
     Daily: { isHovered: false, isFocused: false },
@@ -138,6 +152,13 @@ const SpendingLimitsSetup = ({
     loadData();
   }, [transactionManager, savingsContract, solanaConnected, networkType]);
 
+  // Notify parent whenever limit edits change (for unsaved changes)
+  useEffect(() => {
+    if (onSpendingLimitsUpdate) {
+      onSpendingLimitsUpdate(spendingLimits, limitEdits);
+    }
+  }, [limitEdits, onSpendingLimitsUpdate]);
+
   // Internal data refresh helper (updated to use internal functions)
   const refreshData = async () => {
     await fetchSpendingLimits();
@@ -148,7 +169,7 @@ const SpendingLimitsSetup = ({
   const ethers = window.ethers || require('ethers');
 
   // Internal proposal and limit management functions
-  const saveLimitChanges = async () => {
+  const saveLimitChanges = useCallback(async (isUserInitiated = false) => {
     // Check connection for both networks
     if (networkType === "solana" && (!transactionManager || !solanaConnected)) {
       alert("Please connect your Solana wallet first");
@@ -167,7 +188,16 @@ const SpendingLimitsSetup = ({
 
       // Check if user has entered any spending limit values
       if (daily === 0 && weekly === 0 && monthly === 0) {
-        alert("Please set at least one spending limit");
+        console.error("🚨 saveLimitChanges called with all zero values!", {
+          daily, weekly, monthly,
+          limitEdits: limitEdits,
+          isUserInitiated,
+          callStack: new Error().stack
+        });
+        // Only show alert if this was a user-initiated action
+        if (isUserInitiated) {
+          alert("Please set at least one spending limit");
+        }
         return;
       }
 
@@ -226,6 +256,11 @@ const SpendingLimitsSetup = ({
 
         // Refresh spending limits
         await refreshData();
+
+        // Notify parent component of spending limits update
+        if (onSpendingLimitsUpdate) {
+          onSpendingLimitsUpdate(spendingLimits, limitEdits);
+        }
       } else {
         if (networkType === "solana") {
           alert("After setup lock, you can still add individual limits or remove existing ones on Solana");
@@ -243,7 +278,17 @@ const SpendingLimitsSetup = ({
         alert(`Failed to save limit changes: ${error.message}`);
       }
     }
-  };
+  }, [networkType, transactionManager, solanaConnected, savingsContract, isSetupCommitted, limitEdits, spendingLimits, refreshData, onSpendingLimitsUpdate]);
+
+  // Temporarily disable save callback to prevent auto-triggering on input
+  // TODO: Re-implement this properly without causing transaction requests on every keystroke
+  /*
+  useEffect(() => {
+    if (onSetSaveCallback) {
+      onSetSaveCallback(saveLimitChanges);
+    }
+  }, [onSetSaveCallback]);
+  */
 
   const submitIndividualProposal = async (periodName) => {
     // Check connection for both networks
@@ -411,64 +456,19 @@ const SpendingLimitsSetup = ({
 
   return (
     <div style={stepContainerStyle}>
-      {/* Step Header */}
+      {/* Header */}
       <div style={stepStyles.stepHeader}>
-        <div style={layoutStyles.flexAlignCenter}>
-          <h3
-            style={{
-              ...stepStyles.step1Title,
-              color: colors.success?.light || "#9ae6b4",
-            }}
-          >
-            {isSetupCommitted
-              ? "💰 Spending Limits"
-              : "🧩 Step 1: Set Your Spending Limits"}
-          </h3>
-          {!isSetupCommitted && (
-            <div
-              style={{
-                ...stepStyles.stepStatus,
-                ...(stepValidation.step1Complete
-                  ? stepStyles.stepStatusComplete
-                  : stepStyles.stepStatusRequired),
-              }}
-            >
-              {stepValidation.step1Complete
-                ? "✅ Complete"
-                : "Required before Lock-In"}
-            </div>
-          )}
-        </div>
-
-        {!isSetupCommitted &&
-          stepValidation.step1Complete &&
-          currentStep === 1 && (
-            <button
-              onClick={goToNextStep}
-              style={{
-                padding: "8px 16px",
-                borderRadius: "6px",
-                border: "1px solid #3182ce",
-                backgroundColor: "#3182ce",
-                color: "white",
-                cursor: "pointer",
-                fontSize: "0.9em",
-                fontWeight: "600",
-                transition: "all 0.2s ease",
-              }}
-              onMouseOver={(e) => {
-                e.target.style.backgroundColor = "#2c5aa0";
-              }}
-              onMouseOut={(e) => {
-                e.target.style.backgroundColor = "#3182ce";
-              }}
-            >
-              Continue to Step 2 →
-            </button>
-          )}
+        <h3
+          style={{
+            ...stepStyles.step1Title,
+            color: colors.success?.light || "#9ae6b4",
+          }}
+        >
+          💰 Spending Limits
+        </h3>
       </div>
 
-      {/* Step Description */}
+      {/* Description */}
       <p
         style={{
           fontSize: "0.9em",
@@ -479,13 +479,11 @@ const SpendingLimitsSetup = ({
       >
         {isSetupCommitted
           ? "⚠️ Account locked: Changes require 24-hour timelock proposals. Edit individual limits or add new ones."
-          : currentStep === 1
-          ? "Configure daily, weekly, or monthly spending limits to control your withdrawals. After wallet lock-in, updates will require 24 hours - 7 days approval for security and impulse control reasons."
-          : "Set your spending limits. You can freely modify them until you commit the setup."}
+          : "Configure daily, weekly, or monthly spending limits to control your withdrawals. After wallet lock-in, updates will require 24 hours - 7 days approval for security and impulse control reasons."}
       </p>
 
       {/* Progress Tips for Setup Mode */}
-      {!isSetupCommitted && currentStep === 1 && (
+      {!isSetupCommitted && (
         <div
           style={{
             fontSize: "0.8em",
@@ -807,7 +805,7 @@ const SpendingLimitsSetup = ({
                         </button>
                       ) : (
                         <button
-                          onClick={() => saveLimitChanges()}
+                          onClick={() => saveLimitChanges(true)}
                           style={{
                             flex: 1,
                             padding: "8px",

@@ -663,3 +663,215 @@ npm run test:ci
 - **Proper cleanup**: Always clean up test state in `afterEach` hooks
 
 This testing framework ensures reliable validation of multi-blockchain functionality while maintaining fast development cycles and comprehensive error coverage.
+
+## 🏗️ Adapter Architecture Principles
+
+This project follows strict adapter architecture principles to ensure clean separation between blockchain-specific logic and business logic. ALL network-specific code MUST be encapsulated in adapters.
+
+### Unified Interface Rule
+
+**CORE PRINCIPLE**: Components MUST NOT contain network-specific conditionals (`if (networkType === "evm")` or `if (networkType === "solana")`). All blockchain differences are implementation details hidden behind unified adapter interfaces.
+
+### Adapter Interface Requirements
+
+Both EVM and Solana adapters MUST expose identical method signatures for the same business operations:
+
+```javascript
+// ✅ CORRECT - Both adapters implement these methods identically
+interface UnifiedAdapter {
+  // Setup operations
+  async commitSetup(dailyLimit, weeklyLimit, monthlyLimit): Promise<string>
+
+  // Spending limits
+  async setSpendingLimits(dailyLimit, weeklyLimit, monthlyLimit): Promise<string>
+  async getSpendingLimits(): Promise<SpendingLimit[]>
+
+  // Withdrawal addresses
+  async addWithdrawalAddress(title, address): Promise<string>
+  async removeWithdrawalAddress(address): Promise<string>
+
+  // Withdrawals
+  async withdraw(amount, token, destination): Promise<string>
+
+  // All methods return transaction hash/signature as string
+}
+```
+
+### Method Naming Convention
+
+- **Use business logic names**: `commitSetup()`, `addWithdrawalAddress()`, `withdraw()`
+- **NOT technical names**: `commitInitialSetup()`, `requestWithdrawalAddress()`, `processWithdrawal()`
+- **Return format**: Always return transaction hash/signature as string for consistency
+- **Parameters**: Use business-friendly parameters (amounts as numbers, not Wei/Lamports)
+
+### Violation Examples (DO NOT DO)
+
+```javascript
+// ❌ BAD - Network conditionals in components
+if (networkType === "evm") {
+  await savingsContract.commitInitialSetup();
+} else {
+  await transactionManager.commitSetup();
+}
+
+// ❌ BAD - Different method names for same business logic
+evmContract.setCommonPeriodLimits() vs solanaAdapter.setSpendingLimits()
+
+// ❌ BAD - Exposing technical implementation details
+if (networkType === "evm") {
+  const limitWei = ethers.parseUnits(amount.toString(), 6);
+  await contract.method(limitWei);
+}
+
+// ❌ BAD - Network-specific error handling in components
+catch (error) {
+  if (networkType === "solana" && error.code === 6000) {
+    // Solana-specific error handling
+  } else if (networkType === "evm" && error.reason) {
+    // EVM-specific error handling
+  }
+}
+```
+
+### Correct Pattern (DO THIS)
+
+```javascript
+// ✅ GOOD - Unified interface, no network awareness
+await transactionManager.commitSetup(daily, weekly, monthly);
+
+// ✅ GOOD - Adapter handles all network specifics
+try {
+  const txHash = await transactionManager.addWithdrawalAddress(title, address);
+  console.log(`Transaction successful: ${txHash}`);
+} catch (error) {
+  // Adapter translates network-specific errors to unified format
+  alert(`Operation failed: ${error.message}`);
+}
+
+// ✅ GOOD - Business logic stays clean
+const limits = await transactionManager.getSpendingLimits();
+const hasLimits = limits.some(limit => limit.isActive);
+```
+
+### Implementation Guidelines
+
+#### 1. Adapter Responsibilities
+```javascript
+// EVMAdapter.js
+class EVMAdapter {
+  async commitSetup(dailyLimit, weeklyLimit, monthlyLimit) {
+    // Convert to Wei internally
+    const dailyWei = dailyLimit > 0 ? ethers.parseUnits(dailyLimit.toString(), 6) : 0;
+    const weeklyWei = weeklyLimit > 0 ? ethers.parseUnits(weeklyLimit.toString(), 6) : 0;
+    const monthlyWei = monthlyLimit > 0 ? ethers.parseUnits(monthlyLimit.toString(), 6) : 0;
+
+    // Call unified contract method
+    const tx = await this.savingsContract.commitSetup(dailyWei, weeklyWei, monthlyWei);
+
+    // Return consistent format
+    return tx.hash;
+  }
+}
+
+// SolanaAdapter.js
+class SolanaAdapter {
+  async commitSetup(dailyLimit, weeklyLimit, monthlyLimit) {
+    // Use existing commitSetupWithLimits method
+    return await this.commitSetupWithLimits(dailyLimit, weeklyLimit, monthlyLimit);
+  }
+}
+```
+
+#### 2. Component Best Practices
+```javascript
+// ✅ SetupCommitStep.js - Clean business logic
+const handleCommit = async () => {
+  try {
+    // Extract business values
+    const daily = parseFloat(limitEdits.Daily.value) || 0;
+    const weekly = parseFloat(limitEdits.Weekly.value) || 0;
+    const monthly = parseFloat(limitEdits.Monthly.value) || 0;
+
+    // Single unified call
+    const txHash = await transactionManager.commitSetup(daily, weekly, monthly);
+
+    alert("Setup committed successfully!");
+  } catch (error) {
+    alert(`Setup failed: ${error.message}`);
+  }
+};
+```
+
+#### 3. Error Handling Standards
+```javascript
+// Adapters MUST translate network-specific errors to business errors
+class EVMAdapter {
+  async commitSetup(...args) {
+    try {
+      return await this.savingsContract.commitSetup(...args);
+    } catch (error) {
+      // Translate EVM errors to business terms
+      if (error.message.includes("Daily limit too high")) {
+        throw new Error("Daily limit exceeds weekly limit");
+      } else if (error.code === 4001) {
+        throw new Error("Transaction cancelled by user");
+      } else {
+        throw new Error(`Setup failed: ${error.message}`);
+      }
+    }
+  }
+}
+```
+
+### Testing Adapter Interfaces
+
+```javascript
+// ✅ Test that both adapters implement the same interface
+describe('Adapter Interface Compliance', () => {
+  const evmAdapter = new EVMAdapter();
+  const solanaAdapter = new SolanaAdapter();
+
+  test('both adapters have commitSetup method', () => {
+    expect(typeof evmAdapter.commitSetup).toBe('function');
+    expect(typeof solanaAdapter.commitSetup).toBe('function');
+  });
+
+  test('commitSetup returns consistent format', async () => {
+    const evmResult = await evmAdapter.commitSetup(100, 500, 2000);
+    const solanaResult = await solanaAdapter.commitSetup(100, 500, 2000);
+
+    expect(typeof evmResult).toBe('string'); // Transaction hash
+    expect(typeof solanaResult).toBe('string'); // Transaction signature
+  });
+});
+```
+
+### Migration Strategy
+
+When refactoring existing code that violates these principles:
+
+1. **Identify Network Conditionals**: Search for `if (networkType === ` patterns
+2. **Extract to Adapters**: Move network-specific logic to respective adapters
+3. **Unify Method Names**: Ensure both adapters use same method names
+4. **Standardize Returns**: All methods return transaction hash/signature as string
+5. **Update Components**: Remove conditionals, use unified adapter calls
+6. **Test Interface**: Verify both adapters work identically from component perspective
+
+### Benefits
+
+- ✅ **Clean separation of concerns**: Business logic separate from blockchain specifics
+- ✅ **Easier testing**: Mock single interface instead of multiple network paths
+- ✅ **Better maintainability**: Network changes only affect adapters
+- ✅ **Consistent UX**: Same user experience across all blockchains
+- ✅ **Future-proof**: Easy to add new blockchains without touching components
+- ✅ **Reduced complexity**: Components focus on business logic, not technical details
+
+### Code Review Checklist
+
+When reviewing code, check for:
+- [ ] No `if (networkType === ...)` conditionals in components
+- [ ] All blockchain operations go through adapters
+- [ ] Method names are business-focused, not technical
+- [ ] Return formats are consistent across adapters
+- [ ] Error messages are business-friendly, not network-specific
+- [ ] Components can work with any adapter without modification

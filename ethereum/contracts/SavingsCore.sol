@@ -379,6 +379,30 @@ contract SavingsCore is Initializable, UUPSUpgradeable, OwnableUpgradeable, ISav
         proposalModule.commitInitialSetup(msg.sender);
     }
 
+    /**
+     * @dev Unified method that sets spending limits and commits setup in a single transaction
+     * @param dailyLimit Daily spending limit (0 to disable)
+     * @param weeklyLimit Weekly spending limit (0 to disable)
+     * @param monthlyLimit Monthly spending limit (0 to disable)
+     */
+    function commitSetup(
+        uint256 dailyLimit,
+        uint256 weeklyLimit,
+        uint256 monthlyLimit
+    ) external {
+        address user = msg.sender; // Store the original caller
+
+        // First set the spending limits - use internal calls to preserve user context
+        ITimePeriodLimitsModule limitsModule = ITimePeriodLimitsModule(modules[ModuleIds.TIME_PERIOD_LIMITS]);
+        require(address(limitsModule) != address(0), "TimePeriodLimitsModule not registered");
+        limitsModule.setCommonPeriodLimits(user, dailyLimit, weeklyLimit, monthlyLimit);
+
+        // Then commit the setup
+        IProposalSystemModule proposalModule = IProposalSystemModule(modules[ModuleIds.PROPOSAL_SYSTEM]);
+        require(address(proposalModule) != address(0), "ProposalSystemModule not registered");
+        proposalModule.commitInitialSetup(user);
+    }
+
     function recalculateTotalLockedValue() external {
         IProposalSystemModule proposalModule = IProposalSystemModule(modules[ModuleIds.PROPOSAL_SYSTEM]);
         require(address(proposalModule) != address(0), "ProposalSystemModule not registered");

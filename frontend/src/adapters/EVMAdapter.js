@@ -292,6 +292,42 @@ export class EVMAdapter extends BlockchainAdapter {
     }
   }
 
+  // Setup Operations - Unified Interface
+  /**
+   * Unified method that sets spending limits and commits setup in a single transaction
+   * @param {number} dailyLimit Daily spending limit (0 to disable)
+   * @param {number} weeklyLimit Weekly spending limit (0 to disable)
+   * @param {number} monthlyLimit Monthly spending limit (0 to disable)
+   * @returns {Promise<string>} Transaction hash
+   */
+  async commitSetup(dailyLimit, weeklyLimit, monthlyLimit) {
+    if (!this.savingsContract) throw new Error('Contract not initialized');
+
+    // Convert to Wei (contract expects 6 decimal places for USDT-compatible amounts)
+    const dailyWei = dailyLimit > 0 ? ethers.parseUnits(dailyLimit.toString(), 6) : 0;
+    const weeklyWei = weeklyLimit > 0 ? ethers.parseUnits(weeklyLimit.toString(), 6) : 0;
+    const monthlyWei = monthlyLimit > 0 ? ethers.parseUnits(monthlyLimit.toString(), 6) : 0;
+
+    try {
+      // Call the unified commitSetup method we added to the contract
+      const tx = await this.savingsContract.commitSetup(dailyWei, weeklyWei, monthlyWei);
+      await tx.wait(); // Wait for transaction confirmation
+
+      return tx.hash; // Return consistent format (transaction hash as string)
+    } catch (error) {
+      // Translate EVM errors to business-friendly messages
+      if (error.message.includes("Daily limit too high")) {
+        throw new Error("Daily limit exceeds weekly limit");
+      } else if (error.message.includes("Weekly limit too high")) {
+        throw new Error("Weekly limit exceeds monthly limit");
+      } else if (error.code === 4001) {
+        throw new Error("Transaction cancelled by user");
+      } else {
+        throw new Error(`Setup failed: ${error.message}`);
+      }
+    }
+  }
+
   // Private Methods
   async _initializeContracts() {
     if (!this.signer || !this.networkConfig.savingsContract) return;

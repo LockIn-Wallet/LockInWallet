@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { ethers } from "ethers";
 import SavingsABI from "./SavingsABI.json";
 import MockUSDT_ABI from "./MockUSDT_ABI.json";
@@ -68,6 +68,7 @@ import {
 import {
   fetchSpendingLimits as fetchSpendingLimitsService,
   fetchPendingLimitProposals as fetchPendingLimitProposalsService,
+  fetchUserBalances as fetchUserBalancesService,
 } from "./services";
 
 // Import components
@@ -81,11 +82,7 @@ import WithdrawalInterface from "./components/organisms/WithdrawalInterface.js";
 import SetupCommitStep from "./components/organisms/SetupCommitStep.js";
 import WithdrawalAddressSetupStep from "./components/organisms/WithdrawalAddressSetupStep.js";
 
-// Import step validation utilities
-import {
-  goToNextStep as goToNextStepUtil,
-  goToPreviousStep as goToPreviousStepUtil,
-} from "./utils/stepValidation.js";
+// Note: Step validation utilities removed - using simplified setup logic
 
 const ETH_ADDRESS = networkConfig.constants.ETH_ADDRESS; // ETH address (native token)
 const SOL_ADDRESS = networkConfig.constants.SOL_ADDRESS; // SOL address (native token)
@@ -206,6 +203,8 @@ function AppContentInner({
   const [spendingLimits, setSpendingLimits] = useState([]); // Array of all time periods
   const [pendingLimitProposals, setPendingLimitProposals] = useState([]); // Pending limit change proposals
   const [limitsLoaded, setLimitsLoaded] = useState(false); // Track if limits have been fetched
+  const [limitEdits, setLimitEdits] = useState({}); // Track unsaved limit edits from SpendingLimitsSetup
+  // const [saveSpendingLimitsCallback, setSaveSpendingLimitsCallback] = useState(null); // Temporarily disabled
 
   // Unified limit editing state - moved to SpendingLimitsSetup component
 
@@ -233,23 +232,7 @@ function AppContentInner({
   const [exceedsInstantLimit, setExceedsInstantLimit] = useState(false);
   const [exceedingPeriod, setExceedingPeriod] = useState(null); // Which period would be exceeded
 
-  // 3-Step Setup Wizard state management
-  const [currentStep, setCurrentStep] = useState(1); // Current wizard step (1, 2, or 3)
-  const [stepValidation, setStepValidation] = useState({
-    step1Complete: false, // Spending limits configured
-    step2Complete: false, // At least one withdrawal address added
-    step3Complete: false, // Setup committed/locked
-  });
-
-  // Note: Step validation functions moved to individual components for encapsulation
-
-  const goToNextStep = () => {
-    goToNextStepUtil(currentStep, setCurrentStep);
-  };
-
-  const goToPreviousStep = () => {
-    goToPreviousStepUtil(currentStep, setCurrentStep);
-  };
+  // Note: Simplified setup - removed step validation and wizard navigation
 
   // State clearing function for network switches
   const clearAllState = () => {
@@ -290,6 +273,41 @@ function AppContentInner({
   });
 
   // Network functions are now provided by useNetworkManager hook
+
+  // Auto-initialize TransactionManager for EVM if wallet is connected but TransactionManager is null
+  useEffect(() => {
+    const initializeEVMTransactionManagerIfNeeded = async () => {
+      if (
+        networkType === "evm" &&
+        provider &&
+        signer &&
+        savingsContract &&
+        !transactionManager
+      ) {
+        console.log("🔄 Auto-initializing TransactionManager for connected EVM wallet...");
+        try {
+          const txManager = await initializeTransactionManager(networkType, selectedNetwork);
+          if (txManager) {
+            console.log("✅ TransactionManager auto-initialized for EVM");
+          } else {
+            console.error("❌ TransactionManager auto-initialization failed for EVM");
+          }
+        } catch (error) {
+          console.error("❌ Error auto-initializing TransactionManager for EVM:", error);
+        }
+      }
+    };
+
+    initializeEVMTransactionManagerIfNeeded();
+  }, [networkType, provider, signer, savingsContract, transactionManager, initializeTransactionManager, selectedNetwork]);
+
+  // Memoized callback for spending limits update to prevent infinite loops
+  const handleSpendingLimitsUpdate = useCallback((updatedLimits, updatedLimitEdits) => {
+    setSpendingLimits(updatedLimits);
+    setLimitEdits(updatedLimitEdits || {});
+    console.log('💰 Parent spending limits updated:', updatedLimits);
+    console.log('✏️ Parent limit edits updated:', updatedLimitEdits);
+  }, []);
 
   const isCorrectNetwork = () => {
     if (networkType === "solana") {
@@ -419,13 +437,33 @@ function AppContentInner({
     );
   }, [withdrawalAmount, spendingLimits, instantWithdrawableAmount]);
 
-  // Balance refresh function moved to BalanceDisplay component
-  // Note: This is a placeholder function for components that still expect refreshBalances
-  // Actual balance refreshing is handled by BalanceDisplay component internally
-  const refreshBalances = () => {
-    console.log(
-      "⚠️ refreshBalances called - balance refreshing is now handled by BalanceDisplay component"
-    );
+  // Balance refresh function for deposit callbacks and manual refresh
+  const refreshBalances = async () => {
+    try {
+      console.log("🔄 App.js: Refreshing balances after deposit...");
+
+      // Fetch balances using the same service as BalanceDisplay
+      const fetchedBalances = await fetchUserBalancesService({
+        transactionManager,
+        savingsContract,
+        signer,
+        connection,
+        networkType,
+        selectedNetwork,
+        getCurrentNetwork,
+        userAddress,
+        solanaPublicKey
+      });
+
+      console.log("✅ App.js: Balances refreshed:", fetchedBalances);
+
+      // Update the state, which will trigger BalanceDisplay re-render
+      setBalances(fetchedBalances);
+    } catch (error) {
+      console.error("❌ App.js: Error refreshing balances:", error);
+      // Set empty balances on error
+      setBalances({});
+    }
   };
 
   // TransactionManager initialization now handled by useNetworkManager hook
@@ -439,27 +477,8 @@ function AppContentInner({
   // Note: Balance loading now handled by BalanceDisplay component
 
   // Set default balances immediately when switching to Solana to avoid empty state
-  useEffect(() => {
-    if (networkType === "solana" && Object.keys(balances).length === 0) {
-      console.log("🚀 Setting default SOL balance to eliminate loading state");
-      setBalances({ SOL: 0 });
-    }
-  }, [networkType, balances]);
 
-  // Note: Step validation moved to individual components
-
-  // Auto-advance steps when setup is not committed and during guided flow
-  useEffect(() => {
-    if (!isSetupCommitted) {
-      // Allow independent access to Step 2, but Step 3 still requires Step 1 completion for lock-in
-      if (currentStep === 3 && !stepValidation.step1Complete) {
-        setCurrentStep(1);
-      }
-    } else {
-      // Once setup is committed, we're in usage mode - reset to show final state
-      setCurrentStep(3);
-    }
-  }, [currentStep, stepValidation, isSetupCommitted]);
+  // Note: Step validation logic removed - using simplified setup
 
   // Note: Balance loading when switching networks is now handled directly in switchNetworkType()
 
@@ -655,6 +674,19 @@ function AppContentInner({
     // Store user address
     const address = await web3Signer.getAddress();
     setUserAddress(address);
+
+    // Initialize TransactionManager for EVM network
+    console.log("🔄 Initializing TransactionManager for EVM network...");
+    try {
+      const txManager = await initializeTransactionManager(networkType, selectedNetwork);
+      if (txManager) {
+        console.log("✅ TransactionManager successfully initialized for EVM");
+      } else {
+        console.error("❌ TransactionManager initialization failed for EVM");
+      }
+    } catch (error) {
+      console.error("❌ Error initializing TransactionManager for EVM:", error);
+    }
 
     // Automatically fetch balances and proxy status after connecting
     try {
@@ -856,7 +888,6 @@ function AppContentInner({
         solanaPublicKey={solanaPublicKey}
         solanaConnected={solanaConnected}
         isSetupCommitted={isSetupCommitted}
-        currentStep={currentStep}
         switchNetworkType={switchNetworkType}
         switchNetwork={switchNetwork}
       />
@@ -891,6 +922,8 @@ function AppContentInner({
             // Wallet state
             provider={provider}
             solanaWallet={solanaWallet}
+            // Balance state from parent
+            balances={balances}
             // Callbacks for App.js state updates
             onBalanceUpdate={(newBalances) => {
               // Update parent state for other components that might need balance data
@@ -921,27 +954,24 @@ function AppContentInner({
             />
           )}
 
-          {/* Step 1: Spending Limits Setup / Management */}
+          {/* Spending Limits Setup / Management */}
           <SpendingLimitsSetup
-            currentStep={currentStep}
             isSetupCommitted={isSetupCommitted}
-            stepValidation={stepValidation}
-            goToNextStep={goToNextStep}
             currentTime={currentTime}
             networkType={networkType}
             transactionManager={transactionManager}
             solanaConnected={solanaConnected}
             savingsContract={savingsContract}
             getCurrentUserAddress={getCurrentUserAddress}
+            spendingLimits={spendingLimits}
+            onSpendingLimitsUpdate={handleSpendingLimitsUpdate}
+            // onSetSaveCallback={setSaveSpendingLimitsCallback} // Temporarily disabled
           />
 
-          {/* Step 2: Withdrawal Addresses Setup Component */}
+          {/* Withdrawal Addresses Setup Component */}
           {!isSetupCommitted && (
             <WithdrawalAddressSetupStep
-              // Step wizard state
-              currentStep={currentStep}
               isSetupCommitted={isSetupCommitted}
-              stepValidation={stepValidation}
               spendingLimits={spendingLimits}
               // Blockchain services (dependency injection)
               transactionManager={transactionManager}
@@ -951,16 +981,14 @@ function AppContentInner({
               solanaConnected={solanaConnected}
               solanaPublicKey={solanaPublicKey}
               userAddress={userAddress}
-              // Step navigation
-              goToNextStep={goToNextStep}
             />
           )}
-          {/* Step 3: Setup Commit Step Component */}
+          {/* Setup Commit Step Component */}
           {!isSetupCommitted && (
             <SetupCommitStep
               isSetupCommitted={isSetupCommitted}
-              stepValidation={stepValidation}
-              currentStep={currentStep}
+              spendingLimits={spendingLimits}
+              limitEdits={limitEdits}
               // Blockchain services (dependency injection)
               transactionManager={transactionManager}
               savingsContract={savingsContract}
@@ -970,6 +998,7 @@ function AppContentInner({
               onSetupCommitted={setIsSetupCommitted}
               onSetupInfoUpdate={setSetupInfo}
               onSpendingLimitsRefresh={fetchSpendingLimits}
+              // onSaveSpendingLimits={saveSpendingLimitsCallback} // Temporarily disabled
             />
           )}
           {/* Withdrawal Interface Component */}
