@@ -198,7 +198,7 @@ const WithdrawalInterface = ({
         if (selectedToken === "ETH") {
           // Withdraw ETH to destination
           const amountWei = ethers.parseEther(withdrawalAmount);
-          tx = await savingsContract.withdrawSolToDestination(destinationAddress, amountWei);
+          tx = await savingsContract.withdrawTo(amountWei, ethers.ZeroAddress, destinationAddress);
         } else {
           // Withdraw ERC20 token to destination
           const network = getCurrentNetwork(networkType, selectedNetwork);
@@ -207,7 +207,7 @@ const WithdrawalInterface = ({
             throw new Error(`Token ${selectedToken} not found in network configuration`);
           }
           const amountTokens = ethers.parseUnits(withdrawalAmount, tokenInfo.decimals);
-          tx = await savingsContract.withdrawSplToDestination(destinationAddress, tokenInfo.address, amountTokens);
+          tx = await savingsContract.withdrawTo(amountTokens, tokenInfo.address, destinationAddress);
         }
 
         await tx.wait();

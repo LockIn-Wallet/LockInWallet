@@ -41,6 +41,12 @@ const config: HardhatUserConfig = {
       // optional: use private key from Ganache here
       // accounts: ["0x..."]
     },
+    polygon: {
+      url: "https://polygon-rpc.com",
+      chainId: 137,
+      accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
+      gasPrice: "auto"
+    }
   }
 };
 

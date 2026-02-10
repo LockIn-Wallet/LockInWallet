@@ -19,6 +19,8 @@
     "upgrade-module": "hardhat run scripts/upgrade-module.js --network localhost",
     "validate-deployment": "hardhat run scripts/validate-deployment.js --network localhost",
     "gas-estimation": "node scripts/gas-estimation.js",
+    "estimate-polygon-costs": "hardhat run scripts/estimate-polygon-costs.js --network polygon",
+    "deploy-polygon": "hardhat run scripts/deploy-modular.js --network polygon",
     "clean": "hardhat clean"
   },
   "keywords": [

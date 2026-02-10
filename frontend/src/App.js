@@ -43,6 +43,13 @@ import {
   detectExceedingPeriod,
 } from "./utils/walletUtils.js";
 
+// Import network filtering utilities
+import {
+  getDefaultNetwork,
+  getAvailableNetworks,
+  hasProductionNetworks,
+} from "./utils/networkFilter.js";
+
 // Import contract verification utilities
 import {
   verifyEVMContractDeployment,
@@ -103,7 +110,22 @@ function AppContent() {
     // Default to Solana if we detect a Solana wallet connection
     return localStorage.getItem("walletName") ? "solana" : "evm";
   }); // "evm" or "solana"
-  const [selectedNetwork, setSelectedNetwork] = useState("localhost"); // Current selected network
+
+  // Smart network selection based on environment and deployment status
+  const [selectedNetwork, setSelectedNetwork] = useState(() => {
+    // Try to restore from localStorage first
+    const savedNetwork = localStorage.getItem(`preferred_${networkType}_network`);
+    if (savedNetwork) {
+      const availableNetworks = getAvailableNetworks(networkType);
+      const isAvailable = availableNetworks.some(network => network.key === savedNetwork);
+      if (isAvailable) {
+        return savedNetwork;
+      }
+    }
+
+    // Get appropriate default based on environment and deployment status
+    return getDefaultNetwork(networkType);
+  });
 
   // Conditionally render SolanaWalletProvider only for Solana network
   if (networkType === "solana") {

@@ -7,9 +7,17 @@ import {
   utilityStyles,
 } from "../../styles";
 
+// Import network filtering utilities
+import {
+  getAvailableNetworks,
+  getNetworkDisplayName,
+  hasProductionNetworks,
+} from "../../utils/networkFilter";
+
 /**
  * NetworkSelector component - Network switching controls
  * Handles selection between EVM/Solana and specific networks
+ * Dynamically filters networks based on deployment status and environment
  */
 const NetworkSelector = ({
   networkType,
@@ -18,6 +26,14 @@ const NetworkSelector = ({
   switchNetworkType,
   switchNetwork,
 }) => {
+  // Get available networks for current type
+  const availableNetworks = getAvailableNetworks(networkType);
+  const isDevelopment = process.env.NODE_ENV === "development";
+
+  // Check if we have production networks available
+  const hasEvmProduction = hasProductionNetworks("evm");
+  const hasSolanaProduction = hasProductionNetworks("solana");
+
   return (
     <div style={layoutStyles.networkSelection}>
       <div style={layoutStyles.networkSelectionGroup}>
@@ -27,8 +43,14 @@ const NetworkSelector = ({
           onChange={(e) => switchNetworkType(e.target.value)}
           style={formStyles.select}
         >
-          <option value="evm">Ethereum (EVM)</option>
-          <option value="solana">Solana</option>
+          <option value="evm">
+            Ethereum (EVM)
+            {!hasEvmProduction && !isDevelopment && " (No Networks)"}
+          </option>
+          <option value="solana">
+            Solana
+            {!hasSolanaProduction && !isDevelopment && " (No Networks)"}
+          </option>
         </select>
       </div>
 
@@ -36,29 +58,32 @@ const NetworkSelector = ({
         <select
           value={selectedNetwork}
           onChange={(e) => switchNetwork(e.target.value)}
-          disabled={isNetworkSwitching}
+          disabled={isNetworkSwitching || availableNetworks.length === 0}
           style={{
             ...formStyles.select,
-            cursor: isNetworkSwitching ? "not-allowed" : "pointer",
+            cursor: isNetworkSwitching || availableNetworks.length === 0
+              ? "not-allowed"
+              : "pointer",
           }}
         >
-          {networkType === "solana" ? (
-            <>
-              <option value="localhost">Solana Localhost</option>
-              <option value="devnet">Solana Devnet</option>
-              <option value="mainnet">Solana Mainnet</option>
-            </>
+          {availableNetworks.length === 0 ? (
+            <option value="">No networks available</option>
           ) : (
-            <>
-              <option value="localhost">Localhost</option>
-              <option value="ethereum">Ethereum Mainnet</option>
-              <option value="optimism">Optimism</option>
-            </>
+            availableNetworks.map((network) => (
+              <option key={network.key} value={network.key}>
+                {getNetworkDisplayName(networkType, network.key, isDevelopment)}
+              </option>
+            ))
           )}
         </select>
         {isNetworkSwitching && (
           <span style={{ color: "#fbb6ce", fontSize: "0.8em" }}>
             Switching...
+          </span>
+        )}
+        {availableNetworks.length === 0 && !isNetworkSwitching && (
+          <span style={{ color: "#f56565", fontSize: "0.8em" }}>
+            No deployed networks
           </span>
         )}
       </div>

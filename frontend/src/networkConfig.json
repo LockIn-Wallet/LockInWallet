@@ -120,6 +120,53 @@
           "recommended": true
         }
       }
+    },
+    "polygon": {
+      "chainId": 137,
+      "name": "Polygon",
+      "nativeCurrency": {
+        "name": "Polygon",
+        "symbol": "MATIC",
+        "decimals": 18
+      },
+      "rpcUrls": [
+        "https://polygon-rpc.com",
+        "https://rpc-mainnet.matic.network"
+      ],
+      "blockExplorerUrls": [
+        "https://polygonscan.com"
+      ],
+      "savingsContract": "0x0000000000000000000000000000000000000000",
+      "tokens": {
+        "USDT": {
+          "address": "0xc2132D05D31c914a87C6611C10748AEb04B58e8F",
+          "symbol": "USDT",
+          "name": "Tether USD (PoS)",
+          "decimals": 6,
+          "recommended": true
+        },
+        "USDC": {
+          "address": "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174",
+          "symbol": "USDC",
+          "name": "USD Coin (PoS)",
+          "decimals": 6,
+          "recommended": true
+        },
+        "DAI": {
+          "address": "0x8f3Cf7ad23Cd3CaDbD9735AFf958023239c6A063",
+          "symbol": "DAI",
+          "name": "Dai Stablecoin (PoS)",
+          "decimals": 18,
+          "recommended": true
+        },
+        "WETH": {
+          "address": "0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619",
+          "symbol": "WETH",
+          "name": "Wrapped Ether",
+          "decimals": 18,
+          "recommended": false
+        }
+      }
     }
   },
   "solana": {

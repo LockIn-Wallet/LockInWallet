@@ -205,6 +205,9 @@ export const useNetworkManager = ({
       // For Solana networks, update the selected network and clear cached data
       setSelectedNetwork(networkKey);
 
+      // Persist selected Solana network to localStorage
+      localStorage.setItem(`preferred_solana_network`, networkKey);
+
       // Clear cached data when switching Solana networks (handled by clearAllState)
       if (clearAllState) {
         clearAllState();
@@ -250,6 +253,10 @@ export const useNetworkManager = ({
 
       setSelectedNetwork(networkKey);
       setCurrentChainId(network.chainId);
+
+      // Persist selected EVM network to localStorage
+      localStorage.setItem(`preferred_evm_network`, networkKey);
+
       return true;
     } catch (switchError) {
       // If the network is not added to MetaMask, add it
@@ -270,6 +277,10 @@ export const useNetworkManager = ({
 
           setSelectedNetwork(networkKey);
           setCurrentChainId(network.chainId);
+
+          // Persist selected EVM network to localStorage
+          localStorage.setItem(`preferred_evm_network`, networkKey);
+
           return true;
         } catch (addError) {
           console.error("Error adding network:", addError);
