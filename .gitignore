@@ -105,6 +105,17 @@ public
 tmp/
 temp/
 
+# Private keys and sensitive data (SECURITY)
+**/mintAuthority.json
+**/devnetMintAuthority.json
+**/*Authority.json
+**/*authority.json
+**/*privateKey*
+**/*private-key*
+**/*secret*
+**/keypair.json
+**/wallet.json
+
 # Logs
 logs
 *.log
