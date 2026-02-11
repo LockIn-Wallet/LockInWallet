@@ -1,7 +1,7 @@
 {
-  "buildCommand": "cd frontend && npm run build:vercel",
-  "outputDirectory": "frontend/build",
-  "installCommand": "cd frontend && npm install --prefer-offline --no-audit --no-optional",
+  "buildCommand": "npm run build:vercel",
+  "outputDirectory": "build",
+  "installCommand": "npm install --prefer-offline --no-audit --no-optional",
   "env": {
     "NODE_OPTIONS": "--max-old-space-size=4096",
     "GENERATE_SOURCEMAP": "false",
