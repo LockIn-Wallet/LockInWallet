@@ -1,0 +1,43 @@
+# Exclude everything except frontend
+ethereum/
+solana/
+node_modules/
+.git/
+
+# Exclude build artifacts
+**/target/
+**/build/
+**/dist/
+**/.cache/
+**/coverage/
+
+# Exclude development files
+**/.env
+**/.env.local
+**/.env.development
+**/.env.test
+**/npm-debug.log*
+**/yarn-debug.log*
+**/yarn-error.log*
+
+# Exclude test files
+**/__tests__/
+**/test/
+**/*.test.js
+**/*.test.ts
+**/*.spec.js
+**/*.spec.ts
+
+# Exclude documentation
+**/*.md
+**/docs/
+
+# Exclude IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Exclude OS files
+.DS_Store
+Thumbs.db

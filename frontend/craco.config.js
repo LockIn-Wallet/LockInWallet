@@ -49,6 +49,37 @@ module.exports = {
         });
       }
 
+      // Memory and build optimizations for Vercel
+      if (process.env.CI || process.env.VERCEL) {
+        // Optimize for production builds
+        webpackConfig.optimization = {
+          ...webpackConfig.optimization,
+          splitChunks: {
+            chunks: 'all',
+            cacheGroups: {
+              vendor: {
+                test: /[\\/]node_modules[\\/]/,
+                name: 'vendors',
+                chunks: 'all',
+                maxSize: 244000, // Split large vendor chunks
+              },
+              solana: {
+                test: /[\\/]node_modules[\\/](@solana|@coral-xyz)[\\/]/,
+                name: 'solana',
+                chunks: 'all',
+                priority: 10,
+                maxSize: 244000,
+              },
+            },
+          },
+          // Reduce memory usage during build
+          minimize: true,
+        };
+
+        // Disable source maps in CI to save memory
+        webpackConfig.devtool = false;
+      }
+
       return webpackConfig;
     },
   },

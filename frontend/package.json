@@ -24,6 +24,8 @@
     "start:clean": "npm run clean && npm start",
     "build": "craco build",
     "build:clean": "npm run clean && npm run build",
+    "build:production": "NODE_OPTIONS='--max-old-space-size=4096' GENERATE_SOURCEMAP=false DISABLE_ESLINT_PLUGIN=true craco build",
+    "build:vercel": "npm run build:production",
     "test": "craco test",
     "test:ci": "craco test --watchAll=false --coverage",
     "test:functionality": "craco test --testPathPattern=functionality --watchAll=false",
