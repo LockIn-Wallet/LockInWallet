@@ -20,7 +20,7 @@ export const layoutStyles = {
 
   // Header sections
   headerSection: {
-    marginBottom: spacing.xxxl,
+    marginBottom: spacing.xl,
   },
 
   // Flex layouts

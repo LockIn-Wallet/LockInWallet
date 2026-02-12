@@ -14,11 +14,15 @@ import {
 } from "../../styles";
 
 // Import utility functions
-import { getCurrentNetwork, isCorrectNetwork } from "../../utils/walletUtils.js";
+import {
+  getCurrentNetwork,
+  isCorrectNetwork,
+} from "../../utils/walletUtils.js";
 
 // Import other components
 import NetworkSelector from "./NetworkSelector.js";
 import WalletConnector from "./WalletConnector.js";
+import TypewriterText from "../atoms/TypewriterText.js";
 
 /**
  * StatusHeader component - Main header with logo and status information
@@ -45,7 +49,13 @@ const StatusHeader = ({
 }) => {
   // Local wrapper functions using imported utilities
   const getNetworkInfo = () => getCurrentNetwork(networkType, selectedNetwork);
-  const checkCorrectNetwork = () => isCorrectNetwork(networkType, selectedNetwork, solanaConnected, currentChainId);
+  const checkCorrectNetwork = () =>
+    isCorrectNetwork(
+      networkType,
+      selectedNetwork,
+      solanaConnected,
+      currentChainId,
+    );
   return (
     <div style={layoutStyles.headerSection}>
       {/* Main Logo */}
@@ -58,11 +68,44 @@ const StatusHeader = ({
           e.target.nextSibling.style.display = "block";
         }}
       />
-      <h1
-        style={{ ...styles.app.title, display: "none", textAlign: "center" }}
-      >
+      <h1 style={{ ...styles.app.title, display: "none", textAlign: "center" }}>
         🔒 LockIn Wallet
       </h1>
+
+      {/* Tagline - Only show when wallet is disconnected */}
+      {(!provider && networkType !== "solana") || (networkType === "solana" && (!solanaConnected || !solanaWallet)) ? (
+        <div
+          style={{
+            textAlign: "center",
+            marginTop: spacing.sm,
+            marginBottom: spacing.lg,
+          }}
+        >
+          <p
+            style={{
+              fontSize: fontSize.lg,
+              fontWeight: fontWeight.medium,
+              color: colors.text.secondary,
+              margin: 0,
+              fontStyle: "italic",
+            }}
+          >
+            Protect{" "}
+            <TypewriterText
+              words={["profits", "bankroll", "savings"]}
+              typingSpeed={120}
+              deletingSpeed={60}
+              delayBetweenWords={4000}
+              style={{
+                fontSize: fontSize.lg,
+                fontWeight: fontWeight.medium,
+                color: colors.success.main,
+              }}
+            />
+            even from yourself
+          </p>
+        </div>
+      ) : null}
 
       {/* Status Info Card */}
       {(provider || (networkType === "solana" && solanaWallet)) && (
