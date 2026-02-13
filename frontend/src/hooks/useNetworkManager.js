@@ -164,6 +164,14 @@ export const useNetworkManager = ({
     setNetworkType(newNetworkType);
     localStorage.setItem("preferredNetworkType", newNetworkType);
 
+    // Update selected network and persist preference
+    setSelectedNetwork(selectedNetwork);
+    if (newNetworkType === "solana") {
+      localStorage.setItem(`preferred_solana_network`, selectedNetwork);
+    } else {
+      localStorage.setItem(`preferred_evm_network`, selectedNetwork);
+    }
+
     // Initialize TransactionManager for new network
     try {
       if (newNetworkType === "solana") {
@@ -192,6 +200,7 @@ export const useNetworkManager = ({
     return null;
   }, [
     setNetworkType,
+    setSelectedNetwork,
     clearAllState,
     solanaConnected,
     solanaPublicKey,

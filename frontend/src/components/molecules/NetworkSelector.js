@@ -9,14 +9,12 @@ import {
 
 // Import network filtering utilities
 import {
-  getAvailableNetworks,
-  getNetworkDisplayName,
-  hasProductionNetworks,
+  getAllNetworksUnified,
 } from "../../utils/networkFilter";
 
 /**
- * NetworkSelector component - Network switching controls
- * Handles selection between EVM/Solana and specific networks
+ * NetworkSelector component - Unified network switching
+ * Single dropdown for both EVM and Solana networks
  * Dynamically filters networks based on deployment status and environment
  */
 const NetworkSelector = ({
@@ -26,63 +24,59 @@ const NetworkSelector = ({
   switchNetworkType,
   switchNetwork,
 }) => {
-  // Get available networks for current type
-  const availableNetworks = getAvailableNetworks(networkType);
+  // Get unified network list
+  const allNetworks = getAllNetworksUnified();
   const isDevelopment = process.env.NODE_ENV === "development";
 
-  // Check if we have production networks available
-  const hasEvmProduction = hasProductionNetworks("evm");
-  const hasSolanaProduction = hasProductionNetworks("solana");
+  // Current value for the dropdown
+  const currentValue = `${networkType}:${selectedNetwork}`;
+
+  // Handle network change
+  const handleNetworkChange = async (value) => {
+    const [newNetworkType, newNetworkKey] = value.split(":");
+
+    // If network type is changing, call switchNetworkType
+    if (newNetworkType !== networkType) {
+      await switchNetworkType(newNetworkType, newNetworkKey);
+    } else {
+      // Same network type, just switch network
+      await switchNetwork(newNetworkKey, networkType);
+    }
+  };
 
   return (
     <div style={layoutStyles.networkSelection}>
       <div style={layoutStyles.networkSelectionGroup}>
         <span style={utilityStyles.label}>Network:</span>
         <select
-          value={networkType}
-          onChange={(e) => switchNetworkType(e.target.value)}
-          style={formStyles.select}
-        >
-          <option value="evm">
-            Ethereum (EVM)
-            {!hasEvmProduction && !isDevelopment && " (No Networks)"}
-          </option>
-          <option value="solana">
-            Solana
-            {!hasSolanaProduction && !isDevelopment && " (No Networks)"}
-          </option>
-        </select>
-      </div>
-
-      <div style={layoutStyles.networkSelectionGroup}>
-        <select
-          value={selectedNetwork}
-          onChange={(e) => switchNetwork(e.target.value)}
-          disabled={isNetworkSwitching || availableNetworks.length === 0}
+          value={currentValue}
+          onChange={(e) => handleNetworkChange(e.target.value)}
+          disabled={isNetworkSwitching || allNetworks.length === 0}
           style={{
             ...formStyles.select,
-            cursor: isNetworkSwitching || availableNetworks.length === 0
+            cursor: isNetworkSwitching || allNetworks.length === 0
               ? "not-allowed"
               : "pointer",
           }}
         >
-          {availableNetworks.length === 0 ? (
+          {allNetworks.length === 0 ? (
             <option value="">No networks available</option>
           ) : (
-            availableNetworks.map((network) => (
-              <option key={network.key} value={network.key}>
-                {getNetworkDisplayName(networkType, network.key, isDevelopment)}
+            allNetworks.map((network) => (
+              <option key={network.value} value={network.value}>
+                {network.label}
+                {isDevelopment && !network.deployed && !network.isLocal && " (Not Deployed)"}
               </option>
             ))
           )}
         </select>
         {isNetworkSwitching && (
-          <span style={{ color: "#fbb6ce", fontSize: "0.8em" }}>
+          <span style={{ color: "#fbb6ce", fontSize: "0.8em", marginLeft: "8px" }}>
             Switching...
           </span>
         )}
-        {availableNetworks.length === 0 && !isNetworkSwitching && (
-          <span style={{ color: "#f56565", fontSize: "0.8em" }}>
+        {allNetworks.length === 0 && !isNetworkSwitching && (
+          <span style={{ color: "#f56565", fontSize: "0.8em", marginLeft: "8px" }}>
             No deployed networks
           </span>
         )}

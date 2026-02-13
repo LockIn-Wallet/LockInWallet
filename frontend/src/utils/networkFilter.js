@@ -136,3 +136,41 @@ export const getDefaultNetwork = (networkType) => {
   // Last resort fallback
   return networkType === "evm" ? "ethereum" : "mainnet";
 };
+
+/**
+ * Get all available networks across both EVM and Solana, unified in one list
+ * @param {string} environment - "development" or "production" (defaults to NODE_ENV)
+ * @returns {Array} Array of {value, label, networkType, networkKey, deployed} objects
+ */
+export const getAllNetworksUnified = (environment = process.env.NODE_ENV) => {
+  const evmNetworks = getAvailableNetworks("evm", environment);
+  const solanaNetworks = getAvailableNetworks("solana", environment);
+
+  const unified = [];
+
+  // Add EVM networks
+  evmNetworks.forEach(network => {
+    unified.push({
+      value: `evm:${network.key}`,
+      label: network.name,
+      networkType: "evm",
+      networkKey: network.key,
+      deployed: network.deployed,
+      isLocal: network.isLocal
+    });
+  });
+
+  // Add Solana networks
+  solanaNetworks.forEach(network => {
+    unified.push({
+      value: `solana:${network.key}`,
+      label: network.name,
+      networkType: "solana",
+      networkKey: network.key,
+      deployed: network.deployed,
+      isLocal: network.isLocal
+    });
+  });
+
+  return unified;
+};
