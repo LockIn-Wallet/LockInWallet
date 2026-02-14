@@ -318,6 +318,129 @@ export class EVMAdapter extends BlockchainAdapter {
     return tx.hash;
   }
 
+  // Fetch pending proposals from the contract
+  async fetchPendingProposals(userAddress = null) {
+    try {
+      if (!this.savingsContract) {
+        console.log('❌ Savings contract not available, skipping proposal fetch');
+        return [];
+      }
+
+      const targetAddress = userAddress || this.userAddress;
+      if (!targetAddress) {
+        console.log('❌ No user address available for fetching pending proposals');
+        return [];
+      }
+
+      console.log('📋 Fetching EVM pending proposals from contract...');
+
+      // Call the contract method to get pending proposals
+      const [proposalIds, categories, newLimits, executeAfters, isIncreaseFlags] =
+        await this.savingsContract.getUserPendingProposals();
+
+      console.log(`✅ Found ${proposalIds.length} pending proposals for EVM`);
+
+      const proposals = [];
+      const currentTime = Math.floor(Date.now() / 1000);
+
+      // Format the data to match Solana structure
+      for (let i = 0; i < proposalIds.length; i++) {
+        const executeAfterTimestamp = Number(executeAfters[i]);
+        const timeRemaining = Math.max(0, executeAfterTimestamp - currentTime);
+        const canExecute = timeRemaining === 0;
+
+        // Convert Wei to human-readable format
+        const limitInTokens = parseFloat(ethers.formatUnits(newLimits[i], 6));
+
+        proposals.push({
+          proposalId: proposalIds[i], // Keep as bytes32 string
+          periodName: categories[i],
+          newLimit: limitInTokens.toString(),
+          executeAfter: executeAfterTimestamp,
+          executed: false, // This method only returns pending proposals
+          isIncrease: isIncreaseFlags[i],
+          createdAt: executeAfterTimestamp - (24 * 60 * 60), // Estimate created time
+          action: 'change',
+          networkType: 'evm',
+          timeRemaining,
+          canExecute,
+          timeRemainingText: timeRemaining > 0 ? this.formatTimeRemaining(timeRemaining) : 'Ready to execute'
+        });
+      }
+
+      console.log(`📋 Formatted ${proposals.length} EVM proposals for display`);
+      return proposals;
+    } catch (error) {
+      console.error('Error fetching EVM pending proposals:', error);
+      return [];
+    }
+  }
+
+  // Helper function to format time remaining (matching Solana implementation)
+  formatTimeRemaining(seconds) {
+    if (seconds <= 0) return 'Ready to execute';
+
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const remainingSeconds = seconds % 60;
+
+    if (hours > 0) {
+      return `${hours}h ${minutes}m ${remainingSeconds}s`;
+    } else if (minutes > 0) {
+      return `${minutes}m ${remainingSeconds}s`;
+    } else {
+      return `${remainingSeconds}s`;
+    }
+  }
+
+  // Execute a pending proposal
+  async executeLimitProposal(proposalId) {
+    try {
+      if (!this.savingsContract) {
+        throw new Error('Savings contract not initialized');
+      }
+      if (!this.userAddress) {
+        throw new Error('User not connected');
+      }
+
+      console.log('🔄 Executing EVM proposal:', proposalId);
+
+      // Call the contract method to execute the proposal
+      const tx = await this.savingsContract.executeLimitProposal(proposalId);
+      await tx.wait();
+
+      console.log('✅ EVM proposal executed successfully:', tx.hash);
+      return tx.hash;
+    } catch (error) {
+      console.error('❌ Error executing EVM proposal:', error);
+      throw new Error(`Proposal execution failed: ${error.message}`);
+    }
+  }
+
+  // Cancel a pending proposal
+  async cancelLimitProposal(proposalId) {
+    try {
+      if (!this.savingsContract) {
+        throw new Error('Savings contract not initialized');
+      }
+      if (!this.userAddress) {
+        throw new Error('User not connected');
+      }
+
+      console.log('🔄 Cancelling EVM proposal:', proposalId);
+
+      // Call the contract method to cancel the proposal
+      const tx = await this.savingsContract.cancelLimitProposal(proposalId);
+      await tx.wait();
+
+      console.log('✅ EVM proposal cancelled successfully:', tx.hash);
+      return tx.hash;
+    } catch (error) {
+      console.error('❌ Error cancelling EVM proposal:', error);
+      throw new Error(`Proposal cancellation failed: ${error.message}`);
+    }
+  }
+
   // Utility Methods
   formatAmount(amount, decimals) {
     return ethers.formatUnits(amount, decimals);

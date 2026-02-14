@@ -347,10 +347,11 @@ const SpendingLimitsSetup = ({
         await adapter.executeLimitProposal(proposal.proposalId);
         alert(`✅ Executed ${proposal.action} proposal for ${proposal.periodName}!`);
       } else {
-        // EVM execution: Call contract method (placeholder for now)
+        // For EVM: Execute proposal through adapter
         console.log("🔄 Executing EVM proposal:", proposal);
-        alert(`✅ Executing ${proposal.action} proposal for ${proposal.periodName}...`);
-        // TODO: Add actual EVM contract execution when implemented
+        const adapter = transactionManager.getCurrentAdapter();
+        await adapter.executeLimitProposal(proposal.proposalId);
+        alert(`✅ Executed ${proposal.action} proposal for ${proposal.periodName}!`);
       }
 
       // Refresh data
@@ -370,8 +371,9 @@ const SpendingLimitsSetup = ({
         const adapter = transactionManager.getCurrentAdapter();
         await adapter.cancelLimitProposal(proposal.proposalId);
       } else if (networkType === "evm") {
-        // EVM cancellation not implemented yet
-        console.log("EVM proposal cancellation not implemented");
+        // For EVM: Use adapter to cancel proposal
+        const adapter = transactionManager.getCurrentAdapter();
+        await adapter.cancelLimitProposal(proposal.proposalId);
       }
 
       // Refresh proposals

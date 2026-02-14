@@ -29,7 +29,7 @@
     "frontend:test": "npm test --workspace=frontend",
     "dev:multi": "concurrently \"npm run node --workspace=ethereum\" \"npm run solana:localnet\"",
     "dev:solana": "concurrently \"npm run solana:localnet\" \"npm run frontend:start\"",
-    "dev:evm": "npm run node --workspace=ethereum & sleep 5 && npm run deploy-modular --workspace=ethereum && npm run frontend:start",
+    "dev:evm": "(lsof -ti:8545 | xargs kill -9 2>/dev/null || true) && npm run node --workspace=ethereum & sleep 5 && npm run deploy-modular --workspace=ethereum && npm run frontend:start",
     "dev:full": "concurrently \"npm run node --workspace=ethereum\" \"npm run solana:localnet\" \"npm run frontend:start\"",
     "deploy:full": "npm run deploy-modular --workspace=ethereum && npm run solana:deploy-reliable"
   },

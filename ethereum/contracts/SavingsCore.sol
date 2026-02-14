@@ -467,6 +467,20 @@ contract SavingsCore is Initializable, UUPSUpgradeable, OwnableUpgradeable, ISav
         return proposalModule.getProposal(msg.sender, proposalId);
     }
 
+    function getUserPendingProposals() external view returns (
+        bytes32[] memory proposalIds,
+        string[] memory categories,
+        uint256[] memory newLimits,
+        uint256[] memory executeAfters,
+        bool[] memory isIncreaseFlags
+    ) {
+        IProposalSystemModule proposalModule = IProposalSystemModule(modules[ModuleIds.PROPOSAL_SYSTEM]);
+        if (address(proposalModule) == address(0)) {
+            return (new bytes32[](0), new string[](0), new uint256[](0), new uint256[](0), new bool[](0));
+        }
+        return proposalModule.getUserPendingProposals(msg.sender);
+    }
+
     // ========== BYPASS SYSTEM FUNCTIONS ==========
 
     function requestLimitBypass(

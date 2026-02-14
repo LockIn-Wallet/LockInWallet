@@ -379,6 +379,45 @@
         "type": "address"
       }
     ],
+    "name": "getUserPendingProposals",
+    "outputs": [
+      {
+        "internalType": "bytes32[]",
+        "name": "proposalIds",
+        "type": "bytes32[]"
+      },
+      {
+        "internalType": "string[]",
+        "name": "categories",
+        "type": "string[]"
+      },
+      {
+        "internalType": "uint256[]",
+        "name": "newLimits",
+        "type": "uint256[]"
+      },
+      {
+        "internalType": "uint256[]",
+        "name": "executeAfters",
+        "type": "uint256[]"
+      },
+      {
+        "internalType": "bool[]",
+        "name": "isIncreaseFlags",
+        "type": "bool[]"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "user",
+        "type": "address"
+      }
+    ],
     "name": "isSetupCommitted",
     "outputs": [
       {

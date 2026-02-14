@@ -44,7 +44,8 @@ export async function fetchPendingLimitProposals(params) {
       } else {
         return await fetchEvmProposals({
           savingsContract,
-          userAddress: currentUserAddress
+          userAddress: currentUserAddress,
+          transactionManager
         });
       }
     },
@@ -86,34 +87,35 @@ async function fetchSolanaProposals(params) {
  * @returns {Promise<Array>} - Array of formatted EVM proposals
  */
 async function fetchEvmProposals(params) {
-  const { savingsContract, userAddress } = params;
+  const { savingsContract, userAddress, transactionManager } = params;
 
   console.log("📋 Fetching EVM pending proposals...");
 
-  // EVM: For now, no proposals since we removed localStorage
-  // TODO: Implement proper EVM on-chain proposal fetching
-  console.log("📋 EVM proposals not yet implemented for on-chain fetching");
-
-  // When EVM proposals are implemented, this would be the structure:
-  /*
   if (!savingsContract) {
     console.log("❌ Savings contract not available, skipping proposal fetch");
     return [];
   }
 
   try {
-    const proposals = await savingsContract.getUserPendingProposals(userAddress);
-    return proposals.map(proposal => ({
-      ...proposal,
-      networkType: 'evm'
-    }));
+    // Use the transaction manager to call the adapter method directly
+    // This ensures consistent formatting across both networks
+    if (transactionManager && transactionManager.getCurrentAdapter) {
+      const adapter = transactionManager.getCurrentAdapter();
+      if (adapter && adapter.fetchPendingProposals) {
+        const proposals = await adapter.fetchPendingProposals(userAddress);
+        return proposals.map(proposal => ({
+          ...proposal,
+          networkType: 'evm'
+        }));
+      }
+    }
+
+    console.log("❌ Transaction manager or adapter not available for EVM proposals");
+    return [];
   } catch (error) {
     console.error("Error fetching EVM proposals:", error);
     return [];
   }
-  */
-
-  return [];
 }
 
 /**

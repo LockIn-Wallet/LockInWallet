@@ -14,6 +14,9 @@ contract ProposalSystemModule is IProposalSystemModule {
     mapping(address => UserSetupData) private userSetupData;
     mapping(address => mapping(bytes32 => CategoryUpdateProposal)) private userProposals;
 
+    // Track proposal IDs per user for enumeration
+    mapping(address => bytes32[]) private userProposalIds;
+
     modifier onlyAuthorized() {
         require(
             msg.sender == address(savingsCore) ||
@@ -70,6 +73,9 @@ contract ProposalSystemModule is IProposalSystemModule {
             exists: true
         });
 
+        // Add to proposal tracking
+        userProposalIds[user].push(proposalId);
+
         emit CategoryIncreaseProposed(user, periodName, newLimit, userProposals[user][proposalId].executeAfter, proposalId);
         return proposalId;
     }
@@ -92,6 +98,9 @@ contract ProposalSystemModule is IProposalSystemModule {
             isIncrease: false,
             exists: true
         });
+
+        // Add to proposal tracking
+        userProposalIds[user].push(proposalId);
 
         emit CategoryIncreaseProposed(user, periodName, 0, block.timestamp, proposalId);
         return proposalId;
@@ -256,6 +265,45 @@ contract ProposalSystemModule is IProposalSystemModule {
         }
 
         return (remainingCapacity, totalCapacity);
+    }
+
+    function getUserPendingProposals(address user) external view returns (
+        bytes32[] memory proposalIds,
+        string[] memory categories,
+        uint256[] memory newLimits,
+        uint256[] memory executeAfters,
+        bool[] memory isIncreaseFlags
+    ) {
+        bytes32[] memory allProposalIds = userProposalIds[user];
+        uint256 pendingCount = 0;
+
+        // First pass: count pending proposals
+        for (uint256 i = 0; i < allProposalIds.length; i++) {
+            CategoryUpdateProposal storage proposal = userProposals[user][allProposalIds[i]];
+            if (proposal.exists && !proposal.executed) {
+                pendingCount++;
+            }
+        }
+
+        // Second pass: populate arrays with pending proposals
+        proposalIds = new bytes32[](pendingCount);
+        categories = new string[](pendingCount);
+        newLimits = new uint256[](pendingCount);
+        executeAfters = new uint256[](pendingCount);
+        isIncreaseFlags = new bool[](pendingCount);
+
+        uint256 pendingIndex = 0;
+        for (uint256 i = 0; i < allProposalIds.length; i++) {
+            CategoryUpdateProposal storage proposal = userProposals[user][allProposalIds[i]];
+            if (proposal.exists && !proposal.executed) {
+                proposalIds[pendingIndex] = allProposalIds[i];
+                categories[pendingIndex] = proposal.category;
+                newLimits[pendingIndex] = proposal.newLimit;
+                executeAfters[pendingIndex] = proposal.executeAfter;
+                isIncreaseFlags[pendingIndex] = proposal.isIncrease;
+                pendingIndex++;
+            }
+        }
     }
 
     function canIncreaseLimit(address user, uint256 increaseAmount) external view returns (bool) {

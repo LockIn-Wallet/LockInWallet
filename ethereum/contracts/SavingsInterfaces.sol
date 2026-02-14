@@ -114,6 +114,13 @@ interface IProposalSystemModule {
         uint256 increasesInPeriod,
         uint256 lastIncreaseTimestamp
     );
+    function getUserPendingProposals(address user) external view returns (
+        bytes32[] memory proposalIds,
+        string[] memory categories,
+        uint256[] memory newLimits,
+        uint256[] memory executeAfters,
+        bool[] memory isIncreaseFlags
+    );
 
     // Events
     event SetupCommitted(address indexed user, uint256 timestamp);
