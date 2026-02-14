@@ -3,6 +3,7 @@ import { BlockchainAdapter } from './BlockchainAdapter.js';
 import SavingsABI from '../SavingsABI.json';
 import MockUSDT_ABI from '../MockUSDT_ABI.json';
 import ApprovalSystemModuleABI from '../ApprovalSystemModuleABI.json';
+import ProposalSystemModuleABI from '../ProposalSystemModuleABI.json';
 
 /**
  * EVM Blockchain Adapter for MetaMask and ethers.js integration
@@ -14,6 +15,7 @@ export class EVMAdapter extends BlockchainAdapter {
     this.signer = null;
     this.savingsContract = null;
     this.approvalModule = null;
+    this.proposalModule = null;
     this.userAddress = null;
     this.ETH_ADDRESS = "0x0000000000000000000000000000000000000000";
   }
@@ -62,6 +64,7 @@ export class EVMAdapter extends BlockchainAdapter {
     this.signer = null;
     this.savingsContract = null;
     this.approvalModule = null;
+    this.proposalModule = null;
     this.userAddress = null;
   }
 
@@ -269,6 +272,48 @@ export class EVMAdapter extends BlockchainAdapter {
     };
   }
 
+  async addSpendingLimit(periodName, limit) {
+    if (!this.savingsContract) throw new Error('Contract not initialized');
+
+    const limitWei = ethers.parseUnits(limit.toString(), 6);
+
+    // Determine duration based on period name
+    const durations = {
+      'Daily': 86400,      // 1 day
+      'Weekly': 604800,    // 7 days
+      'Monthly': 2592000   // 30 days
+    };
+
+    const duration = durations[periodName];
+    if (!duration) {
+      throw new Error('Invalid period name. Must be Daily, Weekly, or Monthly');
+    }
+
+    const tx = await this.savingsContract.addTimePeriodLimit(
+      periodName,
+      limitWei,
+      duration
+    );
+
+    await tx.wait();
+    return tx.hash;
+  }
+
+  // Proposal Management
+  async proposeLimitChange(periodName, newLimit) {
+    if (!this.savingsContract) throw new Error('Savings contract not initialized');
+    if (!this.userAddress) throw new Error('User not connected');
+
+    const limitWei = ethers.parseUnits(newLimit.toString(), 6);
+    const tx = await this.savingsContract.proposeLimitChange(
+      periodName,
+      limitWei
+    );
+    await tx.wait();
+
+    return tx.hash;
+  }
+
   // Utility Methods
   formatAmount(amount, decimals) {
     return ethers.formatUnits(amount, decimals);
@@ -339,17 +384,27 @@ export class EVMAdapter extends BlockchainAdapter {
       this.signer
     );
 
-    // Initialize approval module
+    // Initialize modules
     try {
       const moduleAddresses = await import('../moduleAddresses.json');
+
+      // Initialize approval module
       const approvalModuleAddress = moduleAddresses.modules.approvalSystem;
       this.approvalModule = new ethers.Contract(
         approvalModuleAddress,
         ApprovalSystemModuleABI,
         this.signer
       );
+
+      // Initialize proposal module
+      const proposalModuleAddress = moduleAddresses.modules.proposalSystem;
+      this.proposalModule = new ethers.Contract(
+        proposalModuleAddress,
+        ProposalSystemModuleABI,
+        this.signer
+      );
     } catch (error) {
-      console.warn('Could not initialize approval module:', error);
+      console.warn('Could not initialize modules:', error);
     }
   }
 

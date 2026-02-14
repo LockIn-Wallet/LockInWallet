@@ -112,7 +112,10 @@ Common development scenarios for fast project startup:
 # Start project for Solana development
 npm run solana:deploy-reliable && npm run frontend:start
 
-# Start project for EVM development
+# Start project for EVM development (all-in-one: chain + deploy + frontend)
+npm run dev:evm
+
+# Manual EVM development (when you need more control)
 npm run deploy-modular --workspace=ethereum && npm run frontend:start
 
 # Full multi-chain development (everything at once)
@@ -142,7 +145,10 @@ npm run dev:full
 
 **Option 2: Individual Chain Development**
 ```bash
-# Ethereum development
+# Ethereum development (automated)
+npm run dev:evm              # All-in-one: start chain + deploy + frontend
+
+# Ethereum development (manual steps)
 npm run node --workspace=ethereum        # Start EVM chain
 npm run deploy-modular --workspace=ethereum    # Deploy EVM contracts
 cd frontend && npm start      # Start frontend
@@ -438,6 +444,7 @@ npm run deploy:full        # Deploy to both chains
 npm run dev:full           # Start chains + frontend
 
 # Individual chain development
+npm run dev:evm            # EVM: start chain + deploy + frontend
 npm run * --workspace=ethereum    # Ethereum commands
 npm run solana:*           # Solana commands
 npm run frontend:*         # Frontend commands

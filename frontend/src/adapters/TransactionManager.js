@@ -242,6 +242,24 @@ export class TransactionManager {
     }
   }
 
+  async addSpendingLimit(periodName, limit) {
+    try {
+      const adapter = this.getCurrentAdapter();
+
+      if (!(await adapter.isConnected())) {
+        throw new Error('Wallet not connected');
+      }
+
+      const result = await adapter.addSpendingLimit(periodName, limit);
+      console.log(`${this.networkType} spending limit added for ${periodName}:`, result);
+      return result;
+
+    } catch (error) {
+      console.error(`${this.networkType} add spending limit error:`, error);
+      throw error;
+    }
+  }
+
   async setCommonPeriodLimits(dailyLimit, weeklyLimit, monthlyLimit) {
     try {
       const adapter = this.getCurrentAdapter();

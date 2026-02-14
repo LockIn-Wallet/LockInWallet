@@ -307,17 +307,10 @@ const SpendingLimitsSetup = ({
     }
     try {
       const newLimit = parseFloat(edit.value);
-      if (networkType === "solana") {
-        // Solana proposal submission
-        const adapter = transactionManager.getCurrentAdapter();
-        const txHash = await adapter.proposeLimitChange(periodName, newLimit);
-        console.log("Solana proposal transaction:", txHash);
-      } else {
-        // EVM proposal submission
-        const limitWei = ethers.parseUnits(newLimit.toString(), 6);
-        const tx = await savingsContract.proposeLimitChange(periodName, limitWei);
-        await tx.wait();
-      }
+
+      // Use unified adapter interface for both EVM and Solana
+      const txHash = await transactionManager.proposeLimitChange(periodName, newLimit);
+      console.log("Proposal transaction:", txHash);
 
       alert(`✅ ${periodName} limit change proposal submitted! It will be executable after the timelock period.`);
 

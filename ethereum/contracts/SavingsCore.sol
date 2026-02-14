@@ -409,6 +409,64 @@ contract SavingsCore is Initializable, UUPSUpgradeable, OwnableUpgradeable, ISav
         proposalModule.recalculateTotalLockedValue(msg.sender);
     }
 
+    function addTimePeriodLimit(
+        string calldata periodName,
+        uint256 limit,
+        uint256 durationInSeconds
+    ) external {
+        ITimePeriodLimitsModule limitsModule = ITimePeriodLimitsModule(modules[ModuleIds.TIME_PERIOD_LIMITS]);
+        require(address(limitsModule) != address(0), "TimePeriodLimitsModule not registered");
+        limitsModule.addTimePeriodLimit(msg.sender, periodName, limit, durationInSeconds);
+
+        // After adding a new limit, recalculate total locked value if setup is committed
+        IProposalSystemModule proposalModule = IProposalSystemModule(modules[ModuleIds.PROPOSAL_SYSTEM]);
+        if (address(proposalModule) != address(0) && proposalModule.isSetupCommitted(msg.sender)) {
+            proposalModule.recalculateTotalLockedValue(msg.sender);
+        }
+    }
+
+    // ========== PROPOSAL SYSTEM FUNCTIONS ==========
+
+    function proposeLimitChange(
+        string calldata periodName,
+        uint256 newLimit
+    ) external returns (bytes32 proposalId) {
+        IProposalSystemModule proposalModule = IProposalSystemModule(modules[ModuleIds.PROPOSAL_SYSTEM]);
+        require(address(proposalModule) != address(0), "ProposalSystemModule not registered");
+        return proposalModule.proposeLimitChange(msg.sender, periodName, newLimit);
+    }
+
+    function proposeLimitRemoval(string calldata periodName) external returns (bytes32 proposalId) {
+        IProposalSystemModule proposalModule = IProposalSystemModule(modules[ModuleIds.PROPOSAL_SYSTEM]);
+        require(address(proposalModule) != address(0), "ProposalSystemModule not registered");
+        return proposalModule.proposeLimitRemoval(msg.sender, periodName);
+    }
+
+    function executeLimitProposal(bytes32 proposalId) external {
+        IProposalSystemModule proposalModule = IProposalSystemModule(modules[ModuleIds.PROPOSAL_SYSTEM]);
+        require(address(proposalModule) != address(0), "ProposalSystemModule not registered");
+        proposalModule.executeLimitProposal(msg.sender, proposalId);
+    }
+
+    function cancelLimitProposal(bytes32 proposalId) external {
+        IProposalSystemModule proposalModule = IProposalSystemModule(modules[ModuleIds.PROPOSAL_SYSTEM]);
+        require(address(proposalModule) != address(0), "ProposalSystemModule not registered");
+        proposalModule.cancelLimitProposal(msg.sender, proposalId);
+    }
+
+    function getProposal(bytes32 proposalId) external view returns (
+        string memory category,
+        uint256 newLimit,
+        uint256 executeAfter,
+        bool executed,
+        bool isIncrease,
+        bool exists
+    ) {
+        IProposalSystemModule proposalModule = IProposalSystemModule(modules[ModuleIds.PROPOSAL_SYSTEM]);
+        require(address(proposalModule) != address(0), "ProposalSystemModule not registered");
+        return proposalModule.getProposal(msg.sender, proposalId);
+    }
+
     // ========== BYPASS SYSTEM FUNCTIONS ==========
 
     function requestLimitBypass(
