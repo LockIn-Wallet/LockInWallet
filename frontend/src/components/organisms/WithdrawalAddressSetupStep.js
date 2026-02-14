@@ -102,7 +102,10 @@ const WithdrawalAddressSetupStep = ({
 
   // Load data when dependencies change
   useEffect(() => {
-    fetchWithdrawalData();
+    // Only fetch data when transactionManager is available
+    if (transactionManager) {
+      fetchWithdrawalData();
+    }
   }, [transactionManager, savingsContract, solanaConnected, networkType]);
 
   // Request withdrawal address function (moved from App.js)

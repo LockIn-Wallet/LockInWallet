@@ -8,7 +8,6 @@ import { isSolanaAddress } from './utils/addressValidation.js';
  * Fetches pending withdrawal address requests for a user across networks
  * @param {Object} params - Service parameters
  * @param {Object} params.transactionManager - Transaction manager instance
- * @param {Object} params.savingsContract - EVM savings contract (for EVM)
  * @param {string} params.networkType - "evm" or "solana"
  * @param {string} params.userAddress - User's address
  * @param {Function} params.getCurrentUserAddress - Function to get current user address
@@ -20,7 +19,6 @@ export async function fetchPendingWithdrawalRequests(params) {
 
   const {
     transactionManager,
-    savingsContract,
     networkType,
     userAddress,
     getCurrentUserAddress
@@ -31,17 +29,18 @@ export async function fetchPendingWithdrawalRequests(params) {
       // Get current user address using provided function or fallback to passed address
       const currentUserAddress = getCurrentUserAddress ? getCurrentUserAddress() : userAddress;
 
-      if (networkType === "solana") {
-        return await fetchSolanaWithdrawalRequests({
-          transactionManager,
-          userAddress: currentUserAddress
-        });
-      } else {
-        return await fetchEvmWithdrawalRequests({
-          savingsContract,
-          userAddress: currentUserAddress
-        });
+      // Unified adapter pattern - both networks use transactionManager
+      if (!transactionManager?.getPendingWithdrawalDestinationRequests) {
+        console.log(`❌ ${networkType.toUpperCase()} withdrawal destination requests method not available in transaction manager`);
+        return [];
       }
+
+      console.log(`🔄 Calling ${networkType.toUpperCase()} transactionManager.getPendingWithdrawalDestinationRequests()...`);
+      const targetAddress = currentUserAddress || await transactionManager.getAddress();
+      const withdrawalRequests = await transactionManager.getPendingWithdrawalDestinationRequests(targetAddress);
+      console.log(`✅ Fetched ${networkType.toUpperCase()} withdrawal requests for ${targetAddress}:`, withdrawalRequests);
+
+      return withdrawalRequests;
     },
     [], // Default to empty array on error
     `${networkType.toUpperCase()} withdrawal requests fetch`
@@ -93,10 +92,13 @@ async function fetchSolanaWithdrawalRequests(params) {
 }
 
 /**
- * Fetches EVM pending withdrawal requests using the savings contract
+ * DEPRECATED: Fetches EVM withdrawal requests using direct contract access
+ * Replaced with unified adapter pattern - use transactionManager.getPendingWithdrawalDestinationRequests() instead
+ * Keeping for reference during transition period
  * @param {Object} params - EVM-specific parameters
  * @returns {Promise<Array>} - Array of formatted EVM withdrawal requests
  */
+// eslint-disable-next-line no-unused-vars
 async function fetchEvmWithdrawalRequests(params) {
   const { savingsContract, userAddress } = params;
 

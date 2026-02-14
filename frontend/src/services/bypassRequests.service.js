@@ -9,7 +9,6 @@ import { formatBypassRequest, formatTimestamp } from './utils/dataFormatters.js'
  * Fetches pending bypass requests for a user across networks
  * @param {Object} params - Service parameters
  * @param {Object} params.transactionManager - Transaction manager instance
- * @param {Object} params.savingsContract - EVM savings contract (for EVM)
  * @param {string} params.networkType - "evm" or "solana"
  * @param {string} params.userAddress - User's address
  * @param {string} params.solanaPublicKey - Solana public key (for Solana)
@@ -21,7 +20,6 @@ export async function fetchPendingBypassRequests(params) {
 
   const {
     transactionManager,
-    savingsContract,
     networkType,
     userAddress,
     solanaPublicKey
@@ -29,18 +27,18 @@ export async function fetchPendingBypassRequests(params) {
 
   return safeDataFetch(
     async () => {
-      if (networkType === "solana") {
-        return await fetchSolanaBypassRequests({
-          transactionManager,
-          userAddress,
-          solanaPublicKey
-        });
-      } else {
-        return await fetchEvmBypassRequests({
-          savingsContract,
-          userAddress
-        });
+      // Unified adapter pattern - both networks use transactionManager
+      if (!transactionManager?.fetchPendingBypassRequests) {
+        console.log(`❌ ${networkType.toUpperCase()} bypass requests method not available in transaction manager`);
+        return [];
       }
+
+      console.log(`🔄 Calling ${networkType.toUpperCase()} transactionManager.fetchPendingBypassRequests()...`);
+      const targetAddress = userAddress || await transactionManager.getAddress();
+      const bypassRequests = await transactionManager.fetchPendingBypassRequests(targetAddress);
+      console.log(`✅ Fetched ${networkType.toUpperCase()} bypass requests for ${targetAddress}:`, bypassRequests);
+
+      return bypassRequests;
     },
     [], // Default to empty array on error
     `${networkType.toUpperCase()} bypass requests fetch`
@@ -137,10 +135,13 @@ async function fetchSolanaBypassRequests(params) {
 }
 
 /**
- * Fetches EVM bypass requests using the savings contract
+ * DEPRECATED: Fetches EVM bypass requests using direct contract access
+ * Replaced with unified adapter pattern - use transactionManager.fetchPendingBypassRequests() instead
+ * Keeping for reference during transition period
  * @param {Object} params - EVM-specific parameters
  * @returns {Promise<Array>} - Array of formatted EVM bypass requests
  */
+// eslint-disable-next-line no-unused-vars
 async function fetchEvmBypassRequests(params) {
   const { savingsContract, userAddress } = params;
 

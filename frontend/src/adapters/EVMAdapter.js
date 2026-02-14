@@ -248,7 +248,11 @@ export class EVMAdapter extends BlockchainAdapter {
       });
     }
 
-    return fetchedLimits;
+    // Return unified format that matches the service expectation
+    return {
+      limits: fetchedLimits,
+      isSetupCommitted: false // TODO: Get this from contract if method exists
+    };
   }
 
   async setSpendingLimits(daily, weekly, monthly) {
@@ -405,6 +409,46 @@ export class EVMAdapter extends BlockchainAdapter {
       );
     } catch (error) {
       console.warn('Could not initialize modules:', error);
+    }
+  }
+
+  // Bypass Requests (unified adapter pattern)
+  async fetchPendingBypassRequests(userAddress = null) {
+    if (!this.savingsContract) throw new Error('Contract not initialized');
+
+    // Note: getUserActiveBypassRequests() uses msg.sender, so no user parameter needed
+    const bypassData = await this.savingsContract.getUserActiveBypassRequests();
+    const [requestIds, amounts, skipPeriods, tokens, executeAfters] = bypassData;
+
+    const requests = [];
+    for (let i = 0; i < requestIds.length; i++) {
+      requests.push({
+        requestId: requestIds[i],
+        amount: this.formatAmount(amounts[i], 6), // Format to USDT units
+        skipPeriod: skipPeriods[i],
+        token: tokens[i],
+        executeAfter: executeAfters[i].toString()
+      });
+    }
+
+    return requests;
+  }
+
+  // Withdrawal Destination Requests (unified adapter pattern)
+  async getPendingWithdrawalDestinationRequests(userAddress = null) {
+    if (!this.savingsContract) throw new Error('Contract not initialized');
+
+    const targetAddress = userAddress || await this.getAddress();
+
+    try {
+      // This would call a contract method like getUserPendingWithdrawalDestinationRequests
+      // For now, returning empty array since the exact contract method needs to be confirmed
+      console.log('🔍 EVMAdapter: Fetching withdrawal destination requests for', targetAddress);
+      console.log('⚠️ EVMAdapter: getPendingWithdrawalDestinationRequests not yet implemented');
+      return [];
+    } catch (error) {
+      console.error('❌ EVMAdapter: Error fetching withdrawal destination requests:', error);
+      return [];
     }
   }
 

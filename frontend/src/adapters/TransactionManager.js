@@ -451,4 +451,14 @@ export class TransactionManager {
   async cancelLimitProposal(proposalId) {
     return await this.getCurrentAdapter().cancelLimitProposal(proposalId);
   }
+
+  // Bypass Requests Methods (unified adapter pattern)
+  async fetchPendingBypassRequests(userAddress) {
+    return await this.getCurrentAdapter().fetchPendingBypassRequests(userAddress);
+  }
+
+  // Withdrawal Destination Requests Methods (unified adapter pattern)
+  async getPendingWithdrawalDestinationRequests(userAddress) {
+    return await this.getCurrentAdapter().getPendingWithdrawalDestinationRequests(userAddress);
+  }
 }

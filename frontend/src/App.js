@@ -765,6 +765,12 @@ function AppContentInner({
   const fetchPendingLimitProposals = async (txManager = transactionManager) => {
     const currentUserAddress = getCurrentUserAddress();
 
+    // Only proceed if transactionManager is available
+    if (!txManager) {
+      console.log(`⏭️ Skipping pending proposals fetch - TransactionManager not yet initialized`);
+      return;
+    }
+
     try {
       const proposals = await fetchPendingLimitProposalsService({
         transactionManager: txManager,
@@ -803,6 +809,12 @@ function AppContentInner({
       networkType
     );
 
+    // Only proceed if transactionManager is available
+    if (!txManager) {
+      console.log(`⏭️ Skipping spending limits fetch with TxManager - TransactionManager not yet initialized`);
+      return;
+    }
+
     if (networkType === "solana") {
       try {
         // Fetch spending limits using service
@@ -838,6 +850,12 @@ function AppContentInner({
       );
       // Delegate to the dedicated Solana function to avoid duplication and race conditions
       await fetchSpendingLimitsWithTxManager(transactionManager);
+      return;
+    }
+
+    // Only proceed if transactionManager is available
+    if (!transactionManager) {
+      console.log(`⏭️ Skipping spending limits fetch - TransactionManager not yet initialized`);
       return;
     }
 
@@ -977,18 +995,24 @@ function AppContentInner({
           )}
 
           {/* Spending Limits Setup / Management */}
-          <SpendingLimitsSetup
-            isSetupCommitted={isSetupCommitted}
-            currentTime={currentTime}
-            networkType={networkType}
-            transactionManager={transactionManager}
-            solanaConnected={solanaConnected}
-            savingsContract={savingsContract}
-            getCurrentUserAddress={getCurrentUserAddress}
-            spendingLimits={spendingLimits}
-            onSpendingLimitsUpdate={handleSpendingLimitsUpdate}
-            // onSetSaveCallback={setSaveSpendingLimitsCallback} // Temporarily disabled
-          />
+          {transactionManager ? (
+            <SpendingLimitsSetup
+              isSetupCommitted={isSetupCommitted}
+              currentTime={currentTime}
+              networkType={networkType}
+              transactionManager={transactionManager}
+              solanaConnected={solanaConnected}
+              savingsContract={savingsContract}
+              getCurrentUserAddress={getCurrentUserAddress}
+              spendingLimits={spendingLimits}
+              onSpendingLimitsUpdate={handleSpendingLimitsUpdate}
+              // onSetSaveCallback={setSaveSpendingLimitsCallback} // Temporarily disabled
+            />
+          ) : (
+            <div style={{ padding: "20px", textAlign: "center", color: "#666" }}>
+              Initializing spending limits...
+            </div>
+          )}
 
           {/* Withdrawal Addresses Setup Component */}
           {!isSetupCommitted && (

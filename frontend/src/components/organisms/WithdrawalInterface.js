@@ -127,7 +127,10 @@ const WithdrawalInterface = ({
 
   // Load data when dependencies change
   useEffect(() => {
-    fetchWithdrawalData();
+    // Only fetch data when transactionManager is available
+    if (transactionManager) {
+      fetchWithdrawalData();
+    }
   }, [transactionManager, savingsContract, solanaConnected, networkType]);
 
   // Withdrawal execution function (moved from App.js)

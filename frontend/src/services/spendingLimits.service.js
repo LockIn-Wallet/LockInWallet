@@ -9,8 +9,6 @@ import { formatSpendingLimit } from './utils/dataFormatters.js';
  * Fetches spending limits for a user across networks
  * @param {Object} params - Service parameters
  * @param {Object} params.transactionManager - Transaction manager instance
- * @param {Object} params.savingsContract - EVM savings contract (for EVM)
- * @param {Object} params.signer - EVM signer (for EVM)
  * @param {string} params.networkType - "evm" or "solana"
  * @returns {Promise<Object>} - Object containing limits array and setup status
  */
@@ -20,18 +18,23 @@ export async function fetchSpendingLimits(params) {
 
   const {
     transactionManager,
-    savingsContract,
-    signer,
     networkType
   } = params;
 
   return safeDataFetch(
     async () => {
-      if (networkType === "solana") {
-        return await fetchSolanaSpendingLimits({ transactionManager });
-      } else {
-        return await fetchEvmSpendingLimits({ savingsContract, signer });
+      // Unified adapter pattern - both networks use transactionManager
+      if (!transactionManager?.getSpendingLimits) {
+        console.log(`❌ ${networkType.toUpperCase()} spending limits method not available in transaction manager`);
+        return { limits: [], isSetupCommitted: false };
       }
+
+      console.log(`🔄 Calling ${networkType.toUpperCase()} transactionManager.getSpendingLimits()...`);
+      const userAddress = await transactionManager.getAddress();
+      const spendingData = await transactionManager.getSpendingLimits(userAddress);
+      console.log(`✅ Fetched ${networkType.toUpperCase()} spending limits for ${userAddress}:`, spendingData);
+
+      return spendingData;
     },
     { limits: [], isSetupCommitted: false }, // Default response structure
     `${networkType.toUpperCase()} spending limits fetch`
@@ -84,10 +87,13 @@ async function fetchSolanaSpendingLimits(params) {
 }
 
 /**
- * Fetches EVM spending limits using the savings contract
+ * DEPRECATED: Fetches EVM spending limits using direct contract access
+ * Replaced with unified adapter pattern - use transactionManager.getSpendingLimits() instead
+ * Keeping for reference during transition period
  * @param {Object} params - EVM-specific parameters
  * @returns {Promise<Object>} - Object containing limits and setup status
  */
+// eslint-disable-next-line no-unused-vars
 async function fetchEvmSpendingLimits(params) {
   const { savingsContract, signer } = params;
 
