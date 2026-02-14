@@ -44,14 +44,38 @@ export const getAvailableNetworks = (networkType, environment = process.env.NODE
     isLocal: key === "localhost"
   }));
 
+  // Check environment variables for production overrides
+  const showLocalhost = process.env.REACT_APP_SHOW_LOCALHOST !== 'false';
+  const showUndeployed = process.env.REACT_APP_SHOW_UNDEPLOYED_NETWORKS !== 'false';
+  const isProduction = environment === "production" || process.env.REACT_APP_ENVIRONMENT === "production";
+
+  console.log(`🌐 Network filtering - Environment: ${environment}, Production: ${isProduction}`);
+
   // In production, only show deployed networks (exclude localhost and undeployed)
-  if (environment === "production") {
-    return networkList.filter(network =>
-      network.deployed && !network.isLocal
-    );
+  if (isProduction) {
+    const filtered = networkList.filter(network => {
+      // Always exclude localhost in production unless explicitly enabled
+      if (network.isLocal && !showLocalhost) {
+        console.log(`   Filtering out ${network.name} (localhost)`);
+        return false;
+      }
+
+      // Exclude undeployed networks in production unless explicitly enabled
+      if (!network.deployed && !showUndeployed) {
+        console.log(`   Filtering out ${network.name} (not deployed)`);
+        return false;
+      }
+
+      console.log(`   Including ${network.name} (deployed: ${network.deployed})`);
+      return true;
+    });
+
+    console.log(`🎯 Production networks available: ${filtered.map(n => n.name).join(', ')}`);
+    return filtered;
   }
 
   // In development, show all networks but mark deployment status
+  console.log(`🔧 Development networks available: ${networkList.map(n => n.name).join(', ')}`);
   return networkList;
 };
 
