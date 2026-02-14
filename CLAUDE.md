@@ -182,6 +182,49 @@ For detailed Solana development, see **`solana/CLAUDE.md`**
 ### Frontend Development
 For detailed frontend development, see documentation in **`frontend/`** folder
 
+### 🚀 Production Builds
+
+Build and serve optimized production bundles for deployment or local testing:
+
+**Quick Commands (From Project Root)**
+```bash
+# Build production bundle
+npm run frontend:build:production
+
+# Serve production build locally (http://localhost:3001)
+npm run frontend:serve
+
+# Build + Serve in one command (most convenient)
+npm run frontend:build-and-serve
+```
+
+**Manual Commands**
+```bash
+# From project root
+npm run build:production --workspace=frontend
+cd frontend && npx serve -s build -p 3001
+
+# Or from frontend folder
+cd frontend
+npm run build:production
+npm run serve
+```
+
+**Production Build Features:**
+- ✅ **Optimized Bundle**: Minified JavaScript and CSS
+- ✅ **No Source Maps**: Reduced bundle size for production
+- ✅ **Memory Optimized**: 4GB Node.js memory allocation for large builds
+- ✅ **Static Server**: Serves on http://localhost:3001 with proper MIME types
+- ✅ **Ready for Deployment**: Can be deployed to any static hosting service
+
+**Bundle Size:** ~532 kB gzipped (main bundle)
+
+**Use Cases:**
+- 🧪 **Local Testing**: Test production behavior before deployment
+- 📱 **Performance Testing**: Measure real-world load times
+- 🚀 **Deployment Prep**: Generate files ready for hosting
+- 🔍 **Debugging**: Test with production optimizations enabled
+
 ## Workspace Management
 
 This project uses **npm workspaces** to manage the multi-blockchain architecture:
