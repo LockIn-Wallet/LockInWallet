@@ -382,15 +382,15 @@ contract TimePeriodLimitsModule is ITimePeriodLimitsModule {
     ) external onlyAuthorized {
         require(dailyLimit > 0 || weeklyLimit > 0 || monthlyLimit > 0, "At least one limit must be set");
 
-        // Validate logical limit ordering
+        // Validate basic limit ordering - allow restrictive limits
         if (dailyLimit > 0 && weeklyLimit > 0) {
-            require(dailyLimit * 7 <= weeklyLimit, "Daily limit too high for weekly limit");
+            require(dailyLimit <= weeklyLimit, "Daily limit cannot exceed weekly limit");
         }
         if (weeklyLimit > 0 && monthlyLimit > 0) {
-            require(weeklyLimit * 4 <= monthlyLimit, "Weekly limit too high for monthly limit");
+            require(weeklyLimit <= monthlyLimit, "Weekly limit cannot exceed monthly limit");
         }
         if (dailyLimit > 0 && monthlyLimit > 0) {
-            require(dailyLimit * 30 <= monthlyLimit, "Daily limit too high for monthly limit");
+            require(dailyLimit <= monthlyLimit, "Daily limit cannot exceed monthly limit");
         }
 
         // Add or update common periods - use internal calls to avoid authorization issues

@@ -588,15 +588,15 @@ impl SavingsAccount {
         monthly_limit: Option<u64>,
         current_time: i64,
     ) -> Result<()> {
-        // Validate logical limit ordering if multiple limits are set
+        // Validate basic limit ordering - allow restrictive limits
         if let (Some(daily), Some(weekly)) = (daily_limit, weekly_limit) {
-            require!(daily * 7 <= weekly, crate::error::ErrorCode::InvalidLimitParameters);
+            require!(daily <= weekly, crate::error::ErrorCode::InvalidLimitParameters);
         }
         if let (Some(weekly), Some(monthly)) = (weekly_limit, monthly_limit) {
-            require!(weekly * 4 <= monthly, crate::error::ErrorCode::InvalidLimitParameters);
+            require!(weekly <= monthly, crate::error::ErrorCode::InvalidLimitParameters);
         }
         if let (Some(daily), Some(monthly)) = (daily_limit, monthly_limit) {
-            require!(daily * 30 <= monthly, crate::error::ErrorCode::InvalidLimitParameters);
+            require!(daily <= monthly, crate::error::ErrorCode::InvalidLimitParameters);
         }
 
         // Add or update common periods

@@ -72,8 +72,25 @@ describe("Savings Wallet Modules", function () {
       const { savingsCore, user1 } = await loadFixture(deployModulesFixture);
 
       const dailyLimit = hre.ethers.parseEther("1.0");
-      const weeklyLimit = hre.ethers.parseEther("7.0");  // 7 * daily = weekly
-      const monthlyLimit = hre.ethers.parseEther("30.0"); // 30 * daily = monthly
+      const weeklyLimit = hre.ethers.parseEther("7.0");  // Example: weekly > daily
+      const monthlyLimit = hre.ethers.parseEther("30.0"); // Example: monthly > weekly
+
+      await expect(
+        savingsCore.connect(user1).setCommonPeriodLimits(
+          dailyLimit,
+          weeklyLimit,
+          monthlyLimit
+        )
+      ).not.to.be.reverted;
+    });
+
+    it("Should allow restrictive spending limits (weekly < daily × 7)", async function () {
+      const { savingsCore, user1 } = await loadFixture(deployModulesFixture);
+
+      // Set restrictive limits where weekly is less than daily × 7
+      const dailyLimit = hre.ethers.parseEther("10.0");   // $10 daily
+      const weeklyLimit = hre.ethers.parseEther("50.0");  // $50 weekly (less than daily × 7 = $70)
+      const monthlyLimit = hre.ethers.parseEther("150.0"); // $150 monthly (less than weekly × 4 = $200)
 
       await expect(
         savingsCore.connect(user1).setCommonPeriodLimits(
@@ -89,8 +106,8 @@ describe("Savings Wallet Modules", function () {
 
       // Set a low daily limit
       const dailyLimit = hre.ethers.parseEther("1.0");
-      const weeklyLimit = hre.ethers.parseEther("7.0");  // 7 * daily = weekly
-      const monthlyLimit = hre.ethers.parseEther("30.0"); // 30 * daily = monthly
+      const weeklyLimit = hre.ethers.parseEther("7.0");  // Example: weekly > daily
+      const monthlyLimit = hre.ethers.parseEther("30.0"); // Example: monthly > weekly
 
       await savingsCore.connect(user1).setCommonPeriodLimits(
         dailyLimit,

@@ -201,17 +201,17 @@ const SpendingLimitsSetup = ({
         return;
       }
 
-      // Validate limit ordering
-      if (daily > 0 && weekly > 0 && daily * 7 > weekly) {
-        alert("Daily limit × 7 cannot exceed weekly limit");
+      // Validate basic limit ordering - allow restrictive limits
+      if (daily > 0 && weekly > 0 && daily > weekly) {
+        alert("Daily limit cannot exceed weekly limit");
         return;
       }
-      if (weekly > 0 && monthly > 0 && weekly * 4 > monthly) {
-        alert("Weekly limit × 4 cannot exceed monthly limit");
+      if (weekly > 0 && monthly > 0 && weekly > monthly) {
+        alert("Weekly limit cannot exceed monthly limit");
         return;
       }
-      if (daily > 0 && monthly > 0 && daily * 30 > monthly) {
-        alert("Daily limit × 30 cannot exceed monthly limit");
+      if (daily > 0 && monthly > 0 && daily > monthly) {
+        alert("Daily limit cannot exceed monthly limit");
         return;
       }
 
@@ -1030,8 +1030,7 @@ const SpendingLimitsSetup = ({
             marginBottom: "15px",
           }}
         >
-          💡 Tip: Daily × 7 ≤ Weekly, Weekly × 4 ≤ Monthly for logical
-          budgeting
+          💡 Tip: Daily ≤ Weekly ≤ Monthly for logical spending control
         </div>
       </div>
 
