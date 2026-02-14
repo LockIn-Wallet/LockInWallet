@@ -187,13 +187,34 @@ const StatusHeader = ({
                 color: checkCorrectNetwork()
                   ? colors.success.light
                   : colors.error.light,
+                cursor: !checkCorrectNetwork() && networkType === "evm" ? "pointer" : "default",
+                textDecoration: !checkCorrectNetwork() && networkType === "evm" ? "underline" : "none",
               }}
+              onClick={async () => {
+                if (!checkCorrectNetwork() && networkType === "evm") {
+                  console.log(`🔄 User clicked to switch to ${getNetworkInfo().name}...`);
+                  try {
+                    // Import the network switching function dynamically
+                    const { ensureCorrectNetwork } = await import("../../utils/providerManager.js");
+                    const switched = await ensureCorrectNetwork(selectedNetwork);
+                    if (switched) {
+                      console.log(`✅ Successfully switched to ${getNetworkInfo().name}`);
+                    } else {
+                      alert(`Please manually switch MetaMask to ${getNetworkInfo().name} network`);
+                    }
+                  } catch (error) {
+                    console.error('Network switch failed:', error);
+                    alert(`Failed to switch network: ${error.message}`);
+                  }
+                }
+              }}
+              title={!checkCorrectNetwork() && networkType === "evm" ? `Click to switch to ${getNetworkInfo().name}` : ""}
             >
               {checkCorrectNetwork()
                 ? `Connected to ${getNetworkInfo().name}`
                 : networkType === "solana"
                 ? `Connect Solana wallet`
-                : `Wrong network - Switch to ${getNetworkInfo().name}`}
+                : `Wrong network - Click to switch to ${getNetworkInfo().name}`}
             </span>
           </div>
         </div>

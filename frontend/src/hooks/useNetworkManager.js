@@ -239,38 +239,51 @@ export const useNetworkManager = ({
       return true;
     }
 
-    // EVM network switching logic
+    // EVM network switching logic - automatically switch MetaMask
+    console.log(`🔄 Switching to EVM network: ${networkKey} (${network?.name || 'Unknown'})`);
+
     if (!window.ethereum) {
-      alert("Please install MetaMask!");
+      console.error("❌ MetaMask not found");
+      alert("Please install MetaMask to use EVM networks!");
       return false;
     }
 
     const network = NETWORKS.evm[networkKey];
     if (!network) {
-      alert("Unsupported network");
+      console.error(`❌ Unsupported network: ${networkKey}`);
+      alert(`Network ${networkKey} is not supported`);
       return false;
     }
 
     setIsNetworkSwitching(true);
 
     try {
+      console.log(`🦊 Requesting MetaMask to switch to ${network.name} (Chain ID: ${network.chainId})`);
+
       // Try to switch to the network
       await window.ethereum.request({
         method: "wallet_switchEthereumChain",
         params: [{ chainId: `0x${network.chainId.toString(16)}` }],
       });
 
+      // Success! Update our internal state
       setSelectedNetwork(networkKey);
       setCurrentChainId(network.chainId);
 
       // Persist selected EVM network to localStorage
       localStorage.setItem(`preferred_evm_network`, networkKey);
 
+      console.log(`✅ Successfully switched to ${network.name}`);
       return true;
+
     } catch (switchError) {
-      // If the network is not added to MetaMask, add it
+      console.log(`⚠️ Network switch failed, checking if network needs to be added...`);
+
+      // If the network is not added to MetaMask, add it first
       if (switchError.code === 4902) {
         try {
+          console.log(`📝 Adding ${network.name} to MetaMask...`);
+
           await window.ethereum.request({
             method: "wallet_addEthereumChain",
             params: [
@@ -284,25 +297,44 @@ export const useNetworkManager = ({
             ],
           });
 
+          // Update our internal state after successful add
           setSelectedNetwork(networkKey);
           setCurrentChainId(network.chainId);
 
           // Persist selected EVM network to localStorage
           localStorage.setItem(`preferred_evm_network`, networkKey);
 
+          console.log(`✅ Successfully added and switched to ${network.name}`);
           return true;
+
         } catch (addError) {
-          console.error("Error adding network:", addError);
-          alert(`Failed to add ${network.name} to MetaMask`);
+          console.error(`❌ Failed to add ${network.name}:`, addError.message);
+
+          // User-friendly error handling
+          if (addError.code === 4001) {
+            alert(`You cancelled adding ${network.name} to MetaMask. Please try again if you want to use this network.`);
+          } else {
+            alert(`Failed to add ${network.name} to MetaMask. Please add it manually.`);
+          }
           return false;
         }
       } else {
-        console.error("Error switching network:", switchError);
-        alert(`Failed to switch to ${network.name}`);
+        // Handle other types of errors
+        console.error(`❌ Network switch error:`, switchError.message);
+
+        if (switchError.code === 4001) {
+          // User rejected the switch
+          console.log(`User cancelled network switch to ${network.name}`);
+          alert(`You cancelled switching to ${network.name}. Please approve the network switch to continue.`);
+        } else {
+          console.log(`Failed to switch to ${network.name}: ${switchError.message}`);
+          alert(`Failed to switch to ${network.name}. Please try again or switch manually in MetaMask.`);
+        }
         return false;
       }
     } finally {
       setIsNetworkSwitching(false);
+      console.log(`🔄 Network switching completed for ${networkKey}`);
     }
   }, [
     setSelectedNetwork,

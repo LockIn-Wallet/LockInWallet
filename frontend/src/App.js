@@ -56,6 +56,11 @@ import {
   createDeploymentErrorMessage,
 } from "./utils/contractVerification.js";
 
+// Import provider management utilities
+import {
+  ensureCorrectNetwork,
+} from "./utils/providerManager.js";
+
 // Import circuit breaker utilities
 import {
   createCircuitBreakers,
@@ -596,6 +601,20 @@ function AppContentInner({
           method: "eth_accounts",
         });
         if (accounts.length > 0) {
+          console.log(`🔗 Auto-connecting wallet to ${networkType}:${selectedNetwork}...`);
+
+          // Auto-switch to correct network if connected wallet is on wrong network
+          if (networkType === "evm") {
+            console.log(`🔄 Ensuring MetaMask is on ${selectedNetwork} network (auto-connect)...`);
+            const networkSwitched = await ensureCorrectNetwork(selectedNetwork);
+            if (!networkSwitched) {
+              console.warn(`❌ Failed to auto-switch to ${selectedNetwork} network on page load. User may need to switch manually.`);
+              // Don't throw error - still allow connection even if network switch fails
+            } else {
+              console.log(`✅ MetaMask auto-switched to ${selectedNetwork} network on page load`);
+            }
+          }
+
           // Already connected, proceed without requesting permission
           await connectWalletInternal();
         }
@@ -612,13 +631,36 @@ function AppContentInner({
   const connectWallet = debounce(async () => {
     if (window.ethereum) {
       try {
-        // Request account access
+        console.log(`🔗 Connecting wallet to ${networkType}:${selectedNetwork}...`);
+
+        // Step 1: Request account access
         await window.ethereum.request({ method: "eth_requestAccounts" });
+
+        // Step 2: Ensure we're on the correct network (auto-switch if needed)
+        if (networkType === "evm") {
+          console.log(`🔄 Ensuring MetaMask is on ${selectedNetwork} network...`);
+          const networkSwitched = await ensureCorrectNetwork(selectedNetwork);
+          if (!networkSwitched) {
+            throw new Error(`Failed to switch to ${selectedNetwork} network. Please switch manually.`);
+          }
+          console.log(`✅ MetaMask switched to ${selectedNetwork} network`);
+        }
+
+        // Step 3: Complete the connection
         await connectWalletInternal();
       } catch (error) {
-        const walletErrorHandler = createErrorHandler("wallet_connection");
-        const formattedError = walletErrorHandler(error);
-        alert(formattedError.userMessage + getDevErrorDetails(formattedError));
+        console.error('❌ Wallet connection failed:', error.message);
+
+        // Provide user-friendly error messages
+        if (error.message.includes("User rejected")) {
+          alert("Connection cancelled. Please try again and approve the connection.");
+        } else if (error.message.includes("network")) {
+          alert(`Network switch required. Please switch MetaMask to ${selectedNetwork} and try again.`);
+        } else {
+          const walletErrorHandler = createErrorHandler("wallet_connection");
+          const formattedError = walletErrorHandler(error);
+          alert(formattedError.userMessage + getDevErrorDetails(formattedError));
+        }
       }
     } else {
       alert("Please install MetaMask!");
@@ -641,9 +683,10 @@ function AppContentInner({
     }
 
     // Verify contract is actually deployed before making any calls
+    // Use MetaMask provider when possible, fallback to public RPC
     const isContractDeployed = await verifyEVMContractDeployment(
-      web3Provider,
-      contractAddress
+      contractAddress,
+      selectedNetwork
     );
     if (!isContractDeployed) {
       const deploymentError = getNetworkErrorMessage(

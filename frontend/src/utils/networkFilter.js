@@ -45,9 +45,18 @@ export const getAvailableNetworks = (networkType, environment = process.env.NODE
   }));
 
   // Check environment variables for production overrides
-  const showLocalhost = process.env.REACT_APP_SHOW_LOCALHOST !== 'false';
-  const showUndeployed = process.env.REACT_APP_SHOW_UNDEPLOYED_NETWORKS !== 'false';
-  const isProduction = environment === "production" || process.env.REACT_APP_ENVIRONMENT === "production";
+  const isDevelopment = environment === "development" || process.env.NODE_ENV === "development";
+  const isProduction = environment === "production" || process.env.NODE_ENV === "production" || process.env.REACT_APP_ENVIRONMENT === "production";
+
+  // In production, default to hiding localhost and undeployed (secure defaults)
+  // In development, default to showing everything (convenience defaults)
+  const showLocalhost = isProduction
+    ? process.env.REACT_APP_SHOW_LOCALHOST === 'true'  // Explicit opt-in for production
+    : process.env.REACT_APP_SHOW_LOCALHOST !== 'false'; // Opt-out for development
+
+  const showUndeployed = isProduction
+    ? process.env.REACT_APP_SHOW_UNDEPLOYED_NETWORKS === 'true'  // Explicit opt-in for production
+    : process.env.REACT_APP_SHOW_UNDEPLOYED_NETWORKS !== 'false'; // Opt-out for development
 
   console.log(`🌐 Network filtering - Environment: ${environment}, Production: ${isProduction}`);
 
@@ -131,34 +140,58 @@ export const PRODUCTION_NETWORKS = {
  * @returns {string} Default network key
  */
 export const getDefaultNetwork = (networkType) => {
-  const isDevelopment = process.env.NODE_ENV === "development";
+  const environment = process.env.NODE_ENV;
+  const isProduction = environment === "production" || process.env.REACT_APP_ENVIRONMENT === "production";
 
-  if (isDevelopment) {
-    // In development, prefer localhost if available
-    return "localhost";
+  console.log(`🎯 Getting default network for ${networkType}, environment: ${environment}, production: ${isProduction}`);
+
+  if (!isProduction) {
+    // In development, prefer localhost if available and deployed
+    const localhostDeployed = isNetworkDeployed(networkType, "localhost");
+    if (localhostDeployed) {
+      console.log(`   → Selected localhost (deployed)`);
+      return "localhost";
+    }
   }
 
-  // In production, get the first available deployed network
-  const availableNetworks = getAvailableNetworks(networkType, "production");
-  if (availableNetworks.length > 0) {
-    // Priority order for production defaults
+  // Get available networks for current environment
+  const availableNetworks = getAvailableNetworks(networkType, environment);
+  console.log(`   → Available networks: ${availableNetworks.map(n => `${n.key}(${n.deployed ? 'deployed' : 'not deployed'})`).join(', ')}`);
+
+  // In any environment, prioritize deployed networks
+  const deployedNetworks = availableNetworks.filter(n => n.deployed);
+
+  if (deployedNetworks.length > 0) {
+    // Priority order for deployed networks
     const priorities = {
-      evm: ["ethereum", "polygon", "optimism"],
+      evm: ["polygon", "ethereum", "optimism"],  // Polygon first since it's deployed
       solana: ["mainnet", "devnet"]
     };
 
     const priorityList = priorities[networkType] || [];
     for (const networkKey of priorityList) {
-      const found = availableNetworks.find(n => n.key === networkKey);
-      if (found) return networkKey;
+      const found = deployedNetworks.find(n => n.key === networkKey);
+      if (found) {
+        console.log(`   → Selected ${networkKey} (deployed, priority match)`);
+        return networkKey;
+      }
     }
 
-    // Fallback to first available
+    // Fallback to first deployed network
+    console.log(`   → Selected ${deployedNetworks[0].key} (first deployed)`);
+    return deployedNetworks[0].key;
+  }
+
+  // If no deployed networks, fallback to any available (development only)
+  if (availableNetworks.length > 0) {
+    console.log(`   → Selected ${availableNetworks[0].key} (fallback - not deployed)`);
     return availableNetworks[0].key;
   }
 
   // Last resort fallback
-  return networkType === "evm" ? "ethereum" : "mainnet";
+  const fallback = networkType === "evm" ? "polygon" : "mainnet";
+  console.log(`   → Selected ${fallback} (last resort fallback)`);
+  return fallback;
 };
 
 /**

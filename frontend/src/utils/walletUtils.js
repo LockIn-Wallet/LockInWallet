@@ -2,7 +2,6 @@
 // Extracted from App.js for better organization and reusability
 
 import networkConfig from "../networkConfig.json";
-import { getNetworkConfig } from "./rpcConfig.js";
 
 // Network configuration - supports both EVM and Solana
 const NETWORKS = {
@@ -22,14 +21,8 @@ const getCurrentNetwork = (networkType, selectedNetwork) => {
     return NETWORKS.solana[selectedNetwork] || NETWORKS.solana.localhost;
   }
 
-  // For EVM networks, use enhanced config with dynamic RPC URLs (including private endpoints)
-  const enhancedConfig = getNetworkConfig("evm", selectedNetwork);
-  if (enhancedConfig) {
-    return enhancedConfig;
-  }
-
-  // Fallback to localhost if enhanced config not available
-  return NETWORKS.evm.localhost;
+  // For EVM networks, use direct config (MetaMask provider approach, no private RPC needed)
+  return NETWORKS.evm[selectedNetwork] || NETWORKS.evm.localhost;
 };
 
 const isSolanaNetwork = (networkType) => {

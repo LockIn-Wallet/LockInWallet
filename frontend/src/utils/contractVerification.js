@@ -1,115 +1,72 @@
 /**
  * Contract deployment verification utilities
- * Helps prevent "missing revert data" errors by verifying contracts are deployed
+ * Uses MetaMask provider when available, falls back to public RPCs
  */
 
-// Environment and network debugging
+import { verifyContractDeployment, getBestProvider, ensureCorrectNetwork } from './providerManager.js';
+
+// Environment debugging
 const isProduction = process.env.NODE_ENV === 'production';
-const isDevelopment = process.env.NODE_ENV === 'development';
 
 /**
- * Log deployment verification details for debugging
- * @param {string} networkName - Human-readable network name
- * @param {string} contractAddress - Contract address being verified
- * @param {string} rpcUrl - RPC URL being used
- */
-const logVerificationAttempt = (networkName, contractAddress, rpcUrl) => {
-  console.log(`🔍 Verifying contract deployment:`);
-  console.log(`   Network: ${networkName}`);
-  console.log(`   Contract: ${contractAddress}`);
-  console.log(`   RPC: ${rpcUrl ? rpcUrl.substring(0, 50) + '...' : 'Unknown'}`);
-  console.log(`   Environment: ${process.env.NODE_ENV}`);
-};
-
-/**
- * Verify if an EVM contract is deployed at the given address with retry logic
- * @param {object} provider - Ethers provider instance
+ * Verify if an EVM contract is deployed at the given address
+ * Uses MetaMask provider when available, falls back to public RPCs
  * @param {string} contractAddress - Contract address to verify
- * @param {number} maxRetries - Maximum number of retry attempts (default: 3)
+ * @param {string} networkKey - Network key (e.g., "polygon")
  * @returns {boolean} True if contract is deployed, false otherwise
  */
-export const verifyEVMContractDeployment = async (provider, contractAddress, maxRetries = 3) => {
-  if (!provider || !contractAddress) {
-    console.warn("Missing provider or contract address");
-    return false;
-  }
-
+export const verifyEVMContractDeployment = async (contractAddress, networkKey = 'polygon') => {
   // Check if address is zero address (not deployed)
   const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
-  if (contractAddress === ZERO_ADDRESS) {
-    console.log(`Contract deployment check for ${contractAddress}: NOT DEPLOYED (zero address)`);
+  if (!contractAddress || contractAddress === ZERO_ADDRESS) {
+    console.log(`Contract verification: Invalid or zero address ${contractAddress}`);
     return false;
   }
 
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
-    try {
-      console.log(`Contract verification attempt ${attempt}/${maxRetries} for ${contractAddress}`);
-
-      // Get the bytecode at the address
-      const code = await provider.getCode(contractAddress);
-
-      // Contract is deployed if bytecode exists (not just '0x' or '0x0')
-      const isDeployed = code !== '0x' && code !== '0x0' && code.length > 2;
-
-      if (isDeployed) {
-        console.log(`✅ Contract deployment check for ${contractAddress}: DEPLOYED (bytecode length: ${code.length})`);
-        return true;
-      } else {
-        console.log(`❌ Contract deployment check for ${contractAddress}: NOT DEPLOYED (bytecode: ${code})`);
-
-        // If this isn't the last attempt, wait before retrying
-        if (attempt < maxRetries) {
-          console.log(`Retrying in ${attempt * 1000}ms...`);
-          await new Promise(resolve => setTimeout(resolve, attempt * 1000));
-        }
-      }
-    } catch (error) {
-      console.error(`Contract verification error (attempt ${attempt}):`, error.message);
-
-      // If this is an RPC error and not the last attempt, try again
-      if (attempt < maxRetries && (
-        error.message.includes('network') ||
-        error.message.includes('timeout') ||
-        error.message.includes('502') ||
-        error.message.includes('503') ||
-        error.message.includes('rate limit')
-      )) {
-        console.log(`Network error detected, retrying in ${attempt * 2000}ms...`);
-        await new Promise(resolve => setTimeout(resolve, attempt * 2000));
-        continue;
-      } else {
-        // For non-network errors or final attempt, return false
-        break;
-      }
-    }
+  try {
+    // Use the new provider manager
+    const result = await verifyContractDeployment(contractAddress, networkKey);
+    return result.isDeployed;
+  } catch (error) {
+    console.error('Contract verification failed:', error.message);
+    return false;
   }
-
-  console.log(`❌ Final result for ${contractAddress}: NOT DEPLOYED (after ${maxRetries} attempts)`);
-  return false;
 };
 
 /**
- * Enhanced contract verification with network context for better debugging
- * @param {object} provider - Ethers provider instance
+ * Enhanced contract verification with network context and automatic provider selection
  * @param {string} contractAddress - Contract address to verify
- * @param {string} networkName - Human-readable network name
- * @param {string} rpcUrl - RPC URL being used (optional, for logging)
+ * @param {string} networkKey - Network key (e.g., "polygon")
+ * @param {string} networkName - Human-readable network name (optional, for logging)
  * @returns {boolean} True if contract is deployed, false otherwise
  */
-export const verifyContractWithNetworkContext = async (provider, contractAddress, networkName, rpcUrl = null) => {
-  logVerificationAttempt(networkName, contractAddress, rpcUrl);
+export const verifyContractWithNetworkContext = async (contractAddress, networkKey, networkName = null) => {
+  const displayName = networkName || networkKey;
 
-  const result = await verifyEVMContractDeployment(provider, contractAddress);
+  console.log(`🔍 Enhanced contract verification for ${displayName}:`);
+  console.log(`   Contract: ${contractAddress}`);
+  console.log(`   Network: ${networkKey}`);
 
-  if (!result && isProduction) {
-    console.error(`🚨 PRODUCTION CONTRACT VERIFICATION FAILED:`);
-    console.error(`   This should not happen in production!`);
-    console.error(`   Network: ${networkName}`);
-    console.error(`   Address: ${contractAddress}`);
-    console.error(`   Please check RPC connectivity and contract deployment status.`);
+  try {
+    // Attempt to ensure we're on the correct network (if MetaMask is available)
+    await ensureCorrectNetwork(networkKey);
+
+    // Verify the contract using the best available provider
+    const result = await verifyEVMContractDeployment(contractAddress, networkKey);
+
+    if (!result && isProduction) {
+      console.error(`🚨 PRODUCTION CONTRACT VERIFICATION FAILED:`);
+      console.error(`   This should not happen in production!`);
+      console.error(`   Network: ${displayName}`);
+      console.error(`   Address: ${contractAddress}`);
+      console.error(`   Recommendation: Check MetaMask network and contract deployment status.`);
+    }
+
+    return result;
+  } catch (error) {
+    console.error(`❌ Enhanced contract verification failed:`, error.message);
+    return false;
   }
-
-  return result;
 };
 
 /**
