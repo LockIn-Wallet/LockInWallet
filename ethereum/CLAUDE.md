@@ -269,6 +269,17 @@ When using proper upgrade scripts:
 
 ## Troubleshooting
 
+### 🔧 Diagnostic Tools & Monitoring
+
+For comprehensive diagnostic utilities, monitoring workflows, and troubleshooting guidance, see the **[Diagnostic Tools Documentation](./DIAGNOSTIC_TOOLS.md)**.
+
+**Available diagnostic categories:**
+- **System Health Monitoring** - Overall contract status and functionality
+- **Contract Verification** - Deployment status and code verification
+- **Transaction Analysis** - Transaction history and cost analysis
+- **Gas & Cost Estimation** - Planning and optimization tools
+- **Development & Testing** - Development workflow support
+
 ### Common ABI/Contract Issues
 
 #### **"could not decode result data" Error**
@@ -341,6 +352,7 @@ cd ../frontend && npm start  # Terminal 3
 ## Cross-References
 
 - **Root Project Overview**: See **`../CLAUDE.md`** for multi-blockchain orchestration and workspace management
+- **Diagnostic Tools**: See **`./DIAGNOSTIC_TOOLS.md`** for comprehensive monitoring, troubleshooting, and maintenance utilities
 - **Solana Development**: See **`../solana/`** folder for Solana-specific development
 - **Frontend Development**: See **`../frontend/`** folder for React app development
 - **Multi-Chain Commands**: Use workspace commands from project root (see **`../CLAUDE.md`**)

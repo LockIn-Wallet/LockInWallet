@@ -2,6 +2,7 @@ import { HardhatUserConfig } from "hardhat/config";
 import "@nomicfoundation/hardhat-toolbox";
 // import "@nomiclabs/hardhat-ethers";
 import "@openzeppelin/hardhat-upgrades";
+import "dotenv/config";
 
 // Auto-update frontend ABIs after compilation
 import { subtask } from "hardhat/config";
@@ -42,10 +43,11 @@ const config: HardhatUserConfig = {
       // accounts: ["0x..."]
     },
     polygon: {
-      url: "https://polygon-rpc.com",
+      url: process.env.POLYGON_RPC_URL || "https://polygon-rpc.com",
       chainId: 137,
       accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
-      gasPrice: "auto"
+      gasPrice: "auto",
+      timeout: 120000
     }
   }
 };

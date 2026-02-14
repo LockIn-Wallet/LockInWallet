@@ -126,7 +126,7 @@
       "name": "Polygon",
       "nativeCurrency": {
         "name": "Polygon",
-        "symbol": "MATIC",
+        "symbol": "POL",
         "decimals": 18
       },
       "rpcUrls": [
@@ -136,7 +136,7 @@
       "blockExplorerUrls": [
         "https://polygonscan.com"
       ],
-      "savingsContract": "0x0000000000000000000000000000000000000000",
+      "savingsContract": "0x09AC25686Fb2aB3ce5cF6b92F84C90E9BBdA8e93",
       "tokens": {
         "USDT": {
           "address": "0xc2132D05D31c914a87C6611C10748AEb04B58e8F",
