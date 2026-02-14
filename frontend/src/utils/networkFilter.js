@@ -69,6 +69,12 @@ export const getAvailableNetworks = (networkType, environment = process.env.NODE
         return false;
       }
 
+      // Exclude Solana devnet and mainnet in production (keep only localhost for Solana)
+      if (networkType === "solana" && (network.key === "devnet" || network.key === "mainnet")) {
+        console.log(`   Filtering out ${network.name} (Solana ${network.key} not allowed in production)`);
+        return false;
+      }
+
       // Exclude undeployed networks in production unless explicitly enabled
       if (!network.deployed && !showUndeployed) {
         console.log(`   Filtering out ${network.name} (not deployed)`);
@@ -131,7 +137,7 @@ export const getNetworkDisplayName = (networkType, networkKey, showStatus = fals
  */
 export const PRODUCTION_NETWORKS = {
   evm: ["ethereum", "polygon", "optimism"],
-  solana: ["mainnet", "devnet"]
+  solana: [] // Solana networks excluded from production (devnet/mainnet removed)
 };
 
 /**
@@ -165,7 +171,7 @@ export const getDefaultNetwork = (networkType) => {
     // Priority order for deployed networks
     const priorities = {
       evm: ["polygon", "ethereum", "optimism"],  // Polygon first since it's deployed
-      solana: ["mainnet", "devnet"]
+      solana: ["localhost", "mainnet", "devnet"]  // Note: mainnet/devnet filtered out in production
     };
 
     const priorityList = priorities[networkType] || [];

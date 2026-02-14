@@ -77,6 +77,7 @@ export const styles = {
       maxWidth: "800px",
       margin: "0 auto",
       padding: theme.spacing.xxl,
+      position: "relative", // Allow absolute positioning within container
     },
     title: {
       margin: `0 0 ${theme.spacing.xxl} 0`,
@@ -90,6 +91,39 @@ export const styles = {
       margin: `0 auto ${theme.spacing.xxl} auto`, // Center horizontally and bottom spacing
       maxWidth: '400px', // Allow for bigger logos
       display: 'block', // Ensure proper spacing and centering
+    },
+  },
+
+  // Social media links
+  socialLinks: {
+    container: {
+      position: "absolute",
+      top: theme.spacing.lg,
+      right: theme.spacing.lg,
+      display: "flex",
+      gap: theme.spacing.md,
+      zIndex: 10,
+    },
+    link: {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      width: "32px",
+      height: "32px",
+      borderRadius: "50%",
+      backgroundColor: "rgba(255, 255, 255, 0.1)",
+      transition: "all 0.2s ease",
+      textDecoration: "none",
+      border: `1px solid ${theme.colors.border.default}`,
+      '&:hover': {
+        backgroundColor: "rgba(255, 255, 255, 0.2)",
+        transform: "translateY(-1px)",
+      },
+    },
+    icon: {
+      width: "18px",
+      height: "18px",
+      fill: theme.colors.text.secondary,
     },
   },
 

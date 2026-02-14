@@ -85,6 +85,7 @@ import {
 
 // Import components
 import SolanaWalletProvider from "./components/SolanaWalletProvider.js";
+import SocialLinks from "./components/atoms/SocialLinks.js";
 import StatusHeader from "./components/molecules/StatusHeader.js";
 import BalanceDisplay from "./components/molecules/BalanceDisplay.js";
 import WalletConnectionPrompt from "./components/molecules/WalletConnectionPrompt.js";
@@ -926,6 +927,9 @@ function AppContentInner({
 
   return (
     <div style={styles.app.container}>
+      {/* Social Media Links - Top Right Corner */}
+      <SocialLinks />
+
       {/* Error Display */}
       {lastError && lastError.severity === "error" && (
         <div
