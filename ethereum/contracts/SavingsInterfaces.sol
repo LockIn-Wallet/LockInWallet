@@ -176,6 +176,7 @@ interface IApprovalSystemModule {
 
     // Withdrawal address management
     function requestWithdrawalAddress(address user, string calldata title, address destination) external returns (bytes32 requestId);
+    function addWithdrawalAddressDirect(address user, string calldata title, address destination) external;
     function executeWithdrawalAddressRequest(address user, bytes32 requestId) external;
     function cancelWithdrawalAddressRequest(address user, bytes32 requestId) external;
     function removeWithdrawalAddress(address user, address destination) external;

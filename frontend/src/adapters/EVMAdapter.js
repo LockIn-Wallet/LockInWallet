@@ -248,10 +248,13 @@ export class EVMAdapter extends BlockchainAdapter {
       });
     }
 
+    // Get setup committed status from contract
+    const isSetupCommitted = await this.getIsSetupCommitted();
+
     // Return unified format that matches the service expectation
     return {
       limits: fetchedLimits,
-      isSetupCommitted: false // TODO: Get this from contract if method exists
+      isSetupCommitted: isSetupCommitted
     };
   }
 
@@ -564,15 +567,152 @@ export class EVMAdapter extends BlockchainAdapter {
     const targetAddress = userAddress || await this.getAddress();
 
     try {
-      // This would call a contract method like getUserPendingWithdrawalDestinationRequests
-      // For now, returning empty array since the exact contract method needs to be confirmed
       console.log('🔍 EVMAdapter: Fetching withdrawal destination requests for', targetAddress);
-      console.log('⚠️ EVMAdapter: getPendingWithdrawalDestinationRequests not yet implemented');
-      return [];
+      const result = await this.savingsContract.getUserPendingWithdrawalRequests();
+      return this.formatWithdrawalRequests(result);
     } catch (error) {
       console.error('❌ EVMAdapter: Error fetching withdrawal destination requests:', error);
       return [];
     }
+  }
+
+  // Withdrawal Address Management (unified adapter interface)
+  async fetchWithdrawalAddresses(userAddress = null) {
+    if (!this.savingsContract) throw new Error('Contract not initialized');
+
+    try {
+      const result = await this.savingsContract.getUserWithdrawalAddresses();
+      return this.formatWithdrawalAddresses(result);
+    } catch (error) {
+      console.error('❌ EVMAdapter: Error fetching withdrawal addresses:', error);
+      return [];
+    }
+  }
+
+  async addWithdrawalDestination(address, title) {
+    if (!this.savingsContract) throw new Error('Contract not initialized');
+
+    try {
+      // Check if contract is locked by getting setup committed status
+      console.log('🔍 EVMAdapter: Checking setup committed status...');
+      const isSetupCommitted = await this.getIsSetupCommitted();
+      console.log(`📊 EVMAdapter: isSetupCommitted() returned: ${isSetupCommitted}`);
+      console.log(`📊 Contract lock status: ${isSetupCommitted ? 'LOCKED' : 'UNLOCKED'}`);
+
+      if (isSetupCommitted) {
+        // Contract is locked - use timelock pattern for security
+        console.log('🔒 Contract is locked, using timelock request...');
+        return await this.requestWithdrawalDestinationAddition(address, title);
+      } else {
+        // Contract is unlocked - add directly without timelock
+        console.log('🔓 Contract is unlocked, adding directly...');
+        console.log(`🔧 Calling addWithdrawalDestinationDirect(${address}, ${title})`);
+        return await this.addWithdrawalDestinationDirect(address, title);
+      }
+    } catch (error) {
+      console.error('❌ Error in addWithdrawalDestination:', error);
+      console.error('❌ Error stack:', error.stack);
+      // Fallback to timelock pattern for safety
+      console.log('⚠️ Falling back to timelock pattern for safety');
+      return await this.requestWithdrawalDestinationAddition(address, title);
+    }
+  }
+
+  async requestWithdrawalDestinationAddition(address, title) {
+    if (!this.savingsContract) throw new Error('Contract not initialized');
+
+    try {
+      const tx = await this.savingsContract.requestWithdrawalAddress(title, address);
+      await tx.wait();
+      console.log(`✅ Requested withdrawal address: ${title} -> ${address} (tx: ${tx.hash})`);
+      return tx.hash;
+    } catch (error) {
+      console.error('❌ EVMAdapter: Error requesting withdrawal address:', error);
+      throw error;
+    }
+  }
+
+  async addWithdrawalDestinationDirect(address, title) {
+    if (!this.savingsContract) throw new Error('Contract not initialized');
+
+    try {
+      console.log(`🔧 EVMAdapter: Calling contract.addWithdrawalAddressDirect("${title}", "${address}")`);
+      const tx = await this.savingsContract.addWithdrawalAddressDirect(title, address);
+      console.log(`📋 EVMAdapter: Transaction submitted: ${tx.hash}`);
+      await tx.wait();
+      console.log(`✅ Added withdrawal address directly: ${title} -> ${address} (tx: ${tx.hash})`);
+      return tx.hash;
+    } catch (error) {
+      console.error('❌ EVMAdapter: Error adding withdrawal address directly:', error);
+      console.error('❌ EVMAdapter: Direct add error details:', error.message);
+      if (error.reason) console.error('❌ EVMAdapter: Contract revert reason:', error.reason);
+      throw error;
+    }
+  }
+
+  async executeWithdrawalAddressRequest(requestId) {
+    if (!this.savingsContract) throw new Error('Contract not initialized');
+
+    try {
+      const tx = await this.savingsContract.executeWithdrawalAddressRequest(requestId);
+      await tx.wait();
+      console.log(`✅ Executed withdrawal address request: ${requestId} (tx: ${tx.hash})`);
+      return tx.hash;
+    } catch (error) {
+      console.error('❌ EVMAdapter: Error executing withdrawal address request:', error);
+      throw error;
+    }
+  }
+
+  async removeWithdrawalAddress(destination) {
+    if (!this.savingsContract) throw new Error('Contract not initialized');
+
+    try {
+      const tx = await this.savingsContract.removeWithdrawalAddress(destination);
+      await tx.wait();
+      console.log(`✅ Removed withdrawal address: ${destination} (tx: ${tx.hash})`);
+      return tx.hash;
+    } catch (error) {
+      console.error('❌ EVMAdapter: Error removing withdrawal address:', error);
+      throw error;
+    }
+  }
+
+  async getIsSetupCommitted(userAddress = null) {
+    if (!this.savingsContract) throw new Error('Contract not initialized');
+
+    try {
+      console.log('🔍 EVMAdapter: Calling contract.isSetupCommitted()...');
+      const result = await this.savingsContract.isSetupCommitted();
+      console.log(`🔍 EVMAdapter: Contract returned isSetupCommitted: ${result}`);
+      return result;
+    } catch (error) {
+      console.error('❌ EVMAdapter: Error checking setup committed status:', error);
+      console.error('❌ EVMAdapter: Setup check error details:', error.message);
+      return false;
+    }
+  }
+
+  // Data formatting helpers
+  formatWithdrawalAddresses(contractResult) {
+    const [titles, destinations, timestamps] = contractResult;
+    return titles.map((title, index) => ({
+      title,
+      destination: destinations[index],
+      addedAt: Number(timestamps[index]),
+      active: true // All returned addresses are active
+    }));
+  }
+
+  formatWithdrawalRequests(contractResult) {
+    const [requestIds, titles, destinations, executeAfters] = contractResult;
+    return requestIds.map((requestId, index) => ({
+      requestId,
+      title: titles[index],
+      destination: destinations[index],
+      executeAfter: Number(executeAfters[index]),
+      timeRemaining: Math.max(0, Number(executeAfters[index]) - Math.floor(Date.now() / 1000))
+    }));
   }
 
   // Getters for backward compatibility

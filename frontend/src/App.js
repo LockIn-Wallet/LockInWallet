@@ -550,9 +550,9 @@ function AppContentInner({
       console.log(`- Deployed: ${proxyDeployed}`);
       console.log(`- Deposit Address: ${depositAddress}`);
 
-      // Update UI state
+      // Update UI state - only set proxy address if actually deployed
       setIsProxyDeployed(proxyDeployed);
-      setProxyAddress(depositAddress);
+      setProxyAddress(proxyDeployed ? depositAddress : "");
 
       console.log(
         `✅ State updated: isProxyDeployed=${proxyDeployed}, proxyAddress=${depositAddress}`

@@ -120,7 +120,7 @@ const WithdrawalAddressSetupStep = ({
     }
     if (
       networkType === "evm" &&
-      (!savingsContract || !title || !address)
+      (!transactionManager || !title || !address)
     ) {
       alert("Please fill in all fields and connect your MetaMask wallet");
       return;
@@ -149,25 +149,25 @@ const WithdrawalAddressSetupStep = ({
             `The address has been processed based on your contract lock status. Check the withdrawal destinations or pending requests sections.`
         );
       } else {
-        // EVM address request logic (existing - requires timelock)
+        // EVM address request logic (now uses adapter's smart routing)
         // Validate address format
         if (!ethers.isAddress(address)) {
           alert("Please enter a valid Ethereum address");
           return;
         }
 
-        const tx = await savingsContract.requestWithdrawalAddress(
-          title,
-          address
+        const adapter = transactionManager.getCurrentAdapter();
+        const txHash = await adapter.addWithdrawalDestination(
+          address,
+          title
         );
-        await tx.wait();
 
         alert(
-          `✅ EVM withdrawal address request submitted successfully!\n\n` +
+          `✅ EVM withdrawal address processed successfully!\n\n` +
             `Title: ${title}\n` +
             `Address: ${address}\n` +
-            `Executable after: 24 hours\n\n` +
-            `You can execute this request from the "Pending Withdrawal Requests" section once the waiting period is over.`
+            `Transaction: ${txHash}\n\n` +
+            `The address has been processed based on your setup status. Check the withdrawal destinations or pending requests sections.`
         );
       }
 
@@ -224,12 +224,12 @@ const WithdrawalAddressSetupStep = ({
         alert("Withdrawal address removed successfully!");
       } else {
         // EVM implementation
-        if (!savingsContract) {
-          throw new Error("Savings contract not initialized");
+        if (!transactionManager) {
+          throw new Error("Transaction manager not initialized");
         }
 
-        const tx = await savingsContract.removeWithdrawalAddress(destination);
-        await tx.wait();
+        const adapter = transactionManager.getCurrentAdapter();
+        const txHash = await adapter.removeWithdrawalAddress(destination);
         alert("Withdrawal address removed successfully!");
       }
 

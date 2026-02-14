@@ -144,6 +144,11 @@
   {
     "inputs": [
       {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
+      },
+      {
         "components": [
           {
             "internalType": "bool",
@@ -172,18 +177,18 @@
           }
         ],
         "internalType": "struct UserSetupData",
-        "name": "userData",
+        "name": "",
         "type": "tuple"
       },
       {
         "internalType": "uint256",
-        "name": "increaseAmount",
+        "name": "",
         "type": "uint256"
       }
     ],
     "name": "_checkIncreaseLimit",
     "outputs": [],
-    "stateMutability": "view",
+    "stateMutability": "pure",
     "type": "function"
   },
   {

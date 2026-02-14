@@ -19,11 +19,11 @@ function getExistingProxyAddress() {
 
 const PROXY_ADDRESS = getExistingProxyAddress();
 
-// Check for development mode flag
-const isDevelopmentMode = process.env.DEV_MODE === 'true';
+// Check for production mode flag (dev mode disabled for production)
+const isProduction = process.env.PRODUCTION === 'true';
 
 async function main() {
-  console.log(`🔄 Starting modular savings wallet deployment${isDevelopmentMode ? ' (DEVELOPMENT MODE)' : ''}...\n`);
+  console.log(`🔄 Starting modular savings wallet deployment${isProduction ? ' (PRODUCTION MODE)' : ' (DEVELOPMENT MODE)'}...\n`);
 
   // Get deployer account
   const [deployer] = await ethers.getSigners();
@@ -165,12 +165,14 @@ async function main() {
     console.log("   ✅ Essential functions available directly in SavingsCore");
     console.log("   ✅ Frontend compatibility maintained for core functions");
 
-    // Set development mode if requested
-    if (isDevelopmentMode) {
-      console.log("\n🚧 Setting development mode...");
-      tx = await savingsCore.setDevelopmentMode(true);
+    // Set production mode if requested (disable dev mode for production)
+    if (isProduction) {
+      console.log("\n🏭 Setting production mode (disabling dev mode)...");
+      const tx = await savingsCore.setDevelopmentMode(false);
       await tx.wait();
-      console.log("   ✅ Development mode enabled");
+      console.log("   ✅ Production mode enabled (dev mode disabled)");
+    } else {
+      console.log("\n🧪 Development mode enabled by default");
     }
 
     // Deploy MockUSDT only if it's a fresh deployment or if needed
@@ -349,8 +351,23 @@ async function main() {
       console.log(`MockUSDT Address:      ${usdtAddress}`);
     }
     console.log(`Deployer Address:      ${deployer.address}`);
-    console.log(`Development Mode:      ${isDevelopmentMode ? 'ENABLED' : 'DISABLED'}`);
+
+    // Check actual contract development mode state
+    const contractDevMode = await savingsCore.getDevelopmentMode();
+    console.log(`Development Mode:      ${contractDevMode ? 'ENABLED' : 'DISABLED'}`);
     console.log("=" .repeat(60));
+
+    if (contractDevMode) {
+      console.log("\n⚡ Fast Development Timing Active:");
+      console.log("   • Spending limit proposals: 30 seconds");
+      console.log("   • Withdrawal address requests: 10 seconds");
+      console.log("   • Bypass requests: 10 seconds");
+    } else {
+      console.log("\n🏭 Production Security Timing Active:");
+      console.log("   • Spending limit proposals: 24 hours");
+      console.log("   • Withdrawal address requests: 24 hours");
+      console.log("   • Bypass requests: 24 hours");
+    }
 
     if (isUpgrade) {
       console.log("\n✅ Modular upgrade completed successfully!");

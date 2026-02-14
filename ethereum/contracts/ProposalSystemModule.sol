@@ -58,7 +58,7 @@ contract ProposalSystemModule is IProposalSystemModule {
 
         bool isIncrease = newLimit > currentLimit;
         if (isIncrease) {
-            _checkIncreaseLimit(userData, newLimit - currentLimit);
+            _checkIncreaseLimit(user, userData, newLimit - currentLimit);
         }
 
         proposalId = keccak256(abi.encodePacked(user, periodName, newLimit, block.timestamp));
@@ -222,17 +222,9 @@ contract ProposalSystemModule is IProposalSystemModule {
 
     // ========== INTERNAL HELPER FUNCTIONS ==========
 
-    function _checkIncreaseLimit(UserSetupData storage userData, uint256 increaseAmount) internal view {
-        // Reset period if 7 days have passed
-        if (block.timestamp >= userData.lastIncreaseTimestamp + 7 days) {
-            // Period has reset, any increase is allowed up to 20%
-            uint256 maxIncrease = userData.totalLockedValue * 20 / 100; // 20% of total locked value
-            require(increaseAmount <= maxIncrease, "Increase exceeds 20% of locked value");
-        } else {
-            // Within 7-day period, check cumulative increases
-            uint256 maxIncrease = userData.totalLockedValue * 20 / 100;
-            require(userData.increasesInPeriod + increaseAmount <= maxIncrease, "Exceeds 7-day increase limit");
-        }
+    function _checkIncreaseLimit(address /* user */, UserSetupData storage /* userData */, uint256 /* increaseAmount */) internal pure {
+        // Allow unlimited increases - no restrictions
+        return;
     }
 
     function _updateIncreaseTracking(UserSetupData storage userData, uint256 increaseAmount) internal {
@@ -310,7 +302,7 @@ contract ProposalSystemModule is IProposalSystemModule {
         UserSetupData storage userData = userSetupData[user];
         if (!userData.hasCommittedSetup) return false;
 
-        try this._checkIncreaseLimit(userData, increaseAmount) {
+        try this._checkIncreaseLimit(user, userData, increaseAmount) {
             return true;
         } catch {
             return false;
@@ -318,16 +310,8 @@ contract ProposalSystemModule is IProposalSystemModule {
     }
 
     // External wrapper for internal function to support try/catch
-    function _checkIncreaseLimit(UserSetupData calldata userData, uint256 increaseAmount) external view {
-        // Reset period if 7 days have passed
-        if (block.timestamp >= userData.lastIncreaseTimestamp + 7 days) {
-            // Period has reset, any increase is allowed up to 20%
-            uint256 maxIncrease = userData.totalLockedValue * 20 / 100; // 20% of total locked value
-            require(increaseAmount <= maxIncrease, "Increase exceeds 20% of locked value");
-        } else {
-            // Within 7-day period, check cumulative increases
-            uint256 maxIncrease = userData.totalLockedValue * 20 / 100;
-            require(userData.increasesInPeriod + increaseAmount <= maxIncrease, "Exceeds 7-day increase limit");
-        }
+    function _checkIncreaseLimit(address /* user */, UserSetupData calldata /* userData */, uint256 /* increaseAmount */) external pure {
+        // Allow unlimited increases - no restrictions
+        return;
     }
 }

@@ -77,7 +77,7 @@ const DepositInterface = ({
         console.log(`✅ EVM proxy status: deployed=${proxyDeployed}, address=${depositAddress}`);
 
         setIsProxyDeployed(proxyDeployed);
-        setDepositAddress(depositAddress);
+        setDepositAddress(proxyDeployed ? depositAddress : "");
       } catch (error) {
         console.error("❌ Error checking EVM proxy status:", error);
         setIsProxyDeployed(false);
@@ -100,7 +100,7 @@ const DepositInterface = ({
         console.log(`✅ Solana proxy status: deployed=${proxyDeployed}, address=${depositAddress}`);
 
         setIsProxyDeployed(proxyDeployed);
-        setDepositAddress(depositAddress);
+        setDepositAddress(proxyDeployed ? depositAddress : "");
       } catch (error) {
         console.error("❌ Error checking Solana proxy status:", error);
         setIsProxyDeployed(false);
@@ -556,7 +556,7 @@ const DepositInterface = ({
           exchanges or other wallets.
         </p>
 
-        {!depositAddress && !isDeploying && (
+        {!isProxyDeployed && !isDeploying && (
           <div
             style={{
               padding: "15px",

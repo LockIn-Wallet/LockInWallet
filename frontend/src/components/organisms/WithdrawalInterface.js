@@ -73,6 +73,11 @@ const WithdrawalInterface = ({
   const [withdrawalAmount, setWithdrawalAmount] = useState("");
   const [selectedWithdrawalDestination, setSelectedWithdrawalDestination] = useState("self");
 
+  // Withdrawal address form state
+  const [showWithdrawalAddressForm, setShowWithdrawalAddressForm] = useState(false);
+  const [newWithdrawalTitle, setNewWithdrawalTitle] = useState("");
+  const [newWithdrawalAddress, setNewWithdrawalAddress] = useState("");
+
   // Internal data state
   const [withdrawalAddresses, setWithdrawalAddresses] = useState([]);
   const [pendingWithdrawalRequests, setPendingWithdrawalRequests] = useState([]);
@@ -433,6 +438,143 @@ const WithdrawalInterface = ({
     }
   };
 
+  // Execute withdrawal address request function (similar to bypass execution pattern)
+  const executeWithdrawalRequest = async (request) => {
+    const confirmed = window.confirm("Execute this withdrawal address request?");
+    if (!confirmed) return;
+
+    setIsLoading(true);
+    try {
+      if (networkType === "solana") {
+        const adapter = transactionManager.getCurrentAdapter();
+        const txHash = await adapter.executeWithdrawalDestinationRequest(request.requestId || request);
+        alert(`✅ Solana withdrawal address approved!\n\nTransaction: ${txHash}`);
+      } else {
+        // EVM execution logic
+        const adapter = transactionManager.getCurrentAdapter();
+        const txHash = await adapter.executeWithdrawalAddressRequest(request.requestId || request);
+        alert(`✅ EVM withdrawal address approved!\n\nTransaction: ${txHash}`);
+      }
+
+      // Refresh internal data
+      await fetchWithdrawalData();
+
+    } catch (error) {
+      console.error(`${networkType.toUpperCase()} execute withdrawal request error:`, error);
+      alert(`Failed to execute withdrawal request: ${error.message}`);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Cancel withdrawal address request function (similar to bypass cancellation pattern)
+  const cancelWithdrawalRequest = async (requestId) => {
+    const confirmed = window.confirm("Cancel this withdrawal address request?");
+    if (!confirmed) return;
+
+    setIsLoading(true);
+    try {
+      if (networkType === "solana") {
+        const adapter = transactionManager.getCurrentAdapter();
+        const txHash = await adapter.cancelWithdrawalDestinationRequest(requestId);
+        alert(`✅ Solana withdrawal address request cancelled!\n\nTransaction: ${txHash}`);
+      } else {
+        const tx = await savingsContract.cancelWithdrawalAddressRequest(requestId);
+        await tx.wait();
+        alert(`✅ EVM withdrawal address request cancelled!\n\nTransaction: ${tx.hash}`);
+      }
+
+      // Refresh internal data
+      await fetchWithdrawalData();
+
+    } catch (error) {
+      console.error(`${networkType.toUpperCase()} cancel withdrawal request error:`, error);
+      alert(`Failed to cancel withdrawal address request: ${error.message}`);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Request withdrawal address function (adapted from WithdrawalAddressSetupStep)
+  const requestWithdrawalAddress = async (title, address) => {
+    // Network-aware validation
+    if (networkType === "solana" && (!transactionManager || !title || !address)) {
+      alert("Please fill in all fields and connect your Solana wallet");
+      return;
+    }
+    if (networkType === "evm" && (!savingsContract || !title || !address)) {
+      alert("Please fill in all fields and connect your MetaMask wallet");
+      return;
+    }
+
+    try {
+      if (networkType === "solana") {
+        // Solana address request logic
+        if (address.length !== 44) {
+          alert("Please enter a valid Solana address (44 characters)");
+          return;
+        }
+
+        const adapter = transactionManager.getCurrentAdapter();
+        const txHash = await adapter.addWithdrawalDestination(address, title);
+
+        alert(
+          `✅ Solana withdrawal address processed successfully!\n\n` +
+          `Title: ${title}\n` +
+          `Address: ${address}\n` +
+          `Transaction: ${txHash}\n\n` +
+          `The address has been processed. Check the withdrawal destinations or pending requests sections.`
+        );
+      } else {
+        // EVM address request logic
+        if (!ethers.isAddress(address)) {
+          alert("Please enter a valid Ethereum address");
+          return;
+        }
+
+        // Use the unified adapter interface we just implemented
+        const adapter = transactionManager.getCurrentAdapter();
+        const txHash = await adapter.addWithdrawalDestination(address, title);
+
+        alert(
+          `✅ EVM withdrawal address processed successfully!\n\n` +
+          `Title: ${title}\n` +
+          `Address: ${address}\n` +
+          `Transaction: ${txHash}\n\n` +
+          `The address has been processed based on your contract lock status. Check the withdrawal destinations or pending requests sections.`
+        );
+      }
+
+      // Refresh internal data
+      await fetchWithdrawalData();
+    } catch (error) {
+      console.error(`Error requesting ${networkType} withdrawal address:`, error);
+
+      // Network-aware error handling
+      if (error.message.includes("already exists")) {
+        alert("This address is already in your withdrawal destinations");
+      } else if (error.message.includes("own address")) {
+        alert("You cannot add your own wallet address as a withdrawal destination");
+      } else {
+        alert(`Failed to add withdrawal address: ${error.message}`);
+      }
+    }
+  };
+
+  // Handle form submission
+  const handleRequestWithdrawalAddress = async () => {
+    try {
+      await requestWithdrawalAddress(newWithdrawalTitle, newWithdrawalAddress);
+      // Clear form fields after successful submission
+      setNewWithdrawalTitle("");
+      setNewWithdrawalAddress("");
+      setShowWithdrawalAddressForm(false);
+    } catch (error) {
+      console.error("Error requesting withdrawal address:", error);
+      // Keep form open on error so user can retry
+    }
+  };
+
   return (
     <div
       style={{
@@ -586,11 +728,13 @@ const WithdrawalInterface = ({
         mode="selection"
         selectedDestination={selectedWithdrawalDestination}
         onDestinationChange={setSelectedWithdrawalDestination}
-        showAddButton={false}
+        showAddButton={true}
         title="Withdraw To:"
         withdrawalAddresses={withdrawalAddresses}
         getCurrentUserAddress={getCurrentUserAddress}
         removeWithdrawalAddress={removeWithdrawalAddress}
+        showWithdrawalAddressForm={showWithdrawalAddressForm}
+        setShowWithdrawalAddressForm={setShowWithdrawalAddressForm}
       />
 
       {/* Dynamic Withdrawal Buttons */}
@@ -678,6 +822,154 @@ const WithdrawalInterface = ({
           </>
         )}
       </div>
+
+      {/* Add New Withdrawal Address Form */}
+      {showWithdrawalAddressForm && (
+        <div
+          style={{
+            marginTop: "15px",
+            padding: "15px",
+            backgroundColor: "#1a202c",
+            borderRadius: "6px",
+            border: "1px solid #4a5568",
+          }}
+        >
+          <h5
+            style={{
+              color: "#fbb043",
+              margin: "0 0 15px 0",
+              fontSize: "1em",
+              fontWeight: "bold",
+            }}
+          >
+            📍 Add New Withdrawal Address
+          </h5>
+
+          <div
+            style={{
+              display: "grid",
+              gap: "10px",
+              marginBottom: "15px",
+            }}
+          >
+            {/* Address Title Input */}
+            <div>
+              <label
+                style={{
+                  display: "block",
+                  marginBottom: "5px",
+                  color: "#e2e8f0",
+                  fontSize: "0.9em",
+                  fontWeight: "bold",
+                }}
+              >
+                Address Title
+              </label>
+              <input
+                type="text"
+                placeholder="e.g., 'Hardware Wallet', 'Exchange Account'"
+                value={newWithdrawalTitle}
+                onChange={(e) => setNewWithdrawalTitle(e.target.value)}
+                style={{
+                  width: "100%",
+                  padding: "8px",
+                  borderRadius: "4px",
+                  border: "1px solid #4a5568",
+                  backgroundColor: "#4a5568",
+                  color: "white",
+                  fontSize: "0.9em",
+                }}
+              />
+            </div>
+
+            {/* Address Input */}
+            <div>
+              <label
+                style={{
+                  display: "block",
+                  marginBottom: "5px",
+                  color: "#e2e8f0",
+                  fontSize: "0.9em",
+                  fontWeight: "bold",
+                }}
+              >
+                {networkType === "solana" ? "Solana Address" : "Ethereum Address"}
+              </label>
+              <input
+                type="text"
+                placeholder={
+                  networkType === "solana"
+                    ? "Solana address..."
+                    : "0x..."
+                }
+                value={newWithdrawalAddress}
+                onChange={(e) => setNewWithdrawalAddress(e.target.value)}
+                style={{
+                  width: "100%",
+                  padding: "8px",
+                  borderRadius: "4px",
+                  border: "1px solid #4a5568",
+                  backgroundColor: "#4a5568",
+                  color: "white",
+                  fontSize: "0.9em",
+                  fontFamily: "monospace",
+                }}
+              />
+            </div>
+          </div>
+
+          {/* Submit Button */}
+          <div style={{ display: "flex", gap: "10px" }}>
+            <button
+              onClick={handleRequestWithdrawalAddress}
+              disabled={
+                !newWithdrawalTitle.trim() || !newWithdrawalAddress.trim()
+              }
+              style={{
+                flex: "1",
+                padding: "10px 16px",
+                borderRadius: "4px",
+                border: "none",
+                backgroundColor:
+                  !newWithdrawalTitle.trim() || !newWithdrawalAddress.trim()
+                    ? "#4a5568"
+                    : "#fbb043",
+                color: "white",
+                cursor:
+                  !newWithdrawalTitle.trim() || !newWithdrawalAddress.trim()
+                    ? "not-allowed"
+                    : "pointer",
+                fontWeight: "bold",
+                fontSize: "0.9em",
+                opacity:
+                  !newWithdrawalTitle.trim() || !newWithdrawalAddress.trim()
+                    ? 0.5
+                    : 1,
+              }}
+            >
+              📍 Add Withdrawal Address
+            </button>
+            <button
+              onClick={() => {
+                setShowWithdrawalAddressForm(false);
+                setNewWithdrawalTitle("");
+                setNewWithdrawalAddress("");
+              }}
+              style={{
+                padding: "10px 16px",
+                borderRadius: "4px",
+                border: "1px solid #718096",
+                backgroundColor: "transparent",
+                color: "#718096",
+                cursor: "pointer",
+                fontSize: "0.9em",
+              }}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Pending Withdrawal Address Requests */}
       {pendingWithdrawalRequests.length > 0 && (

@@ -290,6 +290,33 @@ contract SavingsCore is Initializable, UUPSUpgradeable, OwnableUpgradeable, ISav
         return approvalModule.requestWithdrawalAddress(msg.sender, title, destination);
     }
 
+    function addWithdrawalAddressDirect(
+        string calldata title,
+        address destination
+    ) external {
+        IApprovalSystemModule approvalModule = IApprovalSystemModule(modules[ModuleIds.APPROVAL_SYSTEM]);
+        require(address(approvalModule) != address(0), "ApprovalSystemModule not registered");
+        approvalModule.addWithdrawalAddressDirect(msg.sender, title, destination);
+    }
+
+    function executeWithdrawalAddressRequest(bytes32 requestId) external {
+        IApprovalSystemModule approvalModule = IApprovalSystemModule(modules[ModuleIds.APPROVAL_SYSTEM]);
+        require(address(approvalModule) != address(0), "ApprovalSystemModule not registered");
+        approvalModule.executeWithdrawalAddressRequest(msg.sender, requestId);
+    }
+
+    function removeWithdrawalAddress(address destination) external {
+        IApprovalSystemModule approvalModule = IApprovalSystemModule(modules[ModuleIds.APPROVAL_SYSTEM]);
+        require(address(approvalModule) != address(0), "ApprovalSystemModule not registered");
+        approvalModule.removeWithdrawalAddress(msg.sender, destination);
+    }
+
+    function cancelWithdrawalAddressRequest(bytes32 requestId) external {
+        IApprovalSystemModule approvalModule = IApprovalSystemModule(modules[ModuleIds.APPROVAL_SYSTEM]);
+        require(address(approvalModule) != address(0), "ApprovalSystemModule not registered");
+        approvalModule.cancelWithdrawalAddressRequest(msg.sender, requestId);
+    }
+
     // Essential view functions
     function getUserSpendingLimits(address user)
         external

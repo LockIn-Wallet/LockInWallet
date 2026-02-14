@@ -70,11 +70,13 @@ contract BypassSystemModule is IBypassSystemModule {
         requestId = keccak256(abi.encodePacked(user, skipPeriod, amount, token, block.timestamp));
         require(!userBypassRequests[user][requestId].exists, "Request exists");
 
+        // Use development mode timing (10 seconds in dev mode, 24 hours in production)
+        uint256 timelockDuration = savingsCore.getDevelopmentMode() ? 10 seconds : 24 hours;
         userBypassRequests[user][requestId] = BypassRequest({
             amount: amount,
             skipPeriod: skipPeriod,
             token: token,
-            executeAfter: block.timestamp + 24 hours,
+            executeAfter: block.timestamp + timelockDuration,
             executed: false,
             exists: true
         });
@@ -82,7 +84,7 @@ contract BypassSystemModule is IBypassSystemModule {
         // Add to active requests tracking
         userActiveRequestIds[user].push(requestId);
 
-        emit BypassRequested(user, requestId, skipPeriod, amount, token, block.timestamp + 24 hours);
+        emit BypassRequested(user, requestId, skipPeriod, amount, token, block.timestamp + timelockDuration);
         return requestId;
     }
 

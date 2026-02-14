@@ -211,12 +211,13 @@ contract ApprovalSystemModule is IApprovalSystemModule {
         // Generate unique request ID
         requestId = keccak256(abi.encodePacked(user, title, destination, block.timestamp, block.number));
 
-        // Create withdrawal request with 24 hour timelock
+        // Create withdrawal request with timelock (10 seconds in dev mode, 24 hours in production)
+        uint256 timelockDuration = savingsCore.getDevelopmentMode() ? 10 seconds : 24 hours;
         userWithdrawalRequests[user][requestId] = WithdrawalRequest({
             title: title,
             destination: destination,
             requestTimestamp: block.timestamp,
-            executeAfter: block.timestamp + 24 hours,
+            executeAfter: block.timestamp + timelockDuration,
             exists: true,
             executed: false
         });
@@ -224,8 +225,45 @@ contract ApprovalSystemModule is IApprovalSystemModule {
         // Track pending request
         userPendingRequestIds[user].push(requestId);
 
-        emit WithdrawalAddressRequested(user, requestId, title, destination, block.timestamp + 24 hours);
+        emit WithdrawalAddressRequested(user, requestId, title, destination, block.timestamp + timelockDuration);
         return requestId;
+    }
+
+    /**
+     * @dev Add withdrawal address directly (only during setup phase before commitment)
+     * @param user User address
+     * @param title Display title for the address
+     * @param destination Withdrawal destination address
+     */
+    function addWithdrawalAddressDirect(
+        address user,
+        string calldata title,
+        address destination
+    ) external onlyAuthorized {
+        require(destination != address(0), "Invalid destination address");
+        require(destination != user, "Cannot set own address as destination");
+        require(bytes(title).length > 0 && bytes(title).length <= 50, "Invalid title length");
+
+        // Check that setup is not committed (only allow direct adds during setup)
+        IProposalSystemModule proposalModule = IProposalSystemModule(savingsCore.getModule(keccak256("PROPOSAL_SYSTEM")));
+        require(address(proposalModule) != address(0), "Proposal module not found");
+        require(!proposalModule.isSetupCommitted(user), "Setup already committed - use timelock method");
+
+        // Check for duplicate destinations
+        WithdrawalAddress[] storage addresses = userWithdrawalAddresses[user];
+        for (uint256 i = 0; i < addresses.length; i++) {
+            require(addresses[i].destination != destination || !addresses[i].active, "Address already exists");
+        }
+
+        // Add directly to user's withdrawal addresses (no timelock)
+        userWithdrawalAddresses[user].push(WithdrawalAddress({
+            title: title,
+            destination: destination,
+            addedTimestamp: block.timestamp,
+            active: true
+        }));
+
+        emit WithdrawalAddressAdded(user, destination, title);
     }
 
     function executeWithdrawalAddressRequest(
