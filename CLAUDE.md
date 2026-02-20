@@ -195,7 +195,7 @@ npm run frontend:build:production
 npm run frontend:serve
 
 # Build + Serve in one command (most convenient)
-npm run frontend:build-and-serve
+npm run build-and-serve --workspace=frontend
 ```
 
 **Manual Commands**

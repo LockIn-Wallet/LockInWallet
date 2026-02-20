@@ -262,31 +262,6 @@ async function main() {
     }
 
     // Create module addresses config file for frontend
-    console.log("\n📋 Creating module addresses config...");
-    try {
-      const moduleConfig = {
-        core: savingsAddress,
-        modules: {
-          timePeriodLimits: moduleAddresses.timePeriodLimits,
-          proposalSystem: moduleAddresses.proposalSystem,
-          bypassSystem: moduleAddresses.bypassSystem,
-          approvalSystem: moduleAddresses.approvalSystem
-        },
-        tokens: {
-          usdt: usdtAddress || null
-        },
-        network: "localhost",
-        deployedAt: new Date().toISOString()
-      };
-
-      const moduleConfigPath = path.join(__dirname, "../../frontend/src/moduleAddresses.json");
-      fs.writeFileSync(moduleConfigPath, JSON.stringify(moduleConfig, null, 2));
-      console.log("✅ Module addresses config created");
-
-    } catch (error) {
-      console.log("⚠️  Warning: Could not create module config file");
-      console.log(`   Error: ${error.message}`);
-    }
 
     // Update ABI files
     console.log("\n📋 Updating contract ABIs...");

@@ -2,8 +2,6 @@ import { ethers } from 'ethers';
 import { BlockchainAdapter } from './BlockchainAdapter.js';
 import SavingsABI from '../SavingsABI.json';
 import MockUSDT_ABI from '../MockUSDT_ABI.json';
-import ApprovalSystemModuleABI from '../ApprovalSystemModuleABI.json';
-import ProposalSystemModuleABI from '../ProposalSystemModuleABI.json';
 
 /**
  * EVM Blockchain Adapter for MetaMask and ethers.js integration
@@ -14,8 +12,6 @@ export class EVMAdapter extends BlockchainAdapter {
     this.provider = null;
     this.signer = null;
     this.savingsContract = null;
-    this.approvalModule = null;
-    this.proposalModule = null;
     this.userAddress = null;
     this.ETH_ADDRESS = "0x0000000000000000000000000000000000000000";
   }
@@ -63,8 +59,6 @@ export class EVMAdapter extends BlockchainAdapter {
     this.provider = null;
     this.signer = null;
     this.savingsContract = null;
-    this.approvalModule = null;
-    this.proposalModule = null;
     this.userAddress = null;
   }
 
@@ -514,28 +508,6 @@ export class EVMAdapter extends BlockchainAdapter {
       this.signer
     );
 
-    // Initialize modules
-    try {
-      const moduleAddresses = await import('../moduleAddresses.json');
-
-      // Initialize approval module
-      const approvalModuleAddress = moduleAddresses.modules.approvalSystem;
-      this.approvalModule = new ethers.Contract(
-        approvalModuleAddress,
-        ApprovalSystemModuleABI,
-        this.signer
-      );
-
-      // Initialize proposal module
-      const proposalModuleAddress = moduleAddresses.modules.proposalSystem;
-      this.proposalModule = new ethers.Contract(
-        proposalModuleAddress,
-        ProposalSystemModuleABI,
-        this.signer
-      );
-    } catch (error) {
-      console.warn('Could not initialize modules:', error);
-    }
   }
 
   // Bypass Requests (unified adapter pattern)

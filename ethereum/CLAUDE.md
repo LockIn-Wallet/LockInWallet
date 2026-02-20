@@ -117,7 +117,6 @@ npm run deploy-modular --workspace=ethereum   # Deploy all contracts + modules
 - **Main ABI**: Stored in `../frontend/src/SavingsABI.json` (SavingsCore ABI)
 - **Module ABIs**: Individual module ABIs available in `../frontend/src/`
 - **Network**: EVM localhost development (port 8545)
-- **Module Config**: Module addresses stored in `../frontend/src/moduleAddresses.json`
 
 ### Frontend Development Commands (Multi-Blockchain)
 ```bash

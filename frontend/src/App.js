@@ -2,7 +2,6 @@ import React, { useState, useEffect, useCallback } from "react";
 import { ethers } from "ethers";
 import SavingsABI from "./SavingsABI.json";
 import MockUSDT_ABI from "./MockUSDT_ABI.json";
-import ApprovalSystemModuleABI from "./ApprovalSystemModuleABI.json";
 
 // Import custom hooks
 import { useNetworkManager } from "./hooks/useNetworkManager.js";
@@ -251,7 +250,6 @@ function AppContentInner({
   const [currentTime, setCurrentTime] = useState(Math.floor(Date.now() / 1000));
 
   // Note: Bypass system state now managed by WithdrawalInterface component
-  const [approvalModule, setApprovalModule] = useState(null);
 
   // Enhanced withdrawal system state
   const [instantWithdrawableAmount, setInstantWithdrawableAmount] = useState(0);
@@ -388,7 +386,6 @@ function AppContentInner({
           setProvider(null);
           setSigner(null);
           setSavingsContract(null);
-          setApprovalModule(null);
           setBalances({});
           setUserAddress("");
           setIsSetupCommitted(false);
@@ -710,32 +707,9 @@ function AppContentInner({
       web3Signer
     );
 
-    // Set up approval module contract
-    let approval = null;
-    try {
-      const moduleAddresses = await import("./moduleAddresses.json");
-      const approvalModuleAddress = moduleAddresses.modules?.approvalSystem;
-
-      if (
-        approvalModuleAddress &&
-        approvalModuleAddress !== "0x0000000000000000000000000000000000000000"
-      ) {
-        approval = new ethers.Contract(
-          approvalModuleAddress,
-          ApprovalSystemModuleABI,
-          web3Signer
-        );
-      } else {
-        console.log("Approval module not deployed on this network yet");
-      }
-    } catch (error) {
-      console.warn("Could not load module addresses:", error);
-    }
-
     setProvider(web3Provider);
     setSigner(web3Signer);
     setSavingsContract(savings);
-    setApprovalModule(approval);
 
     // Store user address
     const address = await web3Signer.getAddress();

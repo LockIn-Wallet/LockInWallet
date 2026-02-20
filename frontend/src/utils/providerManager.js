@@ -74,34 +74,56 @@ export const verifyContractDeployment = async (contractAddress, networkKey) => {
     error: null
   };
 
+  console.log(`🔍 Verifying contract deployment:`);
+  console.log(`   Contract: ${contractAddress}`);
+  console.log(`   Network: ${networkKey}`);
+
+  // Try MetaMask first, then fall back to public RPC
+  const providers = [];
+
   try {
-    console.log(`🔍 Verifying contract deployment:`);
-    console.log(`   Contract: ${contractAddress}`);
-    console.log(`   Network: ${networkKey}`);
-
-    // Get the best available provider
     const providerInfo = await getBestProvider(networkKey);
-    result.provider = providerInfo.source;
-    result.source = providerInfo.source;
+    providers.push(providerInfo);
 
-    // Get contract bytecode
-    const code = await providerInfo.provider.getCode(contractAddress);
-    result.bytecodeLength = code.length;
-
-    // Check if contract is deployed
-    result.isDeployed = code !== '0x' && code !== '0x0' && code.length > 2;
-
-    if (result.isDeployed) {
-      console.log(`✅ Contract DEPLOYED via ${providerInfo.source} (bytecode: ${code.length} chars)`);
-    } else {
-      console.log(`❌ Contract NOT DEPLOYED via ${providerInfo.source} (bytecode: ${code})`);
+    // If MetaMask was selected, also prepare public RPC as fallback
+    if (providerInfo.source === 'metamask') {
+      const networkConf = networkConfig.evm[networkKey];
+      if (networkConf?.rpcUrls?.length > 0) {
+        providers.push({
+          provider: new JsonRpcProvider(networkConf.rpcUrls[0]),
+          source: 'public_rpc',
+          chainId: networkConf.chainId,
+          reliable: false
+        });
+      }
     }
-
   } catch (error) {
-    result.error = error.message;
-    console.error(`❌ Contract verification failed:`, error.message);
+    console.warn(`⚠️ Failed to get provider for ${networkKey}:`, error.message);
+    return result;
   }
 
+  for (const providerInfo of providers) {
+    try {
+      const code = await providerInfo.provider.getCode(contractAddress);
+      result.provider = providerInfo.source;
+      result.source = providerInfo.source;
+      result.bytecodeLength = code.length;
+      result.isDeployed = code !== '0x' && code !== '0x0' && code.length > 2;
+
+      if (result.isDeployed) {
+        console.log(`✅ Contract DEPLOYED via ${providerInfo.source} (bytecode: ${code.length} chars)`);
+      } else {
+        console.log(`❌ Contract NOT DEPLOYED via ${providerInfo.source} (bytecode: ${code})`);
+      }
+
+      return result;
+    } catch (error) {
+      console.warn(`⚠️ getCode failed via ${providerInfo.source}: ${error.message}`);
+      result.error = error.message;
+    }
+  }
+
+  console.error(`❌ Contract verification failed with all providers`);
   return result;
 };
 
