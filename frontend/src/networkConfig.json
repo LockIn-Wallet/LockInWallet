@@ -130,8 +130,9 @@
         "decimals": 18
       },
       "rpcUrls": [
-        "https://polygon-rpc.com",
-        "https://rpc-mainnet.matic.network"
+        "https://polygon-mainnet.g.alchemy.com/v2/demo",
+        "https://rpc.ankr.com/polygon",
+        "https://polygon.drpc.org"
       ],
       "blockExplorerUrls": [
         "https://polygonscan.com"

@@ -19,6 +19,7 @@
   },
   "scripts": {
     "start": "craco start",
+    "start:prod": "REACT_APP_ENVIRONMENT=production craco start",
     "start:quiet": "GENERATE_SOURCEMAP=false craco start",
     "start:debug": "REACT_APP_DEBUG=true craco start",
     "start:clean": "npm run clean && npm start",

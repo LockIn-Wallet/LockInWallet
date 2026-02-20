@@ -25,6 +25,7 @@
     "solana:deploy-reliable": "cd solana && npm run deploy-reliable",
     "solana:upgrade-reliable": "cd solana && npm run upgrade-reliable",
     "frontend:start": "npm start --workspace=frontend",
+    "frontend:start:prod": "npm run start:prod --workspace=frontend",
     "frontend:build": "npm run build --workspace=frontend",
     "frontend:build:production": "npm run build:production --workspace=frontend",
     "frontend:serve": "npm run serve --workspace=frontend",
