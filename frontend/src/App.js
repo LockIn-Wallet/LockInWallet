@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { ethers } from "ethers";
 import SavingsABI from "./SavingsABI.json";
 import MockUSDT_ABI from "./MockUSDT_ABI.json";
@@ -49,15 +49,11 @@ import {
   hasProductionNetworks,
 } from "./utils/networkFilter.js";
 
-// Import contract verification utilities
-import {
-  verifyEVMContractDeployment,
-  createDeploymentErrorMessage,
-} from "./utils/contractVerification.js";
 
 // Import provider management utilities
 import {
   ensureCorrectNetwork,
+  createProviderAndSigner,
 } from "./utils/providerManager.js";
 
 // Import circuit breaker utilities
@@ -209,6 +205,9 @@ function AppContentInner({
 
   // Circuit breaker protection
   const [circuitBreakers] = useState(() => createCircuitBreakers());
+
+  // Prevent multiple simultaneous wallet operations (ref for synchronous check)
+  const walletOperationInProgress = useRef(false);
 
   // Error handling
   const [lastError, setLastError] = useState(null);
@@ -376,6 +375,8 @@ function AppContentInner({
             if (!savedNetworkType || savedNetworkType === "evm") {
               setNetworkType("evm");
             }
+            // Re-attempt auto-connect now that chain changed
+            autoConnectWallet();
           }
         }
       };
@@ -394,6 +395,7 @@ function AppContentInner({
           setPendingLimitProposals([]);
           setIsProxyDeployed(false);
           setProxyAddress("");
+          walletOperationInProgress.current = false; // Reset lock on disconnect
         } else {
           // Account changed, reconnect
           autoConnectWallet();
@@ -592,57 +594,59 @@ function AppContentInner({
   };
 
   const autoConnectWallet = debounce(async () => {
-    if (window.ethereum) {
-      try {
-        // Check if already connected
-        const accounts = await window.ethereum.request({
-          method: "eth_accounts",
-        });
-        if (accounts.length > 0) {
-          console.log(`🔗 Auto-connecting wallet to ${networkType}:${selectedNetwork}...`);
+    if (!window.ethereum || walletOperationInProgress.current) return;
+    walletOperationInProgress.current = true;
+    try {
+      // Check if already connected
+      const accounts = await window.ethereum.request({
+        method: "eth_accounts",
+      });
+      if (accounts.length === 0) return;
 
-          // Auto-switch to correct network if connected wallet is on wrong network
-          if (networkType === "evm") {
-            console.log(`🔄 Ensuring MetaMask is on ${selectedNetwork} network (auto-connect)...`);
-            const networkSwitched = await ensureCorrectNetwork(selectedNetwork);
-            if (!networkSwitched) {
-              console.warn(`❌ Failed to auto-switch to ${selectedNetwork} network on page load. User may need to switch manually.`);
-              // Don't throw error - still allow connection even if network switch fails
-            } else {
-              console.log(`✅ MetaMask auto-switched to ${selectedNetwork} network on page load`);
-            }
-          }
+      console.log(`🔗 Auto-connecting wallet to ${networkType}:${selectedNetwork}...`);
 
-          // Already connected, proceed without requesting permission
-          await connectWalletInternal();
+      // Auto-connect should NOT force network switch - just connect if already correct
+      if (networkType === "evm") {
+        const chainIdHex = await window.ethereum.request({ method: "eth_chainId" });
+        const currentChain = parseInt(chainIdHex, 16);
+        const expectedNetwork = getCurrentNetwork(networkType, selectedNetwork);
+        if (currentChain !== expectedNetwork.chainId) {
+          console.log(`⏭️ Auto-connect skipped: MetaMask on chain ${currentChain}, expected ${expectedNetwork.chainId}. User can switch manually.`);
+          setCurrentChainId(currentChain);
+          return;
         }
-      } catch (error) {
-        // Auto-connect failures are expected on first visit - use info level
-        console.log(
-          "Auto-connect failed (expected on first visit):",
-          error.message
-        );
+
       }
+
+      await connectWalletInternal();
+    } catch (error) {
+      console.log(
+        "Auto-connect failed (expected on first visit):",
+        error.message
+      );
+    } finally {
+      walletOperationInProgress.current = false;
     }
   }, 2000); // 2 second debounce to prevent rapid reconnection
 
   const connectWallet = debounce(async () => {
-    if (window.ethereum) {
+    if (window.ethereum && !walletOperationInProgress.current) {
+      walletOperationInProgress.current = true;
       try {
         console.log(`🔗 Connecting wallet to ${networkType}:${selectedNetwork}...`);
 
-        // Step 1: Request account access
-        await window.ethereum.request({ method: "eth_requestAccounts" });
-
-        // Step 2: Ensure we're on the correct network (auto-switch if needed)
+        // Step 1: Switch network FIRST (doesn't require account authorization)
         if (networkType === "evm") {
           console.log(`🔄 Ensuring MetaMask is on ${selectedNetwork} network...`);
           const networkSwitched = await ensureCorrectNetwork(selectedNetwork);
           if (!networkSwitched) {
             throw new Error(`Failed to switch to ${selectedNetwork} network. Please switch manually.`);
           }
-          console.log(`✅ MetaMask switched to ${selectedNetwork} network`);
+          console.log(`✅ MetaMask on ${selectedNetwork} network`);
         }
+
+        // Step 2: Request account access (after network is correct)
+        await window.ethereum.request({ method: "eth_requestAccounts" });
 
         // Step 3: Complete the connection
         await connectWalletInternal();
@@ -652,6 +656,8 @@ function AppContentInner({
         // Provide user-friendly error messages
         if (error.message.includes("User rejected")) {
           alert("Connection cancelled. Please try again and approve the connection.");
+        } else if (error.message.includes("Unauthorized") || error.message.includes("-32006")) {
+          alert("MetaMask RPC error: Your wallet's RPC endpoint is returning Unauthorized.\n\nPlease check MetaMask → Settings → Networks → Polygon and verify the RPC URL is working.");
         } else if (error.message.includes("network")) {
           alert(`Network switch required. Please switch MetaMask to ${selectedNetwork} and try again.`);
         } else {
@@ -659,6 +665,8 @@ function AppContentInner({
           const formattedError = walletErrorHandler(error);
           alert(formattedError.userMessage + getDevErrorDetails(formattedError));
         }
+      } finally {
+        walletOperationInProgress.current = false;
       }
     } else {
       alert("Please install MetaMask!");
@@ -666,8 +674,29 @@ function AppContentInner({
   }, 1000); // 1 second debounce for manual connections
 
   const connectWalletInternal = async () => {
-    const web3Provider = new ethers.BrowserProvider(window.ethereum);
-    const web3Signer = await web3Provider.getSigner();
+    // Verify MetaMask is on the correct chain before proceeding
+    if (networkType === "evm") {
+      const chainIdHex = await window.ethereum.request({ method: "eth_chainId" });
+      const currentChain = parseInt(chainIdHex, 16);
+      const expectedNetwork = getCurrentNetwork(networkType, selectedNetwork);
+      if (currentChain !== expectedNetwork.chainId) {
+        console.log(`❌ connectWalletInternal aborted: MetaMask on chain ${currentChain}, expected ${expectedNetwork.chainId}`);
+        setCurrentChainId(currentChain);
+        return;
+      }
+    }
+
+    // Create provider and signer (auto-falls back to our RPC if MetaMask's is broken)
+    let web3Provider, web3Signer;
+    try {
+      const result = await createProviderAndSigner(selectedNetwork);
+      web3Provider = result.provider;
+      web3Signer = result.signer;
+    } catch (error) {
+      console.error("❌ Failed to create provider:", error.message);
+      alert(`Connection failed: ${error.message}`);
+      return;
+    }
 
     // Get current network and use its contract address
     const currentNetwork = getCurrentNetwork(networkType, selectedNetwork);
@@ -680,24 +709,24 @@ function AppContentInner({
       return;
     }
 
-    // Verify contract is actually deployed before making any calls
-    // Use MetaMask provider when possible, fallback to public RPC
-    const isContractDeployed = await verifyEVMContractDeployment(
-      contractAddress,
-      selectedNetwork
-    );
-    if (!isContractDeployed) {
-      const deploymentError = getNetworkErrorMessage(
-        "CONTRACT_NOT_DEPLOYED",
-        networkType
-      );
-      console.error(
-        "Contract deployment verification failed:",
-        deploymentError
-      );
-      alert(
-        `⚠️ Contract Not Deployed\n\n${deploymentError}\n\nCurrent contract address: ${contractAddress}`
-      );
+    // Verify contract is deployed using the provider (works with both MetaMask and fallback RPC)
+    try {
+      const code = await web3Provider.getCode(contractAddress);
+      const isContractDeployed = code !== '0x' && code !== '0x0' && code.length > 2;
+      if (!isContractDeployed) {
+        const deploymentError = getNetworkErrorMessage(
+          "CONTRACT_NOT_DEPLOYED",
+          networkType
+        );
+        console.error("Contract not deployed:", deploymentError);
+        alert(
+          `⚠️ Contract Not Deployed\n\n${deploymentError}\n\nCurrent contract address: ${contractAddress}`
+        );
+        return;
+      }
+      console.log(`✅ Contract verified at ${contractAddress}`);
+    } catch (error) {
+      console.error("❌ Contract verification failed:", error.message);
       return;
     }
 

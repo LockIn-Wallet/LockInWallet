@@ -3,8 +3,96 @@
  * Falls back to public RPCs only when MetaMask is not available
  */
 
-import { BrowserProvider, JsonRpcProvider } from 'ethers';
+import { BrowserProvider, JsonRpcProvider, AbstractSigner } from 'ethers';
 import networkConfig from '../networkConfig.json';
+
+/**
+ * Signer that uses our own RPC for reads but MetaMask for signing/broadcasting.
+ * Used when MetaMask's configured RPC is broken (e.g. returning 401).
+ */
+class FallbackSigner extends AbstractSigner {
+  constructor(metamaskSigner, fallbackProvider) {
+    super(fallbackProvider);
+    this._metamaskSigner = metamaskSigner;
+  }
+
+  async getAddress() {
+    return this._metamaskSigner.getAddress();
+  }
+
+  async signTransaction(tx) {
+    return this._metamaskSigner.signTransaction(tx);
+  }
+
+  async signMessage(message) {
+    return this._metamaskSigner.signMessage(message);
+  }
+
+  async signTypedData(domain, types, value) {
+    return this._metamaskSigner.signTypedData(domain, types, value);
+  }
+
+  async sendTransaction(tx) {
+    return this._metamaskSigner.sendTransaction(tx);
+  }
+
+  connect(provider) {
+    return new FallbackSigner(this._metamaskSigner, provider);
+  }
+}
+
+/**
+ * Find a working RPC provider from our configured URLs
+ * @param {string} networkKey - Network key (e.g., "polygon")
+ * @returns {JsonRpcProvider|null} Working provider or null
+ */
+const findWorkingRpcProvider = async (networkKey) => {
+  const rpcUrls = networkConfig.evm[networkKey]?.rpcUrls || [];
+  for (const rpcUrl of rpcUrls) {
+    try {
+      const provider = new JsonRpcProvider(rpcUrl);
+      await provider.getBlockNumber();
+      console.log(`✅ Found working RPC: ${rpcUrl}`);
+      return provider;
+    } catch (error) {
+      console.warn(`⚠️ RPC not working: ${rpcUrl}`);
+    }
+  }
+  return null;
+};
+
+/**
+ * Create a provider and signer for connecting to the network.
+ * Uses MetaMask's RPC if it works, falls back to our own RPCs for reads.
+ * @param {string} networkKey - Network key (e.g., "polygon")
+ * @returns {{ provider, signer, usingFallbackRpc }} Provider and signer
+ */
+export const createProviderAndSigner = async (networkKey) => {
+  const browserProvider = new BrowserProvider(window.ethereum);
+
+  // Test if MetaMask's RPC works
+  try {
+    await browserProvider.getBlockNumber();
+    // MetaMask RPC works, use it normally
+    const signer = await browserProvider.getSigner();
+    return { provider: browserProvider, signer, usingFallbackRpc: false };
+  } catch (error) {
+    console.warn(`⚠️ MetaMask RPC broken: ${error.message}`);
+  }
+
+  // MetaMask RPC is broken - use our own RPC for reads
+  const fallbackProvider = await findWorkingRpcProvider(networkKey);
+  if (!fallbackProvider) {
+    throw new Error('No working RPC available. Please check your MetaMask network settings.');
+  }
+
+  // Get MetaMask signer for signing (works even with broken RPC)
+  const metamaskSigner = await browserProvider.getSigner();
+  const signer = new FallbackSigner(metamaskSigner, fallbackProvider);
+
+  console.log(`🔄 Using fallback RPC for reads, MetaMask for signing`);
+  return { provider: fallbackProvider, signer, usingFallbackRpc: true };
+};
 
 /**
  * Get the best available provider for a network
@@ -21,21 +109,31 @@ export const getBestProvider = async (networkKey) => {
   };
 
   try {
-    // First, try to use MetaMask if available and connected to correct network
+    // First, try to use MetaMask if available, connected, and on correct network
     if (typeof window.ethereum !== 'undefined') {
-      const browserProvider = new BrowserProvider(window.ethereum);
-      const network = await browserProvider.getNetwork();
-      const expectedChainId = networkConfig.evm[networkKey]?.chainId;
+      try {
+        // Check if wallet is connected
+        const accounts = window.ethereum.request({ method: 'eth_accounts' });
+        if (accounts.length > 0) {
+          const browserProvider = new BrowserProvider(window.ethereum);
+          const network = await browserProvider.getNetwork();
+          const expectedChainId = networkConfig.evm[networkKey]?.chainId;
 
-      if (Number(network.chainId) === expectedChainId) {
-        result.provider = browserProvider;
-        result.source = 'metamask';
-        result.chainId = Number(network.chainId);
-        result.reliable = true;
-        console.log(`🦊 Using MetaMask provider for ${networkKey} (Chain ID: ${result.chainId})`);
-        return result;
-      } else {
-        console.log(`🦊 MetaMask available but wrong network (${Number(network.chainId)} vs ${expectedChainId})`);
+          if (Number(network.chainId) === expectedChainId) {
+            result.provider = browserProvider;
+            result.source = 'metamask';
+            result.chainId = Number(network.chainId);
+            result.reliable = true;
+            console.log(`🦊 Using MetaMask provider for ${networkKey} (Chain ID: ${result.chainId})`);
+            return result;
+          } else {
+            console.log(`🦊 MetaMask available but wrong network (${Number(network.chainId)} vs ${expectedChainId})`);
+          }
+        } else {
+          console.log(`🦊 MetaMask available but not connected`);
+        }
+      } catch (error) {
+        console.log(`🦊 MetaMask error: ${error.message}`);
       }
     }
 
@@ -138,33 +236,51 @@ export const ensureCorrectNetwork = async (networkKey) => {
     return false;
   }
 
+  const expectedChainId = networkConfig.evm[networkKey]?.chainId;
+  if (!expectedChainId) {
+    console.error(`❌ No chain ID found for network: ${networkKey}`);
+    return false;
+  }
+
+  const hexChainId = `0x${expectedChainId.toString(16)}`;
+
+  const switchChain = async () => {
+    await window.ethereum.request({
+      method: 'wallet_switchEthereumChain',
+      params: [{ chainId: hexChainId }]
+    });
+  };
+
   try {
     const browserProvider = new BrowserProvider(window.ethereum);
     const currentNetwork = await browserProvider.getNetwork();
-    const expectedChainId = networkConfig.evm[networkKey]?.chainId;
 
     if (Number(currentNetwork.chainId) === expectedChainId) {
       console.log(`✅ Already on correct network: ${networkKey}`);
       return true;
     }
 
-    // Request network switch
-    const hexChainId = `0x${expectedChainId.toString(16)}`;
     console.log(`🔄 Requesting switch to ${networkKey} (Chain ID: ${expectedChainId})`);
-
-    await window.ethereum.request({
-      method: 'wallet_switchEthereumChain',
-      params: [{ chainId: hexChainId }]
-    });
-
+    await switchChain();
     console.log(`✅ Successfully switched to ${networkKey}`);
     return true;
 
   } catch (error) {
     if (error.code === 4902) {
       console.log(`📝 Network not added to MetaMask, attempting to add ${networkKey}`);
-      // Network not added to MetaMask, attempt to add it
       return await addNetworkToMetaMask(networkKey);
+    } else if (error.code === -32002 || error.message?.includes('already pending')) {
+      // Another request is already pending - wait and retry
+      console.log(`⏳ Network switch pending, retrying after delay...`);
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      try {
+        await switchChain();
+        console.log(`✅ Successfully switched to ${networkKey} (retry)`);
+        return true;
+      } catch (retryError) {
+        console.warn(`⏳ Network switch still pending, user needs to approve in MetaMask`);
+        return false;
+      }
     } else {
       console.error(`❌ Failed to switch network:`, error.message);
       return false;

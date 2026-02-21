@@ -85,7 +85,7 @@ const WalletConnectionPrompt = ({
           }}
         >
           Fully on chain timelocked wallet that limits the amount you can
-          withdraw to keep you alive in real life.
+          withdraw to keep you alive and happy.
         </p>
       </div>
 
