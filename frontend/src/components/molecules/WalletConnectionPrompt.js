@@ -3,6 +3,9 @@ import React from "react";
 // Import Solana wallet components
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 
+// Import assets
+import bobbyLeeVideo from "../../assets/video/bobby_lee.mp4";
+
 // Import styles
 import {
   layoutStyles,
@@ -61,6 +64,28 @@ const WalletConnectionPrompt = ({
             maxWidth: "100%",
             height: "auto",
             maxHeight: "300px",
+            borderRadius: borderRadius.lg,
+            boxShadow: "0 4px 12px rgba(0, 0, 0, 0.2)",
+          }}
+        />
+      </div>
+
+      {/* Video */}
+      <div
+        style={{
+          textAlign: "center",
+          marginBottom: spacing.xl,
+        }}
+      >
+        <video
+          src={bobbyLeeVideo}
+          controls
+          loop
+          playsInline
+          style={{
+            maxWidth: "100%",
+            height: "auto",
+            maxHeight: "400px",
             borderRadius: borderRadius.lg,
             boxShadow: "0 4px 12px rgba(0, 0, 0, 0.2)",
           }}
