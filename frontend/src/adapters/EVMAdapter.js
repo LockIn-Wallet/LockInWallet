@@ -27,21 +27,23 @@ export class EVMAdapter extends BlockchainAdapter {
     }
   }
 
-  async connect() {
+  async connect({ provider, signer } = {}) {
     try {
-      if (!window.ethereum) {
-        throw new Error('MetaMask not found. Please install MetaMask to continue.');
+      if (provider && signer) {
+        // Use provided provider/signer from root component
+        this.provider = provider;
+        this.signer = signer;
+      } else {
+        // Fallback: create own provider (should rarely happen)
+        if (!window.ethereum) {
+          throw new Error('MetaMask not found. Please install MetaMask to continue.');
+        }
+        await window.ethereum.request({ method: "eth_requestAccounts" });
+        this.provider = new ethers.BrowserProvider(window.ethereum);
+        this.signer = await this.provider.getSigner();
       }
 
-      // Request account access
-      await window.ethereum.request({ method: "eth_requestAccounts" });
-
-      // Set up provider and signer
-      this.provider = new ethers.BrowserProvider(window.ethereum);
-      this.signer = await this.provider.getSigner();
       this.userAddress = await this.signer.getAddress();
-
-      // Set up contracts
       await this._initializeContracts();
 
       return {

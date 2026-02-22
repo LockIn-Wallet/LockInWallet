@@ -58,39 +58,17 @@ export const getAvailableNetworks = (networkType, environment = process.env.NODE
     ? process.env.REACT_APP_SHOW_UNDEPLOYED_NETWORKS === 'true'  // Explicit opt-in for production
     : process.env.REACT_APP_SHOW_UNDEPLOYED_NETWORKS !== 'false'; // Opt-out for development
 
-  console.log(`🌐 Network filtering - Environment: ${environment}, Production: ${isProduction}`);
-
   // In production, only show deployed networks (exclude localhost and undeployed)
   if (isProduction) {
     const filtered = networkList.filter(network => {
-      // Always exclude localhost in production unless explicitly enabled
-      if (network.isLocal && !showLocalhost) {
-        console.log(`   Filtering out ${network.name} (localhost)`);
-        return false;
-      }
-
-      // Exclude Solana devnet and mainnet in production (keep only localhost for Solana)
-      if (networkType === "solana" && (network.key === "devnet" || network.key === "mainnet")) {
-        console.log(`   Filtering out ${network.name} (Solana ${network.key} not allowed in production)`);
-        return false;
-      }
-
-      // Exclude undeployed networks in production unless explicitly enabled
-      if (!network.deployed && !showUndeployed) {
-        console.log(`   Filtering out ${network.name} (not deployed)`);
-        return false;
-      }
-
-      console.log(`   Including ${network.name} (deployed: ${network.deployed})`);
+      if (network.isLocal && !showLocalhost) return false;
+      if (networkType === "solana" && (network.key === "devnet" || network.key === "mainnet")) return false;
+      if (!network.deployed && !showUndeployed) return false;
       return true;
     });
-
-    console.log(`🎯 Production networks available: ${filtered.map(n => n.name).join(', ')}`);
     return filtered;
   }
 
-  // In development, show all networks but mark deployment status
-  console.log(`🔧 Development networks available: ${networkList.map(n => n.name).join(', ')}`);
   return networkList;
 };
 
@@ -149,55 +127,35 @@ export const getDefaultNetwork = (networkType) => {
   const environment = process.env.NODE_ENV;
   const isProduction = environment === "production" || process.env.REACT_APP_ENVIRONMENT === "production";
 
-  console.log(`🎯 Getting default network for ${networkType}, environment: ${environment}, production: ${isProduction}`);
-
   if (!isProduction) {
     // In development, prefer localhost if available and deployed
     const localhostDeployed = isNetworkDeployed(networkType, "localhost");
-    if (localhostDeployed) {
-      console.log(`   → Selected localhost (deployed)`);
-      return "localhost";
-    }
+    if (localhostDeployed) return "localhost";
   }
 
   // Get available networks for current environment
   const availableNetworks = getAvailableNetworks(networkType, environment);
-  console.log(`   → Available networks: ${availableNetworks.map(n => `${n.key}(${n.deployed ? 'deployed' : 'not deployed'})`).join(', ')}`);
-
-  // In any environment, prioritize deployed networks
   const deployedNetworks = availableNetworks.filter(n => n.deployed);
 
   if (deployedNetworks.length > 0) {
     // Priority order for deployed networks
     const priorities = {
-      evm: ["polygon", "ethereum", "optimism"],  // Polygon first since it's deployed
-      solana: ["localhost", "mainnet", "devnet"]  // Note: mainnet/devnet filtered out in production
+      evm: ["polygon", "ethereum", "optimism"],
+      solana: ["localhost", "mainnet", "devnet"]
     };
 
     const priorityList = priorities[networkType] || [];
     for (const networkKey of priorityList) {
       const found = deployedNetworks.find(n => n.key === networkKey);
-      if (found) {
-        console.log(`   → Selected ${networkKey} (deployed, priority match)`);
-        return networkKey;
-      }
+      if (found) return networkKey;
     }
 
-    // Fallback to first deployed network
-    console.log(`   → Selected ${deployedNetworks[0].key} (first deployed)`);
     return deployedNetworks[0].key;
   }
 
-  // If no deployed networks, fallback to any available (development only)
-  if (availableNetworks.length > 0) {
-    console.log(`   → Selected ${availableNetworks[0].key} (fallback - not deployed)`);
-    return availableNetworks[0].key;
-  }
+  if (availableNetworks.length > 0) return availableNetworks[0].key;
 
-  // Last resort fallback
-  const fallback = networkType === "evm" ? "polygon" : "mainnet";
-  console.log(`   → Selected ${fallback} (last resort fallback)`);
-  return fallback;
+  return networkType === "evm" ? "polygon" : "mainnet";
 };
 
 /**

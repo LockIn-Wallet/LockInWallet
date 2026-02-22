@@ -351,6 +351,7 @@ cd ../frontend && npm start  # Terminal 3
 ## Cross-References
 
 - **Root Project Overview**: See **`../CLAUDE.md`** for multi-blockchain orchestration and workspace management
+- **Upgrade Guide**: See **`./UPGRADE_GUIDE.md`** for upgrading SavingsCore proxy and modules on any network
 - **Diagnostic Tools**: See **`./DIAGNOSTIC_TOOLS.md`** for comprehensive monitoring, troubleshooting, and maintenance utilities
 - **Solana Development**: See **`../solana/`** folder for Solana-specific development
 - **Frontend Development**: See **`../frontend/`** folder for React app development

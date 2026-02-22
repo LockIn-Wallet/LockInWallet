@@ -154,10 +154,10 @@ const SpendingLimitsSetup = ({
 
   // Notify parent whenever limit edits change (for unsaved changes)
   useEffect(() => {
-    if (onSpendingLimitsUpdate) {
+    if (limitsLoaded && onSpendingLimitsUpdate) {
       onSpendingLimitsUpdate(spendingLimits, limitEdits);
     }
-  }, [limitEdits, onSpendingLimitsUpdate]);
+  }, [limitEdits, limitsLoaded, onSpendingLimitsUpdate]);
 
   // Internal data refresh helper (updated to use internal functions)
   const refreshData = async () => {

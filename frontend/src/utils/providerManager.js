@@ -3,95 +3,29 @@
  * Falls back to public RPCs only when MetaMask is not available
  */
 
-import { BrowserProvider, JsonRpcProvider, AbstractSigner } from 'ethers';
+import { BrowserProvider, JsonRpcProvider } from 'ethers';
 import networkConfig from '../networkConfig.json';
 
 /**
- * Signer that uses our own RPC for reads but MetaMask for signing/broadcasting.
- * Used when MetaMask's configured RPC is broken (e.g. returning 401).
+ * Create a provider and signer from the connected wallet.
+ * Tests the wallet's RPC connection and throws a clear error if broken.
+ * @returns {{ provider, signer }} Provider and signer
  */
-class FallbackSigner extends AbstractSigner {
-  constructor(metamaskSigner, fallbackProvider) {
-    super(fallbackProvider);
-    this._metamaskSigner = metamaskSigner;
-  }
-
-  async getAddress() {
-    return this._metamaskSigner.getAddress();
-  }
-
-  async signTransaction(tx) {
-    return this._metamaskSigner.signTransaction(tx);
-  }
-
-  async signMessage(message) {
-    return this._metamaskSigner.signMessage(message);
-  }
-
-  async signTypedData(domain, types, value) {
-    return this._metamaskSigner.signTypedData(domain, types, value);
-  }
-
-  async sendTransaction(tx) {
-    return this._metamaskSigner.sendTransaction(tx);
-  }
-
-  connect(provider) {
-    return new FallbackSigner(this._metamaskSigner, provider);
-  }
-}
-
-/**
- * Find a working RPC provider from our configured URLs
- * @param {string} networkKey - Network key (e.g., "polygon")
- * @returns {JsonRpcProvider|null} Working provider or null
- */
-const findWorkingRpcProvider = async (networkKey) => {
-  const rpcUrls = networkConfig.evm[networkKey]?.rpcUrls || [];
-  for (const rpcUrl of rpcUrls) {
-    try {
-      const provider = new JsonRpcProvider(rpcUrl);
-      await provider.getBlockNumber();
-      console.log(`✅ Found working RPC: ${rpcUrl}`);
-      return provider;
-    } catch (error) {
-      console.warn(`⚠️ RPC not working: ${rpcUrl}`);
-    }
-  }
-  return null;
-};
-
-/**
- * Create a provider and signer for connecting to the network.
- * Uses MetaMask's RPC if it works, falls back to our own RPCs for reads.
- * @param {string} networkKey - Network key (e.g., "polygon")
- * @returns {{ provider, signer, usingFallbackRpc }} Provider and signer
- */
-export const createProviderAndSigner = async (networkKey) => {
+export const createProviderAndSigner = async () => {
   const browserProvider = new BrowserProvider(window.ethereum);
 
-  // Test if MetaMask's RPC works
+  // Test if the wallet's RPC works
   try {
     await browserProvider.getBlockNumber();
-    // MetaMask RPC works, use it normally
-    const signer = await browserProvider.getSigner();
-    return { provider: browserProvider, signer, usingFallbackRpc: false };
   } catch (error) {
-    console.warn(`⚠️ MetaMask RPC broken: ${error.message}`);
+    throw new Error(
+      'Your wallet\'s RPC connection is not working. ' +
+      'Please check your wallet settings (Settings → Networks) and ensure the RPC URL for this network is valid.'
+    );
   }
 
-  // MetaMask RPC is broken - use our own RPC for reads
-  const fallbackProvider = await findWorkingRpcProvider(networkKey);
-  if (!fallbackProvider) {
-    throw new Error('No working RPC available. Please check your MetaMask network settings.');
-  }
-
-  // Get MetaMask signer for signing (works even with broken RPC)
-  const metamaskSigner = await browserProvider.getSigner();
-  const signer = new FallbackSigner(metamaskSigner, fallbackProvider);
-
-  console.log(`🔄 Using fallback RPC for reads, MetaMask for signing`);
-  return { provider: fallbackProvider, signer, usingFallbackRpc: true };
+  const signer = await browserProvider.getSigner();
+  return { provider: browserProvider, signer };
 };
 
 /**

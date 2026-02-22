@@ -77,7 +77,7 @@ export const useNetworkManager = ({
   }, [setCurrentChainId, setSelectedNetwork]);
 
   // Initialize TransactionManager for the current network
-  const initializeTransactionManager = useCallback(async (networkType, selectedNetwork) => {
+  const initializeTransactionManager = useCallback(async (networkType, selectedNetwork, evmContext = {}) => {
     try {
       const networkConfig = getCurrentNetwork(networkType, selectedNetwork);
 
@@ -89,7 +89,7 @@ export const useNetworkManager = ({
       const txManager = new TransactionManager();
 
       if (networkType === "evm") {
-        await txManager.initialize("evm", networkConfig);
+        await txManager.initialize("evm", networkConfig, evmContext);
       } else if (networkType === "solana") {
         console.log("Solana wallet info:", {
           connected: solanaConnected,

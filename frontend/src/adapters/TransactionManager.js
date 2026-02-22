@@ -21,8 +21,8 @@ export class TransactionManager {
     try {
       if (networkType === 'evm') {
         const adapter = new EVMAdapter(networkConfig);
-        // Connect the adapter to get provider/signer access
-        await adapter.connect();
+        // Connect the adapter using provided provider/signer or its own fallback
+        await adapter.connect(walletConfig);
         this.adapters.set('evm', adapter);
         this.currentAdapter = adapter;
       } else if (networkType === 'solana') {

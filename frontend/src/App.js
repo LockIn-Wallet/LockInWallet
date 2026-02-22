@@ -311,7 +311,7 @@ function AppContentInner({
       ) {
         console.log("🔄 Auto-initializing TransactionManager for connected EVM wallet...");
         try {
-          const txManager = await initializeTransactionManager(networkType, selectedNetwork);
+          const txManager = await initializeTransactionManager(networkType, selectedNetwork, { provider, signer });
           if (txManager) {
             console.log("✅ TransactionManager auto-initialized for EVM");
           } else {
@@ -330,8 +330,6 @@ function AppContentInner({
   const handleSpendingLimitsUpdate = useCallback((updatedLimits, updatedLimitEdits) => {
     setSpendingLimits(updatedLimits);
     setLimitEdits(updatedLimitEdits || {});
-    console.log('💰 Parent spending limits updated:', updatedLimits);
-    console.log('✏️ Parent limit edits updated:', updatedLimitEdits);
   }, []);
 
   const isCorrectNetwork = () => {
@@ -686,15 +684,15 @@ function AppContentInner({
       }
     }
 
-    // Create provider and signer (auto-falls back to our RPC if MetaMask's is broken)
+    // Create provider and signer from connected wallet
     let web3Provider, web3Signer;
     try {
-      const result = await createProviderAndSigner(selectedNetwork);
+      const result = await createProviderAndSigner();
       web3Provider = result.provider;
       web3Signer = result.signer;
     } catch (error) {
       console.error("❌ Failed to create provider:", error.message);
-      alert(`Connection failed: ${error.message}`);
+      alert(error.message);
       return;
     }
 
@@ -747,7 +745,7 @@ function AppContentInner({
     // Initialize TransactionManager for EVM network
     console.log("🔄 Initializing TransactionManager for EVM network...");
     try {
-      const txManager = await initializeTransactionManager(networkType, selectedNetwork);
+      const txManager = await initializeTransactionManager(networkType, selectedNetwork, { provider: web3Provider, signer: web3Signer });
       if (txManager) {
         console.log("✅ TransactionManager successfully initialized for EVM");
       } else {
