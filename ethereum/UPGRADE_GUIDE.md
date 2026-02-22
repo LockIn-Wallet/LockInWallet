@@ -24,7 +24,7 @@ SavingsCore (UUPS Proxy - permanent address)
 | TimePeriodLimitsModule | `0x0E8DB1A3dAed303F73Ec62b2bcd5EE37726b08c5` |
 | ProposalSystemModule | `0xD1b830850662e2c357C4F411B39Bc654B99CF802` |
 | BypassSystemModule | `0xA29477aDd6C305B73fFe2d63d8F557EC3285144C` |
-| ApprovalSystemModule | `0x2b4F7120Fa95A728a9218b747c25544456825FdA` |
+| ApprovalSystemModule | `0x94F8d8d209F2271844E22Df1895a50d483B900B5` |
 
 ## Upgrade Types
 
