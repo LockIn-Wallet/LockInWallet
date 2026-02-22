@@ -1,0 +1,22 @@
+{
+  "buildCommand": "npm run build:vercel",
+  "outputDirectory": "build",
+  "installCommand": "npm install --prefer-offline --no-audit --no-optional",
+  "env": {
+    "NODE_OPTIONS": "--max-old-space-size=4096",
+    "GENERATE_SOURCEMAP": "false",
+    "DISABLE_ESLINT_PLUGIN": "true"
+  },
+  "rewrites": [
+    { "source": "/(.*)", "destination": "/index.html" }
+  ],
+  "headers": [
+    {
+      "source": "/favicon.png",
+      "headers": [
+        { "key": "Content-Type", "value": "image/png" },
+        { "key": "Cache-Control", "value": "public, max-age=86400" }
+      ]
+    }
+  ]
+}

@@ -13,7 +13,7 @@ import {
 } from "../../styles";
 
 // Import utilities
-import { formatCountdown } from "../../utils/walletUtils.js";
+import { formatCountdown, detectExceedingPeriod } from "../../utils/walletUtils.js";
 import { ethers } from "ethers";
 
 // Import services
@@ -55,11 +55,10 @@ const WithdrawalInterface = ({
   selectedToken,
   setSelectedToken,
 
-  // Calculated values (computed in App.js)
+  // Calculated values
   instantWithdrawableAmount,
   limitingPeriod,
-  exceedsInstantLimit,
-  exceedingPeriod,
+  spendingLimits,
 
   // Callbacks for App.js state updates
   onBalanceUpdate,
@@ -82,6 +81,10 @@ const WithdrawalInterface = ({
   const [withdrawalAddresses, setWithdrawalAddresses] = useState([]);
   const [pendingWithdrawalRequests, setPendingWithdrawalRequests] = useState([]);
   const [pendingBypassRequests, setPendingBypassRequests] = useState([]);
+
+  // Compute limit-exceeding status from local withdrawal amount
+  const exceedingPeriod = detectExceedingPeriod(withdrawalAmount, spendingLimits);
+  const exceedsInstantLimit = parseFloat(withdrawalAmount || 0) > instantWithdrawableAmount;
 
   // Loading states
   const [isLoading, setIsLoading] = useState(false);
@@ -308,15 +311,10 @@ const WithdrawalInterface = ({
         // EVM bypass request logic
         console.log("🔒 EVM: Requesting bypass for", withdrawalAmount, selectedToken, exceedingPeriod);
 
-        let destination = selectedWithdrawalDestination;
-        if (selectedWithdrawalDestination === "self") {
-          destination = getCurrentUserAddress();
-        }
-
         let tx;
         if (selectedToken === "ETH") {
           const amountWei = ethers.parseEther(withdrawalAmount);
-          tx = await savingsContract.requestWithdrawalBypass(ethers.ZeroAddress, amountWei, destination, exceedingPeriod);
+          tx = await savingsContract.requestLimitBypass(amountWei, exceedingPeriod, ethers.ZeroAddress);
         } else {
           const network = getCurrentNetwork(networkType, selectedNetwork);
           const tokenInfo = network.tokens[selectedToken];
@@ -324,7 +322,7 @@ const WithdrawalInterface = ({
             throw new Error(`Token ${selectedToken} not found in network configuration`);
           }
           const amountTokens = ethers.parseUnits(withdrawalAmount, tokenInfo.decimals);
-          tx = await savingsContract.requestWithdrawalBypass(tokenInfo.address, amountTokens, destination, exceedingPeriod);
+          tx = await savingsContract.requestLimitBypass(amountTokens, exceedingPeriod, tokenInfo.address);
         }
 
         await tx.wait();
@@ -422,7 +420,7 @@ const WithdrawalInterface = ({
         const txHash = await adapter.cancelWithdrawalBypass(requestId);
         alert(`✅ Solana bypass request cancelled!\n\nTransaction: ${txHash}`);
       } else {
-        const tx = await savingsContract.cancelWithdrawalBypass(requestId);
+        const tx = await savingsContract.cancelBypassRequest(requestId);
         await tx.wait();
         alert(`✅ EVM bypass request cancelled!\n\nTransaction: ${tx.hash}`);
       }
@@ -1244,11 +1242,10 @@ WithdrawalInterface.propTypes = {
   selectedToken: PropTypes.string.isRequired,
   setSelectedToken: PropTypes.func.isRequired,
 
-  // Calculated values (computed in App.js)
+  // Calculated values
   instantWithdrawableAmount: PropTypes.number.isRequired,
   limitingPeriod: PropTypes.string,
-  exceedsInstantLimit: PropTypes.bool.isRequired,
-  exceedingPeriod: PropTypes.string,
+  spendingLimits: PropTypes.array.isRequired,
 
   // Callbacks for App.js state updates
   onBalanceUpdate: PropTypes.func,

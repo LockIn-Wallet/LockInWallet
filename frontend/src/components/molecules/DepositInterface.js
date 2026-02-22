@@ -578,7 +578,7 @@ const DepositInterface = ({
                 fontWeight: "bold",
               }}
             >
-              🚀 Generate Deposit Address
+              🚀 Generate Permanent Deposit Address
             </button>
 
             <div

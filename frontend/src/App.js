@@ -39,7 +39,6 @@ import {
   isSolanaNetwork,
   formatCountdown,
   calculateInstantWithdrawableAmount,
-  detectExceedingPeriod,
 } from "./utils/walletUtils.js";
 
 // Import network filtering utilities
@@ -253,9 +252,6 @@ function AppContentInner({
   // Enhanced withdrawal system state
   const [instantWithdrawableAmount, setInstantWithdrawableAmount] = useState(0);
   const [limitingPeriod, setLimitingPeriod] = useState(null); // Which period is limiting
-  const [withdrawalAmount, setWithdrawalAmount] = useState("");
-  const [exceedsInstantLimit, setExceedsInstantLimit] = useState(false);
-  const [exceedingPeriod, setExceedingPeriod] = useState(null); // Which period would be exceeded
 
   // Note: Simplified setup - removed step validation and wizard navigation
 
@@ -450,17 +446,6 @@ function AppContentInner({
     setLimitingPeriod(result.limitingPeriod);
   }, [spendingLimits]);
 
-  // Update withdrawal analysis whenever amount changes
-  useEffect(() => {
-    const exceedingPeriod = detectExceedingPeriod(
-      withdrawalAmount,
-      spendingLimits
-    );
-    setExceedingPeriod(exceedingPeriod);
-    setExceedsInstantLimit(
-      parseFloat(withdrawalAmount || 0) > instantWithdrawableAmount
-    );
-  }, [withdrawalAmount, spendingLimits, instantWithdrawableAmount]);
 
   // Balance refresh function for deposit callbacks and manual refresh
   const refreshBalances = async () => {
@@ -1115,11 +1100,10 @@ function AppContentInner({
               // Shared token state (shared with DepositInterface)
               selectedToken={selectedToken}
               setSelectedToken={setSelectedToken}
-              // Calculated values (computed in App.js)
+              // Calculated values
               instantWithdrawableAmount={instantWithdrawableAmount}
               limitingPeriod={limitingPeriod}
-              exceedsInstantLimit={exceedsInstantLimit}
-              exceedingPeriod={exceedingPeriod}
+              spendingLimits={spendingLimits}
               // Callbacks for App.js state updates
               onBalanceUpdate={refreshBalances}
               onSpendingLimitsUpdate={fetchSpendingLimits}
