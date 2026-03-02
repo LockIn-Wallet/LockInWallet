@@ -46,6 +46,9 @@ describe("Savings Wallet Modules", function () {
     const approvalModuleId = hre.ethers.keccak256(hre.ethers.toUtf8Bytes("APPROVAL_SYSTEM"));
     await savingsCore.registerModule(approvalModuleId, approvalModule.target);
 
+    // Set up inter-module cross-references (required for ProposalSystem and BypassSystem)
+    await savingsCore.setupModuleCrossReferences();
+
     // Setup some user funds for testing
     const depositAmount = hre.ethers.parseEther("10.0");
     await savingsCore.connect(user1)["deposit(address,uint256)"](hre.ethers.ZeroAddress, depositAmount, { value: depositAmount });
@@ -152,79 +155,66 @@ describe("Savings Wallet Modules", function () {
   });
 
   describe("ProposalSystemModule", function () {
-    it("Should create withdrawal proposals for amounts exceeding limits", async function () {
+    it("Should create limit change proposals", async function () {
       const { savingsCore, user1 } = await loadFixture(deployModulesFixture);
 
-      // Set spending limits
-      const dailyLimit = hre.ethers.parseEther("1.0");
+      // Set initial spending limits and commit setup
       await savingsCore.connect(user1).setCommonPeriodLimits(
-        dailyLimit,
-        hre.ethers.parseEther("7.0"),
-        hre.ethers.parseEther("30.0")
+        hre.ethers.parseUnits("1.0", 6),
+        hre.ethers.parseUnits("7.0", 6),
+        hre.ethers.parseUnits("30.0", 6)
       );
+      await savingsCore.connect(user1).commitInitialSetup();
 
-      // Attempt to withdraw more than daily limit
-      const largeWithdrawAmount = hre.ethers.parseEther("3.0");
-
+      // Propose an increase to the daily limit
       await expect(
-        savingsCore.connect(user1).proposeWithdrawal(
-          largeWithdrawAmount,
-          hre.ethers.ZeroAddress,
-          user1.address
-        )
+        savingsCore.connect(user1).proposeLimitChange("Daily", hre.ethers.parseUnits("2.0", 6))
       ).not.to.be.reverted;
     });
 
     it("Should enforce timelock on proposal execution", async function () {
-      const { savingsCore, user1 } = await loadFixture(deployModulesFixture);
+      const { savingsCore, proposalModule, user1 } = await loadFixture(deployModulesFixture);
 
-      const dailyLimit = hre.ethers.parseEther("1.0");
       await savingsCore.connect(user1).setCommonPeriodLimits(
-        dailyLimit,
-        hre.ethers.parseEther("7.0"),
-        hre.ethers.parseEther("30.0")
+        hre.ethers.parseUnits("1.0", 6),
+        hre.ethers.parseUnits("7.0", 6),
+        hre.ethers.parseUnits("30.0", 6)
       );
+      await savingsCore.connect(user1).commitInitialSetup();
 
-      const largeWithdrawAmount = hre.ethers.parseEther("3.0");
-
-      // Create proposal
-      await savingsCore.connect(user1).proposeWithdrawal(
-        largeWithdrawAmount,
-        hre.ethers.ZeroAddress,
-        user1.address
+      // Create a limit increase proposal and get proposalId from return value
+      const proposalId = await savingsCore.connect(user1).proposeLimitChange.staticCall(
+        "Daily", hre.ethers.parseUnits("2.0", 6)
       );
+      await savingsCore.connect(user1).proposeLimitChange("Daily", hre.ethers.parseUnits("2.0", 6));
 
       // Immediate execution should fail (timelock not expired)
       await expect(
-        savingsCore.connect(user1).executeWithdrawalProposal(0) // Assuming proposal ID 0
+        savingsCore.connect(user1).executeLimitProposal(proposalId)
       ).to.be.reverted;
     });
 
     it("Should allow proposal execution after timelock expires", async function () {
       const { savingsCore, user1 } = await loadFixture(deployModulesFixture);
 
-      const dailyLimit = hre.ethers.parseEther("1.0");
       await savingsCore.connect(user1).setCommonPeriodLimits(
-        dailyLimit,
-        hre.ethers.parseEther("7.0"),
-        hre.ethers.parseEther("30.0")
+        hre.ethers.parseUnits("1.0", 6),
+        hre.ethers.parseUnits("7.0", 6),
+        hre.ethers.parseUnits("30.0", 6)
       );
+      await savingsCore.connect(user1).commitInitialSetup();
 
-      const largeWithdrawAmount = hre.ethers.parseEther("3.0");
+      // Submit the proposal then read back the proposalId
+      await savingsCore.connect(user1).proposeLimitChange("Daily", hre.ethers.parseUnits("2.0", 6));
+      const [proposalIds] = await savingsCore.connect(user1).getUserPendingProposals();
+      const proposalId = proposalIds[0];
 
-      // Create proposal
-      await savingsCore.connect(user1).proposeWithdrawal(
-        largeWithdrawAmount,
-        hre.ethers.ZeroAddress,
-        user1.address
-      );
-
-      // Fast forward past timelock period (assuming 24 hours)
-      await time.increase(24 * 60 * 60 + 1);
+      // Fast forward past dev-mode timelock (30 seconds)
+      await time.increase(31);
 
       // Execution should now succeed
       await expect(
-        savingsCore.connect(user1).executeWithdrawalProposal(0)
+        savingsCore.connect(user1).executeLimitProposal(proposalId)
       ).not.to.be.reverted;
     });
   });
@@ -233,14 +223,20 @@ describe("Savings Wallet Modules", function () {
     it("Should allow emergency bypass requests", async function () {
       const { savingsCore, user1 } = await loadFixture(deployModulesFixture);
 
-      const emergencyAmount = hre.ethers.parseEther("5.0");
+      // Set up a daily limit so the "Daily" period exists
+      await savingsCore.connect(user1).setCommonPeriodLimits(
+        hre.ethers.parseUnits("1.0", 6),
+        hre.ethers.parseUnits("7.0", 6),
+        hre.ethers.parseUnits("30.0", 6)
+      );
+
+      const emergencyAmount = hre.ethers.parseUnits("5.0", 6);
 
       await expect(
-        savingsCore.connect(user1).requestWithdrawalBypass(
-          hre.ethers.ZeroAddress,
+        savingsCore.connect(user1).requestLimitBypass(
           emergencyAmount,
-          user1.address,
-          "DAILY" // Exceeding daily limit
+          "Daily",
+          hre.ethers.ZeroAddress
         )
       ).not.to.be.reverted;
     });
@@ -248,19 +244,26 @@ describe("Savings Wallet Modules", function () {
     it("Should enforce timelock on bypass execution", async function () {
       const { savingsCore, user1 } = await loadFixture(deployModulesFixture);
 
-      const emergencyAmount = hre.ethers.parseEther("5.0");
-
-      // Create bypass request
-      await savingsCore.connect(user1).requestWithdrawalBypass(
-        hre.ethers.ZeroAddress,
-        emergencyAmount,
-        user1.address,
-        "DAILY"
+      // Set up a daily limit so the "Daily" period exists
+      await savingsCore.connect(user1).setCommonPeriodLimits(
+        hre.ethers.parseUnits("1.0", 6),
+        hre.ethers.parseUnits("7.0", 6),
+        hre.ethers.parseUnits("30.0", 6)
       );
 
-      // Immediate execution should fail
+      const emergencyAmount = hre.ethers.parseUnits("5.0", 6);
+
+      // Get requestId via staticCall then submit
+      const requestId = await savingsCore.connect(user1).requestLimitBypass.staticCall(
+        emergencyAmount, "Daily", hre.ethers.ZeroAddress
+      );
+      await savingsCore.connect(user1).requestLimitBypass(
+        emergencyAmount, "Daily", hre.ethers.ZeroAddress
+      );
+
+      // Immediate execution should fail (timelock not expired)
       await expect(
-        savingsCore.connect(user1).executeBypassWithdrawal(0) // Assuming request ID 0
+        savingsCore.connect(user1).executeBypassWithdrawal(requestId)
       ).to.be.reverted;
     });
   });
@@ -282,24 +285,21 @@ describe("Savings Wallet Modules", function () {
     it("Should coordinate between modules correctly", async function () {
       const { savingsCore, user1 } = await loadFixture(deployModulesFixture);
 
-      // Set up spending limits (TimePeriodLimitsModule)
-      const dailyLimit = hre.ethers.parseEther("1.0");
+      // Set up spending limits and commit setup
       await savingsCore.connect(user1).setCommonPeriodLimits(
-        dailyLimit,
-        hre.ethers.parseEther("7.0"),
-        hre.ethers.parseEther("30.0")
+        hre.ethers.parseUnits("1.0", 6),
+        hre.ethers.parseUnits("7.0", 6),
+        hre.ethers.parseUnits("30.0", 6)
       );
+      await savingsCore.connect(user1).commitInitialSetup();
 
-      // Try to withdraw more than limit, should trigger proposal system
-      const largeAmount = hre.ethers.parseEther("3.0");
+      // Verify limits were set via TimePeriodLimitsModule and committed via ProposalSystemModule
+      const isCommitted = await savingsCore.connect(user1).isSetupCommitted();
+      expect(isCommitted).to.be.true;
 
-      // The system should coordinate between TimePeriodLimits and ProposalSystem modules
+      // Propose a limit increase - exercises coordination between ProposalSystem and TimePeriodLimits
       await expect(
-        savingsCore.connect(user1).proposeWithdrawal(
-          largeAmount,
-          hre.ethers.ZeroAddress,
-          user1.address
-        )
+        savingsCore.connect(user1).proposeLimitChange("Daily", hre.ethers.parseUnits("2.0", 6))
       ).not.to.be.reverted;
     });
 
@@ -312,10 +312,9 @@ describe("Savings Wallet Modules", function () {
 
       // After setting limits, balance should remain the same
       await savingsCore.connect(user1).setCommonPeriodLimits(
-        hre.ethers.parseEther("1.0"),
-        hre.ethers.parseEther("7.0"),
-        hre.ethers.parseEther("30.0"),
-        hre.ethers.ZeroAddress
+        hre.ethers.parseUnits("1.0", 6),
+        hre.ethers.parseUnits("7.0", 6),
+        hre.ethers.parseUnits("30.0", 6)
       );
 
       const balanceAfterLimits = await savingsCore.getTokenBalance(user1.address, hre.ethers.ZeroAddress);

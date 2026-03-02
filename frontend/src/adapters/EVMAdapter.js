@@ -1,7 +1,8 @@
-import { ethers } from 'ethers';
-import { BlockchainAdapter } from './BlockchainAdapter.js';
-import SavingsABI from '../SavingsABI.json';
-import MockUSDT_ABI from '../MockUSDT_ABI.json';
+import { ethers } from "ethers";
+import { BlockchainAdapter } from "./BlockchainAdapter.js";
+import SavingsABI from "../SavingsABI.json";
+import MockUSDT_ABI from "../MockUSDT_ABI.json";
+import ProxyDeploymentModuleABI from "../ProxyDeploymentModuleABI.json";
 
 /**
  * EVM Blockchain Adapter for MetaMask and ethers.js integration
@@ -12,6 +13,7 @@ export class EVMAdapter extends BlockchainAdapter {
     this.provider = null;
     this.signer = null;
     this.savingsContract = null;
+    this.proxyDeploymentModule = null;
     this.userAddress = null;
     this.ETH_ADDRESS = "0x0000000000000000000000000000000000000000";
   }
@@ -20,7 +22,9 @@ export class EVMAdapter extends BlockchainAdapter {
   async isConnected() {
     try {
       if (!window.ethereum) return false;
-      const accounts = await window.ethereum.request({ method: "eth_accounts" });
+      const accounts = await window.ethereum.request({
+        method: "eth_accounts",
+      });
       return accounts.length > 0 && this.provider && this.signer;
     } catch {
       return false;
@@ -36,7 +40,9 @@ export class EVMAdapter extends BlockchainAdapter {
       } else {
         // Fallback: create own provider (should rarely happen)
         if (!window.ethereum) {
-          throw new Error('MetaMask not found. Please install MetaMask to continue.');
+          throw new Error(
+            "MetaMask not found. Please install MetaMask to continue.",
+          );
         }
         await window.ethereum.request({ method: "eth_requestAccounts" });
         this.provider = new ethers.BrowserProvider(window.ethereum);
@@ -49,10 +55,10 @@ export class EVMAdapter extends BlockchainAdapter {
       return {
         address: this.userAddress,
         provider: this.provider,
-        signer: this.signer
+        signer: this.signer,
       };
     } catch (error) {
-      console.error('Failed to connect to MetaMask:', error);
+      console.error("Failed to connect to MetaMask:", error);
       throw error;
     }
   }
@@ -61,6 +67,7 @@ export class EVMAdapter extends BlockchainAdapter {
     this.provider = null;
     this.signer = null;
     this.savingsContract = null;
+    this.proxyDeploymentModule = null;
     this.userAddress = null;
   }
 
@@ -106,16 +113,99 @@ export class EVMAdapter extends BlockchainAdapter {
     }
   }
 
+  // Proxy Sweep - forwards ERC20 tokens stuck in UserProxy into savings
+  async sweepProxy(tokenAddress) {
+    if (!this.savingsContract || !this.signer)
+      throw new Error("Contract not initialized");
+
+    const proxyAddress = await this.savingsContract.getUserProxy(
+      await this.getAddress(),
+    );
+    if (!proxyAddress || proxyAddress === ethers.ZeroAddress) return null;
+
+    const userProxyABI = ["function sweepERC20(address token) external"];
+    const proxyContract = new ethers.Contract(
+      proxyAddress,
+      userProxyABI,
+      this.signer,
+    );
+
+    const tx = await proxyContract.sweepERC20(tokenAddress);
+    await tx.wait();
+    return tx.hash;
+  }
+
+  async checkAndSweepProxy() {
+    try {
+      const userAddress = await this.getAddress();
+      const isDeployed = await this.savingsContract.isProxyDeployed(
+        userAddress,
+      );
+      console.log(
+        "🚀 ~ EVMAdapter ~ checkAndSweepProxy ~ isDeployed:",
+        isDeployed,
+      );
+      if (!isDeployed) return;
+
+      const proxyAddress = await this.savingsContract.getUserProxy(userAddress);
+      if (!proxyAddress || proxyAddress === ethers.ZeroAddress) return;
+      console.log(
+        "🚀 ~ EVMAdapter ~ checkAndSweepProxy ~ proxyAddress:",
+        proxyAddress,
+      );
+
+      // Verify proxy has code (not an EOA or destroyed contract)
+      const code = await this.provider.getCode(proxyAddress);
+      if (!code || code === "0x") return;
+
+      const tokens = this.networkConfig.tokens;
+      if (!tokens) return;
+
+      const ETH_ZERO = "0x0000000000000000000000000000000000000000";
+      for (const [, token] of Object.entries(tokens)) {
+        console.log("🚀 ~ EVMAdapter ~ checkAndSweepProxy ~ token:", token);
+        if (!token.address || token.address === ETH_ZERO) continue;
+        try {
+          const tokenContract = new ethers.Contract(
+            token.address,
+            ["function balanceOf(address) view returns (uint256)"],
+            this.provider,
+          );
+          const balance = await tokenContract.balanceOf(proxyAddress);
+          if (balance > 0n) {
+            console.log(
+              `Sweeping ${ethers.formatUnits(balance, token.decimals)} ${
+                token.symbol
+              } from proxy`,
+            );
+            await this.sweepProxy(token.address);
+          }
+        } catch (error) {
+          console.warn(`Failed to sweep ${token.symbol}:`, error.message);
+        }
+      }
+    } catch (error) {
+      console.warn("Proxy sweep check failed:", error.message);
+    }
+  }
+
   // Balance Management
   async getTokenBalance(userAddress, tokenAddress) {
-    if (!this.savingsContract) throw new Error('Contract not initialized');
+    if (!this.savingsContract) throw new Error("Contract not initialized");
 
-    const balance = await this.savingsContract.getTokenBalance(userAddress, tokenAddress);
+    const balance = await this.savingsContract.getTokenBalance(
+      userAddress,
+      tokenAddress,
+    );
     return balance;
   }
 
   async getAllBalances(userAddress) {
-    if (!this.savingsContract || !userAddress) throw new Error('Contract or address not available');
+    if (!this.savingsContract || !userAddress)
+      throw new Error("Contract or address not available");
+
+    // Auto-sweep any ERC20 tokens sitting in the user's proxy
+    await this.checkAndSweepProxy();
 
     const balances = {};
 
@@ -124,9 +214,15 @@ export class EVMAdapter extends BlockchainAdapter {
     // Fetch token balances
     if (this.networkConfig.tokens) {
       for (const [key, token] of Object.entries(this.networkConfig.tokens)) {
-        if (token.address && token.address !== "0x0000000000000000000000000000000000000000") {
+        if (
+          token.address &&
+          token.address !== "0x0000000000000000000000000000000000000000"
+        ) {
           try {
-            const tokenBalance = await this.savingsContract.getTokenBalance(userAddress, token.address);
+            const tokenBalance = await this.savingsContract.getTokenBalance(
+              userAddress,
+              token.address,
+            );
             balances[key] = this.formatAmount(tokenBalance, token.decimals);
           } catch (error) {
             console.error(`Error fetching ${key} balance:`, error);
@@ -141,13 +237,17 @@ export class EVMAdapter extends BlockchainAdapter {
 
   // Deposit Operations
   async deposit(tokenAddress, amount, tokenDecimals) {
-    if (!this.savingsContract) throw new Error('Contract not initialized');
+    if (!this.savingsContract) throw new Error("Contract not initialized");
 
     const amountWei = this.parseAmount(amount, tokenDecimals);
 
     // Handle ERC20 approval if not ETH
     if (tokenAddress !== this.ETH_ADDRESS) {
-      await this.approveToken(tokenAddress, this.networkConfig.savingsContract, amountWei);
+      await this.approveToken(
+        tokenAddress,
+        this.networkConfig.savingsContract,
+        amountWei,
+      );
     }
 
     // Execute deposit
@@ -156,39 +256,47 @@ export class EVMAdapter extends BlockchainAdapter {
       amountWei,
       {
         value: tokenAddress === this.ETH_ADDRESS ? amountWei : 0,
-      }
+      },
     );
 
     const receipt = await depositTx.wait();
     return {
       hash: depositTx.hash,
       receipt: receipt,
-      success: true
+      success: true,
     };
   }
 
   async approveToken(tokenAddress, spenderAddress, amount) {
-    if (!this.signer) throw new Error('Signer not available');
+    if (!this.signer) throw new Error("Signer not available");
 
-    const tokenContract = new ethers.Contract(tokenAddress, MockUSDT_ABI, this.signer);
+    const tokenContract = new ethers.Contract(
+      tokenAddress,
+      MockUSDT_ABI,
+      this.signer,
+    );
     const approvalTx = await tokenContract.approve(spenderAddress, amount);
     await approvalTx.wait();
 
     return {
       hash: approvalTx.hash,
-      success: true
+      success: true,
     };
   }
 
   // Withdrawal Operations
   async withdraw(amount, tokenAddress, destination = null) {
-    if (!this.savingsContract) throw new Error('Contract not initialized');
+    if (!this.savingsContract) throw new Error("Contract not initialized");
 
     const amountWei = this.parseAmount(amount, 6); // Assuming USDT decimals
 
     let tx;
     if (destination) {
-      tx = await this.savingsContract.withdrawTo(amountWei, tokenAddress, destination);
+      tx = await this.savingsContract.withdrawTo(
+        amountWei,
+        tokenAddress,
+        destination,
+      );
     } else {
       tx = await this.savingsContract.withdraw(amountWei, tokenAddress);
     }
@@ -197,23 +305,42 @@ export class EVMAdapter extends BlockchainAdapter {
     return {
       hash: tx.hash,
       receipt: receipt,
-      success: true
+      success: true,
     };
   }
 
   // Proxy Management
   async isProxyDeployed(userAddress) {
-    if (!this.savingsContract) throw new Error('Contract not initialized');
+    if (!this.savingsContract) throw new Error("Contract not initialized");
     return await this.savingsContract.isProxyDeployed(userAddress);
   }
 
   async getDepositAddress(userAddress) {
-    if (!this.savingsContract) throw new Error('Contract not initialized');
+    if (!this.savingsContract) throw new Error("Contract not initialized");
     return await this.savingsContract.getUserDepositAddress(userAddress);
   }
 
+  async getProxyDeploymentFee() {
+    if (!this.savingsContract) throw new Error("Contract not initialized");
+    return await this.savingsContract.getProxyDeploymentFee();
+  }
+
   async deployProxy() {
-    if (!this.savingsContract) throw new Error('Contract not initialized');
+    if (!this.savingsContract) throw new Error("Contract not initialized");
+
+    // Approve USDT fee before deploying
+    const fee = await this.savingsContract.getProxyDeploymentFee();
+    if (fee > 0n) {
+      if (!this.proxyDeploymentModule)
+        throw new Error("ProxyDeploymentModule not initialized");
+      const paymentTokenAddress =
+        await this.proxyDeploymentModule.paymentToken();
+      await this.approveToken(
+        paymentTokenAddress,
+        this.proxyDeploymentModule.target,
+        fee,
+      );
+    }
 
     const tx = await this.savingsContract.deployUserProxy();
     const receipt = await tx.wait();
@@ -221,15 +348,17 @@ export class EVMAdapter extends BlockchainAdapter {
     return {
       hash: tx.hash,
       receipt: receipt,
-      success: true
+      success: true,
     };
   }
 
   // Spending Limits
   async getSpendingLimits(userAddress) {
-    if (!this.savingsContract) throw new Error('Contract not initialized');
+    if (!this.savingsContract) throw new Error("Contract not initialized");
 
-    const spendingData = await this.savingsContract.getUserSpendingLimits(userAddress);
+    const spendingData = await this.savingsContract.getUserSpendingLimits(
+      userAddress,
+    );
     const [names, limits, spent, remaining, durations, active] = spendingData;
 
     const fetchedLimits = [];
@@ -250,52 +379,54 @@ export class EVMAdapter extends BlockchainAdapter {
     // Return unified format that matches the service expectation
     return {
       limits: fetchedLimits,
-      isSetupCommitted: isSetupCommitted
+      isSetupCommitted: isSetupCommitted,
     };
   }
 
   async setSpendingLimits(daily, weekly, monthly) {
-    if (!this.savingsContract) throw new Error('Contract not initialized');
+    if (!this.savingsContract) throw new Error("Contract not initialized");
 
     const dailyLimitWei = daily > 0 ? this.parseAmount(daily.toString(), 6) : 0;
-    const weeklyLimitWei = weekly > 0 ? this.parseAmount(weekly.toString(), 6) : 0;
-    const monthlyLimitWei = monthly > 0 ? this.parseAmount(monthly.toString(), 6) : 0;
+    const weeklyLimitWei =
+      weekly > 0 ? this.parseAmount(weekly.toString(), 6) : 0;
+    const monthlyLimitWei =
+      monthly > 0 ? this.parseAmount(monthly.toString(), 6) : 0;
 
     const tx = await this.savingsContract.setCommonPeriodLimits(
       dailyLimitWei,
       weeklyLimitWei,
-      monthlyLimitWei
+      monthlyLimitWei,
     );
 
     const receipt = await tx.wait();
     return {
       hash: tx.hash,
       receipt: receipt,
-      success: true
+      success: true,
     };
   }
 
   async addSpendingLimit(periodName, limit) {
-    if (!this.savingsContract) throw new Error('Contract not initialized');
+    if (!this.savingsContract) throw new Error("Contract not initialized");
 
     const limitWei = ethers.parseUnits(limit.toString(), 6);
 
     // Determine duration based on period name
     const durations = {
-      'Daily': 86400,      // 1 day
-      'Weekly': 604800,    // 7 days
-      'Monthly': 2592000   // 30 days
+      Daily: 86400, // 1 day
+      Weekly: 604800, // 7 days
+      Monthly: 2592000, // 30 days
     };
 
     const duration = durations[periodName];
     if (!duration) {
-      throw new Error('Invalid period name. Must be Daily, Weekly, or Monthly');
+      throw new Error("Invalid period name. Must be Daily, Weekly, or Monthly");
     }
 
     const tx = await this.savingsContract.addTimePeriodLimit(
       periodName,
       limitWei,
-      duration
+      duration,
     );
 
     await tx.wait();
@@ -304,13 +435,14 @@ export class EVMAdapter extends BlockchainAdapter {
 
   // Proposal Management
   async proposeLimitChange(periodName, newLimit) {
-    if (!this.savingsContract) throw new Error('Savings contract not initialized');
-    if (!this.userAddress) throw new Error('User not connected');
+    if (!this.savingsContract)
+      throw new Error("Savings contract not initialized");
+    if (!this.userAddress) throw new Error("User not connected");
 
     const limitWei = ethers.parseUnits(newLimit.toString(), 6);
     const tx = await this.savingsContract.proposeLimitChange(
       periodName,
-      limitWei
+      limitWei,
     );
     await tx.wait();
 
@@ -321,21 +453,30 @@ export class EVMAdapter extends BlockchainAdapter {
   async fetchPendingProposals(userAddress = null) {
     try {
       if (!this.savingsContract) {
-        console.log('❌ Savings contract not available, skipping proposal fetch');
+        console.log(
+          "❌ Savings contract not available, skipping proposal fetch",
+        );
         return [];
       }
 
       const targetAddress = userAddress || this.userAddress;
       if (!targetAddress) {
-        console.log('❌ No user address available for fetching pending proposals');
+        console.log(
+          "❌ No user address available for fetching pending proposals",
+        );
         return [];
       }
 
-      console.log('📋 Fetching EVM pending proposals from contract...');
+      console.log("📋 Fetching EVM pending proposals from contract...");
 
       // Call the contract method to get pending proposals
-      const [proposalIds, categories, newLimits, executeAfters, isIncreaseFlags] =
-        await this.savingsContract.getUserPendingProposals();
+      const [
+        proposalIds,
+        categories,
+        newLimits,
+        executeAfters,
+        isIncreaseFlags,
+      ] = await this.savingsContract.getUserPendingProposals();
 
       console.log(`✅ Found ${proposalIds.length} pending proposals for EVM`);
 
@@ -358,26 +499,29 @@ export class EVMAdapter extends BlockchainAdapter {
           executeAfter: executeAfterTimestamp,
           executed: false, // This method only returns pending proposals
           isIncrease: isIncreaseFlags[i],
-          createdAt: executeAfterTimestamp - (24 * 60 * 60), // Estimate created time
-          action: 'change',
-          networkType: 'evm',
+          createdAt: executeAfterTimestamp - 24 * 60 * 60, // Estimate created time
+          action: "change",
+          networkType: "evm",
           timeRemaining,
           canExecute,
-          timeRemainingText: timeRemaining > 0 ? this.formatTimeRemaining(timeRemaining) : 'Ready to execute'
+          timeRemainingText:
+            timeRemaining > 0
+              ? this.formatTimeRemaining(timeRemaining)
+              : "Ready to execute",
         });
       }
 
       console.log(`📋 Formatted ${proposals.length} EVM proposals for display`);
       return proposals;
     } catch (error) {
-      console.error('Error fetching EVM pending proposals:', error);
+      console.error("Error fetching EVM pending proposals:", error);
       return [];
     }
   }
 
   // Helper function to format time remaining (matching Solana implementation)
   formatTimeRemaining(seconds) {
-    if (seconds <= 0) return 'Ready to execute';
+    if (seconds <= 0) return "Ready to execute";
 
     const hours = Math.floor(seconds / 3600);
     const minutes = Math.floor((seconds % 3600) / 60);
@@ -396,22 +540,22 @@ export class EVMAdapter extends BlockchainAdapter {
   async executeLimitProposal(proposalId) {
     try {
       if (!this.savingsContract) {
-        throw new Error('Savings contract not initialized');
+        throw new Error("Savings contract not initialized");
       }
       if (!this.userAddress) {
-        throw new Error('User not connected');
+        throw new Error("User not connected");
       }
 
-      console.log('🔄 Executing EVM proposal:', proposalId);
+      console.log("🔄 Executing EVM proposal:", proposalId);
 
       // Call the contract method to execute the proposal
       const tx = await this.savingsContract.executeLimitProposal(proposalId);
       await tx.wait();
 
-      console.log('✅ EVM proposal executed successfully:', tx.hash);
+      console.log("✅ EVM proposal executed successfully:", tx.hash);
       return tx.hash;
     } catch (error) {
-      console.error('❌ Error executing EVM proposal:', error);
+      console.error("❌ Error executing EVM proposal:", error);
       throw new Error(`Proposal execution failed: ${error.message}`);
     }
   }
@@ -420,22 +564,22 @@ export class EVMAdapter extends BlockchainAdapter {
   async cancelLimitProposal(proposalId) {
     try {
       if (!this.savingsContract) {
-        throw new Error('Savings contract not initialized');
+        throw new Error("Savings contract not initialized");
       }
       if (!this.userAddress) {
-        throw new Error('User not connected');
+        throw new Error("User not connected");
       }
 
-      console.log('🔄 Cancelling EVM proposal:', proposalId);
+      console.log("🔄 Cancelling EVM proposal:", proposalId);
 
       // Call the contract method to cancel the proposal
       const tx = await this.savingsContract.cancelLimitProposal(proposalId);
       await tx.wait();
 
-      console.log('✅ EVM proposal cancelled successfully:', tx.hash);
+      console.log("✅ EVM proposal cancelled successfully:", tx.hash);
       return tx.hash;
     } catch (error) {
-      console.error('❌ Error cancelling EVM proposal:', error);
+      console.error("❌ Error cancelling EVM proposal:", error);
       throw new Error(`Proposal cancellation failed: ${error.message}`);
     }
   }
@@ -472,16 +616,23 @@ export class EVMAdapter extends BlockchainAdapter {
    * @returns {Promise<string>} Transaction hash
    */
   async commitSetup(dailyLimit, weeklyLimit, monthlyLimit) {
-    if (!this.savingsContract) throw new Error('Contract not initialized');
+    if (!this.savingsContract) throw new Error("Contract not initialized");
 
     // Convert to Wei (contract expects 6 decimal places for USDT-compatible amounts)
-    const dailyWei = dailyLimit > 0 ? ethers.parseUnits(dailyLimit.toString(), 6) : 0;
-    const weeklyWei = weeklyLimit > 0 ? ethers.parseUnits(weeklyLimit.toString(), 6) : 0;
-    const monthlyWei = monthlyLimit > 0 ? ethers.parseUnits(monthlyLimit.toString(), 6) : 0;
+    const dailyWei =
+      dailyLimit > 0 ? ethers.parseUnits(dailyLimit.toString(), 6) : 0;
+    const weeklyWei =
+      weeklyLimit > 0 ? ethers.parseUnits(weeklyLimit.toString(), 6) : 0;
+    const monthlyWei =
+      monthlyLimit > 0 ? ethers.parseUnits(monthlyLimit.toString(), 6) : 0;
 
     try {
       // Call the unified commitSetup method we added to the contract
-      const tx = await this.savingsContract.commitSetup(dailyWei, weeklyWei, monthlyWei);
+      const tx = await this.savingsContract.commitSetup(
+        dailyWei,
+        weeklyWei,
+        monthlyWei,
+      );
       await tx.wait(); // Wait for transaction confirmation
 
       return tx.hash; // Return consistent format (transaction hash as string)
@@ -507,18 +658,37 @@ export class EVMAdapter extends BlockchainAdapter {
     this.savingsContract = new ethers.Contract(
       this.networkConfig.savingsContract,
       SavingsABI,
-      this.signer
+      this.signer,
     );
 
+    // Initialize ProxyDeploymentModule by looking up its registered address
+    try {
+      const PROXY_DEPLOYMENT_ID = ethers.keccak256(
+        ethers.toUtf8Bytes("PROXY_DEPLOYMENT"),
+      );
+      const proxyModuleAddress = await this.savingsContract.getModule(
+        PROXY_DEPLOYMENT_ID,
+      );
+      if (proxyModuleAddress && proxyModuleAddress !== ethers.ZeroAddress) {
+        this.proxyDeploymentModule = new ethers.Contract(
+          proxyModuleAddress,
+          ProxyDeploymentModuleABI,
+          this.signer,
+        );
+      }
+    } catch (e) {
+      console.warn("Could not initialize ProxyDeploymentModule:", e.message);
+    }
   }
 
   // Bypass Requests (unified adapter pattern)
   async fetchPendingBypassRequests(userAddress = null) {
-    if (!this.savingsContract) throw new Error('Contract not initialized');
+    if (!this.savingsContract) throw new Error("Contract not initialized");
 
     // Note: getUserActiveBypassRequests() uses msg.sender, so no user parameter needed
     const bypassData = await this.savingsContract.getUserActiveBypassRequests();
-    const [requestIds, amounts, skipPeriods, tokens, executeAfters] = bypassData;
+    const [requestIds, amounts, skipPeriods, tokens, executeAfters] =
+      bypassData;
 
     const requests = [];
     for (let i = 0; i < requestIds.length; i++) {
@@ -527,7 +697,7 @@ export class EVMAdapter extends BlockchainAdapter {
         amount: this.formatAmount(amounts[i], 6), // Format to USDT units
         skipPeriod: skipPeriods[i],
         token: tokens[i],
-        executeAfter: executeAfters[i].toString()
+        executeAfter: executeAfters[i].toString(),
       });
     }
 
@@ -536,133 +706,184 @@ export class EVMAdapter extends BlockchainAdapter {
 
   // Withdrawal Destination Requests (unified adapter pattern)
   async getPendingWithdrawalDestinationRequests(userAddress = null) {
-    if (!this.savingsContract) throw new Error('Contract not initialized');
+    if (!this.savingsContract) throw new Error("Contract not initialized");
 
-    const targetAddress = userAddress || await this.getAddress();
+    const targetAddress = userAddress || (await this.getAddress());
 
     try {
-      console.log('🔍 EVMAdapter: Fetching withdrawal destination requests for', targetAddress);
-      const result = await this.savingsContract.getUserPendingWithdrawalRequests();
+      console.log(
+        "🔍 EVMAdapter: Fetching withdrawal destination requests for",
+        targetAddress,
+      );
+      const result =
+        await this.savingsContract.getUserPendingWithdrawalRequests();
       return this.formatWithdrawalRequests(result);
     } catch (error) {
-      console.error('❌ EVMAdapter: Error fetching withdrawal destination requests:', error);
+      console.error(
+        "❌ EVMAdapter: Error fetching withdrawal destination requests:",
+        error,
+      );
       return [];
     }
   }
 
   // Withdrawal Address Management (unified adapter interface)
   async fetchWithdrawalAddresses(userAddress = null) {
-    if (!this.savingsContract) throw new Error('Contract not initialized');
+    if (!this.savingsContract) throw new Error("Contract not initialized");
 
     try {
       const result = await this.savingsContract.getUserWithdrawalAddresses();
       return this.formatWithdrawalAddresses(result);
     } catch (error) {
-      console.error('❌ EVMAdapter: Error fetching withdrawal addresses:', error);
+      console.error(
+        "❌ EVMAdapter: Error fetching withdrawal addresses:",
+        error,
+      );
       return [];
     }
   }
 
   async addWithdrawalDestination(address, title) {
-    if (!this.savingsContract) throw new Error('Contract not initialized');
+    if (!this.savingsContract) throw new Error("Contract not initialized");
 
     try {
       // Check if contract is locked by getting setup committed status
-      console.log('🔍 EVMAdapter: Checking setup committed status...');
+      console.log("🔍 EVMAdapter: Checking setup committed status...");
       const isSetupCommitted = await this.getIsSetupCommitted();
-      console.log(`📊 EVMAdapter: isSetupCommitted() returned: ${isSetupCommitted}`);
-      console.log(`📊 Contract lock status: ${isSetupCommitted ? 'LOCKED' : 'UNLOCKED'}`);
+      console.log(
+        `📊 EVMAdapter: isSetupCommitted() returned: ${isSetupCommitted}`,
+      );
+      console.log(
+        `📊 Contract lock status: ${isSetupCommitted ? "LOCKED" : "UNLOCKED"}`,
+      );
 
       if (isSetupCommitted) {
         // Contract is locked - use timelock pattern for security
-        console.log('🔒 Contract is locked, using timelock request...');
+        console.log("🔒 Contract is locked, using timelock request...");
         return await this.requestWithdrawalDestinationAddition(address, title);
       } else {
         // Contract is unlocked - add directly without timelock
-        console.log('🔓 Contract is unlocked, adding directly...');
-        console.log(`🔧 Calling addWithdrawalDestinationDirect(${address}, ${title})`);
+        console.log("🔓 Contract is unlocked, adding directly...");
+        console.log(
+          `🔧 Calling addWithdrawalDestinationDirect(${address}, ${title})`,
+        );
         return await this.addWithdrawalDestinationDirect(address, title);
       }
     } catch (error) {
-      console.error('❌ Error in addWithdrawalDestination:', error);
-      console.error('❌ Error stack:', error.stack);
+      console.error("❌ Error in addWithdrawalDestination:", error);
+      console.error("❌ Error stack:", error.stack);
       // Fallback to timelock pattern for safety
-      console.log('⚠️ Falling back to timelock pattern for safety');
+      console.log("⚠️ Falling back to timelock pattern for safety");
       return await this.requestWithdrawalDestinationAddition(address, title);
     }
   }
 
   async requestWithdrawalDestinationAddition(address, title) {
-    if (!this.savingsContract) throw new Error('Contract not initialized');
+    if (!this.savingsContract) throw new Error("Contract not initialized");
 
     try {
-      const tx = await this.savingsContract.requestWithdrawalAddress(title, address);
+      const tx = await this.savingsContract.requestWithdrawalAddress(
+        title,
+        address,
+      );
       await tx.wait();
-      console.log(`✅ Requested withdrawal address: ${title} -> ${address} (tx: ${tx.hash})`);
+      console.log(
+        `✅ Requested withdrawal address: ${title} -> ${address} (tx: ${tx.hash})`,
+      );
       return tx.hash;
     } catch (error) {
-      console.error('❌ EVMAdapter: Error requesting withdrawal address:', error);
+      console.error(
+        "❌ EVMAdapter: Error requesting withdrawal address:",
+        error,
+      );
       throw error;
     }
   }
 
   async addWithdrawalDestinationDirect(address, title) {
-    if (!this.savingsContract) throw new Error('Contract not initialized');
+    if (!this.savingsContract) throw new Error("Contract not initialized");
 
     try {
-      console.log(`🔧 EVMAdapter: Calling contract.addWithdrawalAddressDirect("${title}", "${address}")`);
-      const tx = await this.savingsContract.addWithdrawalAddressDirect(title, address);
+      console.log(
+        `🔧 EVMAdapter: Calling contract.addWithdrawalAddressDirect("${title}", "${address}")`,
+      );
+      const tx = await this.savingsContract.addWithdrawalAddressDirect(
+        title,
+        address,
+      );
       console.log(`📋 EVMAdapter: Transaction submitted: ${tx.hash}`);
       await tx.wait();
-      console.log(`✅ Added withdrawal address directly: ${title} -> ${address} (tx: ${tx.hash})`);
+      console.log(
+        `✅ Added withdrawal address directly: ${title} -> ${address} (tx: ${tx.hash})`,
+      );
       return tx.hash;
     } catch (error) {
-      console.error('❌ EVMAdapter: Error adding withdrawal address directly:', error);
-      console.error('❌ EVMAdapter: Direct add error details:', error.message);
-      if (error.reason) console.error('❌ EVMAdapter: Contract revert reason:', error.reason);
+      console.error(
+        "❌ EVMAdapter: Error adding withdrawal address directly:",
+        error,
+      );
+      console.error("❌ EVMAdapter: Direct add error details:", error.message);
+      if (error.reason)
+        console.error("❌ EVMAdapter: Contract revert reason:", error.reason);
       throw error;
     }
   }
 
   async executeWithdrawalAddressRequest(requestId) {
-    if (!this.savingsContract) throw new Error('Contract not initialized');
+    if (!this.savingsContract) throw new Error("Contract not initialized");
 
     try {
-      const tx = await this.savingsContract.executeWithdrawalAddressRequest(requestId);
+      const tx = await this.savingsContract.executeWithdrawalAddressRequest(
+        requestId,
+      );
       await tx.wait();
-      console.log(`✅ Executed withdrawal address request: ${requestId} (tx: ${tx.hash})`);
+      console.log(
+        `✅ Executed withdrawal address request: ${requestId} (tx: ${tx.hash})`,
+      );
       return tx.hash;
     } catch (error) {
-      console.error('❌ EVMAdapter: Error executing withdrawal address request:', error);
+      console.error(
+        "❌ EVMAdapter: Error executing withdrawal address request:",
+        error,
+      );
       throw error;
     }
   }
 
   async removeWithdrawalAddress(destination) {
-    if (!this.savingsContract) throw new Error('Contract not initialized');
+    if (!this.savingsContract) throw new Error("Contract not initialized");
 
     try {
-      const tx = await this.savingsContract.removeWithdrawalAddress(destination);
+      const tx = await this.savingsContract.removeWithdrawalAddress(
+        destination,
+      );
       await tx.wait();
-      console.log(`✅ Removed withdrawal address: ${destination} (tx: ${tx.hash})`);
+      console.log(
+        `✅ Removed withdrawal address: ${destination} (tx: ${tx.hash})`,
+      );
       return tx.hash;
     } catch (error) {
-      console.error('❌ EVMAdapter: Error removing withdrawal address:', error);
+      console.error("❌ EVMAdapter: Error removing withdrawal address:", error);
       throw error;
     }
   }
 
   async getIsSetupCommitted(userAddress = null) {
-    if (!this.savingsContract) throw new Error('Contract not initialized');
+    if (!this.savingsContract) throw new Error("Contract not initialized");
 
     try {
-      console.log('🔍 EVMAdapter: Calling contract.isSetupCommitted()...');
+      console.log("🔍 EVMAdapter: Calling contract.isSetupCommitted()...");
       const result = await this.savingsContract.isSetupCommitted();
-      console.log(`🔍 EVMAdapter: Contract returned isSetupCommitted: ${result}`);
+      console.log(
+        `🔍 EVMAdapter: Contract returned isSetupCommitted: ${result}`,
+      );
       return result;
     } catch (error) {
-      console.error('❌ EVMAdapter: Error checking setup committed status:', error);
-      console.error('❌ EVMAdapter: Setup check error details:', error.message);
+      console.error(
+        "❌ EVMAdapter: Error checking setup committed status:",
+        error,
+      );
+      console.error("❌ EVMAdapter: Setup check error details:", error.message);
       return false;
     }
   }
@@ -674,7 +895,7 @@ export class EVMAdapter extends BlockchainAdapter {
       title,
       destination: destinations[index],
       addedAt: Number(timestamps[index]),
-      active: true // All returned addresses are active
+      active: true, // All returned addresses are active
     }));
   }
 
@@ -685,7 +906,10 @@ export class EVMAdapter extends BlockchainAdapter {
       title: titles[index],
       destination: destinations[index],
       executeAfter: Number(executeAfters[index]),
-      timeRemaining: Math.max(0, Number(executeAfters[index]) - Math.floor(Date.now() / 1000))
+      timeRemaining: Math.max(
+        0,
+        Number(executeAfters[index]) - Math.floor(Date.now() / 1000),
+      ),
     }));
   }
 

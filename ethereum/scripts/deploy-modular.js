@@ -116,6 +116,14 @@ async function main() {
     moduleAddresses.approvalSystem = await approvalSystemModule.getAddress();
     console.log(`   ✅ ApprovalSystemModule deployed to: ${moduleAddresses.approvalSystem}`);
 
+    // 5. Deploy Proxy Deployment Module
+    console.log("   🔑 Deploying ProxyDeploymentModule...");
+    const ProxyDeploymentModule = await ethers.getContractFactory("ProxyDeploymentModule");
+    const proxyDeploymentModule = await ProxyDeploymentModule.deploy(savingsAddress);
+    await proxyDeploymentModule.waitForDeployment();
+    moduleAddresses.proxyDeployment = await proxyDeploymentModule.getAddress();
+    console.log(`   ✅ ProxyDeploymentModule deployed to: ${moduleAddresses.proxyDeployment}`);
+
     // Register modules with core contract
     console.log("\n🔗 Registering modules with core contract...");
 
@@ -151,6 +159,14 @@ async function main() {
     );
     await tx.wait();
 
+    // Register ProxyDeploymentModule
+    console.log("   Registering ProxyDeploymentModule...");
+    tx = await savingsCore.registerModule(
+      ethers.keccak256(ethers.toUtf8Bytes("PROXY_DEPLOYMENT")),
+      moduleAddresses.proxyDeployment
+    );
+    await tx.wait();
+
     console.log("   ✅ All modules registered successfully");
 
     // Set up module cross-references
@@ -164,16 +180,6 @@ async function main() {
     console.log("\n🔧 Modular system configured...");
     console.log("   ✅ Essential functions available directly in SavingsCore");
     console.log("   ✅ Frontend compatibility maintained for core functions");
-
-    // Set production mode if requested (disable dev mode for production)
-    if (isProduction) {
-      console.log("\n🏭 Setting production mode (disabling dev mode)...");
-      const tx = await savingsCore.setDevelopmentMode(false);
-      await tx.wait();
-      console.log("   ✅ Production mode enabled (dev mode disabled)");
-    } else {
-      console.log("\n🧪 Development mode enabled by default");
-    }
 
     // Deploy MockUSDT only if it's a fresh deployment or if needed
     let usdtAddress;
@@ -202,6 +208,32 @@ async function main() {
       } catch (error) {
         console.log("\n⚠️  Could not read frontend config for USDT address");
       }
+    }
+
+    // Configure proxy deployment fee via module (3 USDT)
+    if (usdtAddress) {
+      console.log("\n💰 Configuring proxy deployment fee...");
+      tx = await proxyDeploymentModule.setPaymentToken(usdtAddress);
+      await tx.wait();
+      console.log(`   ✅ Payment token set to: ${usdtAddress}`);
+
+      tx = await proxyDeploymentModule.setTreasuryAddress(deployer.address);
+      await tx.wait();
+      console.log(`   ✅ Treasury address set to: ${deployer.address}`);
+
+      tx = await proxyDeploymentModule.setProxyDeploymentFee(3_000_000); // 3 USDT (6 decimals)
+      await tx.wait();
+      console.log("   ✅ Proxy deployment fee set to: 3 USDT");
+    }
+
+    // Set production mode if requested (disable dev mode for production)
+    if (isProduction) {
+      console.log("\n🏭 Setting production mode (disabling dev mode)...");
+      const tx = await savingsCore.setDevelopmentMode(false);
+      await tx.wait();
+      console.log("   ✅ Production mode enabled (dev mode disabled)");
+    } else {
+      console.log("\n🧪 Development mode enabled by default");
     }
 
     // Update frontend addresses in networkConfig.json
@@ -293,6 +325,11 @@ async function main() {
       fs.writeFileSync(frontendApprovalSystemABIPath, JSON.stringify(approvalSystemArtifact.abi, null, 2));
       console.log("✅ ApprovalSystemModule ABI updated");
 
+      const proxyDeploymentArtifact = require("../artifacts/contracts/ProxyDeploymentModule.sol/ProxyDeploymentModule.json");
+      const frontendProxyDeploymentABIPath = path.join(__dirname, "../../frontend/src/ProxyDeploymentModuleABI.json");
+      fs.writeFileSync(frontendProxyDeploymentABIPath, JSON.stringify(proxyDeploymentArtifact.abi, null, 2));
+      console.log("✅ ProxyDeploymentModule ABI updated");
+
       // Copy MockUSDT ABI
       if (usdtAddress) {
         const usdtArtifact = require("../artifacts/contracts/MockUSDT.sol/MockUSDT.json");
@@ -322,6 +359,7 @@ async function main() {
     console.log(`  ProposalSystem:      ${moduleAddresses.proposalSystem}`);
     console.log(`  BypassSystem:        ${moduleAddresses.bypassSystem}`);
     console.log(`  ApprovalSystem:      ${moduleAddresses.approvalSystem}`);
+    console.log(`  ProxyDeployment:     ${moduleAddresses.proxyDeployment}`);
     if (usdtAddress) {
       console.log(`MockUSDT Address:      ${usdtAddress}`);
     }
@@ -375,12 +413,14 @@ async function main() {
       const proposalSystemRegistered = await savingsCore.getModule(ethers.keccak256(ethers.toUtf8Bytes("PROPOSAL_SYSTEM")));
       const bypassSystemRegistered = await savingsCore.getModule(ethers.keccak256(ethers.toUtf8Bytes("BYPASS_SYSTEM")));
       const approvalSystemRegistered = await savingsCore.getModule(ethers.keccak256(ethers.toUtf8Bytes("APPROVAL_SYSTEM")));
+      const proxyDeploymentRegistered = await savingsCore.getModule(ethers.keccak256(ethers.toUtf8Bytes("PROXY_DEPLOYMENT")));
 
       console.log("   Validating module registrations...");
       console.log(`   ✅ TimePeriodLimits: ${timePeriodLimitsRegistered === moduleAddresses.timePeriodLimits ? 'REGISTERED' : 'FAILED'}`);
       console.log(`   ✅ ProposalSystem: ${proposalSystemRegistered === moduleAddresses.proposalSystem ? 'REGISTERED' : 'FAILED'}`);
       console.log(`   ✅ BypassSystem: ${bypassSystemRegistered === moduleAddresses.bypassSystem ? 'REGISTERED' : 'FAILED'}`);
       console.log(`   ✅ ApprovalSystem: ${approvalSystemRegistered === moduleAddresses.approvalSystem ? 'REGISTERED' : 'FAILED'}`);
+      console.log(`   ✅ ProxyDeployment: ${proxyDeploymentRegistered === moduleAddresses.proxyDeployment ? 'REGISTERED' : 'FAILED'}`);
 
       // Verify core contract can be called
       const owner = await savingsCore.owner();

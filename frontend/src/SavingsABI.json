@@ -172,25 +172,6 @@
       {
         "indexed": true,
         "internalType": "address",
-        "name": "user",
-        "type": "address"
-      },
-      {
-        "indexed": true,
-        "internalType": "address",
-        "name": "proxy",
-        "type": "address"
-      }
-    ],
-    "name": "ProxyDeployed",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      {
-        "indexed": true,
-        "internalType": "address",
         "name": "implementation",
         "type": "address"
       }
@@ -358,7 +339,7 @@
     "outputs": [
       {
         "internalType": "address",
-        "name": "proxy",
+        "name": "",
         "type": "address"
       }
     ],
@@ -637,6 +618,19 @@
         "internalType": "bool",
         "name": "exists",
         "type": "bool"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "getProxyDeploymentFee",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
       }
     ],
     "stateMutability": "view",
@@ -1179,6 +1173,45 @@
       }
     ],
     "name": "setDevelopmentMode",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "_paymentToken",
+        "type": "address"
+      }
+    ],
+    "name": "setPaymentToken",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "_fee",
+        "type": "uint256"
+      }
+    ],
+    "name": "setProxyDeploymentFee",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "_treasuryAddress",
+        "type": "address"
+      }
+    ],
+    "name": "setTreasuryAddress",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"

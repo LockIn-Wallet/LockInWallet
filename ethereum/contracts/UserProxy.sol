@@ -6,6 +6,7 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 interface ISavings {
     function depositTo(address to) external payable;
     function deposit(address token, uint256 amount) external payable;
+    function deposit(address token, uint256 amount, address beneficiary) external payable;
 }
 
 contract UserProxy {
@@ -43,6 +44,20 @@ contract UserProxy {
         ISavings(mainContract).deposit(token, amount);
 
         emit ProxyDeposit(token, amount, owner);
+    }
+
+    // Sweep ERC20 tokens sent directly to proxy into savings for owner
+    // Permissionless - anyone can call, funds always go to the owner's savings
+    function sweepERC20(address token) external {
+        require(token != address(0), "Use receive() for ETH");
+        IERC20 tokenContract = IERC20(token);
+        uint256 balance = tokenContract.balanceOf(address(this));
+        require(balance > 0, "No tokens to sweep");
+
+        tokenContract.approve(mainContract, balance);
+        ISavings(mainContract).deposit(token, balance, owner);
+
+        emit ProxyDeposit(token, balance, owner);
     }
 
     // Emergency function to recover stuck tokens (only owner)

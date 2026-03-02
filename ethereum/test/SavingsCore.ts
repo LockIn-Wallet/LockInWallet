@@ -183,11 +183,14 @@ describe("SavingsCore", function () {
     });
 
     it("Should allow withdrawing to specific destination", async function () {
-      const { savingsCore, user1, user2 } = await loadFixture(deploySavingsWalletFixture);
+      const { savingsCore, approvalModule, user1, user2 } = await loadFixture(deploySavingsWalletFixture);
 
       // First deposit some ETH
       const depositAmount = hre.ethers.parseEther("1.0");
       await savingsCore.connect(user1)["deposit(address,uint256)"](hre.ethers.ZeroAddress, depositAmount, { value: depositAmount });
+
+      // Register user2 as an approved withdrawal address (direct add since dev mode allows it)
+      await savingsCore.connect(user1).addWithdrawalAddressDirect("user2", user2.address);
 
       const withdrawAmount = hre.ethers.parseEther("0.5");
       const initialUser2Balance = await hre.ethers.provider.getBalance(user2.address);
@@ -243,6 +246,59 @@ describe("SavingsCore", function () {
       await expect(
         savingsCore.connect(user1).withdraw(withdrawAmount, hre.ethers.ZeroAddress)
       ).not.to.be.reverted;
+    });
+  });
+
+  describe("UserProxy Sweep", function () {
+    it("Should sweep ERC20 tokens sent directly to proxy into savings", async function () {
+      const { savingsCore, mockUSDT, user1 } = await loadFixture(deploySavingsWalletFixture);
+
+      // Deploy a UserProxy manually (since ProxyDeploymentModule isn't in fixture)
+      const UserProxy = await hre.ethers.getContractFactory("UserProxy");
+      const userProxy = await UserProxy.deploy(savingsCore.target, user1.address);
+      await userProxy.waitForDeployment();
+
+      // Send USDT directly to proxy (simulating exchange withdrawal)
+      const amount = hre.ethers.parseUnits("100", 6);
+      await mockUSDT.transfer(userProxy.target, amount);
+
+      // Verify tokens are sitting in proxy
+      expect(await mockUSDT.balanceOf(userProxy.target)).to.equal(amount);
+
+      // Anyone can sweep - use a different signer
+      const [, , user2] = await hre.ethers.getSigners();
+      await userProxy.connect(user2).sweepERC20(mockUSDT.target);
+
+      // Tokens should be swept from proxy
+      expect(await mockUSDT.balanceOf(userProxy.target)).to.equal(0);
+
+      // Owner's savings balance should be credited
+      const balance = await savingsCore.getTokenBalance(user1.address, mockUSDT.target);
+      expect(balance).to.equal(amount);
+    });
+
+    it("Should revert sweep when no tokens to sweep", async function () {
+      const { savingsCore, mockUSDT, user1 } = await loadFixture(deploySavingsWalletFixture);
+
+      const UserProxy = await hre.ethers.getContractFactory("UserProxy");
+      const userProxy = await UserProxy.deploy(savingsCore.target, user1.address);
+      await userProxy.waitForDeployment();
+
+      await expect(
+        userProxy.sweepERC20(mockUSDT.target)
+      ).to.be.revertedWith("No tokens to sweep");
+    });
+
+    it("Should revert sweep for ETH address", async function () {
+      const { savingsCore, user1 } = await loadFixture(deploySavingsWalletFixture);
+
+      const UserProxy = await hre.ethers.getContractFactory("UserProxy");
+      const userProxy = await UserProxy.deploy(savingsCore.target, user1.address);
+      await userProxy.waitForDeployment();
+
+      await expect(
+        userProxy.sweepERC20(hre.ethers.ZeroAddress)
+      ).to.be.revertedWith("Use receive() for ETH");
     });
   });
 });

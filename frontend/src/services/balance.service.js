@@ -50,7 +50,8 @@ export async function fetchUserBalances(params) {
           signer,
           selectedNetwork,
           getCurrentNetwork,
-          userAddress
+          userAddress,
+          transactionManager
         });
       }
     },
@@ -115,7 +116,7 @@ async function fetchSolanaBalances(params) {
  * @returns {Promise<Object>} - Object containing EVM balances
  */
 async function fetchEvmBalances(params) {
-  const { savingsContract, signer, selectedNetwork, getCurrentNetwork, userAddress } = params;
+  const { savingsContract, signer, selectedNetwork, getCurrentNetwork, userAddress, transactionManager } = params;
 
   if (!savingsContract || !signer) {
     console.log('⏭️ Skipping EVM balance fetch - missing contract or signer');
@@ -123,6 +124,11 @@ async function fetchEvmBalances(params) {
   }
 
   try {
+    // Auto-sweep any ERC20 tokens sitting in the user's proxy before fetching balances
+    if (transactionManager?.getCurrentAdapter()?.checkAndSweepProxy) {
+      await transactionManager.getCurrentAdapter().checkAndSweepProxy();
+    }
+
     const currentUserAddress = userAddress || (await signer.getAddress());
     const currentNetwork = getCurrentNetwork('evm', selectedNetwork);
     const newBalances = {};

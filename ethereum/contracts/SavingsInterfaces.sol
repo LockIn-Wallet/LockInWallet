@@ -199,6 +199,19 @@ interface IApprovalSystemModule {
     event WithdrawalAddressRequestCancelled(address indexed user, bytes32 indexed requestId);
 }
 
+interface IProxyDeploymentModule {
+    function deployUserProxy(address user) external returns (address proxy);
+    function isProxyDeployed(address user) external view returns (bool);
+    function getUserProxy(address user) external view returns (address);
+    function getUserDepositAddress(address user) external view returns (address);
+    function setTreasuryAddress(address _treasury) external;
+    function setPaymentToken(address _token) external;
+    function setProxyDeploymentFee(uint256 _fee) external;
+    function getProxyDeploymentFee() external view returns (uint256);
+
+    event ProxyDeployed(address indexed user, address indexed proxy);
+}
+
 // ========== MAIN CONTRACT INTERFACE ==========
 
 interface ISavingsCore {
@@ -235,4 +248,5 @@ library ModuleIds {
     bytes32 public constant PROPOSAL_SYSTEM = keccak256("PROPOSAL_SYSTEM");
     bytes32 public constant BYPASS_SYSTEM = keccak256("BYPASS_SYSTEM");
     bytes32 public constant APPROVAL_SYSTEM = keccak256("APPROVAL_SYSTEM");
+    bytes32 public constant PROXY_DEPLOYMENT = keccak256("PROXY_DEPLOYMENT");
 }

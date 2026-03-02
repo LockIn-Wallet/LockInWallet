@@ -5,13 +5,11 @@ import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "./UserProxy.sol";
 import "./SavingsInterfaces.sol";
 
 contract SavingsCore is Initializable, UUPSUpgradeable, OwnableUpgradeable, ISavingsCore {
     // User data storage
     mapping(address => mapping(address => uint256)) private userTokenBalances; // user => token => balance
-    mapping(address => address) private userProxies; // user => proxy address
 
     // Module management
     mapping(bytes32 => address) private modules;
@@ -577,49 +575,51 @@ contract SavingsCore is Initializable, UUPSUpgradeable, OwnableUpgradeable, ISav
         IBypassSystemModule(bypassSystemAddr).setTimePeriodLimitsModule(timePeriodLimitsAddr);
     }
 
-    // ========== USER PROXY FUNCTIONS ==========
+    // ========== PROXY DEPLOYMENT FEE CONFIGURATION (delegates to module) ==========
 
-    function getUserDepositAddress(address user) external view returns (address) {
-        // Calculate deterministic address using CREATE2
-        bytes32 salt = keccak256(abi.encodePacked(user));
-        bytes32 bytecodeHash = keccak256(abi.encodePacked(
-            type(UserProxy).creationCode,
-            abi.encode(address(this), user)
-        ));
-
-        return address(uint160(uint256(keccak256(abi.encodePacked(
-            bytes1(0xff),
-            address(this),
-            salt,
-            bytecodeHash
-        )))));
+    function setTreasuryAddress(address _treasuryAddress) external onlyOwner {
+        IProxyDeploymentModule(modules[ModuleIds.PROXY_DEPLOYMENT]).setTreasuryAddress(_treasuryAddress);
     }
 
-    function deployUserProxy() external returns (address proxy) {
-        require(userProxies[msg.sender] == address(0), "Already deployed");
+    function setPaymentToken(address _paymentToken) external onlyOwner {
+        IProxyDeploymentModule(modules[ModuleIds.PROXY_DEPLOYMENT]).setPaymentToken(_paymentToken);
+    }
 
-        bytes32 salt = keccak256(abi.encodePacked(msg.sender));
+    function setProxyDeploymentFee(uint256 _fee) external onlyOwner {
+        IProxyDeploymentModule(modules[ModuleIds.PROXY_DEPLOYMENT]).setProxyDeploymentFee(_fee);
+    }
 
-        // Deploy using CREATE2 for deterministic address
-        proxy = address(new UserProxy{salt: salt}(address(this), msg.sender));
+    function getProxyDeploymentFee() external view returns (uint256) {
+        IProxyDeploymentModule m = IProxyDeploymentModule(modules[ModuleIds.PROXY_DEPLOYMENT]);
+        if (address(m) == address(0)) return 0;
+        return m.getProxyDeploymentFee();
+    }
 
-        userProxies[msg.sender] = proxy;
-        emit ProxyDeployed(msg.sender, proxy);
+    // ========== USER PROXY FUNCTIONS (delegates to module) ==========
 
-        return proxy;
+    function deployUserProxy() external returns (address) {
+        IProxyDeploymentModule m = IProxyDeploymentModule(modules[ModuleIds.PROXY_DEPLOYMENT]);
+        require(address(m) != address(0), "ProxyDeploymentModule not registered");
+        return m.deployUserProxy(msg.sender);
     }
 
     function isProxyDeployed(address user) external view returns (bool) {
-        return userProxies[user] != address(0);
+        IProxyDeploymentModule m = IProxyDeploymentModule(modules[ModuleIds.PROXY_DEPLOYMENT]);
+        if (address(m) == address(0)) return false;
+        return m.isProxyDeployed(user);
     }
 
     function getUserProxy(address user) external view returns (address) {
-        return userProxies[user];
+        IProxyDeploymentModule m = IProxyDeploymentModule(modules[ModuleIds.PROXY_DEPLOYMENT]);
+        if (address(m) == address(0)) return address(0);
+        return m.getUserProxy(user);
     }
 
-    // ========== EVENTS ==========
-
-    event ProxyDeployed(address indexed user, address indexed proxy);
+    function getUserDepositAddress(address user) external view returns (address) {
+        IProxyDeploymentModule m = IProxyDeploymentModule(modules[ModuleIds.PROXY_DEPLOYMENT]);
+        if (address(m) == address(0)) return address(0);
+        return m.getUserDepositAddress(user);
+    }
 
 
     // Allow contract to receive ETH for withdrawals

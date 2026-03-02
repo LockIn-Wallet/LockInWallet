@@ -261,7 +261,7 @@ const DepositInterface = ({
   const deployProxy = async () => {
     if (networkType === "evm") {
       // EVM proxy deployment
-      if (!savingsContract || !signer) {
+      if (!transactionManager) {
         alert("Please connect your wallet first");
         return;
       }
@@ -275,23 +275,23 @@ const DepositInterface = ({
         setIsDeploying(true);
         console.log("Deploying EVM user proxy...");
 
-        // Call the deployUserProxy function
-        const tx = await savingsContract.deployUserProxy();
-        console.log("Transaction sent:", tx.hash);
-
-        // Wait for transaction confirmation
-        const receipt = await tx.wait();
-        console.log("Transaction confirmed:", receipt);
+        // Deploy proxy through adapter (handles fee approval internally)
+        const result = await transactionManager.deployProxy();
+        console.log("EVM proxy deployment result:", result);
 
         // Refresh proxy status
         await checkProxyStatus();
 
         alert(
-          "🎉 Permanent deposit address generated successfully! This address is permanently tied to your wallet and you can use it for all future deposits from exchanges."
+          "🎉 Permanent deposit address generated successfully! A 3 USDT fee has been charged. This address is permanently tied to your wallet and you can use it for all future deposits from exchanges."
         );
       } catch (error) {
         console.error("Error deploying EVM proxy:", error);
-        alert(`Failed to deploy proxy: ${error.message}`);
+        if (error.message.includes("user rejected") || error.code === 4001) {
+          alert("Transaction cancelled by user");
+        } else {
+          alert(`Failed to deploy proxy: ${error.message}`);
+        }
       } finally {
         setIsDeploying(false);
       }
@@ -589,7 +589,7 @@ const DepositInterface = ({
               }}
             >
               <p style={{ margin: `${spacing.xs} 0` }}>
-                ✨ One-time setup • Gas fee required
+                ✨ One-time setup • 3 USDT fee + gas required
               </p>
               <p style={{ margin: `${spacing.xs} 0` }}>
                 🎯 Direct exchange withdrawals • Permanent address you
