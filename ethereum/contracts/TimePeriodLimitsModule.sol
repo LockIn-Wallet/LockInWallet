@@ -1,14 +1,19 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.19;
 
+import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import "./SavingsInterfaces.sol";
 
-contract TimePeriodLimitsModule is ITimePeriodLimitsModule {
-    // Core contract that owns this module
-    ISavingsCore public immutable savingsCore;
+contract TimePeriodLimitsModule is Initializable, UUPSUpgradeable, OwnableUpgradeable, ITimePeriodLimitsModule {
+    ISavingsCore public savingsCore;
 
     // Storage for user spending limits
     mapping(address => UserSpendingLimits) private userSpendingLimits;
+
+    // Migration flag
+    bool public migrationComplete;
 
     modifier onlyAuthorized() {
         require(
@@ -24,10 +29,19 @@ contract TimePeriodLimitsModule is ITimePeriodLimitsModule {
         _;
     }
 
-    constructor(address _savingsCore) {
+    /// @custom:oz-upgrades-unsafe-allow constructor
+    constructor() {
+        _disableInitializers();
+    }
+
+    function initialize(address _savingsCore) public initializer {
         require(_savingsCore != address(0), "Invalid core address");
+        __Ownable_init(msg.sender);
+        __UUPSUpgradeable_init();
         savingsCore = ISavingsCore(_savingsCore);
     }
+
+    function _authorizeUpgrade(address) internal override onlyOwner {}
 
     // ========== PERIOD MANAGEMENT ==========
 
@@ -403,5 +417,37 @@ contract TimePeriodLimitsModule is ITimePeriodLimitsModule {
         if (monthlyLimit > 0) {
             _addTimePeriodLimitInternal(user, "Monthly", monthlyLimit, 2592000); // 30 days
         }
+    }
+
+    // ========== MIGRATION FUNCTIONS ==========
+
+    function migrateUserLimit(
+        address user,
+        string calldata periodName,
+        uint256 limit,
+        uint256 spentAmount,
+        uint256 lastReset,
+        uint256 duration,
+        bool activeFlag
+    ) external onlyOwner {
+        require(!migrationComplete, "Migration already complete");
+
+        UserSpendingLimits storage userLimits = userSpendingLimits[user];
+        userLimits.periods.push(TimePeriodLimit({
+            limit: limit,
+            spent: spentAmount,
+            lastReset: lastReset,
+            duration: duration,
+            name: periodName,
+            active: activeFlag
+        }));
+        userLimits.periodIndexes[periodName] = userLimits.periods.length - 1;
+        if (activeFlag) {
+            userLimits.periodCount++;
+        }
+    }
+
+    function lockMigration() external onlyOwner {
+        migrationComplete = true;
     }
 }

@@ -17,21 +17,21 @@ describe("SavingsCore", function () {
     const savingsCore = await hre.upgrades.deployProxy(SavingsCore, []);
     await savingsCore.waitForDeployment();
 
-    // Deploy modules with SavingsCore address
+    // Deploy modules as UUPS proxies with SavingsCore address
     const TimePeriodLimitsModule = await hre.ethers.getContractFactory("TimePeriodLimitsModule");
-    const timeLimitsModule = await TimePeriodLimitsModule.deploy(savingsCore.target);
+    const timeLimitsModule = await hre.upgrades.deployProxy(TimePeriodLimitsModule, [savingsCore.target], { initializer: "initialize" });
     await timeLimitsModule.waitForDeployment();
 
     const ProposalSystemModule = await hre.ethers.getContractFactory("ProposalSystemModule");
-    const proposalModule = await ProposalSystemModule.deploy(savingsCore.target);
+    const proposalModule = await hre.upgrades.deployProxy(ProposalSystemModule, [savingsCore.target], { initializer: "initialize" });
     await proposalModule.waitForDeployment();
 
     const BypassSystemModule = await hre.ethers.getContractFactory("BypassSystemModule");
-    const bypassModule = await BypassSystemModule.deploy(savingsCore.target);
+    const bypassModule = await hre.upgrades.deployProxy(BypassSystemModule, [savingsCore.target], { initializer: "initialize" });
     await bypassModule.waitForDeployment();
 
     const ApprovalSystemModule = await hre.ethers.getContractFactory("ApprovalSystemModule");
-    const approvalModule = await ApprovalSystemModule.deploy(savingsCore.target);
+    const approvalModule = await hre.upgrades.deployProxy(ApprovalSystemModule, [savingsCore.target], { initializer: "initialize" });
     await approvalModule.waitForDeployment();
 
     // Register modules

@@ -17,6 +17,8 @@
     "update-frontend": "node scripts/update-frontend-addresses.js",
     "transfer-usdt": "hardhat run scripts/transferUSDT.js --network localhost --",
     "upgrade-module": "hardhat run scripts/upgrade-module.js --network localhost",
+    "upgrade-module-proxy": "hardhat run scripts/upgrade-module-proxy.js --network localhost",
+    "migrate-to-upgradeable": "hardhat run scripts/migrate-to-upgradeable-modules.js --network polygon",
     "validate-deployment": "hardhat run scripts/validate-deployment.js --network localhost",
     "gas-estimation": "node scripts/gas-estimation.js",
     "estimate-polygon-costs": "hardhat run scripts/estimate-polygon-costs.js --network polygon",

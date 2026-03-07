@@ -7,7 +7,8 @@ const MODULE_IDS = {
   'TimePeriodLimitsModule': ethers.keccak256(ethers.toUtf8Bytes("TIME_PERIOD_LIMITS")),
   'ProposalSystemModule': ethers.keccak256(ethers.toUtf8Bytes("PROPOSAL_SYSTEM")),
   'BypassSystemModule': ethers.keccak256(ethers.toUtf8Bytes("BYPASS_SYSTEM")),
-  'ApprovalSystemModule': ethers.keccak256(ethers.toUtf8Bytes("APPROVAL_SYSTEM"))
+  'ApprovalSystemModule': ethers.keccak256(ethers.toUtf8Bytes("APPROVAL_SYSTEM")),
+  'ProxyDeploymentModule': ethers.keccak256(ethers.toUtf8Bytes("PROXY_DEPLOYMENT"))
 };
 
 async function main() {

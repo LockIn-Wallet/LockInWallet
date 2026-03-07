@@ -81,48 +81,48 @@ async function main() {
     // Get core contract instance
     const savingsCore = await ethers.getContractAt("SavingsCore", savingsAddress);
 
-    // Deploy modules
-    console.log("\n🧩 Deploying modules...");
+    // Deploy modules (each as UUPS proxy)
+    console.log("\n🧩 Deploying upgradeable modules...");
 
     // 1. Deploy Time Period Limits Module
-    console.log("   📊 Deploying TimePeriodLimitsModule...");
+    console.log("   📊 Deploying TimePeriodLimitsModule (proxy)...");
     const TimePeriodLimitsModule = await ethers.getContractFactory("TimePeriodLimitsModule");
-    const timePeriodLimitsModule = await TimePeriodLimitsModule.deploy(savingsAddress);
+    const timePeriodLimitsModule = await upgrades.deployProxy(TimePeriodLimitsModule, [savingsAddress], { initializer: "initialize" });
     await timePeriodLimitsModule.waitForDeployment();
     moduleAddresses.timePeriodLimits = await timePeriodLimitsModule.getAddress();
-    console.log(`   ✅ TimePeriodLimitsModule deployed to: ${moduleAddresses.timePeriodLimits}`);
+    console.log(`   ✅ TimePeriodLimitsModule proxy deployed to: ${moduleAddresses.timePeriodLimits}`);
 
     // 2. Deploy Proposal System Module
-    console.log("   📝 Deploying ProposalSystemModule...");
+    console.log("   📝 Deploying ProposalSystemModule (proxy)...");
     const ProposalSystemModule = await ethers.getContractFactory("ProposalSystemModule");
-    const proposalSystemModule = await ProposalSystemModule.deploy(savingsAddress);
+    const proposalSystemModule = await upgrades.deployProxy(ProposalSystemModule, [savingsAddress], { initializer: "initialize" });
     await proposalSystemModule.waitForDeployment();
     moduleAddresses.proposalSystem = await proposalSystemModule.getAddress();
-    console.log(`   ✅ ProposalSystemModule deployed to: ${moduleAddresses.proposalSystem}`);
+    console.log(`   ✅ ProposalSystemModule proxy deployed to: ${moduleAddresses.proposalSystem}`);
 
     // 3. Deploy Bypass System Module
-    console.log("   🚨 Deploying BypassSystemModule...");
+    console.log("   🚨 Deploying BypassSystemModule (proxy)...");
     const BypassSystemModule = await ethers.getContractFactory("BypassSystemModule");
-    const bypassSystemModule = await BypassSystemModule.deploy(savingsAddress);
+    const bypassSystemModule = await upgrades.deployProxy(BypassSystemModule, [savingsAddress], { initializer: "initialize" });
     await bypassSystemModule.waitForDeployment();
     moduleAddresses.bypassSystem = await bypassSystemModule.getAddress();
-    console.log(`   ✅ BypassSystemModule deployed to: ${moduleAddresses.bypassSystem}`);
+    console.log(`   ✅ BypassSystemModule proxy deployed to: ${moduleAddresses.bypassSystem}`);
 
     // 4. Deploy Approval System Module
-    console.log("   🔐 Deploying ApprovalSystemModule...");
+    console.log("   🔐 Deploying ApprovalSystemModule (proxy)...");
     const ApprovalSystemModule = await ethers.getContractFactory("ApprovalSystemModule");
-    const approvalSystemModule = await ApprovalSystemModule.deploy(savingsAddress);
+    const approvalSystemModule = await upgrades.deployProxy(ApprovalSystemModule, [savingsAddress], { initializer: "initialize" });
     await approvalSystemModule.waitForDeployment();
     moduleAddresses.approvalSystem = await approvalSystemModule.getAddress();
-    console.log(`   ✅ ApprovalSystemModule deployed to: ${moduleAddresses.approvalSystem}`);
+    console.log(`   ✅ ApprovalSystemModule proxy deployed to: ${moduleAddresses.approvalSystem}`);
 
     // 5. Deploy Proxy Deployment Module
-    console.log("   🔑 Deploying ProxyDeploymentModule...");
+    console.log("   🔑 Deploying ProxyDeploymentModule (proxy)...");
     const ProxyDeploymentModule = await ethers.getContractFactory("ProxyDeploymentModule");
-    const proxyDeploymentModule = await ProxyDeploymentModule.deploy(savingsAddress);
+    const proxyDeploymentModule = await upgrades.deployProxy(ProxyDeploymentModule, [savingsAddress], { initializer: "initialize", unsafeAllow: ["constructor"] });
     await proxyDeploymentModule.waitForDeployment();
     moduleAddresses.proxyDeployment = await proxyDeploymentModule.getAddress();
-    console.log(`   ✅ ProxyDeploymentModule deployed to: ${moduleAddresses.proxyDeployment}`);
+    console.log(`   ✅ ProxyDeploymentModule proxy deployed to: ${moduleAddresses.proxyDeployment}`);
 
     // Register modules with core contract
     console.log("\n🔗 Registering modules with core contract...");

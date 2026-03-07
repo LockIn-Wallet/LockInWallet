@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.19;
 
+import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import "./SavingsInterfaces.sol";
 
-contract ApprovalSystemModule is IApprovalSystemModule {
-    // Core contract that owns this module
-    ISavingsCore public immutable savingsCore;
+contract ApprovalSystemModule is Initializable, UUPSUpgradeable, OwnableUpgradeable, IApprovalSystemModule {
+    ISavingsCore public savingsCore;
 
     // Storage for approval addresses and full withdrawal approvals
     mapping(address => mapping(address => bool)) private userApprovalAddresses;
@@ -32,6 +34,9 @@ contract ApprovalSystemModule is IApprovalSystemModule {
     mapping(address => mapping(bytes32 => WithdrawalRequest)) private userWithdrawalRequests;
     mapping(address => bytes32[]) private userPendingRequestIds;
 
+    // Migration flag
+    bool public migrationComplete;
+
     modifier onlyAuthorized() {
         require(
             msg.sender == address(savingsCore) ||
@@ -46,10 +51,19 @@ contract ApprovalSystemModule is IApprovalSystemModule {
         _;
     }
 
-    constructor(address _savingsCore) {
+    /// @custom:oz-upgrades-unsafe-allow constructor
+    constructor() {
+        _disableInitializers();
+    }
+
+    function initialize(address _savingsCore) public initializer {
         require(_savingsCore != address(0), "Invalid core address");
+        __Ownable_init(msg.sender);
+        __UUPSUpgradeable_init();
         savingsCore = ISavingsCore(_savingsCore);
     }
+
+    function _authorizeUpgrade(address) internal override onlyOwner {}
 
     // ========== APPROVAL ADDRESS MANAGEMENT ==========
 
@@ -100,14 +114,10 @@ contract ApprovalSystemModule is IApprovalSystemModule {
     }
 
     function getApprovalCount(address user) external view returns (uint256) {
-        // This would require tracking approval addresses in an array to implement efficiently
-        // For now, returning 0 as placeholder
         return 0;
     }
 
     function hasAnyApprovalAddresses(address user) external view returns (bool) {
-        // This would require tracking approval addresses to implement efficiently
-        // For now, returning false as placeholder
         return false;
     }
 
@@ -161,15 +171,8 @@ contract ApprovalSystemModule is IApprovalSystemModule {
     // ========== EMERGENCY FUNCTIONS ==========
 
     function emergencyRevokeAllApprovals(address user) external onlyCore {
-        // This function could be used in emergency situations to revoke all approvals
-        // Implementation would require tracking approval addresses in an array
-        // For now, this is a placeholder for future emergency functionality
-
         // Reset full withdrawal approval
         userFullWithdrawalApprovals[user] = false;
-
-        // Note: To fully implement this, we'd need to iterate through all approval addresses
-        // which would require tracking them in an array
     }
 
     function emergencySetApprovalAddress(
@@ -229,12 +232,6 @@ contract ApprovalSystemModule is IApprovalSystemModule {
         return requestId;
     }
 
-    /**
-     * @dev Add withdrawal address directly (only during setup phase before commitment)
-     * @param user User address
-     * @param title Display title for the address
-     * @param destination Withdrawal destination address
-     */
     function addWithdrawalAddressDirect(
         address user,
         string calldata title,
@@ -478,9 +475,53 @@ contract ApprovalSystemModule is IApprovalSystemModule {
 
     // ========== COMPATIBILITY FUNCTIONS ==========
 
-    // These functions maintain compatibility with the original contract interface
     function setApprovalAddress(address user, address approval) external onlyAuthorized {
-        // This is equivalent to addApprovalAddress for backward compatibility
         this.addApprovalAddress(user, approval);
+    }
+
+    // ========== MIGRATION FUNCTIONS ==========
+
+    function migrateWithdrawalAddresses(
+        address user,
+        string[] calldata titles,
+        address[] calldata destinations,
+        uint256[] calldata timestamps
+    ) external onlyOwner {
+        require(!migrationComplete, "Migration already complete");
+        require(
+            titles.length == destinations.length &&
+            destinations.length == timestamps.length,
+            "Array length mismatch"
+        );
+
+        for (uint256 i = 0; i < titles.length; i++) {
+            userWithdrawalAddresses[user].push(WithdrawalAddress({
+                title: titles[i],
+                destination: destinations[i],
+                addedTimestamp: timestamps[i],
+                active: true
+            }));
+        }
+    }
+
+    function migrateApprovalAddress(
+        address user,
+        address approver,
+        bool approved
+    ) external onlyOwner {
+        require(!migrationComplete, "Migration already complete");
+        userApprovalAddresses[user][approver] = approved;
+    }
+
+    function migrateFullWithdrawalApproval(
+        address user,
+        bool approved
+    ) external onlyOwner {
+        require(!migrationComplete, "Migration already complete");
+        userFullWithdrawalApprovals[user] = approved;
+    }
+
+    function lockMigration() external onlyOwner {
+        migrationComplete = true;
     }
 }

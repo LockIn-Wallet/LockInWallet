@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.19;
 
+import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import "./SavingsInterfaces.sol";
 
-contract ProposalSystemModule is IProposalSystemModule {
-    // Core contract that owns this module
-    ISavingsCore public immutable savingsCore;
+contract ProposalSystemModule is Initializable, UUPSUpgradeable, OwnableUpgradeable, IProposalSystemModule {
+    ISavingsCore public savingsCore;
 
     // Time Period Limits Module for limit checking
     ITimePeriodLimitsModule public timePeriodLimitsModule;
@@ -16,6 +18,9 @@ contract ProposalSystemModule is IProposalSystemModule {
 
     // Track proposal IDs per user for enumeration
     mapping(address => bytes32[]) private userProposalIds;
+
+    // Migration flag
+    bool public migrationComplete;
 
     modifier onlyAuthorized() {
         require(
@@ -31,10 +36,19 @@ contract ProposalSystemModule is IProposalSystemModule {
         _;
     }
 
-    constructor(address _savingsCore) {
+    /// @custom:oz-upgrades-unsafe-allow constructor
+    constructor() {
+        _disableInitializers();
+    }
+
+    function initialize(address _savingsCore) public initializer {
         require(_savingsCore != address(0), "Invalid core address");
+        __Ownable_init(msg.sender);
+        __UUPSUpgradeable_init();
         savingsCore = ISavingsCore(_savingsCore);
     }
+
+    function _authorizeUpgrade(address) internal override onlyOwner {}
 
     function setTimePeriodLimitsModule(address _timePeriodLimitsModule) external onlyCore {
         require(_timePeriodLimitsModule != address(0), "Invalid module address");
@@ -131,7 +145,6 @@ contract ProposalSystemModule is IProposalSystemModule {
     function cancelLimitProposal(address user, bytes32 proposalId) external onlyAuthorized {
         require(userProposals[user][proposalId].exists && !userProposals[user][proposalId].executed, "Invalid proposal");
         delete userProposals[user][proposalId];
-        // Reusing BypassCancelled event for now - could create specific event
     }
 
     // ========== SETUP MANAGEMENT ==========
@@ -302,7 +315,7 @@ contract ProposalSystemModule is IProposalSystemModule {
         UserSetupData storage userData = userSetupData[user];
         if (!userData.hasCommittedSetup) return false;
 
-        try this._checkIncreaseLimit(user, userData, increaseAmount) {
+        try this._checkIncreaseLimitExternal(user, userData, increaseAmount) {
             return true;
         } catch {
             return false;
@@ -310,8 +323,32 @@ contract ProposalSystemModule is IProposalSystemModule {
     }
 
     // External wrapper for internal function to support try/catch
-    function _checkIncreaseLimit(address /* user */, UserSetupData calldata /* userData */, uint256 /* increaseAmount */) external pure {
+    function _checkIncreaseLimitExternal(address /* user */, UserSetupData calldata /* userData */, uint256 /* increaseAmount */) external pure {
         // Allow unlimited increases - no restrictions
         return;
+    }
+
+    // ========== MIGRATION FUNCTIONS ==========
+
+    function migrateSetupData(
+        address user,
+        bool hasCommittedSetup,
+        uint256 totalLockedValue,
+        uint256 commitTimestamp,
+        uint256 lastIncreaseTimestamp,
+        uint256 increasesInPeriod
+    ) external onlyOwner {
+        require(!migrationComplete, "Migration already complete");
+
+        UserSetupData storage userData = userSetupData[user];
+        userData.hasCommittedSetup = hasCommittedSetup;
+        userData.totalLockedValue = totalLockedValue;
+        userData.commitTimestamp = commitTimestamp;
+        userData.lastIncreaseTimestamp = lastIncreaseTimestamp;
+        userData.increasesInPeriod = increasesInPeriod;
+    }
+
+    function lockMigration() external onlyOwner {
+        migrationComplete = true;
     }
 }

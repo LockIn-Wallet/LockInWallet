@@ -2,6 +2,9 @@
 pragma solidity ^0.8.19;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import "./SavingsInterfaces.sol";
 import "./UserProxy.sol";
 
@@ -9,8 +12,8 @@ interface IOwnable {
     function owner() external view returns (address);
 }
 
-contract ProxyDeploymentModule is IProxyDeploymentModule {
-    ISavingsCore public immutable savingsCore;
+contract ProxyDeploymentModule is Initializable, UUPSUpgradeable, OwnableUpgradeable, IProxyDeploymentModule {
+    ISavingsCore public savingsCore;
 
     mapping(address => address) private userProxies;
 
@@ -18,20 +21,27 @@ contract ProxyDeploymentModule is IProxyDeploymentModule {
     address public paymentToken;
     uint256 public proxyDeploymentFee;
 
+    // Migration flag
+    bool public migrationComplete;
+
     modifier onlyCore() {
         require(msg.sender == address(savingsCore), "Not authorized: only core");
         _;
     }
 
-    modifier onlyOwner() {
-        require(msg.sender == IOwnable(address(savingsCore)).owner(), "Not authorized: only owner");
-        _;
+    /// @custom:oz-upgrades-unsafe-allow constructor
+    constructor() {
+        _disableInitializers();
     }
 
-    constructor(address _savingsCore) {
+    function initialize(address _savingsCore) public initializer {
         require(_savingsCore != address(0), "Invalid core address");
+        __Ownable_init(msg.sender);
+        __UUPSUpgradeable_init();
         savingsCore = ISavingsCore(_savingsCore);
     }
+
+    function _authorizeUpgrade(address) internal override onlyOwner {}
 
     function deployUserProxy(address user) external onlyCore returns (address proxy) {
         require(userProxies[user] == address(0), "Already deployed");
@@ -90,5 +100,19 @@ contract ProxyDeploymentModule is IProxyDeploymentModule {
 
     function getProxyDeploymentFee() external view returns (uint256) {
         return proxyDeploymentFee;
+    }
+
+    // Migration: register existing proxies during one-time migration from old module
+    function registerExistingProxy(address user, address proxy) external onlyOwner {
+        require(!migrationComplete, "Migration already complete");
+        require(user != address(0), "Invalid user");
+        require(proxy != address(0), "Invalid proxy");
+        require(userProxies[user] == address(0), "Already registered");
+        userProxies[user] = proxy;
+        emit ProxyDeployed(user, proxy);
+    }
+
+    function lockMigration() external onlyOwner {
+        migrationComplete = true;
     }
 }

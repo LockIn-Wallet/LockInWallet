@@ -2,11 +2,13 @@
 pragma solidity ^0.8.19;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import "./SavingsInterfaces.sol";
 
-contract BypassSystemModule is IBypassSystemModule {
-    // Core contract that owns this module
-    ISavingsCore public immutable savingsCore;
+contract BypassSystemModule is Initializable, UUPSUpgradeable, OwnableUpgradeable, IBypassSystemModule {
+    ISavingsCore public savingsCore;
 
     // Time Period Limits Module for limit checking
     ITimePeriodLimitsModule public timePeriodLimitsModule;
@@ -17,15 +19,18 @@ contract BypassSystemModule is IBypassSystemModule {
     // Track active request IDs per user for enumeration
     mapping(address => bytes32[]) private userActiveRequestIds;
 
-    // Add this modifier to prevent reentrancy
+    // Reentrancy lock
+    bool private locked;
+
+    // Migration flag
+    bool public migrationComplete;
+
     modifier nonReentrant() {
         require(!locked, "Reentrant call");
         locked = true;
         _;
         locked = false;
     }
-
-    bool private locked;
 
     modifier onlyAuthorized() {
         require(
@@ -41,11 +46,20 @@ contract BypassSystemModule is IBypassSystemModule {
         _;
     }
 
-    constructor(address _savingsCore) {
+    /// @custom:oz-upgrades-unsafe-allow constructor
+    constructor() {
+        _disableInitializers();
+    }
+
+    function initialize(address _savingsCore) public initializer {
         require(_savingsCore != address(0), "Invalid core address");
+        __Ownable_init(msg.sender);
+        __UUPSUpgradeable_init();
         savingsCore = ISavingsCore(_savingsCore);
         locked = false;
     }
+
+    function _authorizeUpgrade(address) internal override onlyOwner {}
 
     function setTimePeriodLimitsModule(address _timePeriodLimitsModule) external onlyCore {
         require(_timePeriodLimitsModule != address(0), "Invalid module address");
@@ -254,9 +268,6 @@ contract BypassSystemModule is IBypassSystemModule {
     // ========== EMERGENCY FUNCTIONS ==========
 
     function emergencySetBypassTimelock(uint256 newTimelock) external onlyCore {
-        // This function could be used to adjust timelock in emergency situations
-        // Implementation would depend on specific requirements
-        // For now, this is a placeholder for future emergency functionality
         require(newTimelock >= 1 hours && newTimelock <= 168 hours, "Invalid timelock duration"); // 1 hour to 1 week
     }
 
@@ -264,5 +275,36 @@ contract BypassSystemModule is IBypassSystemModule {
     receive() external payable {
         // Only accept ETH from the core contract
         require(msg.sender == address(savingsCore), "Only core contract can send ETH");
+    }
+
+    // ========== MIGRATION FUNCTIONS ==========
+
+    function migrateBypassRequest(
+        address user,
+        bytes32 requestId,
+        uint256 amount,
+        string calldata skipPeriod,
+        address token,
+        uint256 executeAfter,
+        bool executed
+    ) external onlyOwner {
+        require(!migrationComplete, "Migration already complete");
+
+        userBypassRequests[user][requestId] = BypassRequest({
+            amount: amount,
+            skipPeriod: skipPeriod,
+            token: token,
+            executeAfter: executeAfter,
+            executed: executed,
+            exists: true
+        });
+
+        if (!executed) {
+            userActiveRequestIds[user].push(requestId);
+        }
+    }
+
+    function lockMigration() external onlyOwner {
+        migrationComplete = true;
     }
 }
