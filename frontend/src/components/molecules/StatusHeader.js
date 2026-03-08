@@ -73,7 +73,8 @@ const StatusHeader = ({
       </h1>
 
       {/* Tagline - Only show when wallet is disconnected */}
-      {(!provider && networkType !== "solana") || (networkType === "solana" && (!solanaConnected || !solanaWallet)) ? (
+      {(!provider && networkType !== "solana") ||
+      (networkType === "solana" && (!solanaConnected || !solanaWallet)) ? (
         <div
           style={{
             textAlign: "center",
@@ -95,7 +96,7 @@ const StatusHeader = ({
               words={["profits", "bankroll", "savings"]}
               typingSpeed={120}
               deletingSpeed={60}
-              delayBetweenWords={4000}
+              delayBetweenWords={2500}
               style={{
                 fontSize: fontSize.lg,
                 fontWeight: fontWeight.medium,
@@ -187,28 +188,50 @@ const StatusHeader = ({
                 color: checkCorrectNetwork()
                   ? colors.success.light
                   : colors.error.light,
-                cursor: !checkCorrectNetwork() && networkType === "evm" ? "pointer" : "default",
-                textDecoration: !checkCorrectNetwork() && networkType === "evm" ? "underline" : "none",
+                cursor:
+                  !checkCorrectNetwork() && networkType === "evm"
+                    ? "pointer"
+                    : "default",
+                textDecoration:
+                  !checkCorrectNetwork() && networkType === "evm"
+                    ? "underline"
+                    : "none",
               }}
               onClick={async () => {
                 if (!checkCorrectNetwork() && networkType === "evm") {
-                  console.log(`🔄 User clicked to switch to ${getNetworkInfo().name}...`);
+                  console.log(
+                    `🔄 User clicked to switch to ${getNetworkInfo().name}...`,
+                  );
                   try {
                     // Import the network switching function dynamically
-                    const { ensureCorrectNetwork } = await import("../../utils/providerManager.js");
-                    const switched = await ensureCorrectNetwork(selectedNetwork);
+                    const { ensureCorrectNetwork } = await import(
+                      "../../utils/providerManager.js"
+                    );
+                    const switched = await ensureCorrectNetwork(
+                      selectedNetwork,
+                    );
                     if (switched) {
-                      console.log(`✅ Successfully switched to ${getNetworkInfo().name}`);
+                      console.log(
+                        `✅ Successfully switched to ${getNetworkInfo().name}`,
+                      );
                     } else {
-                      alert(`Please manually switch MetaMask to ${getNetworkInfo().name} network`);
+                      alert(
+                        `Please manually switch MetaMask to ${
+                          getNetworkInfo().name
+                        } network`,
+                      );
                     }
                   } catch (error) {
-                    console.error('Network switch failed:', error);
+                    console.error("Network switch failed:", error);
                     alert(`Failed to switch network: ${error.message}`);
                   }
                 }
               }}
-              title={!checkCorrectNetwork() && networkType === "evm" ? `Click to switch to ${getNetworkInfo().name}` : ""}
+              title={
+                !checkCorrectNetwork() && networkType === "evm"
+                  ? `Click to switch to ${getNetworkInfo().name}`
+                  : ""
+              }
             >
               {checkCorrectNetwork()
                 ? `Connected to ${getNetworkInfo().name}`
