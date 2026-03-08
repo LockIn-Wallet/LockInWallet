@@ -18,10 +18,10 @@
       "blockExplorerUrls": [
         ""
       ],
-      "savingsContract": "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512",
+      "savingsContract": "0x0000000000000000000000000000000000000000",
       "tokens": {
         "USDT": {
-          "address": "0x68B1D87F95878fE05B998F19b66F4baba5De1aed",
+          "address": "0x0000000000000000000000000000000000000000",
           "symbol": "USDT",
           "name": "Tether USD",
           "decimals": 6,
@@ -91,12 +91,12 @@
         "decimals": 18
       },
       "rpcUrls": [
-        "https://opt-mainnet.g.alchemy.com/v2/demo"
+        "https://mainnet.optimism.io"
       ],
       "blockExplorerUrls": [
         "https://optimistic.etherscan.io"
       ],
-      "savingsContract": "0x0000000000000000000000000000000000000000",
+      "savingsContract": "0xA827CDB73b986e987fA88B8f5471ECa25E8b9d63",
       "tokens": {
         "USDT": {
           "address": "0x94b008aA00579c1307B0EF2c499aD98a8ce58e58",
@@ -106,7 +106,7 @@
           "recommended": true
         },
         "USDC": {
-          "address": "0x7F5c764cBc14f9669B88837ca1490cCa17c31607",
+          "address": "0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85",
           "symbol": "USDC",
           "name": "USD Coin",
           "decimals": 6,
@@ -118,54 +118,6 @@
           "name": "Dai Stablecoin",
           "decimals": 18,
           "recommended": true
-        }
-      }
-    },
-    "polygon": {
-      "chainId": 137,
-      "name": "Polygon",
-      "nativeCurrency": {
-        "name": "Polygon",
-        "symbol": "POL",
-        "decimals": 18
-      },
-      "rpcUrls": [
-        "https://polygon-bor-rpc.publicnode.com",
-        "https://1rpc.io/matic",
-        "https://rpc.ankr.com/polygon"
-      ],
-      "blockExplorerUrls": [
-        "https://polygonscan.com"
-      ],
-      "savingsContract": "0x09AC25686Fb2aB3ce5cF6b92F84C90E9BBdA8e93",
-      "tokens": {
-        "USDT": {
-          "address": "0xc2132D05D31c914a87C6611C10748AEb04B58e8F",
-          "symbol": "USDT",
-          "name": "Tether USD (PoS)",
-          "decimals": 6,
-          "recommended": true
-        },
-        "USDC": {
-          "address": "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174",
-          "symbol": "USDC",
-          "name": "USD Coin (PoS)",
-          "decimals": 6,
-          "recommended": true
-        },
-        "DAI": {
-          "address": "0x8f3Cf7ad23Cd3CaDbD9735AFf958023239c6A063",
-          "symbol": "DAI",
-          "name": "Dai Stablecoin (PoS)",
-          "decimals": 18,
-          "recommended": true
-        },
-        "WETH": {
-          "address": "0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619",
-          "symbol": "WETH",
-          "name": "Wrapped Ether",
-          "decimals": 18,
-          "recommended": false
         }
       }
     }

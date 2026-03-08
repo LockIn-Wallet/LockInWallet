@@ -10,7 +10,7 @@ const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 /**
  * Check if a network has deployed contracts (non-zero addresses)
  * @param {string} networkType - "evm" or "solana"
- * @param {string} networkKey - Network key (e.g., "ethereum", "polygon", "localhost")
+ * @param {string} networkKey - Network key (e.g., "ethereum", "optimism", "localhost")
  * @returns {boolean} True if network has deployed contracts
  */
 export const isNetworkDeployed = (networkType, networkKey) => {
@@ -114,7 +114,7 @@ export const getNetworkDisplayName = (networkType, networkKey, showStatus = fals
  * Production network constants - networks that should be available when deployed
  */
 export const PRODUCTION_NETWORKS = {
-  evm: ["ethereum", "polygon", "optimism"],
+  evm: ["ethereum", "optimism"],
   solana: [] // Solana networks excluded from production (devnet/mainnet removed)
 };
 
@@ -140,7 +140,7 @@ export const getDefaultNetwork = (networkType) => {
   if (deployedNetworks.length > 0) {
     // Priority order for deployed networks
     const priorities = {
-      evm: ["polygon", "ethereum", "optimism"],
+      evm: ["optimism", "ethereum"],
       solana: ["localhost", "mainnet", "devnet"]
     };
 
@@ -155,7 +155,7 @@ export const getDefaultNetwork = (networkType) => {
 
   if (availableNetworks.length > 0) return availableNetworks[0].key;
 
-  return networkType === "evm" ? "polygon" : "mainnet";
+  return networkType === "evm" ? "optimism" : "mainnet";
 };
 
 /**

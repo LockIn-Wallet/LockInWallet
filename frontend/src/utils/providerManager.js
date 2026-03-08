@@ -31,7 +31,7 @@ export const createProviderAndSigner = async () => {
 /**
  * Get the best available provider for a network
  * Priority: MetaMask > Public RPC
- * @param {string} networkKey - Network key (e.g., "polygon")
+ * @param {string} networkKey - Network key (e.g., "optimism")
  * @returns {object} Provider instance and metadata
  */
 export const getBestProvider = async (networkKey) => {
@@ -94,7 +94,7 @@ export const getBestProvider = async (networkKey) => {
 /**
  * Verify contract deployment using the best available provider
  * @param {string} contractAddress - Contract address to verify
- * @param {string} networkKey - Network key (e.g., "polygon")
+ * @param {string} networkKey - Network key (e.g., "optimism")
  * @returns {object} Verification result
  */
 export const verifyContractDeployment = async (contractAddress, networkKey) => {

@@ -1,13 +1,13 @@
 const { ethers, upgrades } = require("hardhat");
 
 /**
- * One-time migration script for Polygon deployment.
+ * One-time migration script for Optimism deployment.
  * Deploys new upgradeable module proxies, migrates state from old modules,
  * re-registers modules in SavingsCore, and locks migration.
  *
  * Usage:
  *   CORE_ADDRESS=0x... OLD_TIME_LIMITS=0x... OLD_PROPOSAL=0x... OLD_BYPASS=0x... OLD_APPROVAL=0x... OLD_PROXY_DEPLOY=0x... \
- *   npx hardhat run scripts/migrate-to-upgradeable-modules.js --network polygon
+ *   npx hardhat run scripts/migrate-to-upgradeable-modules.js --network optimism
  *
  * Set USERS as comma-separated addresses to migrate specific users:
  *   USERS=0xabc,0xdef npx hardhat run ...

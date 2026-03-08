@@ -77,14 +77,14 @@ async function main() {
     console.log("  🔐 Multi-signature approvals");
 
     console.log("\n🌐 NETWORK DETAILS:");
-    console.log(`  Network:        Polygon Mainnet`);
+    console.log(`  Network:        Optimism Mainnet`);
     console.log(`  Chain ID:       137`);
     console.log(`  Main Contract:  ${contracts.savingsCore}`);
-    console.log(`  Block Explorer: https://polygonscan.com/address/${contracts.savingsCore}`);
+    console.log(`  Block Explorer: https://optimistic.etherscan.io/address/${contracts.savingsCore}`);
 
     console.log("\n🎯 READY FOR PRODUCTION:");
     console.log("  📱 Frontend configured with contract address");
-    console.log("  🔗 Connect MetaMask to Polygon network");
+    console.log("  🔗 Connect MetaMask to Optimism network");
     console.log("  🚀 Start using your savings wallet!");
 
     const deploymentCost = 56.588033236431351584 - parseFloat(ethers.formatEther(balance));

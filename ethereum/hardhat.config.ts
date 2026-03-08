@@ -42,9 +42,9 @@ const config: HardhatUserConfig = {
       // optional: use private key from Ganache here
       // accounts: ["0x..."]
     },
-    polygon: {
-      url: process.env.POLYGON_RPC_URL || "https://polygon-rpc.com",
-      chainId: 137,
+    optimism: {
+      url: process.env.OPTIMISM_RPC_URL || "https://mainnet.optimism.io",
+      chainId: 10,
       accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
       gasPrice: "auto",
       timeout: 120000

@@ -2,22 +2,22 @@ const hre = require("hardhat");
 const { ethers } = require("hardhat");
 
 /**
- * Gas Cost Estimation Script for Polygon Deployment
+ * Gas Cost Estimation Script for Optimism Deployment
  *
  * This script estimates the gas costs for deploying the savings wallet
- * contracts on Polygon mainnet without actually deploying them.
+ * contracts on Optimism mainnet without actually deploying them.
  */
 
 async function main() {
-  console.log("🔍 Estimating deployment costs for Polygon mainnet...\n");
+  console.log("🔍 Estimating deployment costs for Optimism mainnet...\n");
 
-  // Connect to Polygon network
+  // Connect to Optimism network
   const network = await hre.ethers.provider.getNetwork();
   console.log(`📡 Connected to network: ${network.name} (Chain ID: ${network.chainId})`);
 
   if (network.chainId !== 137n) {
-    console.log("⚠️  Warning: Not connected to Polygon mainnet (Chain ID should be 137)");
-    console.log("   Make sure to run with --network polygon");
+    console.log("⚠️  Warning: Not connected to Optimism mainnet (Chain ID should be 137)");
+    console.log("   Make sure to run with --network optimism");
     return;
   }
 
@@ -27,7 +27,7 @@ async function main() {
   const maxFeePerGas = feeData.maxFeePerGas;
   const maxPriorityFeePerGas = feeData.maxPriorityFeePerGas;
 
-  console.log(`⛽ Current Gas Prices on Polygon:`);
+  console.log(`⛽ Current Gas Prices on Optimism:`);
   console.log(`   Gas Price: ${ethers.formatUnits(gasPrice, "gwei")} gwei`);
   if (maxFeePerGas) {
     console.log(`   Max Fee Per Gas: ${ethers.formatUnits(maxFeePerGas, "gwei")} gwei`);
@@ -186,7 +186,7 @@ async function main() {
   console.log("   1. Copy .env.example to .env");
   console.log("   2. Add your PRIVATE_KEY to .env file");
   console.log("   3. Fund your account with MATIC for gas");
-  console.log("   4. Run: npm run deploy-polygon");
+  console.log("   4. Run: npm run deploy-optimism");
 
   console.log(`\n💡 Recommended MATIC to have in wallet: ${(maticAmount * 1.5).toFixed(4)} MATIC`);
   console.log("   (1.5x the estimate to account for gas price fluctuations)");

@@ -12,10 +12,10 @@ const isProduction = process.env.NODE_ENV === 'production';
  * Verify if an EVM contract is deployed at the given address
  * Uses MetaMask provider when available, falls back to public RPCs
  * @param {string} contractAddress - Contract address to verify
- * @param {string} networkKey - Network key (e.g., "polygon")
+ * @param {string} networkKey - Network key (e.g., "optimism")
  * @returns {boolean} True if contract is deployed, false otherwise
  */
-export const verifyEVMContractDeployment = async (contractAddress, networkKey = 'polygon') => {
+export const verifyEVMContractDeployment = async (contractAddress, networkKey = 'optimism') => {
   // Check if address is zero address (not deployed)
   const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
   if (!contractAddress || contractAddress === ZERO_ADDRESS) {
@@ -36,7 +36,7 @@ export const verifyEVMContractDeployment = async (contractAddress, networkKey = 
 /**
  * Enhanced contract verification with network context and automatic provider selection
  * @param {string} contractAddress - Contract address to verify
- * @param {string} networkKey - Network key (e.g., "polygon")
+ * @param {string} networkKey - Network key (e.g., "optimism")
  * @param {string} networkName - Human-readable network name (optional, for logging)
  * @returns {boolean} True if contract is deployed, false otherwise
  */
