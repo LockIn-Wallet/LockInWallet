@@ -597,10 +597,10 @@ contract SavingsCore is Initializable, UUPSUpgradeable, OwnableUpgradeable, ISav
 
     // ========== USER PROXY FUNCTIONS (delegates to module) ==========
 
-    function deployUserProxy() external returns (address) {
+    function deployUserProxy() external payable returns (address) {
         IProxyDeploymentModule m = IProxyDeploymentModule(modules[ModuleIds.PROXY_DEPLOYMENT]);
         require(address(m) != address(0), "ProxyDeploymentModule not registered");
-        return m.deployUserProxy(msg.sender);
+        return m.deployUserProxy{value: msg.value}(msg.sender);
     }
 
     function isProxyDeployed(address user) external view returns (bool) {

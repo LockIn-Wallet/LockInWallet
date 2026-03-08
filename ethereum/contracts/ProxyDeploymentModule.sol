@@ -43,13 +43,20 @@ contract ProxyDeploymentModule is Initializable, UUPSUpgradeable, OwnableUpgrade
 
     function _authorizeUpgrade(address) internal override onlyOwner {}
 
-    function deployUserProxy(address user) external onlyCore returns (address proxy) {
+    function deployUserProxy(address user) external payable onlyCore returns (address proxy) {
         require(userProxies[user] == address(0), "Already deployed");
 
         if (proxyDeploymentFee > 0) {
-            require(paymentToken != address(0), "Payment token not configured");
             require(treasuryAddress != address(0), "Treasury address not configured");
-            IERC20(paymentToken).transferFrom(user, treasuryAddress, proxyDeploymentFee);
+            if (paymentToken == address(0)) {
+                // Pay in native ETH
+                require(msg.value >= proxyDeploymentFee, "Insufficient ETH for fee");
+                (bool sent, ) = treasuryAddress.call{value: msg.value}("");
+                require(sent, "ETH transfer failed");
+            } else {
+                // Pay in ERC20
+                IERC20(paymentToken).transferFrom(user, treasuryAddress, proxyDeploymentFee);
+            }
         }
 
         bytes32 salt = keccak256(abi.encodePacked(user));
@@ -90,7 +97,7 @@ contract ProxyDeploymentModule is Initializable, UUPSUpgradeable, OwnableUpgrade
     }
 
     function setPaymentToken(address _token) external onlyOwner {
-        require(_token != address(0), "Invalid payment token address");
+        // address(0) means native ETH payment
         paymentToken = _token;
     }
 

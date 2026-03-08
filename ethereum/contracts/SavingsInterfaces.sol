@@ -200,7 +200,7 @@ interface IApprovalSystemModule {
 }
 
 interface IProxyDeploymentModule {
-    function deployUserProxy(address user) external returns (address proxy);
+    function deployUserProxy(address user) external payable returns (address proxy);
     function isProxyDeployed(address user) external view returns (bool);
     function getUserProxy(address user) external view returns (address);
     function getUserDepositAddress(address user) external view returns (address);
