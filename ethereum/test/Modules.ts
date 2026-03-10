@@ -46,6 +46,13 @@ describe("Savings Wallet Modules", function () {
     const approvalModuleId = hre.ethers.keccak256(hre.ethers.toUtf8Bytes("APPROVAL_SYSTEM"));
     await savingsCore.registerModule(approvalModuleId, approvalModule.target);
 
+    const PoolTogetherModule = await hre.ethers.getContractFactory("PoolTogetherModule");
+    const poolTogetherModule = await hre.upgrades.deployProxy(PoolTogetherModule, [savingsCore.target], { initializer: "initialize" });
+    await poolTogetherModule.waitForDeployment();
+
+    const poolTogetherModuleId = hre.ethers.keccak256(hre.ethers.toUtf8Bytes("POOL_TOGETHER"));
+    await savingsCore.registerModule(poolTogetherModuleId, poolTogetherModule.target);
+
     // Set up inter-module cross-references (required for ProposalSystem and BypassSystem)
     await savingsCore.setupModuleCrossReferences();
 
@@ -59,6 +66,7 @@ describe("Savings Wallet Modules", function () {
       proposalModule,
       bypassModule,
       approvalModule,
+      poolTogetherModule,
       owner,
       user1,
       user2,
@@ -66,6 +74,7 @@ describe("Savings Wallet Modules", function () {
       proposalModuleId,
       bypassModuleId,
       approvalModuleId,
+      poolTogetherModuleId,
       depositAmount
     };
   }

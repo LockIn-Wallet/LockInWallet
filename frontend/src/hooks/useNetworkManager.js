@@ -240,6 +240,7 @@ export const useNetworkManager = ({
     }
 
     // EVM network switching logic - automatically switch MetaMask
+    const network = NETWORKS.evm[networkKey];
     console.log(`🔄 Switching to EVM network: ${networkKey} (${network?.name || 'Unknown'})`);
 
     if (!window.ethereum) {
@@ -247,8 +248,6 @@ export const useNetworkManager = ({
       alert("Please install MetaMask to use EVM networks!");
       return false;
     }
-
-    const network = NETWORKS.evm[networkKey];
     if (!network) {
       console.error(`❌ Unsupported network: ${networkKey}`);
       alert(`Network ${networkKey} is not supported`);

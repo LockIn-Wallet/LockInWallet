@@ -124,6 +124,14 @@ async function main() {
     moduleAddresses.proxyDeployment = await proxyDeploymentModule.getAddress();
     console.log(`   ✅ ProxyDeploymentModule proxy deployed to: ${moduleAddresses.proxyDeployment}`);
 
+    // 6. Deploy PoolTogether Module
+    console.log("   🎰 Deploying PoolTogetherModule (proxy)...");
+    const PoolTogetherModule = await ethers.getContractFactory("PoolTogetherModule");
+    const poolTogetherModule = await upgrades.deployProxy(PoolTogetherModule, [savingsAddress], { initializer: "initialize" });
+    await poolTogetherModule.waitForDeployment();
+    moduleAddresses.poolTogether = await poolTogetherModule.getAddress();
+    console.log(`   ✅ PoolTogetherModule proxy deployed to: ${moduleAddresses.poolTogether}`);
+
     // Register modules with core contract
     console.log("\n🔗 Registering modules with core contract...");
 
@@ -164,6 +172,14 @@ async function main() {
     tx = await savingsCore.registerModule(
       ethers.keccak256(ethers.toUtf8Bytes("PROXY_DEPLOYMENT")),
       moduleAddresses.proxyDeployment
+    );
+    await tx.wait();
+
+    // Register PoolTogetherModule
+    console.log("   Registering PoolTogetherModule...");
+    tx = await savingsCore.registerModule(
+      ethers.keccak256(ethers.toUtf8Bytes("POOL_TOGETHER")),
+      moduleAddresses.poolTogether
     );
     await tx.wait();
 
@@ -330,6 +346,11 @@ async function main() {
       fs.writeFileSync(frontendProxyDeploymentABIPath, JSON.stringify(proxyDeploymentArtifact.abi, null, 2));
       console.log("✅ ProxyDeploymentModule ABI updated");
 
+      const poolTogetherArtifact = require("../artifacts/contracts/PoolTogetherModule.sol/PoolTogetherModule.json");
+      const frontendPoolTogetherABIPath = path.join(__dirname, "../../frontend/src/PoolTogetherModuleABI.json");
+      fs.writeFileSync(frontendPoolTogetherABIPath, JSON.stringify(poolTogetherArtifact.abi, null, 2));
+      console.log("✅ PoolTogetherModule ABI updated");
+
       // Copy MockUSDT ABI
       if (usdtAddress) {
         const usdtArtifact = require("../artifacts/contracts/MockUSDT.sol/MockUSDT.json");
@@ -360,6 +381,7 @@ async function main() {
     console.log(`  BypassSystem:        ${moduleAddresses.bypassSystem}`);
     console.log(`  ApprovalSystem:      ${moduleAddresses.approvalSystem}`);
     console.log(`  ProxyDeployment:     ${moduleAddresses.proxyDeployment}`);
+    console.log(`  PoolTogether:        ${moduleAddresses.poolTogether}`);
     if (usdtAddress) {
       console.log(`MockUSDT Address:      ${usdtAddress}`);
     }
@@ -414,6 +436,7 @@ async function main() {
       const bypassSystemRegistered = await savingsCore.getModule(ethers.keccak256(ethers.toUtf8Bytes("BYPASS_SYSTEM")));
       const approvalSystemRegistered = await savingsCore.getModule(ethers.keccak256(ethers.toUtf8Bytes("APPROVAL_SYSTEM")));
       const proxyDeploymentRegistered = await savingsCore.getModule(ethers.keccak256(ethers.toUtf8Bytes("PROXY_DEPLOYMENT")));
+      const poolTogetherRegistered = await savingsCore.getModule(ethers.keccak256(ethers.toUtf8Bytes("POOL_TOGETHER")));
 
       console.log("   Validating module registrations...");
       console.log(`   ✅ TimePeriodLimits: ${timePeriodLimitsRegistered === moduleAddresses.timePeriodLimits ? 'REGISTERED' : 'FAILED'}`);
@@ -421,6 +444,7 @@ async function main() {
       console.log(`   ✅ BypassSystem: ${bypassSystemRegistered === moduleAddresses.bypassSystem ? 'REGISTERED' : 'FAILED'}`);
       console.log(`   ✅ ApprovalSystem: ${approvalSystemRegistered === moduleAddresses.approvalSystem ? 'REGISTERED' : 'FAILED'}`);
       console.log(`   ✅ ProxyDeployment: ${proxyDeploymentRegistered === moduleAddresses.proxyDeployment ? 'REGISTERED' : 'FAILED'}`);
+      console.log(`   ✅ PoolTogether: ${poolTogetherRegistered === moduleAddresses.poolTogether ? 'REGISTERED' : 'FAILED'}`);
 
       // Verify core contract can be called
       const owner = await savingsCore.owner();

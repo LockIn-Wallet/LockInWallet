@@ -199,6 +199,20 @@ interface IApprovalSystemModule {
     event WithdrawalAddressRequestCancelled(address indexed user, bytes32 indexed requestId);
 }
 
+interface IPoolTogetherModule {
+    function depositToVault(address user, address token, uint256 amount) external;
+    function withdrawFromVault(address user, address token, uint256 sharesToRedeem) external;
+    function getUserVaultShares(address user, address token) external view returns (uint256);
+    function getUserVaultBalance(address user, address token) external view returns (uint256);
+    function hasVault(address token) external view returns (bool);
+    function getGrandPrize() external view returns (uint256);
+    function getNumberOfTiers() external view returns (uint8);
+
+    event PrizeVaultSet(address indexed token, address indexed vault);
+    event DepositedToVault(address indexed user, address indexed token, uint256 amount, uint256 shares);
+    event WithdrawnFromVault(address indexed user, address indexed token, uint256 amount, uint256 shares);
+}
+
 interface IProxyDeploymentModule {
     function deployUserProxy(address user) external payable returns (address proxy);
     function isProxyDeployed(address user) external view returns (bool);
@@ -226,6 +240,7 @@ interface ISavingsCore {
     // Balance management
     function getTokenBalance(address user, address token) external view returns (uint256);
     function updateTokenBalance(address user, address token, uint256 amount, bool increase) external;
+    function transferTokensTo(address user, address token, uint256 amount, address destination) external;
 
     // Module management
     function registerModule(bytes32 moduleId, address moduleAddress) external;
@@ -249,4 +264,5 @@ library ModuleIds {
     bytes32 public constant BYPASS_SYSTEM = keccak256("BYPASS_SYSTEM");
     bytes32 public constant APPROVAL_SYSTEM = keccak256("APPROVAL_SYSTEM");
     bytes32 public constant PROXY_DEPLOYMENT = keccak256("PROXY_DEPLOYMENT");
+    bytes32 public constant POOL_TOGETHER = keccak256("POOL_TOGETHER");
 }

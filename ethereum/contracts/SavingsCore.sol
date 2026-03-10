@@ -170,6 +170,17 @@ contract SavingsCore is Initializable, UUPSUpgradeable, OwnableUpgradeable, ISav
         }
     }
 
+    /// @notice Transfer tokens held by SavingsCore to a destination on behalf of a user
+    /// @dev Only callable by authorized modules. Decreases user balance and transfers tokens.
+    function transferTokensTo(address user, address token, uint256 amount, address destination) external onlyAuthorizedModule {
+        require(amount > 0 && amount <= userTokenBalances[user][token], "Invalid amount");
+        require(destination != address(0), "Invalid destination");
+        require(token != address(0), "Only ERC20 tokens supported");
+
+        userTokenBalances[user][token] -= amount;
+        IERC20(token).transfer(destination, amount);
+    }
+
     function getMyBalance() external view returns (uint256) {
         return userTokenBalances[msg.sender][address(0)];
     }
@@ -621,6 +632,39 @@ contract SavingsCore is Initializable, UUPSUpgradeable, OwnableUpgradeable, ISav
         return m.getUserDepositAddress(user);
     }
 
+
+    // ========== POOL TOGETHER FUNCTIONS ==========
+
+    function depositToPoolTogether(address token, uint256 amount) external {
+        IPoolTogetherModule m = IPoolTogetherModule(modules[ModuleIds.POOL_TOGETHER]);
+        require(address(m) != address(0), "PoolTogetherModule not registered");
+        m.depositToVault(msg.sender, token, amount);
+    }
+
+    function withdrawFromPoolTogether(address token, uint256 shares) external {
+        IPoolTogetherModule m = IPoolTogetherModule(modules[ModuleIds.POOL_TOGETHER]);
+        require(address(m) != address(0), "PoolTogetherModule not registered");
+        m.withdrawFromVault(msg.sender, token, shares);
+    }
+
+    function getPoolTogetherBalance(address user, address token) external view returns (uint256 shares, uint256 assets) {
+        IPoolTogetherModule m = IPoolTogetherModule(modules[ModuleIds.POOL_TOGETHER]);
+        if (address(m) == address(0)) return (0, 0);
+        shares = m.getUserVaultShares(user, token);
+        assets = m.getUserVaultBalance(user, token);
+    }
+
+    function getPoolTogetherGrandPrize() external view returns (uint256) {
+        IPoolTogetherModule m = IPoolTogetherModule(modules[ModuleIds.POOL_TOGETHER]);
+        if (address(m) == address(0)) return 0;
+        return m.getGrandPrize();
+    }
+
+    function hasPoolTogetherVault(address token) external view returns (bool) {
+        IPoolTogetherModule m = IPoolTogetherModule(modules[ModuleIds.POOL_TOGETHER]);
+        if (address(m) == address(0)) return false;
+        return m.hasVault(token);
+    }
 
     // Allow contract to receive ETH for withdrawals
     receive() external payable {

@@ -925,4 +925,39 @@ export class EVMAdapter extends BlockchainAdapter {
   getProvider() {
     return this.provider;
   }
+
+  // ========== POOL TOGETHER ==========
+
+  async depositToPoolTogether(tokenAddress, amount) {
+    if (!this.savingsContract) throw new Error("Contract not initialized");
+    const tx = await this.savingsContract.depositToPoolTogether(tokenAddress, amount);
+    await tx.wait();
+    return tx.hash;
+  }
+
+  async withdrawFromPoolTogether(tokenAddress, shares) {
+    if (!this.savingsContract) throw new Error("Contract not initialized");
+    const tx = await this.savingsContract.withdrawFromPoolTogether(tokenAddress, shares);
+    await tx.wait();
+    return tx.hash;
+  }
+
+  async getPoolTogetherBalance(tokenAddress) {
+    if (!this.savingsContract) throw new Error("Contract not initialized");
+    const [shares, assets] = await this.savingsContract.getPoolTogetherBalance(
+      this.userAddress,
+      tokenAddress
+    );
+    return { shares, assets };
+  }
+
+  async getPoolTogetherGrandPrize() {
+    if (!this.savingsContract) throw new Error("Contract not initialized");
+    return await this.savingsContract.getPoolTogetherGrandPrize();
+  }
+
+  async hasPoolTogetherVault(tokenAddress) {
+    if (!this.savingsContract) throw new Error("Contract not initialized");
+    return await this.savingsContract.hasPoolTogetherVault(tokenAddress);
+  }
 }

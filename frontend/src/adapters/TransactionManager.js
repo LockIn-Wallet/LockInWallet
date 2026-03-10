@@ -461,4 +461,25 @@ export class TransactionManager {
   async getPendingWithdrawalDestinationRequests(userAddress) {
     return await this.getCurrentAdapter().getPendingWithdrawalDestinationRequests(userAddress);
   }
+
+  // PoolTogether Methods
+  async hasPoolTogetherVault(tokenAddress) {
+    return await this.getCurrentAdapter().hasPoolTogetherVault(tokenAddress);
+  }
+
+  async getPoolTogetherBalance(tokenAddress) {
+    return await this.getCurrentAdapter().getPoolTogetherBalance(tokenAddress);
+  }
+
+  async getPoolTogetherGrandPrize() {
+    return await this.getCurrentAdapter().getPoolTogetherGrandPrize();
+  }
+
+  async depositToPoolTogether(tokenAddress, amount) {
+    return await this.getCurrentAdapter().depositToPoolTogether(tokenAddress, amount);
+  }
+
+  async withdrawFromPoolTogether(tokenAddress, shares) {
+    return await this.getCurrentAdapter().withdrawFromPoolTogether(tokenAddress, shares);
+  }
 }

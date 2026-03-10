@@ -47,6 +47,13 @@ describe("SavingsCore", function () {
     const approvalModuleId = hre.ethers.keccak256(hre.ethers.toUtf8Bytes("APPROVAL_SYSTEM"));
     await savingsCore.registerModule(approvalModuleId, approvalModule.target);
 
+    const PoolTogetherModule = await hre.ethers.getContractFactory("PoolTogetherModule");
+    const poolTogetherModule = await hre.upgrades.deployProxy(PoolTogetherModule, [savingsCore.target], { initializer: "initialize" });
+    await poolTogetherModule.waitForDeployment();
+
+    const poolTogetherModuleId = hre.ethers.keccak256(hre.ethers.toUtf8Bytes("POOL_TOGETHER"));
+    await savingsCore.registerModule(poolTogetherModuleId, poolTogetherModule.target);
+
     // Deploy MockUSDT for testing
     const MockUSDT = await hre.ethers.getContractFactory("MockUSDT");
     const mockUSDT = await MockUSDT.deploy();
@@ -58,6 +65,7 @@ describe("SavingsCore", function () {
       proposalModule,
       bypassModule,
       approvalModule,
+      poolTogetherModule,
       mockUSDT,
       owner,
       user1,
@@ -65,7 +73,8 @@ describe("SavingsCore", function () {
       timeModuleId,
       proposalModuleId,
       bypassModuleId,
-      approvalModuleId
+      approvalModuleId,
+      poolTogetherModuleId
     };
   }
 
