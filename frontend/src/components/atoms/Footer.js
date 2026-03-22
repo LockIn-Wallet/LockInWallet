@@ -1,24 +1,27 @@
 import React from "react";
-import { colors, spacing, borderRadius, fontSize } from "../../styles";
+import { colors } from "../../styles";
 
 const footerStyles = {
   footer: {
     backgroundColor: colors.background.primary,
-    padding: `${spacing.xxxl} ${spacing.xxl}`,
+    padding: "3rem 2rem",
     borderTop: `1px solid ${colors.border.default}`,
-    marginTop: spacing.xxxl,
+    marginTop: "3rem",
+    marginLeft: "calc(-50vw + 50%)",
+    marginRight: "calc(-50vw + 50%)",
+    width: "100vw",
   },
   inner: {
-    maxWidth: "800px",
+    maxWidth: "1100px",
     margin: "0 auto",
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
-    gap: spacing.xxl,
+    gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+    gap: "2rem",
   },
   colTitle: {
-    color: colors.text.primary,
-    marginBottom: spacing.lg,
-    fontSize: fontSize.normal,
+    color: "#ffffff",
+    marginBottom: "1rem",
+    fontSize: "0.95rem",
     fontWeight: "600",
   },
   list: {
@@ -27,22 +30,31 @@ const footerStyles = {
     padding: 0,
   },
   listItem: {
-    marginBottom: spacing.sm,
+    marginBottom: "0.5rem",
+    backgroundColor: "transparent",
+    margin: 0,
+    marginBottom: "0.5rem",
+    padding: 0,
+    borderRadius: 0,
+    width: "auto",
+    maxWidth: "none",
+    boxShadow: "none",
+    color: "inherit",
   },
   link: {
     color: colors.text.muted,
     textDecoration: "none",
-    fontSize: fontSize.md,
+    fontSize: "0.9rem",
     transition: "color 0.2s",
   },
   bottom: {
-    maxWidth: "800px",
-    margin: `${spacing.xxl} auto 0`,
-    paddingTop: spacing.xxl,
+    maxWidth: "1100px",
+    margin: "2rem auto 0",
+    paddingTop: "2rem",
     borderTop: `1px solid ${colors.border.default}`,
     textAlign: "center",
     color: colors.text.muted,
-    fontSize: fontSize.xs,
+    fontSize: "0.85rem",
   },
 };
 

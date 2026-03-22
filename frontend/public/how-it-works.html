@@ -36,20 +36,20 @@
         {
           "@type": "HowToStep",
           "position": 1,
-          "name": "Install MetaMask",
-          "text": "Install the MetaMask browser extension from metamask.io. Create a new wallet and securely store your seed phrase."
+          "name": "Install MetaMask and Add Optimism",
+          "text": "Install the MetaMask browser extension from metamask.io. Create a new wallet, securely store your seed phrase, and add the Optimism network to MetaMask."
         },
         {
           "@type": "HowToStep",
           "position": 2,
-          "name": "Get Some Crypto",
-          "text": "Purchase ETH or USDT through MetaMask's built-in buy feature, or transfer from an exchange like Coinbase."
+          "name": "Get ETH on Optimism",
+          "text": "Get a small amount of ETH on the Optimism network for gas fees (even $1-2 is enough), plus the tokens you want to save (USDT, USDC, DAI, or ETH)."
         },
         {
           "@type": "HowToStep",
           "position": 3,
           "name": "Connect to LockIn Wallet",
-          "text": "Visit lockinwallet.com and click Connect Wallet. MetaMask will ask you to approve the connection."
+          "text": "Switch MetaMask to Optimism, visit lockinwallet.com, and click Connect Wallet. MetaMask will ask you to approve the connection."
         },
         {
           "@type": "HowToStep",
@@ -140,6 +140,13 @@
       <h3>Why Blockchain?</h3>
       <p>You might wonder: why not just use a regular app? Because regular apps run on someone's server. The company can change the rules, get hacked, go bankrupt, or be forced to freeze your account. A blockchain smart contract runs on a decentralized network that nobody controls. Once your rules are set, they're set — the code executes exactly as written, every time, forever.</p>
 
+      <h3>Which Networks Are Supported?</h3>
+      <p>LockIn Wallet is designed to support multiple blockchain networks. Right now, it's <strong>live on Optimism</strong> — an Ethereum Layer 2 network that offers fast transactions and very low fees (fractions of a penny per transaction). More networks will be added over time, but everything in this guide uses Optimism.</p>
+
+      <div class="callout">
+        <p><strong>Why Optimism?</strong> Optimism has the same security as Ethereum mainnet but with fees that are 50-100x cheaper. A transaction that costs $5 on Ethereum costs less than $0.01 on Optimism. This makes it practical to use for everyday savings operations.</p>
+      </div>
+
       <!-- ─── PART 2: GETTING STARTED ─── -->
 
       <h2>Step 1: Install MetaMask (Your Crypto Wallet)</h2>
@@ -169,22 +176,38 @@
         <li><strong>A place to hold crypto</strong> — ETH, USDT, and other tokens can live in your wallet.</li>
       </ul>
 
+      <h3>Add the Optimism Network to MetaMask</h3>
+      <p>MetaMask defaults to the Ethereum mainnet. You need to add Optimism:</p>
+      <ol>
+        <li>Open MetaMask and click the <strong>network dropdown</strong> at the top (it says "Ethereum Mainnet")</li>
+        <li>Click <strong>"Add network"</strong></li>
+        <li>Search for <strong>"Optimism"</strong> and click <strong>"Add"</strong></li>
+        <li>Approve the network addition</li>
+        <li>Switch to Optimism — you should now see "Optimism" in the network dropdown</li>
+      </ol>
+      <p>Alternatively, when you connect to LockIn Wallet, the app will automatically prompt you to add and switch to Optimism if you haven't already.</p>
+
       <!-- ─── PART 3: GETTING CRYPTO ─── -->
 
-      <h2>Step 2: Get Some Crypto</h2>
+      <h2>Step 2: Get ETH on Optimism</h2>
 
-      <p>To use LockIn Wallet, you need a small amount of cryptocurrency. You'll need two things:</p>
+      <p>To use LockIn Wallet, you need a small amount of cryptocurrency <strong>on the Optimism network</strong>. You'll need two things:</p>
 
       <ol>
-        <li><strong>A tiny bit of ETH</strong> — for "gas fees" (small transaction costs, usually pennies to a few dollars). Think of gas like postage stamps: every action on the blockchain costs a tiny fee.</li>
-        <li><strong>The tokens you want to save</strong> — ETH itself, USDT (a stablecoin pegged to the US dollar), or other supported tokens.</li>
+        <li><strong>A small amount of ETH on Optimism</strong> — for "gas fees" (transaction costs). On Optimism, gas fees are extremely low — typically less than $0.01 per transaction. Even $1-2 worth of ETH is enough for dozens of transactions.</li>
+        <li><strong>The tokens you want to save</strong> — USDT, USDC, or DAI (stablecoins pegged to the US dollar) on Optimism. You can also save ETH itself.</li>
       </ol>
 
-      <h3>Easiest Ways to Get Crypto</h3>
+      <div class="callout callout-warning">
+        <p><strong>Important:</strong> Make sure you're sending to your address <strong>on the Optimism network</strong>, not Ethereum mainnet. The wallet address is the same, but the network matters. If you send ETH on Ethereum mainnet, you'll need to bridge it to Optimism (an extra step and cost). Buying or sending directly on Optimism is simpler and cheaper.</p>
+      </div>
+
+      <h3>Easiest Ways to Get ETH on Optimism</h3>
       <ul>
-        <li><strong>MetaMask's built-in buy:</strong> Click "Buy" in MetaMask. You can purchase ETH with a debit card or bank transfer directly inside the extension.</li>
-        <li><strong>From an exchange:</strong> Sign up at Coinbase, Kraken, or another exchange, buy ETH or USDT, and send it to your MetaMask wallet address.</li>
-        <li><strong>From a friend:</strong> If someone you know has crypto, they can send it to your MetaMask address.</li>
+        <li><strong>MetaMask's built-in buy:</strong> Switch MetaMask to the Optimism network, then click "Buy". You can purchase ETH directly on Optimism with a debit card or bank transfer.</li>
+        <li><strong>From an exchange:</strong> Many exchanges (Coinbase, Kraken, Binance) let you withdraw ETH or USDT directly to Optimism. When withdrawing, select <strong>"Optimism"</strong> as the network — this saves you from having to bridge later.</li>
+        <li><strong>Bridge from Ethereum:</strong> If you already have ETH on Ethereum mainnet, you can use the <a href="https://app.optimism.io/bridge" rel="noopener noreferrer">Optimism Bridge</a> to move it to Optimism.</li>
+        <li><strong>From a friend:</strong> If someone sends you crypto, ask them to send it on the Optimism network.</li>
       </ul>
 
       <div class="callout">
@@ -196,10 +219,11 @@
       <h2>Step 3: Connect to LockIn Wallet</h2>
 
       <ol>
+        <li>Make sure MetaMask is set to the <strong>Optimism</strong> network</li>
         <li>Go to <a href="/">lockinwallet.com</a></li>
-        <li>MetaMask will pop up asking you to connect — click <strong>"Connect"</strong></li>
+        <li>Click <strong>"Connect Wallet"</strong> — MetaMask will pop up asking you to approve the connection</li>
         <li>You'll see the LockIn Wallet interface with your wallet address displayed at the top</li>
-        <li>Make sure you're on the correct network (the app will tell you if you need to switch)</li>
+        <li>If you're on the wrong network, the app will show a warning and let you switch with one click</li>
       </ol>
 
       <p>That's it. You're connected. No sign-up form, no email, no personal information. Your MetaMask wallet IS your account.</p>
@@ -239,11 +263,26 @@
       <ol>
         <li>Review your spending limits and approved addresses</li>
         <li>Click <strong>"Commit Setup"</strong> — this locks in your configuration on the blockchain</li>
-        <li>Deposit ETH, USDT, or other supported tokens into your savings account</li>
+        <li>Deposit ETH, USDT, USDC, DAI or other supported tokens into your savings account</li>
         <li>Your money is now protected by your spending limits</li>
       </ol>
 
       <p>Done. Your <strong>commitment savings account</strong> is live. The smart contract now enforces your limits on every withdrawal, every time, with zero exceptions.</p>
+
+      <h3>One-Time Setup Costs</h3>
+      <p>The first time you set up your LockIn Wallet, a few blockchain transactions are needed to configure your account. These are <strong>one-time costs</strong> that won't repeat:</p>
+
+      <ul>
+        <li><strong>Generating your permanent savings address:</strong> The smart contract creates a unique, deterministic savings address for your wallet. This address is yours forever and can be used to receive deposits from exchanges or other wallets directly — even before you connect to the app.</li>
+        <li><strong>Committing your setup:</strong> Your spending limits, withdrawal addresses, and configuration are written to the blockchain.</li>
+        <li><strong>Token approvals:</strong> If you deposit ERC-20 tokens (USDT, USDC, DAI), you'll need to approve the smart contract to handle them once per token.</li>
+      </ul>
+
+      <p>On Optimism, these one-time setup transactions cost <strong>just a few cents total</strong> in gas fees. After setup, each deposit or withdrawal costs less than $0.01. Make sure you have a small amount of ETH on Optimism (even $1-2 is more than enough) before starting setup.</p>
+
+      <div class="callout">
+        <p><strong>Your permanent address:</strong> Once generated, your savings address works like a regular wallet address. You can send funds to it from any exchange or wallet — they'll land in your LockIn savings account automatically, protected by your spending limits. This makes it easy to set up recurring deposits from exchanges or get paid directly into your locked savings.</p>
+      </div>
 
       <!-- ─── PART 5: SECURITY ─── -->
 
@@ -359,7 +398,7 @@
 
       <div class="faq-item">
         <h3>What are gas fees and how much do they cost?</h3>
-        <p>Gas fees are small payments for processing transactions on the blockchain — like postage for sending a letter. On Ethereum mainnet, fees range from a few cents to a few dollars depending on network traffic. On Layer 2 networks (like Optimism or Arbitrum) and Solana, fees are fractions of a penny. LockIn Wallet works on multiple networks so you can choose the cheapest option.</p>
+        <p>Gas fees are small payments for processing transactions on the blockchain — like postage for sending a letter. LockIn Wallet currently runs on <strong>Optimism</strong>, where gas fees are extremely low — typically less than $0.01 per transaction. Your initial setup (a few one-time transactions) costs just a few cents total. After that, each deposit or withdrawal costs fractions of a penny. You just need a tiny amount of ETH on Optimism to cover fees — even $1-2 is enough for hundreds of transactions.</p>
       </div>
 
       <div class="faq-item">
