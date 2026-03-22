@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>How It Works — Complete Beginner's Guide to LockIn Wallet | From Zero to Savings</title>
+    <meta name="description" content="Step-by-step guide to using LockIn Wallet, even if you've never used crypto before. Learn how to install MetaMask, set up your commitment savings account, and understand why your money is safer than in a bank." />
+    <meta name="keywords" content="how to use lockin wallet, commitment savings account, forced savings app, crypto wallet guide, metamask tutorial, self-custody wallet, blockchain savings" />
+    <link rel="canonical" href="https://lockinwallet.com/how-it-works" />
+    <meta name="robots" content="index, follow" />
+
+    <!-- Open Graph -->
+    <meta property="og:type" content="article" />
+    <meta property="og:url" content="https://lockinwallet.com/how-it-works" />
+    <meta property="og:title" content="How LockIn Wallet Works — Complete Beginner's Guide" />
+    <meta property="og:description" content="Never used crypto? No problem. Step-by-step guide from installing MetaMask to locking in your savings with blockchain-enforced limits." />
+    <meta property="og:site_name" content="LockIn Wallet" />
+
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content="How LockIn Wallet Works — Beginner's Guide" />
+    <meta name="twitter:description" content="Never used crypto? Step-by-step guide from installing MetaMask to locking in your savings with blockchain-enforced limits." />
+
+    <meta name="theme-color" content="#2d3748" />
+    <link rel="icon" href="/favicon.png" type="image/png" />
+    <link rel="stylesheet" href="/landing.css" />
+
+    <!-- Structured Data -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "HowTo",
+      "name": "How to Set Up LockIn Wallet",
+      "description": "Complete beginner's guide to setting up a commitment savings account with blockchain-enforced spending limits.",
+      "step": [
+        {
+          "@type": "HowToStep",
+          "position": 1,
+          "name": "Install MetaMask",
+          "text": "Install the MetaMask browser extension from metamask.io. Create a new wallet and securely store your seed phrase."
+        },
+        {
+          "@type": "HowToStep",
+          "position": 2,
+          "name": "Get Some Crypto",
+          "text": "Purchase ETH or USDT through MetaMask's built-in buy feature, or transfer from an exchange like Coinbase."
+        },
+        {
+          "@type": "HowToStep",
+          "position": 3,
+          "name": "Connect to LockIn Wallet",
+          "text": "Visit lockinwallet.com and click Connect Wallet. MetaMask will ask you to approve the connection."
+        },
+        {
+          "@type": "HowToStep",
+          "position": 4,
+          "name": "Set Spending Limits",
+          "text": "Choose your daily, weekly, and monthly withdrawal limits. These are enforced by smart contracts."
+        },
+        {
+          "@type": "HowToStep",
+          "position": 5,
+          "name": "Deposit and Lock",
+          "text": "Deposit tokens into your savings account. Your limits activate immediately and protect your funds."
+        }
+      ]
+    }
+    </script>
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "FAQPage",
+      "mainEntity": [
+        {
+          "@type": "Question",
+          "name": "Can LockIn Wallet steal my money?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "No. LockIn Wallet is a non-custodial smart contract — your money is stored on the blockchain, not on our servers. We never have access to your funds. The smart contract code is open source and auditable, and only your wallet can interact with your savings account."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Is my money safer in LockIn Wallet than a bank?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "In key ways, yes. Banks can freeze your account, comply with seizure orders, go bankrupt, or be hacked. With LockIn Wallet, your funds are stored on a decentralized blockchain controlled only by your private key. No company, government, or hacker who doesn't have your private key can touch your funds. The trade-off is that you must protect your own seed phrase — there's no 'forgot password' reset."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "What if LockIn Wallet's website goes down?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Your funds are on the blockchain, not on our website. Even if lockinwallet.com went permanently offline, your money would still be in the smart contract. You could interact with the contract directly through tools like Etherscan, or anyone could build a new frontend to access the same contract."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Do I need to understand crypto to use LockIn Wallet?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Not really. You need to install MetaMask (a browser extension) and get some cryptocurrency, but the savings wallet itself works like any other app — set your limits, deposit money, done. This guide walks you through every step from scratch."
+          }
+        }
+      ]
+    }
+    </script>
+  </head>
+  <body>
+    <nav class="landing-nav" aria-label="Main navigation">
+      <div class="landing-nav-inner">
+        <a href="/" class="landing-logo">Lock<span>In</span> Wallet</a>
+        <ul class="landing-nav-links">
+          <li><a href="/how-it-works" style="color: #48bb78;">How It Works</a></li>
+          <li><a href="/impulse-spending">Resources</a></li>
+          <li><a href="/" class="btn-primary btn-nav">Launch App</a></li>
+        </ul>
+      </div>
+    </nav>
+
+    <main class="article-content">
+      <h1>How LockIn Wallet Works: A Complete Beginner's Guide</h1>
+      <p class="article-meta">Published by LockIn Wallet &middot; Step-by-step guide for complete beginners</p>
+
+      <p>Never used crypto? That's fine. This guide walks you through every step — from installing your first wallet to locking in your savings with limits that even you can't break. By the end, you'll have a <strong>commitment savings account</strong> that's more secure than any bank account you've ever had.</p>
+
+      <div class="callout">
+        <p><strong>Time needed:</strong> About 15 minutes from start to finish. You don't need to understand blockchain technology — just follow the steps.</p>
+      </div>
+
+      <!-- ─── PART 1: THE BASICS ─── -->
+
+      <h2>What Is LockIn Wallet?</h2>
+
+      <p>LockIn Wallet is a <strong>forced savings app</strong> that runs on the blockchain. You deposit money, set daily/weekly/monthly withdrawal limits, and those limits are enforced by code (called a "smart contract") that nobody can override — not us, not a bank manager, not even you in a moment of weakness.</p>
+
+      <p>Think of it like putting your money in a safe with a timer lock. You set the rules for how much you can take out and when. The safe follows your rules exactly, every time, with zero exceptions.</p>
+
+      <h3>Why Blockchain?</h3>
+      <p>You might wonder: why not just use a regular app? Because regular apps run on someone's server. The company can change the rules, get hacked, go bankrupt, or be forced to freeze your account. A blockchain smart contract runs on a decentralized network that nobody controls. Once your rules are set, they're set — the code executes exactly as written, every time, forever.</p>
+
+      <!-- ─── PART 2: GETTING STARTED ─── -->
+
+      <h2>Step 1: Install MetaMask (Your Crypto Wallet)</h2>
+
+      <p>MetaMask is a browser extension that acts as your crypto wallet. It's like a digital keychain that lets you interact with blockchain apps. It's free, takes 2 minutes to set up, and is used by millions of people.</p>
+
+      <h3>How to Install</h3>
+      <ol>
+        <li>Open your browser (Chrome, Firefox, or Brave work best)</li>
+        <li>Go to <strong>metamask.io</strong> and click "Download"</li>
+        <li>Click "Add to Chrome" (or your browser) to install the extension</li>
+        <li>Click the MetaMask fox icon in your browser toolbar</li>
+        <li>Select <strong>"Create a new wallet"</strong></li>
+        <li>Create a strong password — this is for your browser only</li>
+        <li>MetaMask will show you a <strong>Secret Recovery Phrase</strong> (12 words)</li>
+      </ol>
+
+      <div class="callout callout-warning">
+        <p><strong>Your seed phrase is everything.</strong> Write down those 12 words on paper (not digitally) and store them somewhere safe. Anyone who has these words has access to your money. If you lose them, nobody — not MetaMask, not us, not anyone — can recover your funds. This is the trade-off for true ownership: you are your own bank, and there's no "forgot password" button.</p>
+      </div>
+
+      <h3>What You Now Have</h3>
+      <p>After setup, MetaMask gives you:</p>
+      <ul>
+        <li><strong>A wallet address</strong> — a long string starting with "0x". This is like your account number. It's safe to share.</li>
+        <li><strong>A private key</strong> — derived from your seed phrase. This is like your PIN. Never share it.</li>
+        <li><strong>A place to hold crypto</strong> — ETH, USDT, and other tokens can live in your wallet.</li>
+      </ul>
+
+      <!-- ─── PART 3: GETTING CRYPTO ─── -->
+
+      <h2>Step 2: Get Some Crypto</h2>
+
+      <p>To use LockIn Wallet, you need a small amount of cryptocurrency. You'll need two things:</p>
+
+      <ol>
+        <li><strong>A tiny bit of ETH</strong> — for "gas fees" (small transaction costs, usually pennies to a few dollars). Think of gas like postage stamps: every action on the blockchain costs a tiny fee.</li>
+        <li><strong>The tokens you want to save</strong> — ETH itself, USDT (a stablecoin pegged to the US dollar), or other supported tokens.</li>
+      </ol>
+
+      <h3>Easiest Ways to Get Crypto</h3>
+      <ul>
+        <li><strong>MetaMask's built-in buy:</strong> Click "Buy" in MetaMask. You can purchase ETH with a debit card or bank transfer directly inside the extension.</li>
+        <li><strong>From an exchange:</strong> Sign up at Coinbase, Kraken, or another exchange, buy ETH or USDT, and send it to your MetaMask wallet address.</li>
+        <li><strong>From a friend:</strong> If someone you know has crypto, they can send it to your MetaMask address.</li>
+      </ul>
+
+      <div class="callout">
+        <p><strong>Stablecoins tip:</strong> If you want your savings to stay pegged to the US dollar (not go up and down with crypto markets), use <strong>USDT</strong> or <strong>USDC</strong>. These are cryptocurrencies that are always worth ~$1. You get the security benefits of blockchain without the price volatility.</p>
+      </div>
+
+      <!-- ─── PART 4: USING LOCKIN WALLET ─── -->
+
+      <h2>Step 3: Connect to LockIn Wallet</h2>
+
+      <ol>
+        <li>Go to <a href="/">lockinwallet.com</a></li>
+        <li>MetaMask will pop up asking you to connect — click <strong>"Connect"</strong></li>
+        <li>You'll see the LockIn Wallet interface with your wallet address displayed at the top</li>
+        <li>Make sure you're on the correct network (the app will tell you if you need to switch)</li>
+      </ol>
+
+      <p>That's it. You're connected. No sign-up form, no email, no personal information. Your MetaMask wallet IS your account.</p>
+
+      <h2>Step 4: Set Your Spending Limits</h2>
+
+      <p>This is where the magic happens. You'll choose how much you're allowed to withdraw per time period:</p>
+
+      <ul>
+        <li><strong>Daily limit:</strong> Maximum you can withdraw in a single day. Start with enough for daily expenses.</li>
+        <li><strong>Weekly limit:</strong> Maximum for the week. Prevents binge spending even if your daily limit is reasonable.</li>
+        <li><strong>Monthly limit:</strong> The overall ceiling. This is your most important safety net.</li>
+      </ul>
+
+      <p>For example, you might set $50/day, $200/week, $500/month. These limits mean:</p>
+      <ul>
+        <li>You can never withdraw more than $50 in a single day</li>
+        <li>Even if you withdraw $50 every day, you're capped at $200 for the week</li>
+        <li>And $500 for the entire month — no matter what</li>
+      </ul>
+
+      <h3>Can I Change My Limits Later?</h3>
+      <p>Yes, but not instantly. Increasing your limits requires a <strong>proposal period</strong> — a waiting time before the new limits take effect. This is by design. If you're tempted to raise your limits in a moment of weakness, the cooling-off period gives you time to reconsider. You can always <em>decrease</em> your limits immediately (making them stricter is always safe).</p>
+
+      <h2>Step 5: Add Withdrawal Addresses</h2>
+
+      <p>For security, you pre-approve the addresses you can withdraw to. This means even if someone compromised your wallet, they could only send funds to addresses you've already approved — not to their own wallet.</p>
+
+      <ol>
+        <li>Add your personal wallet address as an approved withdrawal destination</li>
+        <li>Give each address a friendly name (e.g., "My Main Wallet", "Exchange Account")</li>
+        <li>You can add or remove addresses later</li>
+      </ol>
+
+      <h2>Step 6: Commit &amp; Deposit</h2>
+
+      <ol>
+        <li>Review your spending limits and approved addresses</li>
+        <li>Click <strong>"Commit Setup"</strong> — this locks in your configuration on the blockchain</li>
+        <li>Deposit ETH, USDT, or other supported tokens into your savings account</li>
+        <li>Your money is now protected by your spending limits</li>
+      </ol>
+
+      <p>Done. Your <strong>commitment savings account</strong> is live. The smart contract now enforces your limits on every withdrawal, every time, with zero exceptions.</p>
+
+      <!-- ─── PART 5: SECURITY ─── -->
+
+      <h2>Security: Why Your Money Is Truly Safe</h2>
+
+      <p>This is the part that matters most. Here's exactly why LockIn Wallet is more secure than traditional alternatives:</p>
+
+      <h3>Non-Custodial: We Never Touch Your Money</h3>
+      <p>LockIn Wallet is a <strong>non-custodial</strong> application. That's a technical term that means a simple thing: <strong>your money is never on our servers</strong>. It lives on the blockchain, in a smart contract that only your wallet can access. We built the interface — the buttons and screens you see — but the money itself is controlled by blockchain code, not by us.</p>
+
+      <p>Compare this to a bank: when you deposit money in a bank, it's not "your" money anymore — it's a promise that the bank owes you. The bank lends out your money, invests it, and if things go badly (see: bank runs, Silicon Valley Bank, 2008 financial crisis), you might not get it all back.</p>
+
+      <p>With LockIn Wallet, your money is always 100% there, verifiable on the blockchain at any time.</p>
+
+      <h3>Nobody Can Take Your Money</h3>
+      <p>This is the fundamental advantage of self-custody on a blockchain:</p>
+
+      <ul>
+        <li><strong>We can't take it:</strong> LockIn Wallet has no admin function to withdraw user funds. It's not a policy — it's physically impossible in the code.</li>
+        <li><strong>Governments can't freeze it:</strong> There's no bank to serve a court order to. Your smart contract has no off switch.</li>
+        <li><strong>Hackers can't drain it:</strong> Even if lockinwallet.com gets hacked, your funds are on the blockchain, not on the website. A hacker would need your personal seed phrase to access your money.</li>
+        <li><strong>The company can't go bankrupt and take it:</strong> If LockIn Wallet the company ceased to exist tomorrow, every penny in every user's smart contract would still be there, still enforcing the same limits, still completely accessible to its owner.</li>
+      </ul>
+
+      <div class="callout">
+        <p><strong>The only way someone can access your funds</strong> is if they get your MetaMask seed phrase (those 12 words). That's why protecting your seed phrase is so critical. Keep it offline, on paper, in a secure location. If you protect your seed phrase, your money is untouchable.</p>
+      </div>
+
+      <h3>Open Source and Verifiable</h3>
+      <p>The smart contract code is open source — anyone can read it, audit it, and verify that it does exactly what we say it does. There are no hidden functions, no backdoors, no admin keys. The code is publicly deployed on the blockchain and is immutable (cannot be changed after deployment).</p>
+
+      <p>This is a level of transparency that no bank in the world offers. You don't have to trust us — you can verify everything yourself.</p>
+
+      <h3>What Could Go Wrong? (Being Honest)</h3>
+      <p>No system is perfect. Here are the real risks, so you can make an informed decision:</p>
+
+      <ul>
+        <li><strong>Losing your seed phrase:</strong> If you lose your 12-word recovery phrase and your device breaks, your funds are permanently inaccessible. There is no recovery. Write it down and protect it.</li>
+        <li><strong>Smart contract bugs:</strong> While the code is tested and audited, software can have bugs. This is why we recommend starting with smaller amounts until you're comfortable.</li>
+        <li><strong>Crypto price volatility:</strong> If you save in ETH, its dollar value will fluctuate. Use stablecoins (USDT/USDC) if you want dollar-stable savings.</li>
+        <li><strong>Gas fees:</strong> Every blockchain transaction costs a small fee. On busy days, fees can be higher. This is the cost of decentralization.</li>
+      </ul>
+
+      <!-- ─── PART 6: VS BANKS ─── -->
+
+      <h2>LockIn Wallet vs. Traditional Banks</h2>
+
+      <p>Here's an honest comparison of what you get with each approach:</p>
+
+      <h3>What Banks Give You</h3>
+      <ul>
+        <li>FDIC insurance up to $250,000 (in the US)</li>
+        <li>"Forgot password" recovery</li>
+        <li>Customer service</li>
+        <li>Familiar interface</li>
+      </ul>
+
+      <h3>What Banks Take From You</h3>
+      <ul>
+        <li><strong>Control:</strong> Banks can freeze your account, limit withdrawals, or close your account entirely — at their discretion or under government order</li>
+        <li><strong>Privacy:</strong> Banks report your transactions to governments, sell your data to third parties, and track your spending in detail</li>
+        <li><strong>Access:</strong> Banks have hours, maintenance windows, and can impose holds on your own money. Transfers can take days.</li>
+        <li><strong>True ownership:</strong> When you deposit in a bank, you're lending them money. They owe you — but it's a debt, not possession.</li>
+        <li><strong>Inflation protection:</strong> Savings accounts pay near-zero interest while inflation erodes your purchasing power year after year</li>
+      </ul>
+
+      <h3>What LockIn Wallet Gives You</h3>
+      <ul>
+        <li><strong>True ownership:</strong> Your money is yours, not a bank's liability. It's on the blockchain, under your key.</li>
+        <li><strong>24/7 access:</strong> No bank hours, no holidays, no maintenance windows. The blockchain never closes.</li>
+        <li><strong>Self-enforced discipline:</strong> Spending limits that are truly unbreakable — not just suggestions from a budgeting app</li>
+        <li><strong>Censorship resistance:</strong> No one can freeze your account or stop your transactions</li>
+        <li><strong>Transparency:</strong> Every transaction is verifiable. Every line of code is auditable.</li>
+        <li><strong>Global access:</strong> Works from any country, any device, with just a browser and internet connection</li>
+      </ul>
+
+      <h3>What LockIn Wallet Requires From You</h3>
+      <ul>
+        <li><strong>Seed phrase responsibility:</strong> You must protect your 12 words. Lose them and no one can help.</li>
+        <li><strong>Learning curve:</strong> There's a small learning curve with MetaMask and crypto basics (this guide covers it)</li>
+        <li><strong>Gas fees:</strong> Small transaction costs for each blockchain operation</li>
+      </ul>
+
+      <div class="cta-banner">
+        <h3>Ready to Try It?</h3>
+        <p>Set up your <strong>commitment savings account</strong> in 15 minutes. Your money stays yours — protected by math, not promises.</p>
+        <a href="/" class="btn-primary">Launch LockIn Wallet — Free</a>
+      </div>
+
+      <!-- ─── PART 7: FAQ ─── -->
+
+      <h2>Frequently Asked Questions</h2>
+
+      <div class="faq-item">
+        <h3>Can LockIn Wallet steal my money?</h3>
+        <p>No. LockIn Wallet is non-custodial — your money is stored on the blockchain, not on our servers. We never have access to your funds. The smart contract code is open source and auditable. Only your wallet's private key can interact with your savings account.</p>
+      </div>
+
+      <div class="faq-item">
+        <h3>Is my money safer here than in a bank?</h3>
+        <p>In important ways, yes. Banks can freeze your account, comply with seizure orders, go bankrupt, or get hacked. With LockIn Wallet, your funds are on a decentralized blockchain controlled only by your private key. No company, government, or hacker without your seed phrase can touch your funds. The trade-off: you must protect your own seed phrase — there's no "forgot password" recovery.</p>
+      </div>
+
+      <div class="faq-item">
+        <h3>What if LockIn Wallet's website goes down?</h3>
+        <p>Your funds are on the blockchain, not on our website. Even if lockinwallet.com went permanently offline, your money would still be in the smart contract — same limits, same rules, fully accessible. You could interact with the contract directly through tools like Etherscan, or anyone could build a new interface to access the same contract. The website is just a window into the blockchain — the blockchain is the bank.</p>
+      </div>
+
+      <div class="faq-item">
+        <h3>Do I need to understand crypto to use this?</h3>
+        <p>Not really. You need to install MetaMask (a browser extension) and get some cryptocurrency, but the savings wallet itself works like any other app — set your limits, deposit money, done. This guide walks you through every step from scratch.</p>
+      </div>
+
+      <div class="faq-item">
+        <h3>What are gas fees and how much do they cost?</h3>
+        <p>Gas fees are small payments for processing transactions on the blockchain — like postage for sending a letter. On Ethereum mainnet, fees range from a few cents to a few dollars depending on network traffic. On Layer 2 networks (like Optimism or Arbitrum) and Solana, fees are fractions of a penny. LockIn Wallet works on multiple networks so you can choose the cheapest option.</p>
+      </div>
+
+      <div class="faq-item">
+        <h3>What if I want to save in dollars, not volatile crypto?</h3>
+        <p>Use stablecoins like USDT or USDC. These are cryptocurrencies pegged to the US dollar — always worth approximately $1. You get all the security and self-custody benefits of blockchain without any price volatility. Most LockIn Wallet users save in stablecoins.</p>
+      </div>
+
+      <h2>Related Resources</h2>
+      <ul>
+        <li><a href="/impulse-spending">How to Stop Impulse Spending</a></li>
+        <li><a href="/no-withdrawal-account">No-Withdrawal Savings Accounts Explained</a></li>
+        <li><a href="/addiction-recovery">Money Management for Recovering Addicts</a></li>
+        <li><a href="/gambling-help">Gambling Help: Protecting Your Finances</a></li>
+      </ul>
+    </main>
+
+    <footer class="landing-footer">
+      <div class="landing-footer-inner">
+        <div class="footer-col">
+          <h4>Product</h4>
+          <ul>
+            <li><a href="/">Home</a></li>
+            <li><a href="/how-it-works">How It Works</a></li>
+            <li><a href="/">Launch App</a></li>
+          </ul>
+        </div>
+        <div class="footer-col">
+          <h4>Resources</h4>
+          <ul>
+            <li><a href="/impulse-spending">Stop Impulse Spending</a></li>
+            <li><a href="/no-withdrawal-account">No-Withdrawal Accounts</a></li>
+            <li><a href="/addiction-recovery">Addiction Recovery</a></li>
+            <li><a href="/gambling-help">Gambling Help</a></li>
+          </ul>
+        </div>
+        <div class="footer-col">
+          <h4>LockIn Wallet</h4>
+          <ul>
+            <li><a href="/">Commitment Savings</a></li>
+            <li><a href="/">Forced Savings App</a></li>
+          </ul>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <p>&copy; 2026 LockIn Wallet. All rights reserved.</p>
+      </div>
+    </footer>
+  </body>
+</html>

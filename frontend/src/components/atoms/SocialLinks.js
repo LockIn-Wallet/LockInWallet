@@ -1,8 +1,19 @@
 import React from "react";
-import { styles } from "../../styles";
+import { styles, colors, fontSize, fontWeight, spacing } from "../../styles";
+
+const howItWorksLinkStyle = {
+  color: colors.text.muted,
+  textDecoration: "none",
+  fontSize: fontSize.md,
+  fontWeight: fontWeight.medium,
+  padding: `${spacing.xs} ${spacing.sm}`,
+  borderRadius: "6px",
+  transition: "all 0.2s ease",
+  whiteSpace: "nowrap",
+};
 
 /**
- * SocialLinks component - GitHub and Discord links in top right corner
+ * SocialLinks component - How It Works link + GitHub and Discord links in top right corner
  * Simple, lightweight component with SVG icons for optimal performance
  */
 const SocialLinks = () => {
@@ -13,6 +24,23 @@ const SocialLinks = () => {
 
   return (
     <div style={styles.socialLinks.container}>
+      {/* How It Works Link */}
+      <a
+        href="/how-it-works"
+        style={howItWorksLinkStyle}
+        title="How It Works — Beginner's Guide"
+        onMouseEnter={(e) => {
+          e.target.style.color = colors.primary.main;
+          e.target.style.backgroundColor = "rgba(255, 255, 255, 0.1)";
+        }}
+        onMouseLeave={(e) => {
+          e.target.style.color = colors.text.muted;
+          e.target.style.backgroundColor = "transparent";
+        }}
+      >
+        How It Works
+      </a>
+
       {/* GitHub Link */}
       <a
         href="https://github.com/LockIn-Wallet/LockInWallet"

@@ -88,6 +88,7 @@ import SpendingLimitsSetup from "./components/organisms/SpendingLimitsSetup.js";
 import WithdrawalInterface from "./components/organisms/WithdrawalInterface.js";
 import SetupCommitStep from "./components/organisms/SetupCommitStep.js";
 import WithdrawalAddressSetupStep from "./components/organisms/WithdrawalAddressSetupStep.js";
+import Footer from "./components/atoms/Footer.js";
 
 // Note: Step validation utilities removed - using simplified setup logic
 
@@ -1115,6 +1116,7 @@ function AppContentInner({
           )}
         </div>
       ) : null}
+      <Footer />
     </div>
   );
 }
