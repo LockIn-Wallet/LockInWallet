@@ -56,8 +56,8 @@ const BalanceDisplay = ({
   // PoolTogether state
   const [vaultStates, setVaultStates] = useState({});
   const [grandPrizeWeth, setGrandPrizeWeth] = useState("0");
-  const [ethPrice, setEthPrice] = useState(0);
   const [vaultAvailable, setVaultAvailable] = useState({});
+  const [claimLoading, setClaimLoading] = useState(false);
 
   const loadPoolTogetherData = useCallback(async () => {
     if (networkType !== "evm" || !transactionManager) return;
@@ -91,17 +91,9 @@ const BalanceDisplay = ({
 
       try {
         const prize = await transactionManager.getPoolTogetherGrandPrize();
-        setGrandPrizeWeth(ethers.formatUnits(prize, 18));
+        setGrandPrizeWeth(ethers.formatUnits(prize, 6));
       } catch (e) {
         setGrandPrizeWeth("0");
-      }
-
-      try {
-        const res = await fetch("https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd");
-        const data = await res.json();
-        setEthPrice(data.ethereum.usd);
-      } catch (e) {
-        setEthPrice(0);
       }
     } catch (err) {
       console.error("PoolTogether data load error:", err);
@@ -142,6 +134,23 @@ const BalanceDisplay = ({
       setVaultStates(function (prev) {
         return { ...prev, [key]: { ...prev[key], loading: false } };
       });
+    }
+  };
+
+  const handleClaimPrize = async (token) => {
+    if (!transactionManager || claimLoading) return;
+    setClaimLoading(true);
+    try {
+      const tier = 3; // lowest tier for testing — smaller prize
+      await transactionManager.claimPoolTogetherPrize(token.address, tier);
+      alert("Prize claimed successfully!");
+      await refreshBalances();
+      await loadPoolTogetherData();
+    } catch (err) {
+      console.error("Prize claim error:", err);
+      alert("Prize claim failed: " + err.message);
+    } finally {
+      setClaimLoading(false);
     }
   };
 
@@ -413,10 +422,29 @@ const BalanceDisplay = ({
                       {"🎰 Toggle to earn prizes"}
                     </div>
                   )}
-                  {vaultAvailable[key] && parseFloat(grandPrizeWeth) > 0 && ethPrice > 0 && (
+                  {vaultAvailable[key] && parseFloat(grandPrizeWeth) > 0 && (
                     <div style={{ fontSize: "0.65em", marginTop: "2px", color: "#fbd38d" }}>
-                      {"🏆 Grand prize: ~"}{(parseFloat(grandPrizeWeth) * ethPrice).toFixed(0)}{" "}{token.symbol}{" / 3 months"}
+                      {"🏆 Grand prize: ~$"}{parseFloat(grandPrizeWeth).toFixed(0)}{" / 3 months"}
                     </div>
+                  )}
+                  {vaultStates[key] && vaultStates[key].inVault && vaultAvailable[key] && (
+                    <button
+                      onClick={() => handleClaimPrize(token)}
+                      disabled={claimLoading}
+                      style={{
+                        marginTop: "6px",
+                        padding: "4px 10px",
+                        fontSize: "0.65em",
+                        backgroundColor: claimLoading ? "#4a5568" : "#d69e2e",
+                        color: "#1a202c",
+                        border: "none",
+                        borderRadius: "4px",
+                        cursor: claimLoading ? "wait" : "pointer",
+                        fontWeight: "bold",
+                      }}
+                    >
+                      {claimLoading ? "Claiming..." : "🏆 Claim Prize"}
+                    </button>
                   )}
                 </div>
               )

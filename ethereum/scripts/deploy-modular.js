@@ -242,6 +242,40 @@ async function main() {
       console.log("   ✅ Proxy deployment fee set to: 3 USDT");
     }
 
+    // Deploy and configure mock PoolTogether vaults for localhost testing
+    if (!isUpgrade && !isProduction && usdtAddress) {
+      console.log("\n🎰 Deploying mock PoolTogether contracts...");
+
+      const MockPrizeVault = await ethers.getContractFactory("MockPrizeVault");
+      const mockPrizeVault = await MockPrizeVault.deploy(usdtAddress);
+      await mockPrizeVault.waitForDeployment();
+      const prizeVaultAddress = await mockPrizeVault.getAddress();
+      console.log(`   ✅ MockPrizeVault deployed to: ${prizeVaultAddress}`);
+
+      // Grand prize: 500 USDT (6 decimals), 4 prize tiers
+      const grandPrize = 500_000_000; // 500 USDT
+      const MockPrizePool = await ethers.getContractFactory("MockPrizePool");
+      const mockPrizePool = await MockPrizePool.deploy(grandPrize, 4, usdtAddress);
+      await mockPrizePool.waitForDeployment();
+      const prizePoolAddress = await mockPrizePool.getAddress();
+      console.log(`   ✅ MockPrizePool deployed to: ${prizePoolAddress}`);
+
+      // Fund the prize pool with USDT so prizes can be claimed
+      const mockUSDT = await ethers.getContractAt("MockUSDT", usdtAddress);
+      tx = await mockUSDT.transfer(prizePoolAddress, 10_000_000_000); // 10,000 USDT reserve
+      await tx.wait();
+      console.log(`   ✅ Prize pool funded with 10,000 USDT`);
+
+      console.log("   Configuring PoolTogetherModule with mock vaults...");
+      tx = await poolTogetherModule.setPrizeVault(usdtAddress, prizeVaultAddress);
+      await tx.wait();
+      console.log(`   ✅ Prize vault set for USDT: ${prizeVaultAddress}`);
+
+      tx = await poolTogetherModule.setPrizePool(prizePoolAddress);
+      await tx.wait();
+      console.log(`   ✅ Prize pool set: ${prizePoolAddress}`);
+    }
+
     // Set production mode if requested (disable dev mode for production)
     if (isProduction) {
       console.log("\n🏭 Setting production mode (disabling dev mode)...");

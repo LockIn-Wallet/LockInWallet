@@ -89,6 +89,8 @@ import WithdrawalInterface from "./components/organisms/WithdrawalInterface.js";
 import SetupCommitStep from "./components/organisms/SetupCommitStep.js";
 import WithdrawalAddressSetupStep from "./components/organisms/WithdrawalAddressSetupStep.js";
 import Footer from "./components/atoms/Footer.js";
+import CollapsibleSection from "./components/atoms/CollapsibleSection.js";
+import TransactionHistory from "./components/molecules/TransactionHistory.js";
 
 // Note: Step validation utilities removed - using simplified setup logic
 
@@ -1008,44 +1010,63 @@ function AppContentInner({
 
           {/* Deposit Interface Component */}
           {isSetupCommitted && (
-            <DepositInterface
-              // Blockchain services (dependency injection)
-              transactionManager={transactionManager}
-              savingsContract={savingsContract}
-              signer={signer}
-              connection={connection}
-              // Network and wallet props
-              networkType={networkType}
-              selectedNetwork={selectedNetwork}
-              userAddress={userAddress}
-              solanaPublicKey={solanaPublicKey}
-              solanaConnected={solanaConnected}
-              // Token state from parent (shared with withdrawal)
-              selectedToken={selectedToken}
-              setSelectedToken={setSelectedToken}
-              // Callbacks for App.js state updates
-              onBalanceUpdate={refreshBalances}
-            />
+            <CollapsibleSection title="Deposit Funds" icon="📥" defaultExpanded={true}>
+              <DepositInterface
+                transactionManager={transactionManager}
+                savingsContract={savingsContract}
+                signer={signer}
+                connection={connection}
+                networkType={networkType}
+                selectedNetwork={selectedNetwork}
+                userAddress={userAddress}
+                solanaPublicKey={solanaPublicKey}
+                solanaConnected={solanaConnected}
+                selectedToken={selectedToken}
+                setSelectedToken={setSelectedToken}
+                onBalanceUpdate={refreshBalances}
+              />
+            </CollapsibleSection>
           )}
 
           {/* Spending Limits Setup / Management */}
-          {transactionManager ? (
-            <SpendingLimitsSetup
-              isSetupCommitted={isSetupCommitted}
-              currentTime={currentTime}
-              networkType={networkType}
-              transactionManager={transactionManager}
-              solanaConnected={solanaConnected}
-              savingsContract={savingsContract}
-              getCurrentUserAddress={getCurrentUserAddress}
-              spendingLimits={spendingLimits}
-              onSpendingLimitsUpdate={handleSpendingLimitsUpdate}
-              // onSetSaveCallback={setSaveSpendingLimitsCallback} // Temporarily disabled
-            />
+          {isSetupCommitted ? (
+            <CollapsibleSection title="Spending Limits" icon="⏱️" defaultExpanded={true}>
+              {transactionManager ? (
+                <SpendingLimitsSetup
+                  isSetupCommitted={isSetupCommitted}
+                  currentTime={currentTime}
+                  networkType={networkType}
+                  transactionManager={transactionManager}
+                  solanaConnected={solanaConnected}
+                  savingsContract={savingsContract}
+                  getCurrentUserAddress={getCurrentUserAddress}
+                  spendingLimits={spendingLimits}
+                  onSpendingLimitsUpdate={handleSpendingLimitsUpdate}
+                />
+              ) : (
+                <div style={{ padding: "20px", textAlign: "center", color: "#666" }}>
+                  Initializing spending limits...
+                </div>
+              )}
+            </CollapsibleSection>
           ) : (
-            <div style={{ padding: "20px", textAlign: "center", color: "#666" }}>
-              Initializing spending limits...
-            </div>
+            transactionManager ? (
+              <SpendingLimitsSetup
+                isSetupCommitted={isSetupCommitted}
+                currentTime={currentTime}
+                networkType={networkType}
+                transactionManager={transactionManager}
+                solanaConnected={solanaConnected}
+                savingsContract={savingsContract}
+                getCurrentUserAddress={getCurrentUserAddress}
+                spendingLimits={spendingLimits}
+                onSpendingLimitsUpdate={handleSpendingLimitsUpdate}
+              />
+            ) : (
+              <div style={{ padding: "20px", textAlign: "center", color: "#666" }}>
+                Initializing spending limits...
+              </div>
+            )
           )}
 
           {/* Withdrawal Addresses Setup Component */}
@@ -1053,10 +1074,8 @@ function AppContentInner({
             <WithdrawalAddressSetupStep
               isSetupCommitted={isSetupCommitted}
               spendingLimits={spendingLimits}
-              // Blockchain services (dependency injection)
               transactionManager={transactionManager}
               savingsContract={savingsContract}
-              // Network context
               networkType={networkType}
               solanaConnected={solanaConnected}
               solanaPublicKey={solanaPublicKey}
@@ -1069,50 +1088,52 @@ function AppContentInner({
               isSetupCommitted={isSetupCommitted}
               spendingLimits={spendingLimits}
               limitEdits={limitEdits}
-              // Blockchain services (dependency injection)
               transactionManager={transactionManager}
               savingsContract={savingsContract}
               networkType={networkType}
               solanaConnected={solanaConnected}
-              // Callbacks for parent state updates
               onSetupCommitted={setIsSetupCommitted}
               onSetupInfoUpdate={setSetupInfo}
               onSpendingLimitsRefresh={fetchSpendingLimits}
-              // onSaveSpendingLimits={saveSpendingLimitsCallback} // Temporarily disabled
             />
           )}
           {/* Withdrawal Interface Component */}
           {isSetupCommitted && (
-            <WithdrawalInterface
-              // Blockchain services (dependency injection)
-              transactionManager={transactionManager}
-              savingsContract={savingsContract}
-              signer={signer}
-              connection={connection}
-              // Network & config
-              networkType={networkType}
-              selectedNetwork={selectedNetwork}
-              getCurrentUserAddress={getCurrentUserAddress}
-              getCurrentNetwork={getCurrentNetwork}
-              // Wallet state
-              solanaConnected={solanaConnected}
-              solanaPublicKey={solanaPublicKey}
-              userAddress={userAddress}
-              // Shared token state (shared with DepositInterface)
-              selectedToken={selectedToken}
-              setSelectedToken={setSelectedToken}
-              // Calculated values
-              instantWithdrawableAmount={instantWithdrawableAmount}
-              limitingPeriod={limitingPeriod}
-              spendingLimits={spendingLimits}
-              // Callbacks for App.js state updates
-              onBalanceUpdate={refreshBalances}
-              onSpendingLimitsUpdate={fetchSpendingLimits}
-              // Note: All withdrawal data (addresses, requests, bypasses) now managed by WithdrawalInterface component internally
-
-              // Utilities
-              currentTime={currentTime}
-            />
+            <CollapsibleSection title="Withdraw Funds" icon="💸" defaultExpanded={true}>
+              <WithdrawalInterface
+                transactionManager={transactionManager}
+                savingsContract={savingsContract}
+                signer={signer}
+                connection={connection}
+                networkType={networkType}
+                selectedNetwork={selectedNetwork}
+                getCurrentUserAddress={getCurrentUserAddress}
+                getCurrentNetwork={getCurrentNetwork}
+                solanaConnected={solanaConnected}
+                solanaPublicKey={solanaPublicKey}
+                userAddress={userAddress}
+                selectedToken={selectedToken}
+                setSelectedToken={setSelectedToken}
+                instantWithdrawableAmount={instantWithdrawableAmount}
+                limitingPeriod={limitingPeriod}
+                spendingLimits={spendingLimits}
+                onBalanceUpdate={refreshBalances}
+                onSpendingLimitsUpdate={fetchSpendingLimits}
+                currentTime={currentTime}
+              />
+            </CollapsibleSection>
+          )}
+          {/* Transaction History */}
+          {isSetupCommitted && (
+            <CollapsibleSection title="Transaction History" icon="📜" defaultExpanded={true}>
+              <TransactionHistory
+                savingsContract={savingsContract}
+                userAddress={userAddress}
+                networkType={networkType}
+                selectedNetwork={selectedNetwork}
+                getCurrentNetwork={getCurrentNetwork}
+              />
+            </CollapsibleSection>
           )}
         </div>
       ) : null}

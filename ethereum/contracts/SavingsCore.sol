@@ -666,6 +666,15 @@ contract SavingsCore is Initializable, UUPSUpgradeable, OwnableUpgradeable, ISav
         return m.hasVault(token);
     }
 
+    function claimPoolTogetherPrize(address token, uint8 tier) external {
+        IPoolTogetherModule m = IPoolTogetherModule(modules[ModuleIds.POOL_TOGETHER]);
+        require(address(m) != address(0), "PoolTogetherModule not registered");
+        uint256 prizeAmount = m.claimPrize(msg.sender, token, tier);
+        emit PrizeClaimed(msg.sender, token, prizeAmount, tier);
+    }
+
+    event PrizeClaimed(address indexed user, address indexed token, uint256 amount, uint8 tier);
+
     // Allow contract to receive ETH for withdrawals
     receive() external payable {
         // Accept ETH - could be from module operations

@@ -33,14 +33,16 @@ const config: HardhatUserConfig = {
     }
   },
   networks: {
+    hardhat: {
+      allowUnlimitedContractSize: true,
+    },
     // goerli: {
     //   url: process.env.ALCHEMY_API_URL,
     //   accounts: [process.env.PRIVATE_KEY!]
     // },
     localhost: {
       url: "http://127.0.0.1:8545",
-      // optional: use private key from Ganache here
-      // accounts: ["0x..."]
+      allowUnlimitedContractSize: true,
     },
     optimism: {
       url: process.env.OPTIMISM_RPC_URL || "https://mainnet.optimism.io",

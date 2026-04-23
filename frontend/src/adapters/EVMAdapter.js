@@ -960,4 +960,11 @@ export class EVMAdapter extends BlockchainAdapter {
     if (!this.savingsContract) throw new Error("Contract not initialized");
     return await this.savingsContract.hasPoolTogetherVault(tokenAddress);
   }
+
+  async claimPoolTogetherPrize(tokenAddress, tier = 3) {
+    if (!this.savingsContract) throw new Error("Contract not initialized");
+    const tx = await this.savingsContract.claimPoolTogetherPrize(tokenAddress, tier);
+    await tx.wait();
+    return tx.hash;
+  }
 }

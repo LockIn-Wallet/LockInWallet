@@ -482,4 +482,8 @@ export class TransactionManager {
   async withdrawFromPoolTogether(tokenAddress, shares) {
     return await this.getCurrentAdapter().withdrawFromPoolTogether(tokenAddress, shares);
   }
+
+  async claimPoolTogetherPrize(tokenAddress, tier) {
+    return await this.getCurrentAdapter().claimPoolTogetherPrize(tokenAddress, tier);
+  }
 }

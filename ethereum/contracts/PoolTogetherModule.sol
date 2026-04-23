@@ -22,6 +22,7 @@ interface IERC4626 {
 interface IPrizePool {
     function getTierPrizeSize(uint8 tier) external view returns (uint104);
     function numberOfTiers() external view returns (uint8);
+    function claimPrize(address winner, uint8 tier) external returns (uint256);
 }
 
 contract PoolTogetherModule is Initializable, UUPSUpgradeable, OwnableUpgradeable {
@@ -147,9 +148,27 @@ contract PoolTogetherModule is Initializable, UUPSUpgradeable, OwnableUpgradeabl
         return IPrizePool(prizePool).numberOfTiers();
     }
 
+    // ========== PRIZE CLAIM ==========
+
+    /// @notice Claim a prize for a user from the PrizePool and credit to SavingsCore
+    function claimPrize(address user, address token, uint8 tier) external onlyCore returns (uint256 prizeAmount) {
+        require(prizePool != address(0), "PrizePool not configured");
+        address vault = prizeVaults[token];
+        require(vault != address(0), "No vault for token");
+
+        prizeAmount = IPrizePool(prizePool).claimPrize(user, tier);
+        require(prizeAmount > 0, "No prize to claim");
+
+        IERC20(token).transfer(address(savingsCore), prizeAmount);
+        savingsCore.updateTokenBalance(user, token, prizeAmount, true);
+
+        emit PrizeClaimed(user, token, prizeAmount, tier);
+    }
+
     // ========== EVENTS ==========
 
     event PrizeVaultSet(address indexed token, address indexed vault);
     event DepositedToVault(address indexed user, address indexed token, uint256 amount, uint256 shares);
     event WithdrawnFromVault(address indexed user, address indexed token, uint256 amount, uint256 shares);
+    event PrizeClaimed(address indexed user, address indexed token, uint256 amount, uint8 tier);
 }

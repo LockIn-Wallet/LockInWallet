@@ -202,6 +202,7 @@ interface IApprovalSystemModule {
 interface IPoolTogetherModule {
     function depositToVault(address user, address token, uint256 amount) external;
     function withdrawFromVault(address user, address token, uint256 sharesToRedeem) external;
+    function claimPrize(address user, address token, uint8 tier) external returns (uint256);
     function getUserVaultShares(address user, address token) external view returns (uint256);
     function getUserVaultBalance(address user, address token) external view returns (uint256);
     function hasVault(address token) external view returns (bool);
@@ -211,6 +212,7 @@ interface IPoolTogetherModule {
     event PrizeVaultSet(address indexed token, address indexed vault);
     event DepositedToVault(address indexed user, address indexed token, uint256 amount, uint256 shares);
     event WithdrawnFromVault(address indexed user, address indexed token, uint256 amount, uint256 shares);
+    event PrizeClaimed(address indexed user, address indexed token, uint256 amount, uint8 tier);
 }
 
 interface IProxyDeploymentModule {
