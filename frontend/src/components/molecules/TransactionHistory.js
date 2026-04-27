@@ -3,6 +3,7 @@ import PropTypes from "prop-types";
 import { colors, spacing, borderRadius, fontSize, fontWeight } from "../../styles";
 import {
   fetchTransactionHistory,
+  fetchSolanaTransactionHistory,
   formatTxAmount,
   formatTxTimestamp,
 } from "../../services";
@@ -94,7 +95,10 @@ const historyStyles = {
   },
 };
 
-const DEPOSIT_EVENTS = ['Deposited', 'DepositedToVault', 'DepositedTo'];
+const DEPOSIT_EVENTS = [
+  'Deposited', 'DepositedToVault', 'DepositedTo',
+  'DepositSol', 'DepositSolSelf', 'DepositSpl', 'DepositSplSelf',
+];
 const WINNING_EVENTS = ['PrizeClaimed'];
 
 function getTokenDecimals(tokenSymbol, tokens) {
@@ -109,6 +113,7 @@ const TransactionHistory = ({
   networkType,
   selectedNetwork,
   getCurrentNetwork,
+  transactionManager,
 }) => {
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -125,15 +130,22 @@ const TransactionHistory = ({
   }, [getCurrentNetwork, networkType, selectedNetwork]);
 
   const loadHistory = useCallback(async () => {
-    if (!savingsContract || !userAddress || networkType !== "evm") return;
+    if (networkType === "solana" && !transactionManager) return;
+    if (networkType !== "solana" && (!savingsContract || !userAddress)) return;
+
     setLoading(true);
     try {
-      const tokens = getTokens();
-      const history = await fetchTransactionHistory({
-        savingsContract,
-        userAddress,
-        tokens,
-      });
+      let history = [];
+      if (networkType === "solana") {
+        history = await fetchSolanaTransactionHistory({ transactionManager });
+      } else {
+        const tokens = getTokens();
+        history = await fetchTransactionHistory({
+          savingsContract,
+          userAddress,
+          tokens,
+        });
+      }
       setTransactions(history);
       setLoaded(true);
     } catch (err) {
@@ -141,23 +153,17 @@ const TransactionHistory = ({
     } finally {
       setLoading(false);
     }
-  }, [savingsContract, userAddress, networkType, getTokens]);
+  }, [savingsContract, userAddress, networkType, getTokens, transactionManager]);
 
   useEffect(() => {
-    if (!loaded) {
-      loadHistory();
-    }
-  }, [loaded, loadHistory]);
+    loadHistory();
+  }, [loadHistory]);
 
-  if (networkType !== "evm") {
-    return (
-      <div style={historyStyles.container}>
-        <div style={historyStyles.emptyState}>
-          Transaction history is available for EVM networks only.
-        </div>
-      </div>
-    );
-  }
+  useEffect(() => {
+    if (!loaded) return;
+    const interval = setInterval(loadHistory, 30000);
+    return () => clearInterval(interval);
+  }, [loaded, loadHistory]);
 
   if (loading && !loaded) {
     return (
@@ -183,7 +189,9 @@ const TransactionHistory = ({
             const isDeposit = DEPOSIT_EVENTS.includes(tx.eventName);
             const isWinning = WINNING_EVENTS.includes(tx.eventName);
             const decimals = getTokenDecimals(tx.token, tokens);
-            const formattedAmount = tx.amount ? formatTxAmount(tx.amount, decimals) : null;
+            const formattedAmount = tx.amount != null
+              ? (typeof tx.amount === "number" ? tx.amount.toFixed(2) : formatTxAmount(tx.amount, tx.decimals || decimals))
+              : null;
 
             return (
               <li
@@ -250,6 +258,7 @@ TransactionHistory.propTypes = {
   networkType: PropTypes.string.isRequired,
   selectedNetwork: PropTypes.string,
   getCurrentNetwork: PropTypes.func,
+  transactionManager: PropTypes.object,
 };
 
 export default TransactionHistory;

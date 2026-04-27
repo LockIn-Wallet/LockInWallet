@@ -486,4 +486,26 @@ export class TransactionManager {
   async claimPoolTogetherPrize(tokenAddress, tier) {
     return await this.getCurrentAdapter().claimPoolTogetherPrize(tokenAddress, tier);
   }
+
+  // Penalty Withdrawal
+  async withdrawWithPenalty(tokenAddress, amount, tokenDecimals) {
+    return await this.getCurrentAdapter().withdrawWithPenalty(tokenAddress, amount, tokenDecimals);
+  }
+
+  async getPenaltyRate() {
+    const adapter = this.getCurrentAdapter();
+    if (typeof adapter.getPenaltyRate === 'function') {
+      return await adapter.getPenaltyRate();
+    }
+    return 1000; // default 10%
+  }
+
+  // Transaction History
+  async getTransactionHistory() {
+    const adapter = this.getCurrentAdapter();
+    if (typeof adapter.getTransactionHistory === 'function') {
+      return await adapter.getTransactionHistory();
+    }
+    return [];
+  }
 }

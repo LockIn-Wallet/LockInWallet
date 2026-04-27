@@ -86,6 +86,9 @@ const WithdrawalInterface = ({
   const exceedingPeriod = detectExceedingPeriod(withdrawalAmount, spendingLimits);
   const exceedsInstantLimit = parseFloat(withdrawalAmount || 0) > instantWithdrawableAmount;
 
+  // Penalty state
+  const [penaltyRate, setPenaltyRate] = useState(2000); // basis points, default 20%
+
   // Loading states
   const [isLoading, setIsLoading] = useState(false);
 
@@ -141,6 +144,54 @@ const WithdrawalInterface = ({
     }
   }, [transactionManager, savingsContract, solanaConnected, networkType]);
 
+  useEffect(() => {
+    if (transactionManager && typeof transactionManager.getPenaltyRate === 'function') {
+      transactionManager.getPenaltyRate().then(rate => setPenaltyRate(rate)).catch(() => {});
+    }
+  }, [transactionManager]);
+
+  const withdrawWithPenalty = async () => {
+    if (!transactionManager || !withdrawalAmount || parseFloat(withdrawalAmount) <= 0) return;
+
+    const penaltyPercent = (penaltyRate / 100).toFixed(1);
+    const penaltyAmount = (parseFloat(withdrawalAmount) * penaltyRate / 10000).toFixed(2);
+    const userReceives = (parseFloat(withdrawalAmount) - parseFloat(penaltyAmount)).toFixed(2);
+
+    const confirmed = window.confirm(
+      `Instant Penalty Withdrawal\n\n` +
+      `Total: ${withdrawalAmount} ${selectedToken}\n` +
+      `Penalty (${penaltyPercent}%): ${penaltyAmount} ${selectedToken}\n` +
+      `You receive: ${userReceives} ${selectedToken}\n\n` +
+      `The penalty is sent to the protocol treasury.\nThis action cannot be undone.\n\nProceed?`
+    );
+    if (!confirmed) return;
+
+    setIsLoading(true);
+    try {
+      const adapter = transactionManager.getCurrentAdapter();
+      const amountValue = parseFloat(withdrawalAmount);
+      const network = getCurrentNetwork(networkType, selectedNetwork);
+      const tokenInfo = network.tokens[selectedToken];
+      const decimals = selectedToken === "SOL" ? 9 : (tokenInfo?.decimals || 6);
+      const tokenAddress = selectedToken === "SOL" ? "SOL" : tokenInfo?.address;
+
+      if (!tokenAddress) throw new Error(`Token ${selectedToken} not found`);
+
+      const txHash = await adapter.withdrawWithPenalty(tokenAddress, amountValue, decimals);
+      alert(`Penalty withdrawal successful!\n\nYou received: ${userReceives} ${selectedToken}\nPenalty: ${penaltyAmount} ${selectedToken}\nTx: ${txHash}`);
+      setWithdrawalAmount("");
+
+      if (onBalanceUpdate) await onBalanceUpdate();
+      if (onSpendingLimitsUpdate) await onSpendingLimitsUpdate();
+      await fetchWithdrawalData();
+    } catch (error) {
+      console.error("Penalty withdrawal error:", error);
+      alert(`Penalty withdrawal failed: ${error.message}`);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   // Withdrawal execution function (moved from App.js)
   const withdrawToDestination = async () => {
     // Network-aware connection check
@@ -162,38 +213,27 @@ const WithdrawalInterface = ({
     setIsLoading(true);
     try {
       if (networkType === "solana") {
-        // Solana withdrawal to destination logic
-        console.log("💸 Solana: Withdrawing to destination", withdrawalAmount, selectedToken, selectedWithdrawalDestination);
+        console.log("💸 Solana: Withdrawing with limits", withdrawalAmount, selectedToken, selectedWithdrawalDestination);
 
         const adapter = transactionManager.getCurrentAdapter();
         const amountValue = parseFloat(withdrawalAmount);
-        let destinationAddress = selectedWithdrawalDestination;
 
-        // Handle "self" destination - use user's wallet address
-        if (selectedWithdrawalDestination === "self") {
-          if (!solanaPublicKey) {
-            throw new Error("Solana wallet not connected");
-          }
-          destinationAddress = solanaPublicKey.toString();
+        const network = getCurrentNetwork(networkType, selectedNetwork);
+        const tokenInfo = network.tokens[selectedToken];
+        const decimals = selectedToken === "SOL" ? 9 : (tokenInfo?.decimals || 6);
+        const tokenAddress = selectedToken === "SOL" ? "SOL" : tokenInfo?.address;
+
+        if (!tokenAddress) {
+          throw new Error(`Token ${selectedToken} not found in network configuration`);
         }
 
-        let txHash;
-        if (selectedToken === "SOL") {
-          // Withdraw SOL to destination
-          const amountLamports = Math.floor(amountValue * Math.pow(10, 9)); // Convert to lamports
-          txHash = await adapter.withdrawSolToDestination(destinationAddress, amountLamports);
-        } else {
-          // Withdraw SPL token to destination
-          const network = getCurrentNetwork(networkType, selectedNetwork);
-          const tokenInfo = network.tokens[selectedToken];
-          if (!tokenInfo) {
-            throw new Error(`Token ${selectedToken} not found in network configuration`);
-          }
-          const amountTokens = Math.floor(amountValue * Math.pow(10, tokenInfo.decimals));
-          txHash = await adapter.withdrawSplToDestination(destinationAddress, tokenInfo.address, amountTokens);
-        }
+        const txHash = await adapter.withdrawWithLimits(tokenAddress, amountValue, decimals);
 
-        alert(`✅ Solana withdrawal successful!\n\nTransaction: ${txHash}\nAmount: ${withdrawalAmount} ${selectedToken}\nDestination: ${destinationAddress.slice(0, 8)}...${destinationAddress.slice(-4)}`);
+        let destinationLabel = selectedWithdrawalDestination === "self"
+          ? "self (wallet)"
+          : `${selectedWithdrawalDestination.slice(0, 8)}...${selectedWithdrawalDestination.slice(-4)}`;
+
+        alert(`✅ Solana withdrawal successful!\n\nTransaction: ${txHash}\nAmount: ${withdrawalAmount} ${selectedToken}\nDestination: ${destinationLabel}`);
       } else {
         // EVM withdrawal to destination logic
         console.log("💸 EVM: Withdrawing to destination", withdrawalAmount, selectedToken, selectedWithdrawalDestination);
@@ -715,7 +755,7 @@ const WithdrawalInterface = ({
                 marginTop: "2px",
               }}
             >
-              This withdrawal will require a 24-hour approval period
+              Request a 24-hour bypass, or withdraw instantly with a {(penaltyRate / 100).toFixed(0)}% penalty
             </div>
           </div>
         )}
@@ -816,6 +856,35 @@ const WithdrawalInterface = ({
               }}
             >
               🕐 Request Above {exceedingPeriod} Limit
+            </button>
+            <button
+              onClick={withdrawWithPenalty}
+              disabled={
+                isLoading || !withdrawalAmount || parseFloat(withdrawalAmount) <= 0
+              }
+              style={{
+                padding: "12px 24px",
+                borderRadius: "4px",
+                border: "none",
+                backgroundColor:
+                  isLoading || !withdrawalAmount || parseFloat(withdrawalAmount) <= 0
+                    ? "#4a5568"
+                    : "#e53e3e",
+                color: "white",
+                cursor:
+                  isLoading || !withdrawalAmount || parseFloat(withdrawalAmount) <= 0
+                    ? "not-allowed"
+                    : "pointer",
+                fontWeight: "bold",
+                flex: "1",
+                fontSize: "0.9em",
+                opacity:
+                  isLoading || !withdrawalAmount || parseFloat(withdrawalAmount) <= 0
+                    ? 0.5
+                    : 1,
+              }}
+            >
+              {isLoading ? "Processing..." : `🔴 Withdraw Now (${(penaltyRate / 100).toFixed(0)}% penalty)`}
             </button>
           </>
         )}

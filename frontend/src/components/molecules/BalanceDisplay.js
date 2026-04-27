@@ -244,61 +244,9 @@ const BalanceDisplay = ({
           )}
         </div>
 
-        {/* Educational Introduction for Setup Mode */}
-        {!isSetupCommitted && (
-          <div
-            style={{
-              marginBottom: "20px",
-              padding: "16px",
-              backgroundColor: "#1a365d",
-              border: "2px solid #48bb78",
-              borderRadius: "8px",
-              color: "white",
-            }}
-          >
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                marginBottom: "12px",
-                gap: "8px",
-              }}
-            >
-              <span style={{ fontSize: fontSize.xl }}>🛡️</span>
-              <h4
-                style={{
-                  margin: 0,
-                  color: "#9ae6b4",
-                  fontSize: "1.1em",
-                  fontWeight: "600",
-                }}
-              >
-                Protect your Bankroll/Savings/Profits even from yourself
-              </h4>
-            </div>
-            <div
-              style={{ fontSize: "0.9em", lineHeight: "1.6", color: "#e2e8f0" }}
-            >
-              <p style={{ margin: `0 0 ${spacing.sm} 0` }}>
-                <strong>🏦 No-trading wallet:</strong> Designed for
-                storing stablecoins for your peace of mind.
-              </p>
-              <p style={{ margin: `0 0 ${spacing.sm} 0` }}>
-                <strong>🔐 Set up withdrawal allowance:</strong> Changes to
-                allowance or bypassing withdrawal limits are timelocked to combat spending/risking impulses.
-              </p>
-              <p style={{ margin: `0 0 ${spacing.sm} 0` }}>
-                <strong>🛡️ Compromise-Resistant:</strong> Funds are safe even
-                when your private key is compromised (coming soon)
-              </p>
-              <p style={{ margin: "0" }}>
-                <strong>⛓️ Fully On-Chain:</strong> No intermediaries
-              </p>
-            </div>
-          </div>
-        )}
 
-        {!provider ? (
+
+        {!provider && !(networkType === "solana" && solanaConnected) ? (
           <div style={layoutStyles.emptyState}>
             <p>Connect your wallet to view balances</p>
             <button

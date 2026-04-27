@@ -187,6 +187,26 @@ export async function fetchTransactionHistory(params) {
 }
 
 /**
+ * Fetches transaction history for Solana via the transaction manager adapter
+ * @param {Object} params
+ * @param {Object} params.transactionManager - TransactionManager instance
+ * @returns {Promise<Array>} Sorted transaction list (newest first)
+ */
+export async function fetchSolanaTransactionHistory(params) {
+  const { transactionManager } = params;
+
+  if (!transactionManager) return [];
+
+  return safeDataFetch(
+    async () => {
+      return await transactionManager.getTransactionHistory();
+    },
+    [],
+    'Solana transaction history fetch'
+  );
+}
+
+/**
  * Formats a transaction amount for display
  * @param {BigInt|string} amount - Raw amount
  * @param {number} decimals - Token decimals
@@ -195,7 +215,7 @@ export async function fetchTransactionHistory(params) {
 export function formatTxAmount(amount, decimals = 6) {
   if (!amount) return '';
   try {
-    return parseFloat(ethers.formatUnits(amount, decimals)).toFixed(4);
+    return parseFloat(ethers.formatUnits(amount, decimals)).toFixed(2);
   } catch {
     return amount.toString();
   }

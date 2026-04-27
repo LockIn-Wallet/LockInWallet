@@ -91,4 +91,10 @@ pub enum ErrorCode {
 
     #[msg("Insufficient funds for activation fee")]
     InsufficientFundsForActivation,
+
+    #[msg("Invalid penalty rate: must be between 0 and 5000 basis points (50%)")]
+    InvalidPenaltyRate,
+
+    #[msg("Program config not initialized - penalty rate not available")]
+    ProgramConfigNotInitialized,
 }

@@ -142,6 +142,39 @@ export const buttonStyles = {
     fontSize: fontSize.sm,
     transition: transitions.fast,
   },
+
+  // Wallet connection buttons
+  metamask: {
+    padding: `${spacing.xl} ${spacing.xxxxl}`,
+    borderRadius: borderRadius.xl,
+    border: 'none',
+    backgroundColor: colors.wallet.metamask,
+    color: colors.text.primary,
+    cursor: 'pointer',
+    fontSize: fontSize.lg,
+    fontWeight: fontWeight.bold,
+    transition: transitions.normal,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+  },
+
+  phantom: {
+    padding: `${spacing.xl} ${spacing.xxxxl}`,
+    borderRadius: borderRadius.xl,
+    border: 'none',
+    backgroundColor: colors.wallet.phantom,
+    color: colors.text.primary,
+    cursor: 'pointer',
+    fontSize: fontSize.lg,
+    fontWeight: fontWeight.bold,
+    transition: transitions.normal,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+  },
 };
 
 // Button hover effects
@@ -151,6 +184,20 @@ export const buttonHoverEffects = {
   },
   primaryReset: (e) => {
     e.target.style.backgroundColor = colors.button.primary;
+  },
+
+  metamaskHover: (e) => {
+    e.target.style.backgroundColor = colors.wallet.metamaskHover;
+  },
+  metamaskReset: (e) => {
+    e.target.style.backgroundColor = colors.wallet.metamask;
+  },
+
+  phantomHover: (e) => {
+    e.target.style.backgroundColor = colors.wallet.phantomHover;
+  },
+  phantomReset: (e) => {
+    e.target.style.backgroundColor = colors.wallet.phantom;
   },
 
   refreshHover: (e) => {

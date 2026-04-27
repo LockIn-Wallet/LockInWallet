@@ -737,6 +737,9 @@ pub struct ProgramConfig {
 
     /// Last update timestamp
     pub updated_at: i64,
+
+    /// Penalty rate in basis points (e.g., 1000 = 10%) for instant bypass withdrawals
+    pub penalty_rate_bps: u16,
 }
 
 impl ProgramConfig {
@@ -744,8 +747,11 @@ impl ProgramConfig {
     pub const DISCRIMINATOR_SIZE: usize = 8;
     pub const PUBKEY_SIZE: usize = 32;
     pub const U64_SIZE: usize = 8;
+    pub const U16_SIZE: usize = 2;
     pub const U8_SIZE: usize = 1;
     pub const I64_SIZE: usize = 8;
+
+    pub const DEFAULT_PENALTY_RATE_BPS: u16 = 2000; // 20%
 
     pub const INIT_SPACE: usize = Self::DISCRIMINATOR_SIZE
         + Self::PUBKEY_SIZE // treasury_address
@@ -753,5 +759,6 @@ impl ProgramConfig {
         + Self::PUBKEY_SIZE // admin
         + Self::U8_SIZE // bump
         + Self::I64_SIZE // created_at
-        + Self::I64_SIZE; // updated_at
+        + Self::I64_SIZE // updated_at
+        + Self::U16_SIZE; // penalty_rate_bps
 }

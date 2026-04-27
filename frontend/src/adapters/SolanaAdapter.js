@@ -13,7 +13,10 @@ import {
   TOKEN_PROGRAM_ID,
   ASSOCIATED_TOKEN_PROGRAM_ID
 } from '@solana/spl-token';
+import bs58 from 'bs58';
 import { BlockchainAdapter } from './BlockchainAdapter.js';
+
+const ProgramConfig_DEFAULT_PENALTY_BPS = 2000; // 20%
 
 // Treasury configuration for different environments
 const TREASURY_CONFIG = {
@@ -42,7 +45,7 @@ const INSTRUCTION_DISCRIMINATORS = {
   WithdrawSol: [145, 131, 74, 136, 65, 137, 42, 38],
   WithdrawSpl: [181, 154, 94, 86, 62, 115, 6, 186],
 
-  // Deposit Proxy Program (auto-generated on 2026-02-14)
+  // Deposit Proxy Program (auto-generated on 2026-04-27)
   InitializeProxy: [245, 74, 175, 136, 0, 146, 100, 224],
   ForwardSolDeposit: [29, 156, 48, 213, 90, 128, 229, 58],
   ForwardSplDeposit: [131, 71, 27, 250, 233, 24, 75, 240]
@@ -57,7 +60,7 @@ export class SolanaAdapter extends BlockchainAdapter {
     this.wallet = wallet;
     this.connection = connection;
     this.userAddress = null;
-    this.PROGRAM_ID = new PublicKey("9j511uJuYwoFRFiU1h5wy2oi1Xc8n1FdoK91QxoXHRh2"); // Updated 2026-02-14
+    this.PROGRAM_ID = new PublicKey("9j511uJuYwoFRFiU1h5wy2oi1Xc8n1FdoK91QxoXHRh2"); // Updated 2026-04-27
 
     if (this.wallet?.connected && this.wallet?.publicKey) {
       this.userAddress = this.wallet.publicKey.toString();
@@ -439,27 +442,34 @@ export class SolanaAdapter extends BlockchainAdapter {
           const programLogs = simulation.value.logs || [];
           console.log(`📜 Program logs:`, programLogs);
 
-          const detailedError = this._parseCustomProgramError(simulation.value.err, programLogs);
-          throw new Error(`${methodName}: ${detailedError}`);
-        }
-
-        console.log(`✅ ${methodName} simulation successful`);
-        if (simulation.value.logs && simulation.value.logs.length > 0) {
-          console.log(`📋 Simulation logs:`, simulation.value.logs);
+          const logText = programLogs.join(' ');
+          const isSignerError = logText.includes('did not sign') || logText.includes('ConstraintSigner');
+          if (isSignerError) {
+            console.log(`⚠️ ${methodName} simulation: signer error expected for unsigned tx, proceeding...`);
+          } else {
+            const detailedError = this._parseCustomProgramError(simulation.value.err, programLogs);
+            throw new Error(`${methodName}: ${detailedError}`);
+          }
+        } else {
+          console.log(`✅ ${methodName} simulation successful`);
+          if (simulation.value.logs && simulation.value.logs.length > 0) {
+            console.log(`📋 Simulation logs:`, simulation.value.logs);
+          }
         }
       } catch (simulationError) {
-        if (simulationError.message.includes(methodName)) {
-          // This is our custom error from _parseCustomProgramError
+        if (simulationError.message.includes(`${methodName}:`)) {
           throw simulationError;
-        } else {
-          // This is a simulation failure (network, etc.)
-          console.warn(`⚠️ Transaction simulation failed (proceeding anyway): ${simulationError.message}`);
         }
+        console.warn(`⚠️ Transaction simulation failed (proceeding anyway): ${simulationError.message}`);
       }
 
       // Send the transaction
       const txHash = await this.wallet.sendTransaction(transaction, this.connection);
       console.log(`✅ ${methodName} transaction sent: ${txHash}`);
+
+      // Wait for confirmation so subsequent reads see updated on-chain state
+      await this.connection.confirmTransaction(txHash, 'confirmed');
+      console.log(`✅ ${methodName} transaction confirmed: ${txHash}`);
 
       return txHash;
 
@@ -1652,9 +1662,11 @@ export class SolanaAdapter extends BlockchainAdapter {
       'WithdrawSol': [145, 131, 74, 136, 65, 137, 42, 38],
       'WithdrawSolToDestination': [170, 140, 47, 249, 105, 179, 11, 204],
       'WithdrawSolWithLimits': [75, 241, 60, 175, 113, 191, 138, 113],
+      'WithdrawSolWithPenalty': [240, 110, 162, 147, 195, 128, 43, 135],
       'WithdrawSpl': [181, 154, 94, 86, 62, 115, 6, 186],
       'WithdrawSplToDestination': [30, 228, 247, 163, 185, 59, 123, 128],
-      'WithdrawSplWithLimits': [103, 31, 251, 151, 88, 136, 64, 53]
+      'WithdrawSplWithLimits': [103, 31, 251, 151, 88, 136, 64, 53],
+      'WithdrawSplWithPenalty': [21, 196, 114, 73, 196, 90, 228, 178]
     };
     return discriminators[methodName] || [0, 0, 0, 0, 0, 0, 0, 0];
   }
@@ -2482,12 +2494,10 @@ export class SolanaAdapter extends BlockchainAdapter {
       [Buffer.from("savings"), userPubkey.toBuffer()],
       this.PROGRAM_ID
     );
-    const [spendingLimitsAccount] = await this.getSpendingLimitsPDA(userPubkey);
 
     const amountBigInt = this.parseAmount(amount, tokenDecimals);
 
     if (tokenAddress === 'SOL' || tokenAddress === 'native') {
-      // SOL withdrawal with limits
       const discriminator = Buffer.from(this._generateDiscriminator('WithdrawSolWithLimits'));
       const amountBuffer = Buffer.alloc(8);
       amountBuffer.writeBigUInt64LE(amountBigInt, 0);
@@ -2496,7 +2506,6 @@ export class SolanaAdapter extends BlockchainAdapter {
       const instruction = new TransactionInstruction({
         keys: [
           { pubkey: savingsAccount, isSigner: false, isWritable: true },
-          { pubkey: spendingLimitsAccount, isSigner: false, isWritable: true },
           { pubkey: userPubkey, isSigner: true, isWritable: true },
           { pubkey: SystemProgram.programId, isSigner: false, isWritable: false }
         ],
@@ -2507,7 +2516,6 @@ export class SolanaAdapter extends BlockchainAdapter {
       const transaction = new Transaction().add(instruction);
       return await this._sendTransaction(transaction);
     } else {
-      // SPL token withdrawal with limits - more complex, needs token accounts
       const mintPubkey = new PublicKey(tokenAddress);
       const userTokenAccount = await getAssociatedTokenAddress(mintPubkey, userPubkey);
       const savingsTokenAccount = await getAssociatedTokenAddress(mintPubkey, savingsAccount, true);
@@ -2520,7 +2528,6 @@ export class SolanaAdapter extends BlockchainAdapter {
       const instruction = new TransactionInstruction({
         keys: [
           { pubkey: savingsAccount, isSigner: false, isWritable: true },
-          { pubkey: spendingLimitsAccount, isSigner: false, isWritable: true },
           { pubkey: userPubkey, isSigner: true, isWritable: true },
           { pubkey: userTokenAccount, isSigner: false, isWritable: true },
           { pubkey: savingsTokenAccount, isSigner: false, isWritable: true },
@@ -2532,6 +2539,146 @@ export class SolanaAdapter extends BlockchainAdapter {
       });
 
       const transaction = new Transaction().add(instruction);
+      return await this._sendTransaction(transaction);
+    }
+  }
+
+  // ========== PENALTY WITHDRAWAL FUNCTIONALITY ==========
+
+  async getPenaltyRate() {
+    try {
+      const [programConfigPDA] = await PublicKey.findProgramAddress(
+        [Buffer.from("program_config")],
+        this.PROGRAM_ID
+      );
+      const accountInfo = await this.connection.getAccountInfo(programConfigPDA);
+      if (!accountInfo || !accountInfo.data) {
+        return ProgramConfig_DEFAULT_PENALTY_BPS;
+      }
+      // penalty_rate_bps is the last field: skip discriminator(8) + treasury(32) + fee(8) + admin(32) + bump(1) + created_at(8) + updated_at(8) = 97
+      const offset = 97;
+      if (accountInfo.data.length >= offset + 2) {
+        return accountInfo.data.readUInt16LE(offset);
+      }
+      return ProgramConfig_DEFAULT_PENALTY_BPS;
+    } catch (error) {
+      console.error('Error fetching penalty rate:', error);
+      return ProgramConfig_DEFAULT_PENALTY_BPS;
+    }
+  }
+
+  async ensureProgramConfigExists() {
+    const [programConfigPDA] = await PublicKey.findProgramAddress(
+      [Buffer.from("program_config")],
+      this.PROGRAM_ID
+    );
+    const accountInfo = await this.connection.getAccountInfo(programConfigPDA);
+    if (accountInfo) return;
+
+    const treasuryAddress = this.getTreasuryAddress();
+    const discriminator = Buffer.from(this._generateDiscriminator('InitializeProgramConfig'));
+    const feeBuffer = Buffer.alloc(8);
+    feeBuffer.writeBigUInt64LE(BigInt(5000000), 0); // 0.005 SOL default fee
+    const data = Buffer.concat([discriminator, feeBuffer]);
+
+    const instruction = new TransactionInstruction({
+      keys: [
+        { pubkey: programConfigPDA, isSigner: false, isWritable: true },
+        { pubkey: this.wallet.publicKey, isSigner: true, isWritable: true },
+        { pubkey: treasuryAddress, isSigner: false, isWritable: false },
+        { pubkey: SystemProgram.programId, isSigner: false, isWritable: false }
+      ],
+      programId: this.PROGRAM_ID,
+      data
+    });
+
+    const transaction = new Transaction().add(instruction);
+    await this._sendTransaction(transaction);
+    console.log('✅ ProgramConfig initialized');
+  }
+
+  async withdrawWithPenalty(tokenAddress, amount, tokenDecimals) {
+    if (!this.wallet?.publicKey) {
+      throw new Error('Wallet not connected');
+    }
+
+    await this.ensureProgramConfigExists();
+
+    const userPubkey = this.wallet.publicKey;
+    const [savingsAccount] = await PublicKey.findProgramAddress(
+      [Buffer.from("savings"), userPubkey.toBuffer()],
+      this.PROGRAM_ID
+    );
+    const [programConfigPDA] = await PublicKey.findProgramAddress(
+      [Buffer.from("program_config")],
+      this.PROGRAM_ID
+    );
+    const treasuryAddress = this.getTreasuryAddress();
+
+    const amountBigInt = this.parseAmount(amount, tokenDecimals);
+
+    if (tokenAddress === 'SOL' || tokenAddress === 'native') {
+      const discriminator = Buffer.from(this._generateDiscriminator('WithdrawSolWithPenalty'));
+      const amountBuffer = Buffer.alloc(8);
+      amountBuffer.writeBigUInt64LE(amountBigInt, 0);
+      const data = Buffer.concat([discriminator, amountBuffer]);
+
+      const instruction = new TransactionInstruction({
+        keys: [
+          { pubkey: savingsAccount, isSigner: false, isWritable: true },
+          { pubkey: userPubkey, isSigner: true, isWritable: true },
+          { pubkey: programConfigPDA, isSigner: false, isWritable: false },
+          { pubkey: treasuryAddress, isSigner: false, isWritable: true },
+          { pubkey: SystemProgram.programId, isSigner: false, isWritable: false }
+        ],
+        programId: this.PROGRAM_ID,
+        data
+      });
+
+      const transaction = new Transaction().add(instruction);
+      return await this._sendTransaction(transaction);
+    } else {
+      const mintPubkey = new PublicKey(tokenAddress);
+      const userTokenAccount = await getAssociatedTokenAddress(mintPubkey, userPubkey);
+      const savingsTokenAccount = await getAssociatedTokenAddress(mintPubkey, savingsAccount, true);
+      const treasuryTokenAccount = await getAssociatedTokenAddress(mintPubkey, treasuryAddress);
+
+      const transaction = new Transaction();
+
+      // Create treasury token account if it doesn't exist
+      const treasuryAtaInfo = await this.connection.getAccountInfo(treasuryTokenAccount);
+      if (!treasuryAtaInfo) {
+        transaction.add(
+          createAssociatedTokenAccountInstruction(
+            userPubkey,
+            treasuryTokenAccount,
+            treasuryAddress,
+            mintPubkey
+          )
+        );
+      }
+
+      const discriminator = Buffer.from(this._generateDiscriminator('WithdrawSplWithPenalty'));
+      const amountBuffer = Buffer.alloc(8);
+      amountBuffer.writeBigUInt64LE(amountBigInt, 0);
+      const data = Buffer.concat([discriminator, amountBuffer]);
+
+      const instruction = new TransactionInstruction({
+        keys: [
+          { pubkey: savingsAccount, isSigner: false, isWritable: true },
+          { pubkey: userPubkey, isSigner: true, isWritable: true },
+          { pubkey: programConfigPDA, isSigner: false, isWritable: false },
+          { pubkey: userTokenAccount, isSigner: false, isWritable: true },
+          { pubkey: savingsTokenAccount, isSigner: false, isWritable: true },
+          { pubkey: treasuryTokenAccount, isSigner: false, isWritable: true },
+          { pubkey: mintPubkey, isSigner: false, isWritable: false },
+          { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false }
+        ],
+        programId: this.PROGRAM_ID,
+        data
+      });
+
+      transaction.add(instruction);
       return await this._sendTransaction(transaction);
     }
   }
@@ -4146,6 +4293,148 @@ export class SolanaAdapter extends BlockchainAdapter {
 
     console.log(`✅ Cancelled withdrawal bypass (tx: ${txHash})`);
     return txHash;
+  }
+
+  // ========== TRANSACTION HISTORY ==========
+
+  async getTransactionHistory() {
+    if (!this.wallet?.publicKey) {
+      throw new Error('Wallet not connected');
+    }
+
+    const userPubkey = this.wallet.publicKey;
+    const [savingsAccount] = await PublicKey.findProgramAddress(
+      [Buffer.from("savings"), userPubkey.toBuffer()],
+      this.PROGRAM_ID
+    );
+
+    const SOLANA_EVENT_TYPES = {
+      'DepositSol': { label: 'Deposit', icon: '📥', hasAmount: true, isSol: true },
+      'DepositSolSelf': { label: 'Deposit', icon: '📥', hasAmount: true, isSol: true },
+      'DepositSpl': { label: 'Deposit', icon: '📥', hasAmount: true, isSol: false },
+      'DepositSplSelf': { label: 'Deposit', icon: '📥', hasAmount: true, isSol: false },
+      'WithdrawSol': { label: 'Withdrawal', icon: '📤', hasAmount: true, isSol: true },
+      'WithdrawSolToDestination': { label: 'Withdrawal', icon: '📤', hasAmount: true, isSol: true },
+      'WithdrawSolWithLimits': { label: 'Withdrawal', icon: '📤', hasAmount: true, isSol: true },
+      'WithdrawSpl': { label: 'Withdrawal', icon: '📤', hasAmount: true, isSol: false },
+      'WithdrawSplToDestination': { label: 'Withdrawal', icon: '📤', hasAmount: true, isSol: false },
+      'WithdrawSplWithLimits': { label: 'Withdrawal', icon: '📤', hasAmount: true, isSol: false },
+      'CommitInitialSetup': { label: 'Setup Committed', icon: '🔒', hasAmount: false, isSol: false },
+      'SetCommonPeriodLimits': { label: 'Limits Set', icon: '⏱️', hasAmount: false, isSol: false },
+      'AddWithdrawalDestination': { label: 'Address Added', icon: '📋', hasAmount: false, isSol: false },
+      'RemoveWithdrawalDestination': { label: 'Address Removed', icon: '🗑️', hasAmount: false, isSol: false },
+      'ExecuteWithdrawalBypass': { label: 'Bypass Withdrawal', icon: '⚡', hasAmount: true, isSol: true },
+      'ExecuteSplWithdrawalBypass': { label: 'Bypass Withdrawal', icon: '⚡', hasAmount: true, isSol: false },
+      'WithdrawSolWithPenalty': { label: 'Penalty Withdrawal', icon: '🔴', hasAmount: true, isSol: true },
+      'WithdrawSplWithPenalty': { label: 'Penalty Withdrawal', icon: '🔴', hasAmount: true, isSol: false },
+      'ProposeLimitChange': { label: 'Limit Proposal', icon: '📝', hasAmount: false, isSol: false },
+      'ExecuteLimitProposal': { label: 'Limit Changed', icon: '✅', hasAmount: false, isSol: false },
+    };
+
+    const discMap = {};
+    for (const methodName of Object.keys(SOLANA_EVENT_TYPES)) {
+      const disc = this._generateDiscriminator(methodName);
+      discMap[JSON.stringify(disc)] = methodName;
+    }
+
+    const tokensByMint = {};
+    if (this.networkConfig?.tokens) {
+      for (const [symbol, token] of Object.entries(this.networkConfig.tokens)) {
+        if (token.address) {
+          tokensByMint[token.address] = { symbol, decimals: token.decimals || 6 };
+        }
+      }
+    }
+
+    try {
+      const signatures = await this.connection.getSignaturesForAddress(
+        savingsAccount,
+        { limit: 50 },
+        'confirmed'
+      );
+
+      if (!signatures || signatures.length === 0) {
+        return [];
+      }
+
+      const transactions = await this.connection.getParsedTransactions(
+        signatures.map(s => s.signature),
+        { maxSupportedTransactionVersion: 0 }
+      );
+
+      const history = [];
+      for (let i = 0; i < signatures.length; i++) {
+        const sig = signatures[i];
+        const tx = transactions[i];
+        if (!tx || sig.err) continue;
+
+        let methodName = null;
+        let decoded = null;
+        let ixAccounts = null;
+        const instructions = tx.transaction?.message?.instructions || [];
+        for (const ix of instructions) {
+          if (ix.programId?.toString() === this.PROGRAM_ID.toString() && ix.data) {
+            try {
+              decoded = Buffer.from(bs58.decode(ix.data));
+              const disc = Array.from(decoded.slice(0, 8));
+              const key = JSON.stringify(disc);
+              if (discMap[key]) {
+                methodName = discMap[key];
+                ixAccounts = ix.accounts;
+                break;
+              }
+            } catch {
+              // Skip unparseable instructions
+            }
+          }
+        }
+
+        if (!methodName) continue;
+
+        const eventType = SOLANA_EVENT_TYPES[methodName];
+        if (!eventType) continue;
+
+        let amount = null;
+        let token = null;
+        let decimals = 6;
+
+        if (eventType.hasAmount && decoded && decoded.length >= 16) {
+          const rawAmount = decoded.readBigUInt64LE(8);
+          if (eventType.isSol) {
+            token = 'SOL';
+            decimals = 9;
+          } else if (ixAccounts && ixAccounts.length > 0) {
+            for (const acc of ixAccounts) {
+              const accStr = acc?.toString();
+              if (accStr && tokensByMint[accStr]) {
+                token = tokensByMint[accStr].symbol;
+                decimals = tokensByMint[accStr].decimals;
+                break;
+              }
+            }
+            if (!token) token = 'SPL';
+          }
+          amount = Number(rawAmount) / Math.pow(10, decimals);
+        }
+
+        history.push({
+          txHash: sig.signature,
+          blockNumber: sig.slot,
+          eventName: methodName,
+          label: eventType.label,
+          icon: eventType.icon,
+          timestamp: sig.blockTime || null,
+          token,
+          amount,
+          decimals,
+        });
+      }
+
+      return history;
+    } catch (error) {
+      console.error('Error fetching Solana transaction history:', error);
+      return [];
+    }
   }
 
   // ========== MONETIZATION METHODS ==========

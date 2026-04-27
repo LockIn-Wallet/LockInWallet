@@ -476,12 +476,6 @@ pub fn deposit_sol_self(ctx: Context<DepositSolSelf>, amount: u64) -> Result<()>
         savings_account.activated_at = 0;
     }
 
-    // Check if permanent address is activated for deposits
-    require!(
-        savings_account.permanent_address_activated,
-        ErrorCode::PermanentAddressNotActivated
-    );
-
     // Transfer SOL from user to savings account
     let cpi_context = CpiContext::new(
         ctx.accounts.system_program.to_account_info(),
@@ -532,12 +526,6 @@ pub fn deposit_spl_self(ctx: Context<DepositSplSelf>, amount: u64) -> Result<()>
         savings_account.activation_payment_signature = Vec::new();
         savings_account.activated_at = 0;
     }
-
-    // Check if permanent address is activated for deposits
-    require!(
-        savings_account.permanent_address_activated,
-        ErrorCode::PermanentAddressNotActivated
-    );
 
     // Transfer SPL tokens from user to savings account
     let cpi_accounts = Transfer {
@@ -1947,6 +1935,208 @@ pub fn forward_spl_deposit(ctx: Context<ForwardSplDeposit>, amount: u64) -> Resu
     Ok(())
 }
 
+// ========== PENALTY WITHDRAWAL INSTRUCTIONS ==========
+
+/// Withdraw SOL with penalty (instant bypass, penalty goes to treasury)
+#[derive(Accounts)]
+pub struct WithdrawSolWithPenalty<'info> {
+    #[account(
+        mut,
+        seeds = [b"savings", user.key().as_ref()],
+        bump = savings_account.bump,
+        constraint = savings_account.owner == user.key() @ ErrorCode::UnauthorizedAccess
+    )]
+    pub savings_account: Account<'info, SavingsAccount>,
+
+    #[account(mut)]
+    pub user: Signer<'info>,
+
+    #[account(
+        seeds = [b"program_config"],
+        bump = program_config.bump
+    )]
+    pub program_config: Account<'info, ProgramConfig>,
+
+    /// CHECK: Treasury address from config
+    #[account(
+        mut,
+        constraint = treasury_address.key() == program_config.treasury_address @ ErrorCode::InvalidTreasuryAddress
+    )]
+    pub treasury_address: UncheckedAccount<'info>,
+
+    pub system_program: Program<'info, System>,
+}
+
+/// Withdraw SPL tokens with penalty (instant bypass, penalty goes to treasury)
+#[derive(Accounts)]
+pub struct WithdrawSplWithPenalty<'info> {
+    #[account(
+        mut,
+        seeds = [b"savings", user.key().as_ref()],
+        bump = savings_account.bump,
+        constraint = savings_account.owner == user.key() @ ErrorCode::UnauthorizedAccess
+    )]
+    pub savings_account: Account<'info, SavingsAccount>,
+
+    #[account(mut)]
+    pub user: Signer<'info>,
+
+    #[account(
+        seeds = [b"program_config"],
+        bump = program_config.bump
+    )]
+    pub program_config: Account<'info, ProgramConfig>,
+
+    #[account(
+        mut,
+        constraint = user_token_account.owner == user.key(),
+        constraint = user_token_account.mint == mint.key()
+    )]
+    pub user_token_account: Account<'info, TokenAccount>,
+
+    #[account(
+        mut,
+        associated_token::mint = mint,
+        associated_token::authority = savings_account,
+    )]
+    pub savings_token_account: Account<'info, TokenAccount>,
+
+    /// Treasury's token account for receiving the penalty
+    #[account(
+        mut,
+        constraint = treasury_token_account.mint == mint.key()
+    )]
+    pub treasury_token_account: Account<'info, TokenAccount>,
+
+    pub mint: Account<'info, Mint>,
+
+    pub token_program: Program<'info, Token>,
+}
+
+/// Withdraw SOL with penalty - sends penalty to treasury, rest to user
+pub fn withdraw_sol_with_penalty(ctx: Context<WithdrawSolWithPenalty>, amount: u64) -> Result<()> {
+    require!(amount > 0, ErrorCode::InvalidAmount);
+
+    let savings_account = &mut ctx.accounts.savings_account;
+    let user = &ctx.accounts.user;
+    let program_config = &ctx.accounts.program_config;
+    let clock = Clock::get()?;
+
+    require!(savings_account.has_committed_setup, ErrorCode::SetupNotCommitted);
+    require!(savings_account.sol_balance >= amount, ErrorCode::InsufficientBalance);
+
+    let rent = Rent::get()?;
+    let min_balance = rent.minimum_balance(8 + SavingsAccount::INIT_SPACE);
+    let account_balance = savings_account.to_account_info().lamports();
+    require!(
+        account_balance.saturating_sub(amount) >= min_balance,
+        ErrorCode::InsufficientBalance
+    );
+
+    let penalty_rate = program_config.penalty_rate_bps as u64;
+    let penalty_amount = amount
+        .checked_mul(penalty_rate)
+        .ok_or(ErrorCode::ArithmeticOverflow)?
+        / 10000;
+    let user_amount = amount
+        .checked_sub(penalty_amount)
+        .ok_or(ErrorCode::ArithmeticOverflow)?;
+
+    // Transfer user portion
+    **savings_account.to_account_info().try_borrow_mut_lamports()? -= amount;
+    **user.to_account_info().try_borrow_mut_lamports()? += user_amount;
+
+    // Transfer penalty to treasury
+    **ctx.accounts.treasury_address.to_account_info().try_borrow_mut_lamports()? += penalty_amount;
+
+    savings_account.sol_balance = savings_account
+        .sol_balance
+        .checked_sub(amount)
+        .ok_or(ErrorCode::ArithmeticOverflow)?;
+
+    savings_account.updated_at = clock.unix_timestamp;
+
+    msg!(
+        "Penalty withdrawal: {} lamports total, {} to user, {} penalty to treasury ({}bps)",
+        amount, user_amount, penalty_amount, penalty_rate
+    );
+
+    Ok(())
+}
+
+/// Withdraw SPL tokens with penalty - sends penalty to treasury, rest to user
+pub fn withdraw_spl_with_penalty(ctx: Context<WithdrawSplWithPenalty>, amount: u64) -> Result<()> {
+    require!(amount > 0, ErrorCode::InvalidAmount);
+
+    let savings_account = &mut ctx.accounts.savings_account;
+    let mint = &ctx.accounts.mint;
+    let program_config = &ctx.accounts.program_config;
+    let clock = Clock::get()?;
+
+    require!(savings_account.has_committed_setup, ErrorCode::SetupNotCommitted);
+
+    let current_balance = savings_account.get_token_balance(mint.key());
+    require!(current_balance >= amount, ErrorCode::InsufficientBalance);
+
+    let penalty_rate = program_config.penalty_rate_bps as u64;
+    let penalty_amount = amount
+        .checked_mul(penalty_rate)
+        .ok_or(ErrorCode::ArithmeticOverflow)?
+        / 10000;
+    let user_amount = amount
+        .checked_sub(penalty_amount)
+        .ok_or(ErrorCode::ArithmeticOverflow)?;
+
+    let user_key = savings_account.owner;
+    let seeds = &[b"savings", user_key.as_ref(), &[savings_account.bump]];
+    let signer = &[&seeds[..]];
+
+    // Transfer user portion
+    let cpi_accounts_user = Transfer {
+        from: ctx.accounts.savings_token_account.to_account_info(),
+        to: ctx.accounts.user_token_account.to_account_info(),
+        authority: savings_account.to_account_info(),
+    };
+    let cpi_program = ctx.accounts.token_program.to_account_info();
+    token::transfer(
+        CpiContext::new_with_signer(cpi_program.clone(), cpi_accounts_user, signer),
+        user_amount,
+    )?;
+
+    // Transfer penalty to treasury
+    let cpi_accounts_treasury = Transfer {
+        from: ctx.accounts.savings_token_account.to_account_info(),
+        to: ctx.accounts.treasury_token_account.to_account_info(),
+        authority: savings_account.to_account_info(),
+    };
+    token::transfer(
+        CpiContext::new_with_signer(cpi_program, cpi_accounts_treasury, signer),
+        penalty_amount,
+    )?;
+
+    // Update token balance
+    for token_balance in &mut savings_account.spl_balances {
+        if token_balance.mint == mint.key() {
+            token_balance.amount = token_balance
+                .amount
+                .checked_sub(amount)
+                .ok_or(ErrorCode::ArithmeticOverflow)?;
+            break;
+        }
+    }
+
+    savings_account.updated_at = clock.unix_timestamp;
+
+    msg!(
+        "Penalty withdrawal: {} tokens of mint {}, {} to user, {} penalty to treasury ({}bps)",
+        amount, mint.key(), user_amount, penalty_amount, penalty_rate
+    );
+
+    Ok(())
+}
+
+// ========== MONETIZATION ACCOUNT STRUCTS ==========
+
 /// Initialize program configuration (admin only)
 #[derive(Accounts)]
 pub struct InitializeProgramConfig<'info> {
@@ -2032,6 +2222,7 @@ pub fn initialize_program_config(
     program_config.bump = ctx.bumps.program_config;
     program_config.created_at = clock.unix_timestamp;
     program_config.updated_at = clock.unix_timestamp;
+    program_config.penalty_rate_bps = ProgramConfig::DEFAULT_PENALTY_RATE_BPS;
 
     msg!("Program config initialized - Treasury: {}, Fee: {} lamports, Admin: {}",
          treasury_address.key(), permanent_address_fee_lamports, admin.key());
@@ -2044,20 +2235,25 @@ pub fn update_program_config(
     ctx: Context<UpdateProgramConfig>,
     new_treasury_address: Option<Pubkey>,
     new_fee_lamports: Option<u64>,
+    new_penalty_rate_bps: Option<u16>,
 ) -> Result<()> {
     let program_config = &mut ctx.accounts.program_config;
     let clock = Clock::get()?;
 
-    // Update treasury address if provided
     if let Some(treasury) = new_treasury_address {
         program_config.treasury_address = treasury;
         msg!("Treasury address updated to: {}", treasury);
     }
 
-    // Update fee if provided
     if let Some(fee) = new_fee_lamports {
         program_config.permanent_address_fee_lamports = fee;
         msg!("Permanent address fee updated to: {} lamports", fee);
+    }
+
+    if let Some(rate) = new_penalty_rate_bps {
+        require!(rate <= 5000, ErrorCode::InvalidPenaltyRate);
+        program_config.penalty_rate_bps = rate;
+        msg!("Penalty rate updated to: {} bps ({}%)", rate, rate as f64 / 100.0);
     }
 
     program_config.updated_at = clock.unix_timestamp;

@@ -251,6 +251,18 @@ pub mod savings_core {
         instructions::cancel_withdrawal_bypass(ctx, request_id)
     }
 
+    // ========== PENALTY WITHDRAWAL INSTRUCTIONS ==========
+
+    /// Withdraw SOL with penalty (instant bypass, penalty goes to treasury)
+    pub fn withdraw_sol_with_penalty(ctx: Context<WithdrawSolWithPenalty>, amount: u64) -> Result<()> {
+        instructions::withdraw_sol_with_penalty(ctx, amount)
+    }
+
+    /// Withdraw SPL tokens with penalty (instant bypass, penalty goes to treasury)
+    pub fn withdraw_spl_with_penalty(ctx: Context<WithdrawSplWithPenalty>, amount: u64) -> Result<()> {
+        instructions::withdraw_spl_with_penalty(ctx, amount)
+    }
+
     // ========== DEPOSIT PROXY INSTRUCTIONS ==========
 
     /// Initialize a deposit proxy for a user
@@ -288,8 +300,9 @@ pub mod savings_core {
         ctx: Context<UpdateProgramConfig>,
         new_treasury_address: Option<Pubkey>,
         new_fee_lamports: Option<u64>,
+        new_penalty_rate_bps: Option<u16>,
     ) -> Result<()> {
-        instructions::update_program_config(ctx, new_treasury_address, new_fee_lamports)
+        instructions::update_program_config(ctx, new_treasury_address, new_fee_lamports, new_penalty_rate_bps)
     }
 
     /// Activate permanent address with $5 USD equivalent SOL payment

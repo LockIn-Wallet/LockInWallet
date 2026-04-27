@@ -2299,6 +2299,12 @@ export type SavingsCore = {
           "type": {
             "option": "u64"
           }
+        },
+        {
+          "name": "newPenaltyRateBps",
+          "type": {
+            "option": "u16"
+          }
         }
       ]
     },
@@ -2464,6 +2470,93 @@ export type SavingsCore = {
           "name": "user",
           "writable": true,
           "signer": true
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "withdrawSolWithPenalty",
+      "docs": [
+        "Withdraw SOL with penalty (instant bypass, penalty goes to treasury)"
+      ],
+      "discriminator": [
+        240,
+        110,
+        162,
+        147,
+        195,
+        128,
+        43,
+        135
+      ],
+      "accounts": [
+        {
+          "name": "savingsAccount",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  97,
+                  118,
+                  105,
+                  110,
+                  103,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "user"
+              }
+            ]
+          }
+        },
+        {
+          "name": "user",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "programConfig",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  103,
+                  114,
+                  97,
+                  109,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "treasuryAddress",
+          "writable": true
         },
         {
           "name": "systemProgram",
@@ -2879,6 +2972,193 @@ export type SavingsCore = {
           "type": "u64"
         }
       ]
+    },
+    {
+      "name": "withdrawSplWithPenalty",
+      "docs": [
+        "Withdraw SPL tokens with penalty (instant bypass, penalty goes to treasury)"
+      ],
+      "discriminator": [
+        21,
+        196,
+        114,
+        73,
+        196,
+        90,
+        228,
+        178
+      ],
+      "accounts": [
+        {
+          "name": "savingsAccount",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  97,
+                  118,
+                  105,
+                  110,
+                  103,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "user"
+              }
+            ]
+          }
+        },
+        {
+          "name": "user",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "programConfig",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  103,
+                  114,
+                  97,
+                  109,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "userTokenAccount",
+          "writable": true
+        },
+        {
+          "name": "savingsTokenAccount",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "savingsAccount"
+              },
+              {
+                "kind": "const",
+                "value": [
+                  6,
+                  221,
+                  246,
+                  225,
+                  215,
+                  101,
+                  161,
+                  147,
+                  217,
+                  203,
+                  225,
+                  70,
+                  206,
+                  235,
+                  121,
+                  172,
+                  28,
+                  180,
+                  133,
+                  237,
+                  95,
+                  91,
+                  55,
+                  145,
+                  58,
+                  140,
+                  245,
+                  133,
+                  126,
+                  255,
+                  0,
+                  169
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "treasuryTokenAccount",
+          "docs": [
+            "Treasury's token account for receiving the penalty"
+          ],
+          "writable": true
+        },
+        {
+          "name": "mint"
+        },
+        {
+          "name": "tokenProgram",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
     }
   ],
   "accounts": [
@@ -3062,6 +3342,16 @@ export type SavingsCore = {
       "code": 6027,
       "name": "insufficientFundsForActivation",
       "msg": "Insufficient funds for activation fee"
+    },
+    {
+      "code": 6028,
+      "name": "invalidPenaltyRate",
+      "msg": "Invalid penalty rate: must be between 0 and 5000 basis points (50%)"
+    },
+    {
+      "code": 6029,
+      "name": "programConfigNotInitialized",
+      "msg": "Program config not initialized - penalty rate not available"
     }
   ],
   "types": [
@@ -3377,6 +3667,13 @@ export type SavingsCore = {
               "Last update timestamp"
             ],
             "type": "i64"
+          },
+          {
+            "name": "penaltyRateBps",
+            "docs": [
+              "Penalty rate in basis points (e.g., 1000 = 10%) for instant bypass withdrawals"
+            ],
+            "type": "u16"
           }
         ]
       }

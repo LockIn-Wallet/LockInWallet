@@ -1,34 +1,39 @@
 import React from "react";
 
-// Import Solana wallet components
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 
-// Import assets
 import bobbyLeeVideo from "../../assets/video/bobby_lee.mp4";
 
-// Import styles
 import {
   layoutStyles,
   spacing,
   buttonStyles,
+  buttonHoverEffects,
   colors,
   fontSize,
   fontWeight,
   borderRadius,
 } from "../../styles";
 
-/**
- * WalletConnectionPrompt component - Prompts for wallet connection
- * Shows appropriate connection prompts based on network type and wallet status
- */
+import { getAvailableNetworks } from "../../utils/networkFilter.js";
+
+const hasMetaMaskInstalled = () => !!window.ethereum;
+const hasPhantomInstalled = () =>
+  !!(window.phantom?.solana || window.solana?.isPhantom);
+
+const hasEvmNetworks = () =>
+  getAvailableNetworks("evm").some((n) => n.deployed || n.isLocal);
+const hasSolanaNetworks = () =>
+  getAvailableNetworks("solana").some((n) => n.deployed || n.isLocal);
+
 const WalletConnectionPrompt = ({
   provider,
   networkType,
   solanaConnected,
   solanaWallet,
   connectWallet,
+  onConnectPhantom,
 }) => {
-  // Check if wallet is disconnected
   const isEVMDisconnected = !provider && networkType !== "solana";
   const isSolanaDisconnected =
     networkType === "solana" && (!solanaConnected || !solanaWallet);
@@ -38,17 +43,62 @@ const WalletConnectionPrompt = ({
     return null;
   }
 
+  const canUseMetaMask = hasMetaMaskInstalled() && hasEvmNetworks();
+  const canUsePhantom = hasPhantomInstalled() && hasSolanaNetworks();
+  const isInSolanaMode = networkType === "solana";
+
   return (
     <div style={layoutStyles.emptyState}>
-      <div style={{ textAlign: "center", marginBottom: spacing.xxxxl }}>
-        {isSolanaDisconnected ? (
-          <WalletMultiButton />
+      <div
+        style={{
+          textAlign: "center",
+          marginBottom: spacing.xxxxl,
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          gap: spacing.md,
+        }}
+      >
+        {isInSolanaMode ? (
+          <>
+            <WalletMultiButton />
+            {canUseMetaMask && (
+              <button
+                onClick={connectWallet}
+                style={buttonStyles.metamask}
+                onMouseEnter={buttonHoverEffects.metamaskHover}
+                onMouseLeave={buttonHoverEffects.metamaskReset}
+              >
+                🦊 Connect MetaMask
+              </button>
+            )}
+          </>
         ) : (
-          <button onClick={connectWallet} style={buttonStyles.primary}>
-            Connect MetaMask
-          </button>
+          <>
+            {canUseMetaMask && (
+              <button
+                onClick={connectWallet}
+                style={buttonStyles.metamask}
+                onMouseEnter={buttonHoverEffects.metamaskHover}
+                onMouseLeave={buttonHoverEffects.metamaskReset}
+              >
+                🦊 Connect MetaMask
+              </button>
+            )}
+            {canUsePhantom && onConnectPhantom && (
+              <button
+                onClick={onConnectPhantom}
+                style={buttonStyles.phantom}
+                onMouseEnter={buttonHoverEffects.phantomHover}
+                onMouseLeave={buttonHoverEffects.phantomReset}
+              >
+                👻 Connect Phantom
+              </button>
+            )}
+          </>
         )}
       </div>
+
       {/* Hero Image */}
       <div
         style={{
@@ -113,21 +163,6 @@ const WalletConnectionPrompt = ({
           withdraw to keep you alive and happy.
         </p>
       </div>
-
-      {/* Connection Instructions */}
-      {/* <p
-        style={{
-          textAlign: "center",
-          color: colors.text.secondary,
-          marginBottom: spacing.lg,
-          fontSize: fontSize.normal,
-        }}
-      >
-        Please connect your {isSolanaDisconnected ? "Solana" : "MetaMask"}{" "}
-        wallet to access the savings features.
-      </p> */}
-
-      {/* Connection Button */}
     </div>
   );
 };

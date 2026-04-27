@@ -9,11 +9,6 @@ import { useNetworkManager } from "./hooks/useNetworkManager.js";
 // Solana imports
 import { Connection, PublicKey, clusterApiUrl } from "@solana/web3.js";
 import { useWallet, useConnection } from "@solana/wallet-adapter-react";
-import {
-  WalletMultiButton,
-  WalletDisconnectButton,
-} from "@solana/wallet-adapter-react-ui";
-
 // Import Solana wallet adapter CSS
 import "@solana/wallet-adapter-react-ui/styles.css";
 
@@ -298,32 +293,37 @@ function AppContentInner({
 
   // Network functions are now provided by useNetworkManager hook
 
-  // Auto-initialize TransactionManager for EVM if wallet is connected but TransactionManager is null
+  // Auto-initialize TransactionManager when wallet connects
   useEffect(() => {
-    const initializeEVMTransactionManagerIfNeeded = async () => {
-      if (
-        networkType === "evm" &&
-        provider &&
-        signer &&
-        savingsContract &&
-        !transactionManager
-      ) {
+    const initIfNeeded = async () => {
+      if (transactionManager) return;
+
+      if (networkType === "evm" && provider && signer && savingsContract) {
         console.log("🔄 Auto-initializing TransactionManager for connected EVM wallet...");
         try {
           const txManager = await initializeTransactionManager(networkType, selectedNetwork, { provider, signer });
           if (txManager) {
             console.log("✅ TransactionManager auto-initialized for EVM");
-          } else {
-            console.error("❌ TransactionManager auto-initialization failed for EVM");
           }
         } catch (error) {
           console.error("❌ Error auto-initializing TransactionManager for EVM:", error);
         }
+      } else if (networkType === "solana" && solanaConnected && solanaPublicKey && connection) {
+        console.log("🔄 Auto-initializing TransactionManager for connected Solana wallet...");
+        try {
+          const txManager = await initializeTransactionManager(networkType, selectedNetwork);
+          if (txManager) {
+            console.log("✅ TransactionManager auto-initialized for Solana");
+            await fetchSpendingLimitsWithTxManager(txManager);
+          }
+        } catch (error) {
+          console.error("❌ Error auto-initializing TransactionManager for Solana:", error);
+        }
       }
     };
 
-    initializeEVMTransactionManagerIfNeeded();
-  }, [networkType, provider, signer, savingsContract, transactionManager, initializeTransactionManager, selectedNetwork]);
+    initIfNeeded();
+  }, [networkType, provider, signer, savingsContract, transactionManager, initializeTransactionManager, selectedNetwork, solanaConnected, solanaPublicKey, connection]);
 
   // Memoized callback for spending limits update to prevent infinite loops
   const handleSpendingLimitsUpdate = useCallback((updatedLimits, updatedLimitEdits) => {
@@ -353,72 +353,61 @@ function AppContentInner({
 
   // Set up event listeners and auto-connect (run once)
   useEffect(() => {
-    if (window.ethereum) {
-      const handleChainChanged = (chainId) => {
-        const numericChainId = parseInt(chainId, 16);
-        setCurrentChainId(numericChainId);
+    if (!window.ethereum) return;
 
-        const network = getNetworkByChainId(numericChainId);
-        if (network) {
-          const networkKey = Object.keys(NETWORKS.evm).find(
-            (key) => NETWORKS.evm[key].chainId === numericChainId
-          );
-          if (networkKey) {
-            setSelectedNetwork(networkKey);
-            // Only set to EVM if user hasn't explicitly chosen Solana
-            const savedNetworkType = localStorage.getItem(
-              "preferredNetworkType"
-            );
-            if (!savedNetworkType || savedNetworkType === "evm") {
-              setNetworkType("evm");
-            }
-            // Re-attempt auto-connect now that chain changed
-            autoConnectWallet();
-          }
-        }
-      };
+    const handleChainChanged = (chainId) => {
+      const numericChainId = parseInt(chainId, 16);
+      setCurrentChainId(numericChainId);
 
-      const handleAccountsChanged = (accounts) => {
-        if (accounts.length === 0) {
-          // User disconnected wallet
-          setProvider(null);
-          setSigner(null);
-          setSavingsContract(null);
-          setBalances({});
-          setUserAddress("");
-          setIsSetupCommitted(false);
-          setSetupInfo(null);
-          // Note: Bypass requests now cleared by WithdrawalInterface component
-          setPendingLimitProposals([]);
-          setIsProxyDeployed(false);
-          setProxyAddress("");
-          walletOperationInProgress.current = false; // Reset lock on disconnect
-        } else {
-          // Account changed, reconnect
+      if (networkType !== "evm") return;
+
+      const network = getNetworkByChainId(numericChainId);
+      if (network) {
+        const networkKey = Object.keys(NETWORKS.evm).find(
+          (key) => NETWORKS.evm[key].chainId === numericChainId
+        );
+        if (networkKey) {
+          setSelectedNetwork(networkKey);
           autoConnectWallet();
         }
-      };
+      }
+    };
 
-      window.ethereum.on("chainChanged", handleChainChanged);
-      window.ethereum.on("accountsChanged", handleAccountsChanged);
+    const handleAccountsChanged = (accounts) => {
+      if (networkType !== "evm") return;
 
-      // Detect current network on load
+      if (accounts.length === 0) {
+        setProvider(null);
+        setSigner(null);
+        setSavingsContract(null);
+        setBalances({});
+        setUserAddress("");
+        setIsSetupCommitted(false);
+        setSetupInfo(null);
+        setPendingLimitProposals([]);
+        setIsProxyDeployed(false);
+        setProxyAddress("");
+        walletOperationInProgress.current = false;
+      } else {
+        autoConnectWallet();
+      }
+    };
+
+    window.ethereum.on("chainChanged", handleChainChanged);
+    window.ethereum.on("accountsChanged", handleAccountsChanged);
+
+    if (networkType === "evm") {
       detectCurrentNetwork();
-
-      // Auto-connect on page load
       autoConnectWallet();
-
-      return () => {
-        if (window.ethereum.removeListener) {
-          window.ethereum.removeListener("chainChanged", handleChainChanged);
-          window.ethereum.removeListener(
-            "accountsChanged",
-            handleAccountsChanged
-          );
-        }
-      };
     }
-  }, []); // Run once on mount
+
+    return () => {
+      if (window.ethereum.removeListener) {
+        window.ethereum.removeListener("chainChanged", handleChainChanged);
+        window.ethereum.removeListener("accountsChanged", handleAccountsChanged);
+      }
+    };
+  }, [networkType]); // Re-run when networkType changes
 
   // Balance loading when network changes now handled by BalanceDisplay component
 
@@ -440,6 +429,22 @@ function AppContentInner({
     };
 
     detectSolanaConnection();
+  }, []); // Run once on mount
+
+  // Auto-connect when only one wallet type is supported
+  useEffect(() => {
+    const hasMetaMask = !!window.ethereum;
+    const hasPhantom = !!(window.phantom?.solana || window.solana?.isPhantom);
+    const evmAvailable = hasMetaMask && getAvailableNetworks("evm").some((n) => n.deployed || n.isLocal);
+    const solanaAvailable = hasPhantom && getAvailableNetworks("solana").some((n) => n.deployed || n.isLocal);
+
+    if (solanaAvailable && !evmAvailable && networkType !== "solana") {
+      const defaultSolana = getDefaultNetwork("solana");
+      switchNetworkType("solana", defaultSolana);
+    } else if (evmAvailable && !solanaAvailable && networkType !== "evm") {
+      const defaultEvm = getDefaultNetwork("evm");
+      switchNetworkType("evm", defaultEvm);
+    }
   }, []); // Run once on mount
 
   // Calculate instant withdrawal amount whenever spending limits change
@@ -658,6 +663,21 @@ function AppContentInner({
       alert("Please install MetaMask!");
     }
   }, 1000); // 1 second debounce for manual connections
+
+  const handleConnectPhantom = useCallback(async () => {
+    const defaultSolana = getDefaultNetwork("solana");
+    await switchNetworkType("solana", defaultSolana);
+  }, [switchNetworkType]);
+
+  const handleConnectMetaMask = useCallback(async () => {
+    if (networkType !== "evm") {
+      const defaultEvm = getDefaultNetwork("evm");
+      await switchNetworkType("evm", defaultEvm);
+      setTimeout(() => connectWallet(), 500);
+    } else {
+      connectWallet();
+    }
+  }, [networkType, switchNetworkType, connectWallet]);
 
   const connectWalletInternal = async () => {
     // Verify MetaMask is on the correct chain before proceeding
@@ -974,39 +994,89 @@ function AppContentInner({
         networkType={networkType}
         solanaConnected={solanaConnected}
         solanaWallet={solanaWallet}
-        connectWallet={connectWallet}
+        connectWallet={networkType === "solana" ? handleConnectMetaMask : connectWallet}
+        onConnectPhantom={handleConnectPhantom}
       />
 
       {provider ||
       (networkType === "solana" && solanaConnected && solanaWallet) ? (
         <div>
           {/* Balance Display Component */}
-          <BalanceDisplay
-            // Blockchain services (dependency injection)
-            transactionManager={transactionManager}
-            savingsContract={savingsContract}
-            signer={signer}
-            connection={connection}
-            // Network and wallet props
-            networkType={networkType}
-            selectedNetwork={selectedNetwork}
-            userAddress={userAddress}
-            solanaPublicKey={solanaPublicKey}
-            solanaConnected={solanaConnected}
-            // Setup state
-            isSetupCommitted={isSetupCommitted}
-            // Wallet state
-            provider={provider}
-            solanaWallet={solanaWallet}
-            // Balance state from parent
-            balances={balances}
-            // Callbacks for App.js state updates
-            onBalanceUpdate={(newBalances) => {
-              // Update parent state for other components that might need balance data
-              setBalances(newBalances);
-            }}
-            connectWallet={connectWallet}
-          />
+          {isSetupCommitted && (
+            <BalanceDisplay
+              transactionManager={transactionManager}
+              savingsContract={savingsContract}
+              signer={signer}
+              connection={connection}
+              networkType={networkType}
+              selectedNetwork={selectedNetwork}
+              userAddress={userAddress}
+              solanaPublicKey={solanaPublicKey}
+              solanaConnected={solanaConnected}
+              isSetupCommitted={isSetupCommitted}
+              provider={provider}
+              solanaWallet={solanaWallet}
+              balances={balances}
+              onBalanceUpdate={(newBalances) => {
+                setBalances(newBalances);
+              }}
+              connectWallet={connectWallet}
+            />
+          )}
+
+          {/* Tutorial section — shown during wallet setup */}
+          {!isSetupCommitted && (
+            <div
+              style={{
+                marginBottom: "20px",
+                padding: "16px",
+                backgroundColor: "#1a365d",
+                border: "2px solid #48bb78",
+                borderRadius: "8px",
+                color: "white",
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  marginBottom: "12px",
+                  gap: "8px",
+                }}
+              >
+                <span style={{ fontSize: "1.25rem" }}>🛡️</span>
+                <h4
+                  style={{
+                    margin: 0,
+                    color: "#9ae6b4",
+                    fontSize: "1.1em",
+                    fontWeight: "600",
+                  }}
+                >
+                  Protect your Bankroll/Savings/Profits even from yourself
+                </h4>
+              </div>
+              <div
+                style={{ fontSize: "0.9em", lineHeight: "1.6", color: "#e2e8f0" }}
+              >
+                <p style={{ margin: "0 0 8px 0" }}>
+                  <strong>🏦 No-trading wallet:</strong> Designed for
+                  storing stablecoins for your peace of mind.
+                </p>
+                <p style={{ margin: "0 0 8px 0" }}>
+                  <strong>🔐 Set up withdrawal allowance:</strong> Changes to
+                  allowance or bypassing withdrawal limits are timelocked to combat spending/risking impulses.
+                </p>
+                <p style={{ margin: "0 0 8px 0" }}>
+                  <strong>🛡️ Compromise-Resistant:</strong> Funds are safe even
+                  when your private key is compromised (coming soon)
+                </p>
+                <p style={{ margin: "0" }}>
+                  <strong>⛓️ Fully On-Chain:</strong> No intermediaries
+                </p>
+              </div>
+            </div>
+          )}
 
           {/* Deposit Interface Component */}
           {isSetupCommitted && (
@@ -1132,6 +1202,7 @@ function AppContentInner({
                 networkType={networkType}
                 selectedNetwork={selectedNetwork}
                 getCurrentNetwork={getCurrentNetwork}
+                transactionManager={transactionManager}
               />
             </CollapsibleSection>
           )}

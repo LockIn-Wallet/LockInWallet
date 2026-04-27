@@ -80,6 +80,14 @@ export const colors = {
     blue: "#63b3ed",
     cyan: "#2b77ad",
   },
+
+  // Wallet brand colors
+  wallet: {
+    metamask: "#F6851B",
+    metamaskHover: "#E2761B",
+    phantom: "#AB9FF2",
+    phantomHover: "#9580E8",
+  },
 };
 
 export const spacing = {
