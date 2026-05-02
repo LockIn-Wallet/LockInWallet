@@ -130,24 +130,24 @@
       "programId": "HNi2JKTNeHvz2ENckdVBW1ncfkJUYppuYeBwNhWjkK7d",
       "tokens": {
         "USDT": {
-          "address": "AiJmzsthDtv4nFt5kzV714EZY4G9iK4BMvDgAte9yZTx",
+          "address": "DjjiJ3PGhANM8RxocGRJEBuZQS7P7JTpsd3uBrpWGq7W",
           "symbol": "USDT",
           "name": "Test USDT",
           "decimals": 6,
           "recommended": true
         },
         "USDC": {
-          "address": "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU",
+          "address": "FwKa91j5onFebaV3WkxjaPUCc1bZFHru49Z994u61i2c",
           "symbol": "USDC",
           "name": "Test USDC",
           "decimals": 6,
           "recommended": true
         },
         "DAI": {
-          "address": "EjmyN6qEC1Tf1JxioBo3j1VdTz8EBaRLPXP7Y5p3H5Ks",
+          "address": "BtnL955jtsbZfpQDTpt57SCdRkUoZapargv8pksMPVVR",
           "symbol": "DAI",
           "name": "Test DAI",
-          "decimals": 18,
+          "decimals": 6,
           "recommended": true
         },
         "SOL": {

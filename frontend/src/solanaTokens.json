@@ -1,10 +1,29 @@
 {
   "solanaTokens": {
-    "usdtMint": "AiJmzsthDtv4nFt5kzV714EZY4G9iK4BMvDgAte9yZTx",
-    "userTokenAccount": "8iMvcygGz4XNHdcCVwuZ724LsQ4Uv8VphUjC3xCagLUX",
-    "userAddress": "4xo6a3qHYgtsDkKUAy1wMQhyN1zoXo3tKPR5foxa3hV4",
-    "mintAuthority": "7SSapwmPCcDLpSwxyEQCXN31ULfy84izvzS1ez9x9yH6",
-    "balance": 1000000,
-    "createdAt": "2026-04-27T16:54:41.503Z"
-  }
+    "USDT": {
+      "address": "DjjiJ3PGhANM8RxocGRJEBuZQS7P7JTpsd3uBrpWGq7W",
+      "symbol": "USDT",
+      "name": "Test USDT",
+      "decimals": 6,
+      "recommended": true,
+      "userTokenAccount": "nvUvsqxZJNM7Xf4fkhJGxsxR7YRVAiP2NFVd5EA6ktD"
+    },
+    "USDC": {
+      "address": "FwKa91j5onFebaV3WkxjaPUCc1bZFHru49Z994u61i2c",
+      "symbol": "USDC",
+      "name": "Test USDC",
+      "decimals": 6,
+      "recommended": true,
+      "userTokenAccount": "6aRDgQK3JHJUqVtUFo9QbWebBRUVhEnk7LBq5Vqv9Sfd"
+    },
+    "DAI": {
+      "address": "BtnL955jtsbZfpQDTpt57SCdRkUoZapargv8pksMPVVR",
+      "symbol": "DAI",
+      "name": "Test DAI",
+      "decimals": 6,
+      "recommended": true,
+      "userTokenAccount": "Fe3XZWLb4L64WWoVkRApAKeLrxNh8rSgXX3NkaudCn8A"
+    }
+  },
+  "createdAt": "2026-04-29T17:01:55.966Z"
 }

@@ -1,764 +1,368 @@
 use anchor_lang::prelude::*;
 
-/// Main savings account that stores user's deposit information
-/// Similar to the userTokenBalances mapping in your EVM contract
+pub const PRECISION: u128 = 1_000_000_000_000; // 1e12 for reward-per-share math
+pub const MAX_VAULT_NAME_LENGTH: usize = 32;
+pub const MAX_VAULT_DESCRIPTION_LENGTH: usize = 256;
+pub const MAX_BPS: u16 = 10_000;
+pub const MAX_PENALTY_BPS: u16 = 5_000; // 50% max penalty
+
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Debug, PartialEq, Eq)]
+pub enum VaultType {
+    Personal,
+    Community,
+}
+
+impl Default for VaultType {
+    fn default() -> Self {
+        VaultType::Personal
+    }
+}
+
+/// A vault holds a single token type with withdrawal limits.
+/// Limits can be fixed amounts (lamports) or percentage-based (bps of balance).
+/// Personal vaults: single member, mutable rules.
+/// Community vaults: multiple members, immutable rules, penalty redistribution.
 #[account]
 #[derive(Default)]
-pub struct SavingsAccount {
-    /// The owner of this savings account
-    pub owner: Pubkey,
-
-    /// Total SOL deposited (in lamports)
-    pub sol_balance: u64,
-
-    /// SPL token balances
-    pub spl_balances: Vec<TokenBalance>,
-
-    /// Bump seed for this PDA
-    pub bump: u8,
-
-    /// When this account was created
-    pub created_at: i64,
-
-    /// Last update timestamp
-    pub updated_at: i64,
-
-    /// Approved withdrawal destinations (addresses user can withdraw to)
-    pub withdrawal_destinations: Vec<WithdrawalDestination>,
-
-    /// Pending withdrawal destination requests (addresses pending approval with timelock)
-    pub pending_withdrawal_destination_requests: Vec<PendingWithdrawalDestinationRequest>,
-
-    /// Pending bypass requests for withdrawals exceeding spending limits
-    pub pending_bypass_requests: Vec<BypassRequest>,
-
-    /// Whether permanent address functionality has been activated with payment
-    pub permanent_address_activated: bool,
-
-    /// The transaction signature of the activation payment (for verification)
-    pub activation_payment_signature: Vec<u8>,
-
-    /// When the permanent address was activated (Unix timestamp)
-    pub activated_at: i64,
-
-    // MERGED FROM SpendingLimitsAccount: Spending limits and proposal management
-    /// Array of time-based spending limits (Daily, Weekly, Monthly, Custom)
-    pub time_period_limits: Vec<TimePeriodLimit>,
-
-    /// Pending proposals for limit changes (mirrors EVM proposal system)
-    pub pending_proposals: Vec<PendingProposal>,
-
-    /// Track if user has committed initial setup (flattened from UserSetupData)
-    pub has_committed_setup: bool,
-
-    /// Total value locked across all periods (for validation)
-    pub total_locked_value: u64,
-
-    /// When setup was committed (Unix timestamp)
-    pub commit_timestamp: i64,
-}
-
-/// Represents a balance for a specific SPL token
-#[derive(AnchorSerialize, AnchorDeserialize, Clone, Debug, PartialEq)]
-pub struct TokenBalance {
-    /// The mint address of the SPL token
-    pub mint: Pubkey,
-
-    /// The amount of tokens deposited
-    pub amount: u64,
-}
-
-/// Represents an approved withdrawal destination address
-#[derive(AnchorSerialize, AnchorDeserialize, Clone, Debug, PartialEq)]
-pub struct WithdrawalDestination {
-    /// The destination address
-    pub address: Pubkey,
-
-    /// Optional title/label for this destination
-    pub title: String,
-
-    /// When this destination was added
-    pub added_at: i64,
-
-    /// Whether this destination is currently active
-    pub active: bool,
-}
-
-/// Represents a pending bypass request for withdrawals exceeding spending limits
-#[derive(AnchorSerialize, AnchorDeserialize, Clone, Debug, PartialEq)]
-pub struct BypassRequest {
-    /// Unique identifier for this request
-    pub request_id: [u8; 32],
-
-    /// Amount to withdraw (in lamports for SOL, token units for SPL)
-    pub amount: u64,
-
-    /// Token mint (use System Program ID for SOL)
+pub struct Vault {
+    pub creator: Pubkey,
+    pub vault_type: VaultType,
+    /// SPL token mint. Pubkey::default() means native SOL vault.
     pub token_mint: Pubkey,
-
-    /// Which spending period this request is bypassing
-    pub bypassing_period: String,
-
-    /// Destination address for the withdrawal
-    pub destination: Pubkey,
-
-    /// Unix timestamp when this request can be executed (24 hours after creation)
-    pub execute_after: i64,
-
-    /// Whether this request has been executed
-    pub executed: bool,
-
-    /// Whether this request has been cancelled
-    pub cancelled: bool,
-
-    /// When this request was created
-    pub created_at: i64,
-}
-
-/// Represents a pending withdrawal destination request (similar to EVM timelock system)
-#[derive(AnchorSerialize, AnchorDeserialize, Clone, Debug, PartialEq)]
-pub struct PendingWithdrawalDestinationRequest {
-    /// Unique identifier for this request
-    pub request_id: [u8; 32],
-
-    /// The destination address to be added
-    pub address: Pubkey,
-
-    /// Title/label for this destination
-    pub title: String,
-
-    /// Unix timestamp when this request can be executed (24 hours after creation)
-    pub execute_after: i64,
-
-    /// Whether this request has been executed
-    pub executed: bool,
-
-    /// Whether this request has been cancelled
-    pub cancelled: bool,
-
-    /// When this request was created
-    pub created_at: i64,
-}
-
-impl SavingsAccount {
-    /// Size calculation for account space allocation
-    pub const DISCRIMINATOR_SIZE: usize = 8;
-    pub const PUBKEY_SIZE: usize = 32;
-    pub const U64_SIZE: usize = 8;
-    pub const U8_SIZE: usize = 1;
-    pub const I64_SIZE: usize = 8;
-    pub const VEC_OVERHEAD: usize = 4; // Vec length prefix
-    pub const STRING_OVERHEAD: usize = 4; // String length prefix
-    pub const BOOL_SIZE: usize = 1;
-    pub const TOKEN_BALANCE_SIZE: usize = 32 + 8; // Pubkey + u64
-    pub const MAX_TOKENS: usize = 10; // Support up to 10 different tokens initially
-    pub const MAX_WITHDRAWAL_DESTINATIONS: usize = 20; // Support up to 20 withdrawal destinations
-    pub const MAX_PENDING_WITHDRAWAL_DESTINATION_REQUESTS: usize = 5; // Support up to 5 pending destination requests
-    pub const MAX_BYPASS_REQUESTS: usize = 10; // Support up to 10 pending bypass requests
-    pub const MAX_TITLE_LENGTH: usize = 64; // Max characters for destination title
-    pub const MAX_PERIOD_NAME_LENGTH: usize = 32; // Max characters for period name
-
-    // MERGED FROM SpendingLimitsAccount: Additional constants for spending limits
-    pub const MAX_PERIODS: usize = 10; // Support up to 10 different time periods
-    pub const MAX_PROPOSALS: usize = 5; // Support up to 5 pending proposals
-
-    // WithdrawalDestination size calculation
-    pub const WITHDRAWAL_DESTINATION_SIZE: usize = Self::PUBKEY_SIZE // address
-        + Self::STRING_OVERHEAD + Self::MAX_TITLE_LENGTH // title
-        + Self::I64_SIZE // added_at
-        + Self::BOOL_SIZE; // active
-
-    // PendingWithdrawalDestinationRequest size calculation
-    pub const PENDING_WITHDRAWAL_DESTINATION_REQUEST_SIZE: usize = 32 // request_id ([u8; 32])
-        + Self::PUBKEY_SIZE // address
-        + Self::STRING_OVERHEAD + Self::MAX_TITLE_LENGTH // title
-        + Self::I64_SIZE // execute_after
-        + Self::BOOL_SIZE // executed
-        + Self::BOOL_SIZE // cancelled
-        + Self::I64_SIZE; // created_at
-
-    // BypassRequest size calculation
-    pub const BYPASS_REQUEST_SIZE: usize = 32 // request_id ([u8; 32])
-        + Self::U64_SIZE // amount
-        + Self::PUBKEY_SIZE // token_mint
-        + Self::STRING_OVERHEAD + Self::MAX_PERIOD_NAME_LENGTH // bypassing_period
-        + Self::PUBKEY_SIZE // destination
-        + Self::I64_SIZE // execute_after
-        + Self::BOOL_SIZE // executed
-        + Self::BOOL_SIZE // cancelled
-        + Self::I64_SIZE; // created_at
-
-    // MERGED FROM SpendingLimitsAccount: TimePeriodLimit size calculation
-    pub const TIME_PERIOD_LIMIT_SIZE: usize = Self::U64_SIZE // limit
-        + Self::U64_SIZE // spent
-        + Self::I64_SIZE // last_reset
-        + Self::U64_SIZE // duration
-        + Self::STRING_OVERHEAD + Self::MAX_PERIOD_NAME_LENGTH // name
-        + Self::BOOL_SIZE; // active
-
-    // MERGED FROM SpendingLimitsAccount: PendingProposal size calculation
-    pub const PENDING_PROPOSAL_SIZE: usize = 32 // proposal_id ([u8; 32])
-        + Self::STRING_OVERHEAD + Self::MAX_PERIOD_NAME_LENGTH // period_name
-        + Self::U64_SIZE // new_limit
-        + Self::I64_SIZE // execute_after
-        + Self::BOOL_SIZE // executed
-        + Self::BOOL_SIZE // is_increase
-        + Self::I64_SIZE; // created_at
-
-    pub const INIT_SPACE: usize = Self::DISCRIMINATOR_SIZE
-        + Self::PUBKEY_SIZE // owner
-        + Self::U64_SIZE // sol_balance
-        + Self::VEC_OVERHEAD + (Self::TOKEN_BALANCE_SIZE * Self::MAX_TOKENS) // spl_balances
-        + Self::U8_SIZE // bump
-        + Self::I64_SIZE // created_at
-        + Self::I64_SIZE // updated_at
-        + Self::VEC_OVERHEAD + (Self::WITHDRAWAL_DESTINATION_SIZE * Self::MAX_WITHDRAWAL_DESTINATIONS) // withdrawal_destinations
-        + Self::VEC_OVERHEAD + (Self::PENDING_WITHDRAWAL_DESTINATION_REQUEST_SIZE * Self::MAX_PENDING_WITHDRAWAL_DESTINATION_REQUESTS) // pending_withdrawal_destination_requests
-        + Self::VEC_OVERHEAD + (Self::BYPASS_REQUEST_SIZE * Self::MAX_BYPASS_REQUESTS) // pending_bypass_requests
-        + Self::BOOL_SIZE // permanent_address_activated
-        + Self::VEC_OVERHEAD + 64 // activation_payment_signature (Vec<u8> with max 64 bytes)
-        + Self::I64_SIZE // activated_at
-        // MERGED FROM SpendingLimitsAccount: New unified fields
-        + Self::VEC_OVERHEAD + (Self::TIME_PERIOD_LIMIT_SIZE * Self::MAX_PERIODS) // time_period_limits
-        + Self::VEC_OVERHEAD + (Self::PENDING_PROPOSAL_SIZE * Self::MAX_PROPOSALS) // pending_proposals
-        + Self::BOOL_SIZE // has_committed_setup
-        + Self::U64_SIZE // total_locked_value
-        + Self::I64_SIZE; // commit_timestamp
-
-    /// Update or add a token balance
-    pub fn update_token_balance(&mut self, mint: Pubkey, amount: u64) -> Result<()> {
-        // Find existing token balance
-        for token_balance in &mut self.spl_balances {
-            if token_balance.mint == mint {
-                token_balance.amount = token_balance.amount.checked_add(amount)
-                    .ok_or(crate::error::ErrorCode::ArithmeticOverflow)?;
-                return Ok(());
-            }
-        }
-
-        // If token not found, add new entry
-        if self.spl_balances.len() >= Self::MAX_TOKENS {
-            return Err(crate::error::ErrorCode::TokenLimitExceeded.into());
-        }
-
-        self.spl_balances.push(TokenBalance { mint, amount });
-        Ok(())
-    }
-
-    /// Get token balance for a specific mint
-    pub fn get_token_balance(&self, mint: Pubkey) -> u64 {
-        for token_balance in &self.spl_balances {
-            if token_balance.mint == mint {
-                return token_balance.amount;
-            }
-        }
-        0
-    }
-
-    /// Add a new withdrawal destination
-    pub fn add_withdrawal_destination(&mut self, address: Pubkey, title: String, current_time: i64) -> Result<()> {
-        require!(!title.is_empty() && title.len() <= Self::MAX_TITLE_LENGTH, crate::error::ErrorCode::InvalidParameters);
-        require!(self.withdrawal_destinations.len() < Self::MAX_WITHDRAWAL_DESTINATIONS, crate::error::ErrorCode::TooManyDestinations);
-
-        // Check if destination already exists
-        for dest in &self.withdrawal_destinations {
-            if dest.address == address && dest.active {
-                return Err(crate::error::ErrorCode::DestinationAlreadyExists.into());
-            }
-        }
-
-        // Check if user is trying to add their own address (not allowed for security)
-        require!(address != self.owner, crate::error::ErrorCode::CannotSetOwnAddress);
-
-        self.withdrawal_destinations.push(WithdrawalDestination {
-            address,
-            title,
-            added_at: current_time,
-            active: true,
-        });
-
-        Ok(())
-    }
-
-    /// Remove a withdrawal destination
-    pub fn remove_withdrawal_destination(&mut self, address: Pubkey) -> Result<()> {
-        for dest in &mut self.withdrawal_destinations {
-            if dest.address == address && dest.active {
-                dest.active = false;
-                return Ok(());
-            }
-        }
-        Err(crate::error::ErrorCode::DestinationNotFound.into())
-    }
-
-    /// Check if a destination is approved
-    pub fn is_destination_approved(&self, address: Pubkey) -> bool {
-        // Owner can always withdraw to self
-        if address == self.owner {
-            return true;
-        }
-
-        for dest in &self.withdrawal_destinations {
-            if dest.address == address && dest.active {
-                return true;
-            }
-        }
-        false
-    }
-
-    /// Add a new pending withdrawal destination request (with timelock)
-    pub fn add_pending_withdrawal_destination_request(
-        &mut self,
-        request_id: [u8; 32],
-        address: Pubkey,
-        title: String,
-        current_time: i64,
-    ) -> Result<()> {
-        require!(!title.is_empty() && title.len() <= Self::MAX_TITLE_LENGTH, crate::error::ErrorCode::InvalidParameters);
-        require!(self.pending_withdrawal_destination_requests.len() < Self::MAX_PENDING_WITHDRAWAL_DESTINATION_REQUESTS, crate::error::ErrorCode::TooManyDestinations);
-
-        // Check if destination already exists or is already pending
-        for dest in &self.withdrawal_destinations {
-            if dest.address == address && dest.active {
-                return Err(crate::error::ErrorCode::DestinationAlreadyExists.into());
-            }
-        }
-        for pending in &self.pending_withdrawal_destination_requests {
-            if pending.address == address && !pending.executed && !pending.cancelled {
-                return Err(crate::error::ErrorCode::DestinationAlreadyExists.into());
-            }
-        }
-
-        // Check if user is trying to add their own address (not allowed for security)
-        require!(address != self.owner, crate::error::ErrorCode::CannotSetOwnAddress);
-
-        // Timelock (configurable via cargo features)
-        let execute_after = current_time + crate::constants::WITHDRAWAL_DESTINATION_TIMELOCK;
-
-        self.pending_withdrawal_destination_requests.push(PendingWithdrawalDestinationRequest {
-            request_id,
-            address,
-            title,
-            execute_after,
-            executed: false,
-            cancelled: false,
-            created_at: current_time,
-        });
-
-        Ok(())
-    }
-
-    /// Execute a pending withdrawal destination request
-    pub fn execute_pending_withdrawal_destination_request(
-        &mut self,
-        request_id: [u8; 32],
-        current_time: i64,
-    ) -> Result<PendingWithdrawalDestinationRequest> {
-        // First find the request and extract the data we need
-        let mut found_request: Option<PendingWithdrawalDestinationRequest> = None;
-
-        for request in &mut self.pending_withdrawal_destination_requests {
-            if request.request_id == request_id && !request.executed && !request.cancelled {
-                require!(current_time >= request.execute_after, crate::error::ErrorCode::RequestStillInTimelock);
-
-                // Mark as executed and copy the request data
-                request.executed = true;
-                found_request = Some(request.clone());
-                break;
-            }
-        }
-
-        if let Some(request) = found_request {
-            // Now add the destination to the approved list (no longer borrowing the requests array)
-            self.add_withdrawal_destination(request.address, request.title.clone(), current_time)?;
-            Ok(request)
-        } else {
-            Err(crate::error::ErrorCode::RequestNotFound.into())
-        }
-    }
-
-    /// Cancel a pending withdrawal destination request
-    pub fn cancel_pending_withdrawal_destination_request(&mut self, request_id: [u8; 32]) -> Result<()> {
-        for request in &mut self.pending_withdrawal_destination_requests {
-            if request.request_id == request_id && !request.executed && !request.cancelled {
-                request.cancelled = true;
-                return Ok(());
-            }
-        }
-        Err(crate::error::ErrorCode::RequestNotFound.into())
-    }
-
-    /// Get active pending withdrawal destination requests
-    pub fn get_active_pending_withdrawal_destination_requests(&self) -> Vec<PendingWithdrawalDestinationRequest> {
-        self.pending_withdrawal_destination_requests
-            .iter()
-            .filter(|r| !r.executed && !r.cancelled)
-            .cloned()
-            .collect()
-    }
-
-    /// Add a new bypass request
-    pub fn add_bypass_request(
-        &mut self,
-        request_id: [u8; 32],
-        amount: u64,
-        token_mint: Pubkey,
-        bypassing_period: String,
-        destination: Pubkey,
-        current_time: i64,
-    ) -> Result<()> {
-        require!(self.pending_bypass_requests.len() < Self::MAX_BYPASS_REQUESTS, crate::error::ErrorCode::TooManyBypassRequests);
-        require!(amount > 0, crate::error::ErrorCode::InvalidParameters);
-        require!(!bypassing_period.is_empty() && bypassing_period.len() <= Self::MAX_PERIOD_NAME_LENGTH, crate::error::ErrorCode::InvalidParameters);
-
-        // Check if destination is approved
-        require!(self.is_destination_approved(destination), crate::error::ErrorCode::DestinationNotApproved);
-
-        // Timelock (configurable via cargo features)
-        let execute_after = current_time + crate::constants::BYPASS_REQUEST_TIMELOCK;
-
-        self.pending_bypass_requests.push(BypassRequest {
-            request_id,
-            amount,
-            token_mint,
-            bypassing_period,
-            destination,
-            execute_after,
-            executed: false,
-            cancelled: false,
-            created_at: current_time,
-        });
-
-        Ok(())
-    }
-
-    /// Execute a bypass request
-    pub fn execute_bypass_request(&mut self, request_id: [u8; 32], current_time: i64) -> Result<BypassRequest> {
-        for request in &mut self.pending_bypass_requests {
-            if request.request_id == request_id && !request.executed && !request.cancelled {
-                require!(current_time >= request.execute_after, crate::error::ErrorCode::RequestStillInTimelock);
-                request.executed = true;
-                return Ok(request.clone());
-            }
-        }
-        Err(crate::error::ErrorCode::RequestNotFound.into())
-    }
-
-    /// Cancel a bypass request
-    pub fn cancel_bypass_request(&mut self, request_id: [u8; 32]) -> Result<()> {
-        for request in &mut self.pending_bypass_requests {
-            if request.request_id == request_id && !request.executed && !request.cancelled {
-                request.cancelled = true;
-                return Ok(());
-            }
-        }
-        Err(crate::error::ErrorCode::RequestNotFound.into())
-    }
-
-    /// Get active bypass requests
-    pub fn get_active_bypass_requests(&self) -> Vec<BypassRequest> {
-        self.pending_bypass_requests
-            .iter()
-            .filter(|r| !r.executed && !r.cancelled)
-            .cloned()
-            .collect()
-    }
-
-    // MERGED FROM SpendingLimitsAccount: Spending limits management methods
-
-    /// Add or update a time period limit
-    pub fn add_time_period_limit(
-        &mut self,
-        name: String,
-        limit: u64,
-        duration: u64,
-        current_time: i64,
-    ) -> Result<()> {
-        require!(limit > 0, crate::error::ErrorCode::InvalidLimitParameters);
-        require!(duration >= 3600, crate::error::ErrorCode::InvalidLimitParameters); // At least 1 hour
-        require!(!name.is_empty() && name.len() <= Self::MAX_PERIOD_NAME_LENGTH, crate::error::ErrorCode::InvalidLimitParameters);
-
-        // Check if period already exists
-        for period in &mut self.time_period_limits {
-            if period.name == name {
-                // Update existing period
-                period.limit = limit;
-                period.duration = duration;
-                period.active = true;
-                return Ok(());
-            }
-        }
-
-        // Add new period if we haven't reached the limit
-        if self.time_period_limits.len() >= Self::MAX_PERIODS {
-            return Err(crate::error::ErrorCode::TokenLimitExceeded.into());
-        }
-
-        self.time_period_limits.push(TimePeriodLimit {
-            limit,
-            spent: 0,
-            last_reset: current_time,
-            duration,
-            name,
-            active: true,
-        });
-
-        Ok(())
-    }
-
-    /// Remove a time period limit by name
-    pub fn remove_time_period_limit(&mut self, name: &str) -> Result<()> {
-        for period in &mut self.time_period_limits {
-            if period.name == name {
-                period.active = false;
-                return Ok(());
-            }
-        }
-        Err(crate::error::ErrorCode::InvalidLimitParameters.into())
-    }
-
-    /// Check if withdrawal amount is within all active limits
-    pub fn check_spending_limits(&mut self, amount: u64, current_time: i64) -> Result<()> {
-        for period in &mut self.time_period_limits {
-            if !period.active {
-                continue;
-            }
-
-            // Reset period if duration has passed
-            if current_time >= period.last_reset + period.duration as i64 {
-                period.last_reset = current_time;
-                period.spent = 0;
-            }
-
-            // Check if this withdrawal would exceed the period limit
-            if period.spent + amount > period.limit {
-                return Err(crate::error::ErrorCode::SpendingLimitExceeded.into());
-            }
-        }
-        Ok(())
-    }
-
-    /// Update spending for all active periods after successful withdrawal
-    pub fn update_spending(&mut self, amount: u64, current_time: i64) -> Result<()> {
-        for period in &mut self.time_period_limits {
-            if !period.active {
-                continue;
-            }
-
-            // Reset period if duration has passed
-            if current_time >= period.last_reset + period.duration as i64 {
-                period.last_reset = current_time;
-                period.spent = 0;
-            }
-
-            period.spent = period.spent.checked_add(amount)
-                .ok_or(crate::error::ErrorCode::ArithmeticOverflow)?;
-        }
-        Ok(())
-    }
-
-    /// Get current spending information for a specific period
-    pub fn get_period_info(&self, name: &str, current_time: i64) -> Option<(u64, u64, u64, bool)> {
-        for period in &self.time_period_limits {
-            if period.name == name && period.active {
-                // Calculate current spent (would be reset if duration passed)
-                let current_spent = if current_time >= period.last_reset + period.duration as i64 {
-                    0 // Would be reset
-                } else {
-                    period.spent
-                };
-
-                let remaining = if period.limit > current_spent {
-                    period.limit - current_spent
-                } else {
-                    0
-                };
-
-                return Some((period.limit, current_spent, remaining, period.active));
-            }
-        }
-        None
-    }
-
-    /// Set common period limits (Daily, Weekly, Monthly) helper function
-    pub fn set_common_period_limits(
-        &mut self,
-        daily_limit: Option<u64>,
-        weekly_limit: Option<u64>,
-        monthly_limit: Option<u64>,
-        current_time: i64,
-    ) -> Result<()> {
-        // Validate basic limit ordering - allow restrictive limits
-        if let (Some(daily), Some(weekly)) = (daily_limit, weekly_limit) {
-            require!(daily <= weekly, crate::error::ErrorCode::InvalidLimitParameters);
-        }
-        if let (Some(weekly), Some(monthly)) = (weekly_limit, monthly_limit) {
-            require!(weekly <= monthly, crate::error::ErrorCode::InvalidLimitParameters);
-        }
-        if let (Some(daily), Some(monthly)) = (daily_limit, monthly_limit) {
-            require!(daily <= monthly, crate::error::ErrorCode::InvalidLimitParameters);
-        }
-
-        // Add or update common periods
-        if let Some(limit) = daily_limit {
-            self.add_time_period_limit("Daily".to_string(), limit, 86400, current_time)?; // 1 day
-        }
-        if let Some(limit) = weekly_limit {
-            self.add_time_period_limit("Weekly".to_string(), limit, 604800, current_time)?; // 7 days
-        }
-        if let Some(limit) = monthly_limit {
-            self.add_time_period_limit("Monthly".to_string(), limit, 2592000, current_time)?; // 30 days
-        }
-
-        Ok(())
-    }
-}
-
-
-/// Represents a time-based spending limit (mirrors EVM TimePeriodLimit struct)
-#[derive(AnchorSerialize, AnchorDeserialize, Clone, Debug, PartialEq)]
-pub struct TimePeriodLimit {
-    /// Spending limit for this period (in lamports for SOL, token amount for SPL)
-    pub limit: u64,
-
-    /// Amount spent in current period
-    pub spent: u64,
-
-    /// When this period was last reset (Unix timestamp)
-    pub last_reset: i64,
-
-    /// Period duration in seconds (86400 for daily, 604800 for weekly, etc.)
-    pub duration: u64,
-
-    /// Period name ("Daily", "Weekly", "Monthly", "Custom Salary", etc.)
     pub name: String,
-
-    /// Whether this limit is currently active
-    pub active: bool,
-}
-
-/// Pending proposal for spending limit changes (mirrors EVM proposal system)
-#[derive(AnchorSerialize, AnchorDeserialize, Clone, Debug, PartialEq)]
-pub struct PendingProposal {
-    /// Unique identifier for this proposal
-    pub proposal_id: [u8; 32],
-
-    /// Period name being modified ("Daily", "Weekly", "Monthly", etc.)
-    pub period_name: String,
-
-    /// New limit being proposed
-    pub new_limit: u64,
-
-    /// Unix timestamp when this proposal can be executed
-    pub execute_after: i64,
-
-    /// Whether this proposal has been executed
-    pub executed: bool,
-
-    /// Whether this is a limit increase (true) or decrease/removal (false)
-    pub is_increase: bool,
-
-    /// When this proposal was created
+    pub description: String,
+    /// Daily withdrawal limit. Interpretation depends on `limits_are_percentage`.
+    /// Fixed mode: amount in lamports/smallest-unit. Percentage mode: basis points (e.g. 500 = 5%).
+    pub daily_limit: u64,
+    /// Weekly withdrawal limit (same interpretation as daily_limit).
+    pub weekly_limit: u64,
+    /// Monthly withdrawal limit (same interpretation as daily_limit).
+    pub monthly_limit: u64,
+    /// When true, daily/weekly/monthly_limit are basis points of member balance.
+    /// When false, they are fixed amounts in lamports/smallest-unit.
+    pub limits_are_percentage: bool,
+    /// Penalty rate for instant withdrawals beyond limits (always basis points)
+    pub penalty_rate_bps: u16,
+    /// Creator-chosen nonce to allow multiple vaults per creator
+    pub vault_nonce: u64,
+    pub member_count: u32,
+    /// Sum of all member balances (excluding penalty pool)
+    pub total_balance: u64,
+    /// Accumulated penalty per share, scaled by PRECISION (reward-per-share pattern)
+    pub accumulated_penalty_per_share: u128,
+    pub is_active: bool,
     pub created_at: i64,
+    pub updated_at: i64,
+    pub bump: u8,
 }
 
-/// User setup and configuration data (mirrors EVM UserSetupData struct)
-#[derive(AnchorSerialize, AnchorDeserialize, Clone, Debug, PartialEq, Default)]
-pub struct UserSetupData {
-    /// Track if user has committed initial setup
-    pub has_committed_setup: bool,
+impl Vault {
+    pub const INIT_SPACE: usize = 8  // discriminator
+        + 32  // creator
+        + 1   // vault_type
+        + 32  // token_mint
+        + (4 + MAX_VAULT_NAME_LENGTH)        // name
+        + (4 + MAX_VAULT_DESCRIPTION_LENGTH)  // description
+        + 8   // daily_limit
+        + 8   // weekly_limit
+        + 8   // monthly_limit
+        + 1   // limits_are_percentage
+        + 2   // penalty_rate_bps
+        + 8   // vault_nonce
+        + 4   // member_count
+        + 8   // total_balance
+        + 16  // accumulated_penalty_per_share
+        + 1   // is_active
+        + 8   // created_at
+        + 8   // updated_at
+        + 1;  // bump
 
-    /// Total value locked across all periods (for validation)
-    pub total_locked_value: u64,
+    pub fn is_sol_vault(&self) -> bool {
+        self.token_mint == Pubkey::default()
+    }
 
-    /// When setup was committed (Unix timestamp)
-    pub commit_timestamp: i64,
+    /// Calculate the effective limit for a given member balance.
+    /// In percentage mode: balance * limit_value / 10000.
+    /// In fixed mode: returns the limit directly.
+    pub fn effective_limit(&self, limit_value: u64, balance: u64) -> u64 {
+        if limit_value == 0 {
+            return 0;
+        }
+        if self.limits_are_percentage {
+            if balance == 0 { return 0; }
+            ((balance as u128) * (limit_value as u128) / (MAX_BPS as u128)) as u64
+        } else {
+            limit_value
+        }
+    }
 
-    /// Track period start for increase limits
-    pub last_increase_timestamp: i64,
-
-    /// Amount increased in current 7-day period
-    pub increases_in_period: u64,
+    /// Record penalty into the reward-per-share accumulator.
+    /// Only meaningful for community vaults where total_balance > 0.
+    pub fn record_penalty(&mut self, penalty_amount: u64) {
+        if self.total_balance > 0 {
+            self.accumulated_penalty_per_share = self.accumulated_penalty_per_share
+                .checked_add(
+                    (penalty_amount as u128)
+                        .checked_mul(PRECISION)
+                        .unwrap_or(0)
+                        / (self.total_balance as u128)
+                )
+                .unwrap_or(self.accumulated_penalty_per_share);
+        }
+    }
 }
 
-
-/// Deposit proxy account that provides permanent addresses for exchange deposits
-/// This allows users to have deterministic deposit addresses that forward to their savings
+/// Per-member state within a vault.
 #[account]
 #[derive(Default)]
-pub struct DepositProxy {
-    /// The owner of this deposit proxy (user's wallet)
-    pub owner: Pubkey,
-
-    /// The savings program this proxy forwards to (should be current program)
-    pub savings_program: Pubkey,
-
-    /// Bump seed for this PDA
+pub struct VaultMember {
+    pub vault: Pubkey,
+    pub member: Pubkey,
+    pub balance: u64,
+    pub daily_spent: u64,
+    pub daily_last_reset: i64,
+    pub weekly_spent: u64,
+    pub weekly_last_reset: i64,
+    pub monthly_spent: u64,
+    pub monthly_last_reset: i64,
+    /// Reward-per-share debt for penalty redistribution
+    pub penalty_debt: u128,
+    /// Accumulated but unclaimed penalty rewards
+    pub unclaimed_penalties: u64,
+    pub joined_at: i64,
     pub bump: u8,
-
-    /// When this proxy was created
-    pub created_at: i64,
-
-    /// Last time this proxy was used
-    pub last_used: i64,
-
-    /// Total number of deposits forwarded
-    pub deposit_count: u64,
 }
 
-impl DepositProxy {
-    /// Update deposit statistics
-    pub fn record_deposit(&mut self) -> Result<()> {
-        let clock = Clock::get()?;
-        self.last_used = clock.unix_timestamp;
-        self.deposit_count = self.deposit_count.saturating_add(1);
+impl VaultMember {
+    pub const INIT_SPACE: usize = 8  // discriminator
+        + 32  // vault
+        + 32  // member
+        + 8   // balance
+        + 8   // daily_spent
+        + 8   // daily_last_reset
+        + 8   // weekly_spent
+        + 8   // weekly_last_reset
+        + 8   // monthly_spent
+        + 8   // monthly_last_reset
+        + 16  // penalty_debt
+        + 8   // unclaimed_penalties
+        + 8   // joined_at
+        + 1;  // bump
+
+    pub const DAILY_DURATION: i64 = 86_400;
+    pub const WEEKLY_DURATION: i64 = 604_800;
+    pub const MONTHLY_DURATION: i64 = 2_592_000;
+
+    /// Settle pending penalty rewards based on current accumulator.
+    pub fn settle_penalties(&mut self, accumulated: u128) {
+        let pending = (self.balance as u128)
+            .checked_mul(accumulated)
+            .unwrap_or(0)
+            / PRECISION;
+        let debt = self.penalty_debt.min(pending);
+        let reward = ((pending - debt) as u64).min(u64::MAX);
+        self.unclaimed_penalties = self.unclaimed_penalties.saturating_add(reward);
+        self.penalty_debt = (self.balance as u128)
+            .checked_mul(accumulated)
+            .unwrap_or(0)
+            / PRECISION;
+    }
+
+    /// Snapshot debt after a balance change.
+    pub fn snapshot_debt(&mut self, accumulated: u128) {
+        self.penalty_debt = (self.balance as u128)
+            .checked_mul(accumulated)
+            .unwrap_or(0)
+            / PRECISION;
+    }
+
+    /// Reset period if expired, then check if withdrawal fits within limit.
+    pub fn check_and_update_limits(
+        &mut self,
+        amount: u64,
+        balance: u64,
+        vault: &Vault,
+        current_time: i64,
+    ) -> Result<()> {
+        // Daily
+        if vault.daily_limit > 0 {
+            if current_time >= self.daily_last_reset + Self::DAILY_DURATION {
+                self.daily_spent = 0;
+                self.daily_last_reset = current_time;
+            }
+            let max = vault.effective_limit(vault.daily_limit, balance);
+            require!(
+                self.daily_spent.checked_add(amount).unwrap_or(u64::MAX) <= max,
+                crate::error::ErrorCode::SpendingLimitExceeded
+            );
+        }
+
+        // Weekly
+        if vault.weekly_limit > 0 {
+            if current_time >= self.weekly_last_reset + Self::WEEKLY_DURATION {
+                self.weekly_spent = 0;
+                self.weekly_last_reset = current_time;
+            }
+            let max = vault.effective_limit(vault.weekly_limit, balance);
+            require!(
+                self.weekly_spent.checked_add(amount).unwrap_or(u64::MAX) <= max,
+                crate::error::ErrorCode::SpendingLimitExceeded
+            );
+        }
+
+        // Monthly
+        if vault.monthly_limit > 0 {
+            if current_time >= self.monthly_last_reset + Self::MONTHLY_DURATION {
+                self.monthly_spent = 0;
+                self.monthly_last_reset = current_time;
+            }
+            let max = vault.effective_limit(vault.monthly_limit, balance);
+            require!(
+                self.monthly_spent.checked_add(amount).unwrap_or(u64::MAX) <= max,
+                crate::error::ErrorCode::SpendingLimitExceeded
+            );
+        }
+
+        // All checks passed — update spent counters
+        if vault.daily_limit > 0 {
+            self.daily_spent = self.daily_spent.saturating_add(amount);
+        }
+        if vault.weekly_limit > 0 {
+            self.weekly_spent = self.weekly_spent.saturating_add(amount);
+        }
+        if vault.monthly_limit > 0 {
+            self.monthly_spent = self.monthly_spent.saturating_add(amount);
+        }
+
         Ok(())
     }
 }
 
-/// Program configuration that stores treasury and fee settings
+/// An approved withdrawal destination for a vault member.
+/// PDA seeds: ["withdrawal_dest", vault, member, destination]
+#[account]
+#[derive(Default)]
+pub struct WithdrawalDestination {
+    pub vault: Pubkey,
+    pub member: Pubkey,
+    pub destination: Pubkey,
+    pub title: String,
+    pub added_at: i64,
+    pub bump: u8,
+}
+
+impl WithdrawalDestination {
+    pub const MAX_TITLE_LENGTH: usize = 64;
+    pub const INIT_SPACE: usize = 8  // discriminator
+        + 32  // vault
+        + 32  // member
+        + 32  // destination
+        + (4 + Self::MAX_TITLE_LENGTH)  // title
+        + 8   // added_at
+        + 1;  // bump
+}
+
+/// A pending request to add a withdrawal destination (timelock).
+/// PDA seeds: ["pending_dest", vault, member, destination]
+#[account]
+#[derive(Default)]
+pub struct PendingDestinationRequest {
+    pub vault: Pubkey,
+    pub member: Pubkey,
+    pub destination: Pubkey,
+    pub title: String,
+    pub execute_after: i64,
+    pub created_at: i64,
+    pub bump: u8,
+}
+
+impl PendingDestinationRequest {
+    pub const INIT_SPACE: usize = 8  // discriminator
+        + 32  // vault
+        + 32  // member
+        + 32  // destination
+        + (4 + WithdrawalDestination::MAX_TITLE_LENGTH)  // title
+        + 8   // execute_after
+        + 8   // created_at
+        + 1;  // bump
+}
+
+/// A pending proposal to change vault rules (timelock).
+/// Only one active per vault. PDA seeds: ["rule_proposal", vault]
+#[account]
+#[derive(Default)]
+pub struct RuleChangeProposal {
+    pub vault: Pubkey,
+    pub proposer: Pubkey,
+    pub new_daily_limit: Option<u64>,
+    pub new_weekly_limit: Option<u64>,
+    pub new_monthly_limit: Option<u64>,
+    pub new_limits_are_percentage: Option<bool>,
+    pub new_penalty_rate_bps: Option<u16>,
+    pub execute_after: i64,
+    pub created_at: i64,
+    pub bump: u8,
+}
+
+impl RuleChangeProposal {
+    pub const INIT_SPACE: usize = 8  // discriminator
+        + 32  // vault
+        + 32  // proposer
+        + 9   // new_daily_limit (Option<u64>)
+        + 9   // new_weekly_limit
+        + 9   // new_monthly_limit
+        + 2   // new_limits_are_percentage (Option<bool>)
+        + 3   // new_penalty_rate_bps (Option<u16>)
+        + 8   // execute_after
+        + 8   // created_at
+        + 1;  // bump
+}
+
+/// A bypass request to withdraw above limits after a timelock.
+/// One active per vault+member. PDA seeds: ["bypass_request", vault, member]
+#[account]
+#[derive(Default)]
+pub struct BypassRequest {
+    pub vault: Pubkey,
+    pub member: Pubkey,
+    pub amount: u64,
+    pub is_sol: bool,
+    pub token_mint: Pubkey,
+    pub execute_after: i64,
+    pub created_at: i64,
+    pub bump: u8,
+}
+
+impl BypassRequest {
+    pub const INIT_SPACE: usize = 8  // discriminator
+        + 32  // vault
+        + 32  // member
+        + 8   // amount
+        + 1   // is_sol
+        + 32  // token_mint
+        + 8   // execute_after
+        + 8   // created_at
+        + 1;  // bump
+}
+
+/// Global program configuration.
 #[account]
 #[derive(Default)]
 pub struct ProgramConfig {
-    /// Treasury address where activation fees are sent
     pub treasury_address: Pubkey,
-
-    /// Fee amount in lamports for permanent address activation ($5 USD equivalent)
-    pub permanent_address_fee_lamports: u64,
-
-    /// Admin address that can update treasury and fee settings
+    pub default_penalty_rate_bps: u16,
     pub admin: Pubkey,
-
-    /// Bump seed for this PDA
     pub bump: u8,
-
-    /// When this config was created
     pub created_at: i64,
-
-    /// Last update timestamp
     pub updated_at: i64,
-
-    /// Penalty rate in basis points (e.g., 1000 = 10%) for instant bypass withdrawals
-    pub penalty_rate_bps: u16,
 }
 
 impl ProgramConfig {
-    /// Size calculation for account space allocation
-    pub const DISCRIMINATOR_SIZE: usize = 8;
-    pub const PUBKEY_SIZE: usize = 32;
-    pub const U64_SIZE: usize = 8;
-    pub const U16_SIZE: usize = 2;
-    pub const U8_SIZE: usize = 1;
-    pub const I64_SIZE: usize = 8;
-
-    pub const DEFAULT_PENALTY_RATE_BPS: u16 = 2000; // 20%
-
-    pub const INIT_SPACE: usize = Self::DISCRIMINATOR_SIZE
-        + Self::PUBKEY_SIZE // treasury_address
-        + Self::U64_SIZE // permanent_address_fee_lamports
-        + Self::PUBKEY_SIZE // admin
-        + Self::U8_SIZE // bump
-        + Self::I64_SIZE // created_at
-        + Self::I64_SIZE // updated_at
-        + Self::U16_SIZE; // penalty_rate_bps
+    pub const INIT_SPACE: usize = 8  // discriminator
+        + 32  // treasury_address
+        + 2   // default_penalty_rate_bps
+        + 32  // admin
+        + 1   // bump
+        + 8   // created_at
+        + 8;  // updated_at
 }

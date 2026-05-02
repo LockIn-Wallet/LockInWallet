@@ -1,5 +1,5 @@
 {
-    "last_deployment": "2026-02-14T09:07:52.3NZ",
+    "last_deployment": "2026-04-29T17:01:09.3NZ",
     "deployed_by": "andriy",
     "note": "Breaking change detection removed - Solana programs are designed to be upgradeable"
 }

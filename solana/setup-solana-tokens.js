@@ -4,9 +4,6 @@ const {
   Connection,
   PublicKey,
   Keypair,
-  SystemProgram,
-  Transaction,
-  sendAndConfirmTransaction,
   LAMPORTS_PER_SOL
 } = require('@solana/web3.js');
 
@@ -22,154 +19,149 @@ const path = require('path');
 
 const USER_ADDRESS = '4xo6a3qHYgtsDkKUAy1wMQhyN1zoXo3tKPR5foxa3hV4';
 const RPC_URL = 'http://127.0.0.1:8899';
+const MINT_AMOUNT = 1_000_000;
+const SOL_AIRDROP = 100;
+
+const TOKENS_TO_CREATE = [
+  { key: 'USDT', symbol: 'USDT', name: 'Test USDT', decimals: 6 },
+  { key: 'USDC', symbol: 'USDC', name: 'Test USDC', decimals: 6 },
+  { key: 'DAI',  symbol: 'DAI',  name: 'Test DAI',  decimals: 6 },
+];
 
 async function setupTokens() {
   try {
     console.log('🚀 Setting up Solana test tokens...');
 
-    // Connect directly to existing validator (assume it's running from deployment script)
-    console.log('Connecting to existing validator...');
     const connection = new Connection(RPC_URL, 'confirmed');
     try {
       await connection.getVersion();
-      console.log('✅ Connected to existing validator!');
+      console.log('✅ Connected to validator');
     } catch (error) {
-      console.error('❌ Cannot connect to existing validator:', error.message);
+      console.error('❌ Cannot connect to validator:', error.message);
       throw error;
     }
 
-    // Create user public key
     const userPublicKey = new PublicKey(USER_ADDRESS);
-
-    // Create a mint authority keypair (we'll save this for token operations)
+    const payer = Keypair.generate();
     const mintAuthority = Keypair.generate();
 
-    // Create a payer keypair for transaction fees
-    const payer = Keypair.generate();
-
-    // Airdrop SOL to payer, mint authority, and user for transaction fees
-    console.log('📝 Requesting SOL airdrop for transaction fees...');
-    const payerAirdrop = await connection.requestAirdrop(payer.publicKey, 2 * LAMPORTS_PER_SOL);
-    const mintAuthorityAirdrop = await connection.requestAirdrop(mintAuthority.publicKey, 1 * LAMPORTS_PER_SOL);
-    const userAirdrop = await connection.requestAirdrop(userPublicKey, 10 * LAMPORTS_PER_SOL); // 10 SOL for user wallet
+    // Airdrop SOL to payer, mint authority, and user
+    console.log(`📝 Airdropping SOL (${SOL_AIRDROP} to user, 5 to payer)...`);
+    const payerAirdrop = await connection.requestAirdrop(payer.publicKey, 5 * LAMPORTS_PER_SOL);
+    const mintAirdrop = await connection.requestAirdrop(mintAuthority.publicKey, 1 * LAMPORTS_PER_SOL);
+    const userAirdrop = await connection.requestAirdrop(userPublicKey, SOL_AIRDROP * LAMPORTS_PER_SOL);
 
     await connection.confirmTransaction(payerAirdrop);
-    await connection.confirmTransaction(mintAuthorityAirdrop);
+    await connection.confirmTransaction(mintAirdrop);
     await connection.confirmTransaction(userAirdrop);
-    console.log('✅ Airdrops completed (including 10 SOL to user wallet)');
+    console.log(`✅ Airdrops completed (${SOL_AIRDROP} SOL to user wallet)`);
 
-    // Create USDT token mint (6 decimals like real USDT)
-    console.log('📝 Creating USDT token mint...');
-    const usdtMint = await createMint(
-      connection,
-      payer,                    // payer (for transaction fees)
-      mintAuthority.publicKey,  // mint authority (generated keypair)
-      mintAuthority.publicKey,  // freeze authority (generated keypair)
-      6                         // decimals
-    );
+    const createdTokens = {};
 
-    console.log(`✅ USDT Token Mint created: ${usdtMint.toString()}`);
+    for (const tokenDef of TOKENS_TO_CREATE) {
+      console.log(`\n📝 Creating ${tokenDef.symbol} token mint (${tokenDef.decimals} decimals)...`);
 
-    // Create associated token account for user
-    console.log(`📝 Creating token account for ${USER_ADDRESS}...`);
-    const userTokenAccount = await getOrCreateAssociatedTokenAccount(
-      connection,
-      payer,
-      usdtMint,
-      userPublicKey
-    );
+      const mint = await createMint(
+        connection,
+        payer,
+        mintAuthority.publicKey,
+        mintAuthority.publicKey,
+        tokenDef.decimals
+      );
+      console.log(`   Mint: ${mint.toString()}`);
 
-    console.log(`✅ Token account created: ${userTokenAccount.address.toString()}`);
+      const userATA = await getOrCreateAssociatedTokenAccount(
+        connection,
+        payer,
+        mint,
+        userPublicKey
+      );
 
-    // Mint 1,000,000 USDT (with 6 decimals) to user account
-    console.log('📝 Minting 1,000,000 test USDT tokens...');
-    await mintTo(
-      connection,
-      payer,                    // payer (for transaction fees)
-      usdtMint,
-      userTokenAccount.address,
-      mintAuthority,            // mint authority (has signing capability)
-      1000000 * (10 ** 6)       // 1M USDT with 6 decimals
-    );
-
-    console.log('✅ Tokens minted successfully!');
-
-    // Check balance
-    const accountInfo = await getAccount(connection, userTokenAccount.address);
-    const balance = Number(accountInfo.amount) / (10 ** 6);
-    console.log(`💰 USDT Balance: ${balance.toLocaleString()} USDT`);
-
-    // Save token addresses to frontend config
-    const tokenConfig = {
-      solanaTokens: {
-        usdtMint: usdtMint.toString(),
-        userTokenAccount: userTokenAccount.address.toString(),
-        userAddress: USER_ADDRESS,
-        mintAuthority: mintAuthority.publicKey.toString(),
-        balance: balance,
-        createdAt: new Date().toISOString()
+      // SPL token amounts are u64 (max ~1.8e19). For 18-decimal tokens, batch to stay within u64.
+      const maxU64 = BigInt("18446744073709551615");
+      const rawTotal = BigInt(MINT_AMOUNT) * (BigInt(10) ** BigInt(tokenDef.decimals));
+      if (rawTotal <= maxU64) {
+        await mintTo(connection, payer, mint, userATA.address, mintAuthority, rawTotal);
+      } else {
+        const batchAmount = maxU64 / BigInt(2);
+        let remaining = rawTotal;
+        while (remaining > BigInt(0)) {
+          const chunk = remaining > batchAmount ? batchAmount : remaining;
+          await mintTo(connection, payer, mint, userATA.address, mintAuthority, chunk);
+          remaining -= chunk;
+        }
       }
-    };
 
-    // Also save the mint authority keypair for future operations (LOCAL DEV ONLY!)
+      const accountInfo = await getAccount(connection, userATA.address);
+      const balance = Number(accountInfo.amount / (BigInt(10) ** BigInt(tokenDef.decimals)));
+      console.log(`   ✅ ${balance.toLocaleString()} ${tokenDef.symbol} minted to user`);
+
+      createdTokens[tokenDef.key] = {
+        address: mint.toString(),
+        symbol: tokenDef.symbol,
+        name: tokenDef.name,
+        decimals: tokenDef.decimals,
+        recommended: true,
+        userTokenAccount: userATA.address.toString(),
+      };
+    }
+
+    // Save mint authority for future operations (LOCAL DEV ONLY)
     const mintAuthorityConfig = {
       publicKey: mintAuthority.publicKey.toString(),
       secretKey: Array.from(mintAuthority.secretKey)
     };
-
     const mintAuthorityPath = path.join(__dirname, '../frontend/src/mintAuthority.json');
     fs.writeFileSync(mintAuthorityPath, JSON.stringify(mintAuthorityConfig, null, 2));
-    console.log(`🔑 Mint authority saved to: ${mintAuthorityPath} (DEV ONLY!)`);
-    console.log(`⚠️  WARNING: This file contains private keys! Only for local development!`);
+    console.log(`\n🔑 Mint authority saved to: ${mintAuthorityPath} (DEV ONLY!)`);
 
-    const configPath = path.join(__dirname, '../frontend/src/solanaTokens.json');
-    fs.writeFileSync(configPath, JSON.stringify(tokenConfig, null, 2));
-    console.log(`✅ Token config saved to: ${configPath}`);
-
-    // Auto-update the frontend networkConfig.json with new mint address
-    console.log('📝 Updating frontend networkConfig.json with new USDT mint address...');
+    // Update frontend networkConfig.json with new mint addresses
+    console.log('📝 Updating frontend networkConfig.json...');
     const networkConfigPath = path.join(__dirname, '../frontend/src/networkConfig.json');
 
     let networkConfig;
     try {
-      const networkConfigContent = fs.readFileSync(networkConfigPath, 'utf8');
-      networkConfig = JSON.parse(networkConfigContent);
+      networkConfig = JSON.parse(fs.readFileSync(networkConfigPath, 'utf8'));
     } catch (error) {
       console.error('❌ Error reading networkConfig.json:', error.message);
       throw error;
     }
 
-    // Update localhost USDT token address in Solana configuration
-    if (networkConfig.solana && networkConfig.solana.localhost && networkConfig.solana.localhost.tokens && networkConfig.solana.localhost.tokens.USDT) {
-      const oldMintAddress = networkConfig.solana.localhost.tokens.USDT.address;
-      networkConfig.solana.localhost.tokens.USDT.address = usdtMint.toString();
-
-      try {
-        fs.writeFileSync(networkConfigPath, JSON.stringify(networkConfig, null, 2));
-        console.log(`✅ Network configuration updated successfully`);
-        console.log(`   Old USDT mint: ${oldMintAddress}`);
-        console.log(`   New USDT mint: ${usdtMint.toString()}`);
-      } catch (error) {
-        console.error('❌ Error writing networkConfig.json:', error.message);
-        throw error;
+    const localhostTokens = networkConfig?.solana?.localhost?.tokens;
+    if (localhostTokens) {
+      for (const [key, tokenInfo] of Object.entries(createdTokens)) {
+        const oldAddress = localhostTokens[key]?.address || '(none)';
+        localhostTokens[key] = {
+          ...localhostTokens[key],
+          address: tokenInfo.address,
+          symbol: tokenInfo.symbol,
+          name: tokenInfo.name,
+          decimals: tokenInfo.decimals,
+          recommended: true,
+        };
+        console.log(`   ${key}: ${oldAddress} → ${tokenInfo.address}`);
       }
+
+      fs.writeFileSync(networkConfigPath, JSON.stringify(networkConfig, null, 2));
+      console.log('✅ networkConfig.json updated');
     } else {
-      console.log('⚠️  Could not find localhost USDT token configuration in networkConfig.json');
+      console.log('⚠️  Could not find solana.localhost.tokens in networkConfig.json');
     }
 
-    // Check user SOL balance
-    const userSolBalance = await connection.getBalance(userPublicKey);
-    const solBalanceFormatted = (userSolBalance / LAMPORTS_PER_SOL).toFixed(2);
+    // Save token config for reference
+    const tokenConfig = { solanaTokens: createdTokens, createdAt: new Date().toISOString() };
+    const configPath = path.join(__dirname, '../frontend/src/solanaTokens.json');
+    fs.writeFileSync(configPath, JSON.stringify(tokenConfig, null, 2));
 
-    console.log('\n🎉 Solana tokens setup complete!');
-    console.log(`📋 Summary:`);
-    console.log(`   USDT Mint Address: ${usdtMint.toString()}`);
-    console.log(`   Mint Authority: ${mintAuthority.publicKey.toString()}`);
-    console.log(`   User Token Account: ${userTokenAccount.address.toString()}`);
-    console.log(`   User Address: ${USER_ADDRESS}`);
-    console.log(`   USDT Balance: ${balance.toLocaleString()} USDT`);
-    console.log(`   SOL Balance: ${solBalanceFormatted} SOL`);
-    console.log(`   Frontend Config: networkConfig.json updated with new mint address`);
+    // Print summary
+    const userSolBalance = await connection.getBalance(userPublicKey);
+    console.log('\n🎉 Token setup complete!');
+    console.log('📋 Summary:');
+    console.log(`   User: ${USER_ADDRESS}`);
+    console.log(`   SOL:  ${(userSolBalance / LAMPORTS_PER_SOL).toFixed(2)} SOL`);
+    for (const [key, info] of Object.entries(createdTokens)) {
+      console.log(`   ${key}: ${MINT_AMOUNT.toLocaleString()} ${info.symbol} (mint: ${info.address})`);
+    }
 
   } catch (error) {
     console.error('❌ Error setting up tokens:', error.message);

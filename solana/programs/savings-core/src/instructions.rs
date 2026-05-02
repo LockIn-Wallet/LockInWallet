@@ -1,2316 +1,1640 @@
 use anchor_lang::prelude::*;
+use anchor_lang::system_program;
 use anchor_spl::token::{self, Mint, Token, TokenAccount, Transfer};
 use anchor_spl::associated_token::AssociatedToken;
+
 use crate::state::*;
 use crate::error::ErrorCode;
+use crate::constants::*;
 
-/// Initialize a new savings account for a user
-#[derive(Accounts)]
-pub struct Initialize<'info> {
-    #[account(
-        init,
-        payer = user,
-        space = 8 + SavingsAccount::INIT_SPACE,
-        seeds = [b"savings", user.key().as_ref()],
-        bump
-    )]
-    pub savings_account: Account<'info, SavingsAccount>,
+// ============================================================
+// Account Contexts
+// ============================================================
 
-    #[account(mut)]
-    pub user: Signer<'info>,
-
-    pub system_program: Program<'info, System>,
-}
-
-/// Deposit SOL to the savings account
-#[derive(Accounts)]
-pub struct DepositSol<'info> {
-    #[account(
-        init_if_needed,
-        payer = payer,
-        space = 8 + SavingsAccount::INIT_SPACE,
-        seeds = [b"savings", beneficiary.key().as_ref()],
-        bump
-    )]
-    pub savings_account: Account<'info, SavingsAccount>,
-
-    /// The beneficiary whose savings account will be credited
-    /// CHECK: This account is used for PDA derivation and balance credit
-    pub beneficiary: UncheckedAccount<'info>,
-
-    /// The payer for account creation and transaction fees
-    #[account(mut)]
-    pub payer: Signer<'info>,
-
-    pub system_program: Program<'info, System>,
-}
-
-/// Deposit SPL tokens to the savings account
-#[derive(Accounts)]
-pub struct DepositSpl<'info> {
-    #[account(
-        init_if_needed,
-        payer = payer,
-        space = 8 + SavingsAccount::INIT_SPACE,
-        seeds = [b"savings", beneficiary.key().as_ref()],
-        bump
-    )]
-    pub savings_account: Account<'info, SavingsAccount>,
-
-    /// The beneficiary whose savings account will be credited
-    /// CHECK: This account is used for PDA derivation and balance credit
-    pub beneficiary: UncheckedAccount<'info>,
-
-    /// The payer for account creation and transaction fees
-    #[account(mut)]
-    pub payer: Signer<'info>,
-
-    /// Source token account that holds the tokens to deposit
-    #[account(
-        mut,
-        constraint = source_token_account.mint == mint.key()
-    )]
-    pub source_token_account: Account<'info, TokenAccount>,
-
-    /// The savings account's token account for this mint
-    #[account(
-        init_if_needed,
-        payer = payer,
-        associated_token::mint = mint,
-        associated_token::authority = savings_account,
-    )]
-    pub savings_token_account: Account<'info, TokenAccount>,
-
-    /// The mint of the SPL token being deposited
-    pub mint: Account<'info, Mint>,
-
-    pub token_program: Program<'info, Token>,
-    pub associated_token_program: Program<'info, AssociatedToken>,
-    pub system_program: Program<'info, System>,
-}
-
-/// Deposit SOL for self (backward compatibility)
-#[derive(Accounts)]
-pub struct DepositSolSelf<'info> {
-    #[account(
-        init_if_needed,
-        payer = user,
-        space = 8 + SavingsAccount::INIT_SPACE,
-        seeds = [b"savings", user.key().as_ref()],
-        bump
-    )]
-    pub savings_account: Account<'info, SavingsAccount>,
-
-    #[account(mut)]
-    pub user: Signer<'info>,
-
-    pub system_program: Program<'info, System>,
-}
-
-/// Deposit SPL tokens for self (backward compatibility)
-#[derive(Accounts)]
-pub struct DepositSplSelf<'info> {
-    #[account(
-        init_if_needed,
-        payer = user,
-        space = 8 + SavingsAccount::INIT_SPACE,
-        seeds = [b"savings", user.key().as_ref()],
-        bump
-    )]
-    pub savings_account: Account<'info, SavingsAccount>,
-
-    #[account(mut)]
-    pub user: Signer<'info>,
-
-    /// User's token account that holds the tokens to deposit
-    #[account(
-        mut,
-        constraint = user_token_account.owner == user.key(),
-        constraint = user_token_account.mint == mint.key()
-    )]
-    pub user_token_account: Account<'info, TokenAccount>,
-
-    /// The savings account's token account for this mint
-    #[account(
-        init_if_needed,
-        payer = user,
-        associated_token::mint = mint,
-        associated_token::authority = savings_account,
-    )]
-    pub savings_token_account: Account<'info, TokenAccount>,
-
-    /// The mint of the SPL token being deposited
-    pub mint: Account<'info, Mint>,
-
-    pub token_program: Program<'info, Token>,
-    pub associated_token_program: Program<'info, AssociatedToken>,
-    pub system_program: Program<'info, System>,
-}
-
-/// Get balance account context
-#[derive(Accounts)]
-pub struct GetBalance<'info> {
-    #[account(
-        seeds = [b"savings", user.key().as_ref()],
-        bump = savings_account.bump
-    )]
-    pub savings_account: Account<'info, SavingsAccount>,
-
-    pub user: Signer<'info>,
-}
-
-/// Initialize savings account instruction
-pub fn initialize(ctx: Context<Initialize>) -> Result<()> {
-    let savings_account = &mut ctx.accounts.savings_account;
-    let user = &ctx.accounts.user;
-    let clock = Clock::get()?;
-
-    savings_account.owner = user.key();
-    savings_account.sol_balance = 0;
-    savings_account.spl_balances = Vec::new();
-    savings_account.bump = ctx.bumps.savings_account;
-    savings_account.created_at = clock.unix_timestamp;
-    savings_account.updated_at = clock.unix_timestamp;
-
-    msg!("Savings account initialized for user: {}", user.key());
-
-    Ok(())
-}
-
-/// Deposit SOL instruction
-pub fn deposit_sol(ctx: Context<DepositSol>, amount: u64) -> Result<()> {
-    require!(amount > 0, ErrorCode::InvalidAmount);
-
-    let savings_account = &mut ctx.accounts.savings_account;
-    let beneficiary = &ctx.accounts.beneficiary;
-    let payer = &ctx.accounts.payer;
-    let clock = Clock::get()?;
-
-    // Initialize account if this is the first deposit
-    if savings_account.owner == Pubkey::default() {
-        savings_account.owner = beneficiary.key();
-        savings_account.sol_balance = 0;
-        savings_account.spl_balances = Vec::new();
-        savings_account.bump = ctx.bumps.savings_account;
-        savings_account.created_at = clock.unix_timestamp;
-        savings_account.withdrawal_destinations = Vec::new();
-        savings_account.pending_withdrawal_destination_requests = Vec::new();
-        savings_account.pending_bypass_requests = Vec::new();
-        savings_account.permanent_address_activated = false;
-        savings_account.activation_payment_signature = Vec::new();
-        savings_account.activated_at = 0;
-    }
-
-    // Check if permanent address is activated for deposits
-    require!(
-        savings_account.permanent_address_activated,
-        ErrorCode::PermanentAddressNotActivated
-    );
-
-    // Transfer SOL from payer to savings account
-    let cpi_context = CpiContext::new(
-        ctx.accounts.system_program.to_account_info(),
-        anchor_lang::system_program::Transfer {
-            from: payer.to_account_info(),
-            to: savings_account.to_account_info(),
-        },
-    );
-    anchor_lang::system_program::transfer(cpi_context, amount)?;
-
-    // Update SOL balance
-    savings_account.sol_balance = savings_account
-        .sol_balance
-        .checked_add(amount)
-        .ok_or(crate::error::ErrorCode::ArithmeticOverflow)?;
-
-    savings_account.updated_at = clock.unix_timestamp;
-
-    msg!(
-        "Deposited {} lamports to savings account for {}. New balance: {}",
-        amount,
-        beneficiary.key(),
-        savings_account.sol_balance
-    );
-
-    Ok(())
-}
-
-/// Deposit SPL tokens instruction
-pub fn deposit_spl(ctx: Context<DepositSpl>, amount: u64) -> Result<()> {
-    require!(amount > 0, ErrorCode::InvalidAmount);
-
-    let savings_account = &mut ctx.accounts.savings_account;
-    let beneficiary = &ctx.accounts.beneficiary;
-    let mint = &ctx.accounts.mint;
-    let clock = Clock::get()?;
-
-    // Initialize account if this is the first deposit
-    if savings_account.owner == Pubkey::default() {
-        savings_account.owner = beneficiary.key();
-        savings_account.sol_balance = 0;
-        savings_account.spl_balances = Vec::new();
-        savings_account.bump = ctx.bumps.savings_account;
-        savings_account.created_at = clock.unix_timestamp;
-        savings_account.withdrawal_destinations = Vec::new();
-        savings_account.pending_withdrawal_destination_requests = Vec::new();
-        savings_account.pending_bypass_requests = Vec::new();
-        savings_account.permanent_address_activated = false;
-        savings_account.activation_payment_signature = Vec::new();
-        savings_account.activated_at = 0;
-    }
-
-    // Check if permanent address is activated for deposits
-    require!(
-        savings_account.permanent_address_activated,
-        ErrorCode::PermanentAddressNotActivated
-    );
-
-    // Transfer SPL tokens from source to savings account
-    // The authority must be whoever owns the source_token_account
-    let cpi_accounts = Transfer {
-        from: ctx.accounts.source_token_account.to_account_info(),
-        to: ctx.accounts.savings_token_account.to_account_info(),
-        authority: ctx.accounts.payer.to_account_info(),
-    };
-    let cpi_program = ctx.accounts.token_program.to_account_info();
-    let cpi_ctx = CpiContext::new(cpi_program, cpi_accounts);
-    token::transfer(cpi_ctx, amount)?;
-
-    // Update token balance in savings account
-    savings_account.update_token_balance(mint.key(), amount)?;
-    savings_account.updated_at = clock.unix_timestamp;
-
-    msg!(
-        "Deposited {} tokens of mint {} to savings account for {}",
-        amount,
-        mint.key(),
-        beneficiary.key()
-    );
-
-    Ok(())
-}
-
-/// Withdraw SOL from the savings account
-#[derive(Accounts)]
-pub struct WithdrawSol<'info> {
-    #[account(
-        mut,
-        seeds = [b"savings", user.key().as_ref()],
-        bump = savings_account.bump,
-        constraint = savings_account.owner == user.key() @ ErrorCode::UnauthorizedAccess
-    )]
-    pub savings_account: Account<'info, SavingsAccount>,
-
-    #[account(mut)]
-    pub user: Signer<'info>,
-
-    pub system_program: Program<'info, System>,
-}
-
-/// Withdraw SPL tokens from the savings account
-#[derive(Accounts)]
-pub struct WithdrawSpl<'info> {
-    #[account(
-        mut,
-        seeds = [b"savings", user.key().as_ref()],
-        bump = savings_account.bump,
-        constraint = savings_account.owner == user.key() @ ErrorCode::UnauthorizedAccess
-    )]
-    pub savings_account: Account<'info, SavingsAccount>,
-
-    #[account(mut)]
-    pub user: Signer<'info>,
-
-    /// User's token account to receive the withdrawn tokens
-    #[account(
-        mut,
-        constraint = user_token_account.owner == user.key(),
-        constraint = user_token_account.mint == mint.key()
-    )]
-    pub user_token_account: Account<'info, TokenAccount>,
-
-    /// The savings account's token account for this mint
-    #[account(
-        mut,
-        associated_token::mint = mint,
-        associated_token::authority = savings_account,
-    )]
-    pub savings_token_account: Account<'info, TokenAccount>,
-
-    /// The mint of the SPL token being withdrawn
-    pub mint: Account<'info, Mint>,
-
-    pub token_program: Program<'info, Token>,
-}
-
-/// Withdraw SOL instruction with optional spending limits validation
-pub fn withdraw_sol(ctx: Context<WithdrawSol>, amount: u64) -> Result<()> {
-    require!(amount > 0, ErrorCode::InvalidAmount);
-
-    let savings_account = &mut ctx.accounts.savings_account;
-    let user = &ctx.accounts.user;
-
-    // Check if permanent address is activated for withdrawals
-    require!(
-        savings_account.permanent_address_activated,
-        ErrorCode::PermanentAddressNotActivated
-    );
-
-    // Check if user has sufficient balance
-    require!(
-        savings_account.sol_balance >= amount,
-        ErrorCode::InsufficientBalance
-    );
-
-    // Calculate rent-exempt minimum
-    let rent = Rent::get()?;
-    let min_balance = rent.minimum_balance(8 + SavingsAccount::INIT_SPACE);
-    let account_balance = savings_account.to_account_info().lamports();
-
-    // Ensure we don't withdraw below rent-exempt minimum
-    require!(
-        account_balance.saturating_sub(amount) >= min_balance,
-        ErrorCode::InsufficientBalance
-    );
-
-    // TODO: Add spending limits validation here when spending limits account is passed
-    // This maintains backward compatibility with existing withdrawals
-
-    // Transfer SOL from savings account to user
-    **savings_account.to_account_info().try_borrow_mut_lamports()? -= amount;
-    **user.to_account_info().try_borrow_mut_lamports()? += amount;
-
-    // Update SOL balance
-    savings_account.sol_balance = savings_account
-        .sol_balance
-        .checked_sub(amount)
-        .ok_or(crate::error::ErrorCode::ArithmeticOverflow)?;
-
-    let clock = Clock::get()?;
-    savings_account.updated_at = clock.unix_timestamp;
-
-    msg!(
-        "Withdrew {} lamports from savings account. Remaining balance: {}",
-        amount,
-        savings_account.sol_balance
-    );
-
-    Ok(())
-}
-
-/// Withdraw SPL tokens instruction
-pub fn withdraw_spl(ctx: Context<WithdrawSpl>, amount: u64) -> Result<()> {
-    require!(amount > 0, ErrorCode::InvalidAmount);
-
-    let savings_account = &mut ctx.accounts.savings_account;
-    let mint = &ctx.accounts.mint;
-
-    // Check if permanent address is activated for withdrawals
-    require!(
-        savings_account.permanent_address_activated,
-        ErrorCode::PermanentAddressNotActivated
-    );
-
-    // Check if user has sufficient token balance
-    let current_balance = savings_account.get_token_balance(mint.key());
-    require!(current_balance >= amount, ErrorCode::InsufficientBalance);
-
-    // Create seeds for signing
-    let user_key = savings_account.owner;
-    let seeds = &[b"savings", user_key.as_ref(), &[savings_account.bump]];
-    let signer = &[&seeds[..]];
-
-    // Transfer SPL tokens from savings account to user
-    let cpi_accounts = Transfer {
-        from: ctx.accounts.savings_token_account.to_account_info(),
-        to: ctx.accounts.user_token_account.to_account_info(),
-        authority: savings_account.to_account_info(),
-    };
-    let cpi_program = ctx.accounts.token_program.to_account_info();
-    let cpi_ctx = CpiContext::new_with_signer(cpi_program, cpi_accounts, signer);
-    token::transfer(cpi_ctx, amount)?;
-
-    // Update token balance in savings account
-    for token_balance in &mut savings_account.spl_balances {
-        if token_balance.mint == mint.key() {
-            token_balance.amount = token_balance
-                .amount
-                .checked_sub(amount)
-                .ok_or(crate::error::ErrorCode::ArithmeticOverflow)?;
-            break;
-        }
-    }
-
-    let clock = Clock::get()?;
-    savings_account.updated_at = clock.unix_timestamp;
-
-    msg!(
-        "Withdrew {} tokens of mint {} from savings account",
-        amount,
-        mint.key()
-    );
-
-    Ok(())
-}
-
-/// Deposit SOL for self (backward compatibility)
-pub fn deposit_sol_self(ctx: Context<DepositSolSelf>, amount: u64) -> Result<()> {
-    require!(amount > 0, ErrorCode::InvalidAmount);
-
-    let savings_account = &mut ctx.accounts.savings_account;
-    let user = &ctx.accounts.user;
-    let clock = Clock::get()?;
-
-    // Initialize account if this is the first deposit
-    if savings_account.owner == Pubkey::default() {
-        savings_account.owner = user.key();
-        savings_account.sol_balance = 0;
-        savings_account.spl_balances = Vec::new();
-        savings_account.bump = ctx.bumps.savings_account;
-        savings_account.created_at = clock.unix_timestamp;
-        savings_account.withdrawal_destinations = Vec::new();
-        savings_account.pending_withdrawal_destination_requests = Vec::new();
-        savings_account.pending_bypass_requests = Vec::new();
-        savings_account.permanent_address_activated = false;
-        savings_account.activation_payment_signature = Vec::new();
-        savings_account.activated_at = 0;
-    }
-
-    // Transfer SOL from user to savings account
-    let cpi_context = CpiContext::new(
-        ctx.accounts.system_program.to_account_info(),
-        anchor_lang::system_program::Transfer {
-            from: user.to_account_info(),
-            to: savings_account.to_account_info(),
-        },
-    );
-    anchor_lang::system_program::transfer(cpi_context, amount)?;
-
-    // Update SOL balance
-    savings_account.sol_balance = savings_account
-        .sol_balance
-        .checked_add(amount)
-        .ok_or(crate::error::ErrorCode::ArithmeticOverflow)?;
-
-    savings_account.updated_at = clock.unix_timestamp;
-
-    msg!(
-        "Deposited {} lamports to savings account. New balance: {}",
-        amount,
-        savings_account.sol_balance
-    );
-
-    Ok(())
-}
-
-/// Deposit SPL tokens for self (backward compatibility)
-pub fn deposit_spl_self(ctx: Context<DepositSplSelf>, amount: u64) -> Result<()> {
-    require!(amount > 0, ErrorCode::InvalidAmount);
-
-    let savings_account = &mut ctx.accounts.savings_account;
-    let user = &ctx.accounts.user;
-    let mint = &ctx.accounts.mint;
-    let clock = Clock::get()?;
-
-    // Initialize account if this is the first deposit
-    if savings_account.owner == Pubkey::default() {
-        savings_account.owner = user.key();
-        savings_account.sol_balance = 0;
-        savings_account.spl_balances = Vec::new();
-        savings_account.bump = ctx.bumps.savings_account;
-        savings_account.created_at = clock.unix_timestamp;
-        savings_account.withdrawal_destinations = Vec::new();
-        savings_account.pending_withdrawal_destination_requests = Vec::new();
-        savings_account.pending_bypass_requests = Vec::new();
-        savings_account.permanent_address_activated = false;
-        savings_account.activation_payment_signature = Vec::new();
-        savings_account.activated_at = 0;
-    }
-
-    // Transfer SPL tokens from user to savings account
-    let cpi_accounts = Transfer {
-        from: ctx.accounts.user_token_account.to_account_info(),
-        to: ctx.accounts.savings_token_account.to_account_info(),
-        authority: user.to_account_info(),
-    };
-    let cpi_program = ctx.accounts.token_program.to_account_info();
-    let cpi_ctx = CpiContext::new(cpi_program, cpi_accounts);
-    token::transfer(cpi_ctx, amount)?;
-
-    // Update token balance in savings account
-    savings_account.update_token_balance(mint.key(), amount)?;
-    savings_account.updated_at = clock.unix_timestamp;
-
-    msg!(
-        "Deposited {} tokens of mint {} to savings account",
-        amount,
-        mint.key()
-    );
-
-    Ok(())
-}
-
-// ========== SPENDING LIMITS INSTRUCTIONS ==========
-
-/// Initialize a new spending limits account for a user (now uses unified SavingsAccount)
-#[derive(Accounts)]
-pub struct InitializeSpendingLimits<'info> {
-    #[account(
-        init,
-        payer = user,
-        space = 8 + SavingsAccount::INIT_SPACE,
-        seeds = [b"savings", user.key().as_ref()],
-        bump
-    )]
-    pub savings_account: Account<'info, SavingsAccount>,
-
-    #[account(mut)]
-    pub user: Signer<'info>,
-
-    pub system_program: Program<'info, System>,
-}
-
-/// Add or update a time period limit
-#[derive(Accounts)]
-pub struct AddTimePeriodLimit<'info> {
-    #[account(
-        mut,
-        seeds = [b"savings", user.key().as_ref()],
-        bump = savings_account.bump,
-        constraint = savings_account.owner == user.key() @ ErrorCode::UnauthorizedAccess
-    )]
-    pub savings_account: Account<'info, SavingsAccount>,
-
-    #[account(mut)]
-    pub user: Signer<'info>,
-}
-
-/// Remove a time period limit
-#[derive(Accounts)]
-pub struct RemoveTimePeriodLimit<'info> {
-    #[account(
-        mut,
-        seeds = [b"savings", user.key().as_ref()],
-        bump = savings_account.bump,
-        constraint = savings_account.owner == user.key() @ ErrorCode::UnauthorizedAccess
-    )]
-    pub savings_account: Account<'info, SavingsAccount>,
-
-    #[account(mut)]
-    pub user: Signer<'info>,
-}
-
-/// Set common period limits (Daily, Weekly, Monthly)
-#[derive(Accounts)]
-pub struct SetCommonPeriodLimits<'info> {
-    #[account(
-        mut,
-        seeds = [b"savings", user.key().as_ref()],
-        bump = savings_account.bump,
-        constraint = savings_account.owner == user.key() @ ErrorCode::UnauthorizedAccess
-    )]
-    pub savings_account: Account<'info, SavingsAccount>,
-
-    #[account(mut)]
-    pub user: Signer<'info>,
-}
-
-/// Commit initial setup
-#[derive(Accounts)]
-pub struct CommitInitialSetup<'info> {
-    #[account(
-        mut,
-        seeds = [b"savings", user.key().as_ref()],
-        bump = savings_account.bump,
-        constraint = savings_account.owner == user.key() @ ErrorCode::UnauthorizedAccess
-    )]
-    pub savings_account: Account<'info, SavingsAccount>,
-
-    #[account(mut)]
-    pub user: Signer<'info>,
-}
-
-/// Get spending limits view
-#[derive(Accounts)]
-pub struct GetSpendingLimits<'info> {
-    #[account(
-        seeds = [b"savings", user.key().as_ref()],
-        bump = savings_account.bump
-    )]
-    pub savings_account: Account<'info, SavingsAccount>,
-
-    pub user: Signer<'info>,
-}
-
-/// Modified withdrawal context with spending limits
-#[derive(Accounts)]
-pub struct WithdrawSolWithLimits<'info> {
-    #[account(
-        mut,
-        seeds = [b"savings", user.key().as_ref()],
-        bump = savings_account.bump,
-        constraint = savings_account.owner == user.key() @ ErrorCode::UnauthorizedAccess
-    )]
-    pub savings_account: Account<'info, SavingsAccount>,
-
-    #[account(mut)]
-    pub user: Signer<'info>,
-
-    pub system_program: Program<'info, System>,
-}
-
-/// Modified SPL withdrawal context with spending limits
-#[derive(Accounts)]
-pub struct WithdrawSplWithLimits<'info> {
-    #[account(
-        mut,
-        seeds = [b"savings", user.key().as_ref()],
-        bump = savings_account.bump,
-        constraint = savings_account.owner == user.key() @ ErrorCode::UnauthorizedAccess
-    )]
-    pub savings_account: Account<'info, SavingsAccount>,
-
-    #[account(mut)]
-    pub user: Signer<'info>,
-
-    /// User's token account to receive the withdrawn tokens
-    #[account(
-        mut,
-        constraint = user_token_account.owner == user.key(),
-        constraint = user_token_account.mint == mint.key()
-    )]
-    pub user_token_account: Account<'info, TokenAccount>,
-
-    /// The savings account's token account for this mint
-    #[account(
-        mut,
-        associated_token::mint = mint,
-        associated_token::authority = savings_account,
-    )]
-    pub savings_token_account: Account<'info, TokenAccount>,
-
-    /// The mint of the SPL token being withdrawn
-    pub mint: Account<'info, Mint>,
-
-    pub token_program: Program<'info, Token>,
-}
-
-// ========== SPENDING LIMITS INSTRUCTION IMPLEMENTATIONS ==========
-
-/// Initialize spending limits account instruction
-pub fn initialize_spending_limits(ctx: Context<InitializeSpendingLimits>) -> Result<()> {
-    let savings_account = &mut ctx.accounts.savings_account;
-    let user = &ctx.accounts.user;
-    let clock = Clock::get()?;
-
-    savings_account.owner = user.key();
-    savings_account.sol_balance = 0;
-    savings_account.spl_balances = Vec::new();
-    savings_account.withdrawal_destinations = Vec::new();
-    savings_account.pending_withdrawal_destination_requests = Vec::new();
-    savings_account.pending_bypass_requests = Vec::new();
-    savings_account.permanent_address_activated = false;
-    savings_account.activation_payment_signature = Vec::new();
-    savings_account.activated_at = 0;
-    savings_account.time_period_limits = Vec::new();
-    savings_account.pending_proposals = Vec::new();
-    savings_account.has_committed_setup = false;
-    savings_account.total_locked_value = 0;
-    savings_account.commit_timestamp = 0;
-    savings_account.bump = ctx.bumps.savings_account;
-    savings_account.created_at = clock.unix_timestamp;
-    savings_account.updated_at = clock.unix_timestamp;
-
-    msg!("Spending limits account initialized for user: {}", user.key());
-
-    Ok(())
-}
-
-/// Add time period limit instruction
-pub fn add_time_period_limit(
-    ctx: Context<AddTimePeriodLimit>,
-    name: String,
-    limit: u64,
-    duration: u64,
-) -> Result<()> {
-    let savings_account = &mut ctx.accounts.savings_account;
-    let clock = Clock::get()?;
-
-    savings_account.add_time_period_limit(name.clone(), limit, duration, clock.unix_timestamp)?;
-    savings_account.updated_at = clock.unix_timestamp;
-
-    msg!(
-        "Added time period limit: {} with limit {} and duration {}",
-        name,
-        limit,
-        duration
-    );
-
-    Ok(())
-}
-
-/// Remove time period limit instruction
-pub fn remove_time_period_limit(
-    ctx: Context<RemoveTimePeriodLimit>,
-    name: String,
-) -> Result<()> {
-    let savings_account = &mut ctx.accounts.savings_account;
-    let clock = Clock::get()?;
-
-    savings_account.remove_time_period_limit(&name)?;
-    savings_account.updated_at = clock.unix_timestamp;
-
-    msg!("Removed time period limit: {}", name);
-
-    Ok(())
-}
-
-/// Set common period limits instruction
-pub fn set_common_period_limits(
-    ctx: Context<SetCommonPeriodLimits>,
-    daily_limit: Option<u64>,
-    weekly_limit: Option<u64>,
-    monthly_limit: Option<u64>,
-) -> Result<()> {
-    let savings_account = &mut ctx.accounts.savings_account;
-    let clock = Clock::get()?;
-
-    savings_account.set_common_period_limits(
-        daily_limit,
-        weekly_limit,
-        monthly_limit,
-        clock.unix_timestamp,
-    )?;
-    savings_account.updated_at = clock.unix_timestamp;
-
-    msg!(
-        "Set common period limits - Daily: {:?}, Weekly: {:?}, Monthly: {:?}",
-        daily_limit,
-        weekly_limit,
-        monthly_limit
-    );
-
-    Ok(())
-}
-
-/// Commit initial setup instruction
-pub fn commit_initial_setup(ctx: Context<CommitInitialSetup>) -> Result<()> {
-    let savings_account = &mut ctx.accounts.savings_account;
-    let clock = Clock::get()?;
-
-    // Calculate total locked value across all active periods
-    let mut total_locked_value = 0u64;
-    for period in &savings_account.time_period_limits {
-        if period.active {
-            total_locked_value = total_locked_value.checked_add(period.limit)
-                .ok_or(ErrorCode::ArithmeticOverflow)?;
-        }
-    }
-
-    savings_account.has_committed_setup = true;
-    savings_account.total_locked_value = total_locked_value;
-    savings_account.commit_timestamp = clock.unix_timestamp;
-    savings_account.updated_at = clock.unix_timestamp;
-
-    msg!(
-        "Initial setup committed with total locked value: {}",
-        total_locked_value
-    );
-
-    Ok(())
-}
-
-/// Get spending limits information
-pub fn get_spending_limits(ctx: Context<GetSpendingLimits>) -> Result<()> {
-    let savings_account = &ctx.accounts.savings_account;
-    let clock = Clock::get()?;
-
-    msg!("Spending limits for user: {}", ctx.accounts.user.key());
-    msg!("Setup committed: {}", savings_account.has_committed_setup);
-    msg!("Total locked value: {}", savings_account.total_locked_value);
-
-    for (index, period) in savings_account.time_period_limits.iter().enumerate() {
-        if period.active {
-            let (limit, spent, remaining, _) = savings_account
-                .get_period_info(&period.name, clock.unix_timestamp)
-                .unwrap_or((0, 0, 0, false));
-
-            msg!(
-                "Period {}: {} - Limit: {}, Spent: {}, Remaining: {}",
-                index,
-                period.name,
-                limit,
-                spent,
-                remaining
-            );
-        }
-    }
-
-    Ok(())
-}
-
-/// Withdraw SOL with spending limits validation
-pub fn withdraw_sol_with_limits(ctx: Context<WithdrawSolWithLimits>, amount: u64) -> Result<()> {
-    require!(amount > 0, ErrorCode::InvalidAmount);
-
-    let savings_account = &mut ctx.accounts.savings_account;
-    let user = &ctx.accounts.user;
-    let clock = Clock::get()?;
-
-    // Check if user has sufficient balance
-    require!(
-        savings_account.sol_balance >= amount,
-        ErrorCode::InsufficientBalance
-    );
-
-    // Calculate rent-exempt minimum
-    let rent = Rent::get()?;
-    let min_balance = rent.minimum_balance(8 + SavingsAccount::INIT_SPACE);
-    let account_balance = savings_account.to_account_info().lamports();
-
-    // Ensure we don't withdraw below rent-exempt minimum
-    require!(
-        account_balance.saturating_sub(amount) >= min_balance,
-        ErrorCode::InsufficientBalance
-    );
-
-    // Validate spending limits
-    let savings_account = &mut ctx.accounts.savings_account;
-
-    // Check if setup is committed (required for withdrawals)
-    require!(
-        savings_account.has_committed_setup,
-        ErrorCode::SetupNotCommitted
-    );
-
-    // Check spending limits
-    savings_account.check_spending_limits(amount, clock.unix_timestamp)?;
-
-    // Transfer SOL from savings account to user
-    **savings_account.to_account_info().try_borrow_mut_lamports()? -= amount;
-    **user.to_account_info().try_borrow_mut_lamports()? += amount;
-
-    // Update SOL balance
-    savings_account.sol_balance = savings_account
-        .sol_balance
-        .checked_sub(amount)
-        .ok_or(crate::error::ErrorCode::ArithmeticOverflow)?;
-
-    // Update spending tracking
-    savings_account.update_spending(amount, clock.unix_timestamp)?;
-    savings_account.updated_at = clock.unix_timestamp;
-
-    savings_account.updated_at = clock.unix_timestamp;
-
-    msg!(
-        "Withdrew {} lamports from savings account with spending limits validation. Remaining balance: {}",
-        amount,
-        savings_account.sol_balance
-    );
-
-    Ok(())
-}
-
-/// Withdraw SPL tokens with spending limits validation
-pub fn withdraw_spl_with_limits(ctx: Context<WithdrawSplWithLimits>, amount: u64) -> Result<()> {
-    require!(amount > 0, ErrorCode::InvalidAmount);
-
-    let savings_account = &mut ctx.accounts.savings_account;
-    let mint = &ctx.accounts.mint;
-    let clock = Clock::get()?;
-
-    // Check if user has sufficient token balance
-    let current_balance = savings_account.get_token_balance(mint.key());
-    require!(current_balance >= amount, ErrorCode::InsufficientBalance);
-
-    // Validate spending limits
-    let savings_account = &mut ctx.accounts.savings_account;
-
-    // Check if setup is committed (required for withdrawals)
-    require!(
-        savings_account.has_committed_setup,
-        ErrorCode::SetupNotCommitted
-    );
-
-    // Check spending limits (for SPL tokens, we use the token amount directly)
-    savings_account.check_spending_limits(amount, clock.unix_timestamp)?;
-
-    // Create seeds for signing
-    let user_key = savings_account.owner;
-    let seeds = &[b"savings", user_key.as_ref(), &[savings_account.bump]];
-    let signer = &[&seeds[..]];
-
-    // Transfer SPL tokens from savings account to user
-    let cpi_accounts = Transfer {
-        from: ctx.accounts.savings_token_account.to_account_info(),
-        to: ctx.accounts.user_token_account.to_account_info(),
-        authority: savings_account.to_account_info(),
-    };
-    let cpi_program = ctx.accounts.token_program.to_account_info();
-    let cpi_ctx = CpiContext::new_with_signer(cpi_program, cpi_accounts, signer);
-    token::transfer(cpi_ctx, amount)?;
-
-    // Update token balance in savings account
-    for token_balance in &mut savings_account.spl_balances {
-        if token_balance.mint == mint.key() {
-            token_balance.amount = token_balance
-                .amount
-                .checked_sub(amount)
-                .ok_or(crate::error::ErrorCode::ArithmeticOverflow)?;
-            break;
-        }
-    }
-
-    // Update spending tracking
-    savings_account.update_spending(amount, clock.unix_timestamp)?;
-    savings_account.updated_at = clock.unix_timestamp;
-
-    savings_account.updated_at = clock.unix_timestamp;
-
-    msg!(
-        "Withdrew {} tokens of mint {} from savings account with spending limits validation",
-        amount,
-        mint.key()
-    );
-
-    Ok(())
-}
-
-// ========== PROPOSAL MANAGEMENT INSTRUCTIONS ==========
-
-/// Propose a spending limit change
-#[derive(Accounts)]
-pub struct ProposeLimitChange<'info> {
-    #[account(
-        mut,
-        seeds = [b"savings", user.key().as_ref()],
-        bump = savings_account.bump,
-        constraint = savings_account.owner == user.key() @ ErrorCode::UnauthorizedAccess
-    )]
-    pub savings_account: Account<'info, SavingsAccount>,
-
-    #[account(mut)]
-    pub user: Signer<'info>,
-}
-
-/// Execute a pending proposal
-#[derive(Accounts)]
-pub struct ExecuteLimitProposal<'info> {
-    #[account(
-        mut,
-        seeds = [b"savings", user.key().as_ref()],
-        bump = savings_account.bump,
-        constraint = savings_account.owner == user.key() @ ErrorCode::UnauthorizedAccess
-    )]
-    pub savings_account: Account<'info, SavingsAccount>,
-
-    #[account(mut)]
-    pub user: Signer<'info>,
-}
-
-/// Cancel a pending proposal
-#[derive(Accounts)]
-pub struct CancelLimitProposal<'info> {
-    #[account(
-        mut,
-        seeds = [b"savings", user.key().as_ref()],
-        bump = savings_account.bump,
-        constraint = savings_account.owner == user.key() @ ErrorCode::UnauthorizedAccess
-    )]
-    pub savings_account: Account<'info, SavingsAccount>,
-
-    #[account(mut)]
-    pub user: Signer<'info>,
-}
-
-// ========== PROPOSAL MANAGEMENT INSTRUCTION IMPLEMENTATIONS ==========
-
-/// Propose a spending limit change instruction
-pub fn propose_limit_change(
-    ctx: Context<ProposeLimitChange>,
-    period_name: String,
-    new_limit: u64,
-) -> Result<()> {
-    require!(!period_name.is_empty() && period_name.len() <= SavingsAccount::MAX_PERIOD_NAME_LENGTH, ErrorCode::InvalidLimitParameters);
-    require!(new_limit > 0, ErrorCode::InvalidLimitParameters);
-
-    let savings_account = &mut ctx.accounts.savings_account;
-    let clock = Clock::get()?;
-
-    // Check if setup is committed (required for proposals)
-    require!(
-        savings_account.has_committed_setup,
-        ErrorCode::SetupNotCommitted
-    );
-
-    // Check if period exists
-    let mut period_exists = false;
-    for period in &savings_account.time_period_limits {
-        if period.name == period_name && period.active {
-            period_exists = true;
-            break;
-        }
-    }
-    require!(period_exists, ErrorCode::InvalidLimitParameters);
-
-    // Check if we have room for more proposals
-    if savings_account.pending_proposals.len() >= SavingsAccount::MAX_PROPOSALS {
-        return Err(ErrorCode::TokenLimitExceeded.into());
-    }
-
-    // Check if proposal already exists for this period
-    for proposal in &savings_account.pending_proposals {
-        if proposal.period_name == period_name && !proposal.executed {
-            return Err(ErrorCode::InvalidLimitParameters.into());
-        }
-    }
-
-    // Generate unique proposal ID
-    let mut hasher_input = Vec::new();
-    hasher_input.extend_from_slice(ctx.accounts.user.key().as_ref());
-    hasher_input.extend_from_slice(period_name.as_bytes());
-    hasher_input.extend_from_slice(&new_limit.to_le_bytes());
-    hasher_input.extend_from_slice(&clock.unix_timestamp.to_le_bytes());
-
-    let proposal_id = anchor_lang::solana_program::keccak::hash(&hasher_input).to_bytes();
-
-    // Create proposal with timelock (configurable via cargo features)
-    let timelock_duration = crate::constants::PROPOSAL_TIMELOCK;
-    let execute_after = clock.unix_timestamp + timelock_duration;
-
-    // Determine if this is an increase
-    let current_limit = savings_account.time_period_limits
-        .iter()
-        .find(|p| p.name == period_name && p.active)
-        .map(|p| p.limit)
-        .unwrap_or(0);
-    let is_increase = new_limit > current_limit;
-
-    let proposal = crate::state::PendingProposal {
-        proposal_id,
-        period_name: period_name.clone(),
-        new_limit,
-        execute_after,
-        executed: false,
-        is_increase,
-        created_at: clock.unix_timestamp,
-    };
-
-    savings_account.pending_proposals.push(proposal);
-    savings_account.updated_at = clock.unix_timestamp;
-
-    msg!(
-        "Proposed limit change for {}: {} -> {} (execute after: {})",
-        period_name,
-        current_limit,
-        new_limit,
-        execute_after
-    );
-
-    Ok(())
-}
-
-/// Execute a pending proposal instruction
-pub fn execute_limit_proposal(
-    ctx: Context<ExecuteLimitProposal>,
-    proposal_id: [u8; 32],
-) -> Result<()> {
-    let savings_account = &mut ctx.accounts.savings_account;
-    let clock = Clock::get()?;
-
-    // Find the proposal
-    let mut proposal_index = None;
-    for (index, proposal) in savings_account.pending_proposals.iter().enumerate() {
-        if proposal.proposal_id == proposal_id {
-            proposal_index = Some(index);
-            break;
-        }
-    }
-
-    let proposal_index = proposal_index.ok_or(ErrorCode::InvalidLimitParameters)?;
-
-    // Get proposal details before mutable borrow
-    let (period_name, new_limit, executed, execute_after) = {
-        let proposal = &savings_account.pending_proposals[proposal_index];
-        (
-            proposal.period_name.clone(),
-            proposal.new_limit,
-            proposal.executed,
-            proposal.execute_after,
-        )
-    };
-
-    // Check if already executed
-    require!(!executed, ErrorCode::InvalidLimitParameters);
-
-    // Check if timelock has passed
-    require!(
-        clock.unix_timestamp >= execute_after,
-        ErrorCode::InvalidLimitParameters
-    );
-
-    // Execute the proposal by updating the corresponding limit
-    for period in &mut savings_account.time_period_limits {
-        if period.name == period_name && period.active {
-            period.limit = new_limit;
-            break;
-        }
-    }
-
-    // Mark proposal as executed
-    savings_account.pending_proposals[proposal_index].executed = true;
-    savings_account.updated_at = clock.unix_timestamp;
-
-    msg!(
-        "Executed proposal for {}: new limit {}",
-        period_name,
-        new_limit
-    );
-
-    Ok(())
-}
-
-/// Cancel a pending proposal instruction
-pub fn cancel_limit_proposal(
-    ctx: Context<CancelLimitProposal>,
-    proposal_id: [u8; 32],
-) -> Result<()> {
-    let savings_account = &mut ctx.accounts.savings_account;
-    let clock = Clock::get()?;
-
-    // Find and remove the proposal
-    let mut proposal_index = None;
-    for (index, proposal) in savings_account.pending_proposals.iter().enumerate() {
-        if proposal.proposal_id == proposal_id {
-            proposal_index = Some(index);
-            break;
-        }
-    }
-
-    let proposal_index = proposal_index.ok_or(ErrorCode::InvalidLimitParameters)?;
-    let proposal = &savings_account.pending_proposals[proposal_index];
-
-    // Check if already executed
-    require!(!proposal.executed, ErrorCode::InvalidLimitParameters);
-
-    let period_name = proposal.period_name.clone();
-
-    // Remove the proposal
-    savings_account.pending_proposals.remove(proposal_index);
-    savings_account.updated_at = clock.unix_timestamp;
-
-    msg!("Cancelled proposal for {}", period_name);
-
-    Ok(())
-}
-
-// ========== WITHDRAWAL DESTINATION INSTRUCTIONS ==========
-
-/// Add a withdrawal destination
-#[derive(Accounts)]
-pub struct AddWithdrawalDestination<'info> {
-    #[account(mut, seeds = [b"savings", user.key().as_ref()], bump)]
-    pub savings_account: Account<'info, SavingsAccount>,
-
-    #[account(mut)]
-    pub user: Signer<'info>,
-}
-
-/// Remove a withdrawal destination
-#[derive(Accounts)]
-pub struct RemoveWithdrawalDestination<'info> {
-    #[account(mut, seeds = [b"savings", user.key().as_ref()], bump)]
-    pub savings_account: Account<'info, SavingsAccount>,
-
-    #[account(mut)]
-    pub user: Signer<'info>,
-}
-
-/// Request withdrawal destination addition (with timelock)
-#[derive(Accounts)]
-pub struct RequestWithdrawalDestinationAddition<'info> {
-    #[account(mut, seeds = [b"savings", user.key().as_ref()], bump)]
-    pub savings_account: Account<'info, SavingsAccount>,
-
-    #[account(mut)]
-    pub user: Signer<'info>,
-}
-
-/// Execute a pending withdrawal destination request
-#[derive(Accounts)]
-pub struct ExecuteWithdrawalDestinationRequest<'info> {
-    #[account(mut, seeds = [b"savings", user.key().as_ref()], bump)]
-    pub savings_account: Account<'info, SavingsAccount>,
-
-    #[account(mut)]
-    pub user: Signer<'info>,
-}
-
-/// Cancel a pending withdrawal destination request
-#[derive(Accounts)]
-pub struct CancelWithdrawalDestinationRequest<'info> {
-    #[account(mut, seeds = [b"savings", user.key().as_ref()], bump)]
-    pub savings_account: Account<'info, SavingsAccount>,
-
-    #[account(mut)]
-    pub user: Signer<'info>,
-}
-
-/// Withdraw to destination (extends existing withdraw functionality)
-#[derive(Accounts)]
-pub struct WithdrawToDestination<'info> {
-    #[account(mut, seeds = [b"savings", user.key().as_ref()], bump)]
-    pub savings_account: Account<'info, SavingsAccount>,
-
-    #[account(mut)]
-    pub user: Signer<'info>,
-
-    /// CHECK: This is the destination address that will receive the funds
-    #[account(mut)]
-    pub destination: UncheckedAccount<'info>,
-
-    pub system_program: Program<'info, System>,
-}
-
-/// Withdraw SPL tokens to destination
-#[derive(Accounts)]
-pub struct WithdrawSplToDestination<'info> {
-    #[account(
-        mut,
-        seeds = [b"savings", user.key().as_ref()],
-        bump = savings_account.bump,
-        constraint = savings_account.owner == user.key() @ ErrorCode::UnauthorizedAccess
-    )]
-    pub savings_account: Account<'info, SavingsAccount>,
-
-    #[account(mut)]
-    pub user: Signer<'info>,
-
-    /// Token mint
-    pub mint: Account<'info, Mint>,
-
-    /// User's token account for sending
-    #[account(mut)]
-    pub savings_token_account: Account<'info, TokenAccount>,
-
-    /// Destination token account for receiving
-    #[account(mut)]
-    pub destination_token_account: Account<'info, TokenAccount>,
-
-    pub token_program: Program<'info, Token>,
-}
-
-// ========== BYPASS REQUEST INSTRUCTIONS ==========
-
-/// Request withdrawal bypass for amounts exceeding spending limits
-#[derive(Accounts)]
-pub struct RequestWithdrawalBypass<'info> {
-    #[account(mut, seeds = [b"savings", user.key().as_ref()], bump)]
-    pub savings_account: Account<'info, SavingsAccount>,
-
-    #[account(mut)]
-    pub user: Signer<'info>,
-}
-
-/// Execute a withdrawal bypass after timelock period
-#[derive(Accounts)]
-pub struct ExecuteWithdrawalBypass<'info> {
-    #[account(mut, seeds = [b"savings", user.key().as_ref()], bump)]
-    pub savings_account: Account<'info, SavingsAccount>,
-
-    #[account(mut)]
-    pub user: Signer<'info>,
-
-    /// CHECK: This is the destination address that will receive the funds
-    #[account(mut)]
-    pub destination: UncheckedAccount<'info>,
-
-    pub system_program: Program<'info, System>,
-}
-
-/// Execute SPL token withdrawal bypass
-#[derive(Accounts)]
-pub struct ExecuteSplWithdrawalBypass<'info> {
-    #[account(mut, seeds = [b"savings", user.key().as_ref()], bump)]
-    pub savings_account: Account<'info, SavingsAccount>,
-
-    #[account(mut)]
-    pub user: Signer<'info>,
-
-    /// Token mint
-    pub mint: Account<'info, Mint>,
-
-    /// User's token account for sending
-    #[account(mut)]
-    pub savings_token_account: Account<'info, TokenAccount>,
-
-    /// Destination token account for receiving
-    #[account(mut)]
-    pub destination_token_account: Account<'info, TokenAccount>,
-
-    pub token_program: Program<'info, Token>,
-}
-
-/// Cancel a withdrawal bypass request
-#[derive(Accounts)]
-pub struct CancelWithdrawalBypass<'info> {
-    #[account(mut, seeds = [b"savings", user.key().as_ref()], bump)]
-    pub savings_account: Account<'info, SavingsAccount>,
-
-    #[account(mut)]
-    pub user: Signer<'info>,
-}
-
-// ========== INSTRUCTION IMPLEMENTATIONS ==========
-
-/// Add a withdrawal destination instruction
-pub fn add_withdrawal_destination(
-    ctx: Context<AddWithdrawalDestination>,
-    address: Pubkey,
-    title: String,
-) -> Result<()> {
-    let savings_account = &mut ctx.accounts.savings_account;
-    let clock = Clock::get()?;
-
-    savings_account.add_withdrawal_destination(address, title, clock.unix_timestamp)?;
-    savings_account.updated_at = clock.unix_timestamp;
-
-    msg!("Added withdrawal destination: {}", address);
-    Ok(())
-}
-
-/// Remove a withdrawal destination instruction
-pub fn remove_withdrawal_destination(
-    ctx: Context<RemoveWithdrawalDestination>,
-    address: Pubkey,
-) -> Result<()> {
-    let savings_account = &mut ctx.accounts.savings_account;
-    let clock = Clock::get()?;
-
-    savings_account.remove_withdrawal_destination(address)?;
-    savings_account.updated_at = clock.unix_timestamp;
-
-    msg!("Removed withdrawal destination: {}", address);
-    Ok(())
-}
-
-/// Request withdrawal destination addition instruction (with timelock)
-pub fn request_withdrawal_destination_addition(
-    ctx: Context<RequestWithdrawalDestinationAddition>,
-    address: Pubkey,
-    title: String,
-) -> Result<()> {
-    let savings_account = &mut ctx.accounts.savings_account;
-    let user = &ctx.accounts.user;
-    let clock = Clock::get()?;
-
-    // Generate unique request ID
-    let mut hasher_input = Vec::new();
-    hasher_input.extend_from_slice(user.key().as_ref());
-    hasher_input.extend_from_slice(address.as_ref());
-    hasher_input.extend_from_slice(title.as_bytes());
-    hasher_input.extend_from_slice(&clock.unix_timestamp.to_le_bytes());
-
-    let request_id = anchor_lang::solana_program::keccak::hash(&hasher_input).to_bytes();
-
-    savings_account.add_pending_withdrawal_destination_request(
-        request_id,
-        address,
-        title.clone(),
-        clock.unix_timestamp,
-    )?;
-    savings_account.updated_at = clock.unix_timestamp;
-
-    msg!(
-        "Requested withdrawal destination addition: {} with title '{}' (execute after: {})",
-        address,
-        title,
-        clock.unix_timestamp + 86400
-    );
-    Ok(())
-}
-
-/// Execute a pending withdrawal destination request instruction
-pub fn execute_withdrawal_destination_request(
-    ctx: Context<ExecuteWithdrawalDestinationRequest>,
-    request_id: [u8; 32],
-) -> Result<()> {
-    let savings_account = &mut ctx.accounts.savings_account;
-    let clock = Clock::get()?;
-
-    let executed_request = savings_account.execute_pending_withdrawal_destination_request(
-        request_id,
-        clock.unix_timestamp,
-    )?;
-    savings_account.updated_at = clock.unix_timestamp;
-
-    msg!(
-        "Executed withdrawal destination request: {} with title '{}'",
-        executed_request.address,
-        executed_request.title
-    );
-    Ok(())
-}
-
-/// Cancel a pending withdrawal destination request instruction
-pub fn cancel_withdrawal_destination_request(
-    ctx: Context<CancelWithdrawalDestinationRequest>,
-    request_id: [u8; 32],
-) -> Result<()> {
-    let savings_account = &mut ctx.accounts.savings_account;
-    let clock = Clock::get()?;
-
-    savings_account.cancel_pending_withdrawal_destination_request(request_id)?;
-    savings_account.updated_at = clock.unix_timestamp;
-
-    msg!("Cancelled withdrawal destination request");
-    Ok(())
-}
-
-/// Withdraw SOL to destination instruction
-pub fn withdraw_sol_to_destination(
-    ctx: Context<WithdrawToDestination>,
-    amount: u64,
-) -> Result<()> {
-    let savings_account = &mut ctx.accounts.savings_account;
-    let user = &mut ctx.accounts.user;
-    let destination = &mut ctx.accounts.destination;
-
-    // Verify destination is approved
-    require!(
-        savings_account.is_destination_approved(destination.key()),
-        ErrorCode::DestinationNotApproved
-    );
-
-    // Check balance
-    require!(savings_account.sol_balance >= amount, ErrorCode::InsufficientBalance);
-
-    // Transfer SOL from user to destination
-    let transfer_instruction = anchor_lang::system_program::Transfer {
-        from: user.to_account_info(),
-        to: destination.to_account_info(),
-    };
-
-    anchor_lang::system_program::transfer(
-        CpiContext::new(
-            ctx.accounts.system_program.to_account_info(),
-            transfer_instruction,
-        ),
-        amount,
-    )?;
-
-    // Update balance
-    savings_account.sol_balance = savings_account.sol_balance
-        .checked_sub(amount)
-        .ok_or(ErrorCode::ArithmeticOverflow)?;
-
-    let clock = Clock::get()?;
-    savings_account.updated_at = clock.unix_timestamp;
-
-    msg!("Withdrew {} SOL to {}", amount, destination.key());
-    Ok(())
-}
-
-/// Withdraw SPL tokens to destination instruction
-pub fn withdraw_spl_to_destination(
-    ctx: Context<WithdrawSplToDestination>,
-    amount: u64,
-) -> Result<()> {
-    let savings_account = &mut ctx.accounts.savings_account;
-    let mint = &ctx.accounts.mint;
-
-    // Verify destination token account is approved (check the owner)
-    require!(
-        savings_account.is_destination_approved(ctx.accounts.destination_token_account.owner),
-        ErrorCode::DestinationNotApproved
-    );
-
-    // Check balance
-    let current_balance = savings_account.get_token_balance(mint.key());
-    require!(current_balance >= amount, ErrorCode::InsufficientBalance);
-
-    // Create seeds for signing
-    let user_key = savings_account.owner;
-    let seeds = &[b"savings", user_key.as_ref(), &[savings_account.bump]];
-    let signer = &[&seeds[..]];
-
-    // Transfer SPL tokens from savings account to destination
-    let cpi_accounts = Transfer {
-        from: ctx.accounts.savings_token_account.to_account_info(),
-        to: ctx.accounts.destination_token_account.to_account_info(),
-        authority: savings_account.to_account_info(),
-    };
-    let cpi_program = ctx.accounts.token_program.to_account_info();
-    let cpi_ctx = CpiContext::new_with_signer(cpi_program, cpi_accounts, signer);
-    token::transfer(cpi_ctx, amount)?;
-
-    // Update balance in savings account
-    msg!("Before balance update - splBalances length: {}", savings_account.spl_balances.len());
-    let mut balance_updated = false;
-    for (i, token_balance) in savings_account.spl_balances.iter_mut().enumerate() {
-        msg!("Checking balance entry {}: mint={}, amount={}", i, token_balance.mint, token_balance.amount);
-        if token_balance.mint == mint.key() {
-            let old_amount = token_balance.amount;
-            token_balance.amount = token_balance.amount
-                .checked_sub(amount)
-                .ok_or(ErrorCode::ArithmeticOverflow)?;
-            msg!("Updated balance for mint {}: {} -> {}", mint.key(), old_amount, token_balance.amount);
-            balance_updated = true;
-            break;
-        }
-    }
-    if !balance_updated {
-        msg!("Warning: No balance entry found for mint {} to update", mint.key());
-    }
-
-    let clock = Clock::get()?;
-    savings_account.updated_at = clock.unix_timestamp;
-
-    msg!("Withdrew {} tokens to destination", amount);
-    Ok(())
-}
-
-/// Request withdrawal bypass instruction
-pub fn request_withdrawal_bypass(
-    ctx: Context<RequestWithdrawalBypass>,
-    amount: u64,
-    token_mint: Pubkey,
-    bypassing_period: String,
-    destination: Pubkey,
-) -> Result<()> {
-    let savings_account = &mut ctx.accounts.savings_account;
-    let clock = Clock::get()?;
-    let user_key = ctx.accounts.user.key();
-
-    // Generate unique request ID
-    let request_id = hash_request_id(user_key, amount, clock.unix_timestamp);
-
-    savings_account.add_bypass_request(
-        request_id,
-        amount,
-        token_mint,
-        bypassing_period.clone(),
-        destination,
-        clock.unix_timestamp,
-    )?;
-
-    savings_account.updated_at = clock.unix_timestamp;
-
-    msg!(
-        "Requested withdrawal bypass: {} tokens, period: {}",
-        amount,
-        bypassing_period
-    );
-    Ok(())
-}
-
-/// Execute withdrawal bypass (SOL) instruction
-pub fn execute_withdrawal_bypass(
-    ctx: Context<ExecuteWithdrawalBypass>,
-    request_id: [u8; 32],
-) -> Result<()> {
-    let savings_account = &mut ctx.accounts.savings_account;
-    let user = &mut ctx.accounts.user;
-    let destination = &mut ctx.accounts.destination;
-    let clock = Clock::get()?;
-
-    // Execute the bypass request
-    let request = savings_account.execute_bypass_request(request_id, clock.unix_timestamp)?;
-
-    // Verify this is a SOL withdrawal (token_mint should be system program)
-    require!(
-        request.token_mint == anchor_lang::system_program::ID,
-        ErrorCode::InvalidParameters
-    );
-
-    // Verify destination matches
-    require!(request.destination == destination.key(), ErrorCode::InvalidParameters);
-
-    // Check balance
-    require!(
-        savings_account.sol_balance >= request.amount,
-        ErrorCode::InsufficientBalance
-    );
-
-    // Transfer SOL
-    let transfer_instruction = anchor_lang::system_program::Transfer {
-        from: user.to_account_info(),
-        to: destination.to_account_info(),
-    };
-
-    anchor_lang::system_program::transfer(
-        CpiContext::new(
-            ctx.accounts.system_program.to_account_info(),
-            transfer_instruction,
-        ),
-        request.amount,
-    )?;
-
-    // Update balance
-    savings_account.sol_balance = savings_account.sol_balance
-        .checked_sub(request.amount)
-        .ok_or(ErrorCode::ArithmeticOverflow)?;
-
-    savings_account.updated_at = clock.unix_timestamp;
-
-    msg!(
-        "Executed bypass withdrawal: {} SOL to {}",
-        request.amount,
-        destination.key()
-    );
-    Ok(())
-}
-
-/// Execute SPL withdrawal bypass instruction
-pub fn execute_spl_withdrawal_bypass(
-    ctx: Context<ExecuteSplWithdrawalBypass>,
-    request_id: [u8; 32],
-) -> Result<()> {
-    let savings_account = &mut ctx.accounts.savings_account;
-    let mint = &ctx.accounts.mint;
-    let clock = Clock::get()?;
-
-    // Execute the bypass request
-    let request = savings_account.execute_bypass_request(request_id, clock.unix_timestamp)?;
-
-    // Verify this is for the correct token
-    require!(request.token_mint == mint.key(), ErrorCode::InvalidParameters);
-
-    // Verify destination matches
-    require!(
-        request.destination == ctx.accounts.destination_token_account.owner,
-        ErrorCode::InvalidParameters
-    );
-
-    // Check balance
-    let current_balance = savings_account.get_token_balance(mint.key());
-    require!(current_balance >= request.amount, ErrorCode::InsufficientBalance);
-
-    // Transfer SPL tokens
-    let transfer_instruction = Transfer {
-        from: ctx.accounts.savings_token_account.to_account_info(),
-        to: ctx.accounts.destination_token_account.to_account_info(),
-        authority: ctx.accounts.user.to_account_info(),
-    };
-
-    token::transfer(
-        CpiContext::new(
-            ctx.accounts.token_program.to_account_info(),
-            transfer_instruction,
-        ),
-        request.amount,
-    )?;
-
-    // Update balance
-    for token_balance in &mut savings_account.spl_balances {
-        if token_balance.mint == mint.key() {
-            token_balance.amount = token_balance.amount
-                .checked_sub(request.amount)
-                .ok_or(ErrorCode::ArithmeticOverflow)?;
-            break;
-        }
-    }
-
-    savings_account.updated_at = clock.unix_timestamp;
-
-    msg!("Executed SPL bypass withdrawal: {} tokens", request.amount);
-    Ok(())
-}
-
-/// Cancel withdrawal bypass instruction
-pub fn cancel_withdrawal_bypass(
-    ctx: Context<CancelWithdrawalBypass>,
-    request_id: [u8; 32],
-) -> Result<()> {
-    let savings_account = &mut ctx.accounts.savings_account;
-    let clock = Clock::get()?;
-
-    savings_account.cancel_bypass_request(request_id)?;
-    savings_account.updated_at = clock.unix_timestamp;
-
-    msg!("Cancelled withdrawal bypass request");
-    Ok(())
-}
-
-/// Helper function to generate a unique request ID
-fn hash_request_id(user: Pubkey, amount: u64, timestamp: i64) -> [u8; 32] {
-    use anchor_lang::solana_program::hash::{hash, Hash};
-
-    let mut data = Vec::new();
-    data.extend_from_slice(&user.to_bytes());
-    data.extend_from_slice(&amount.to_le_bytes());
-    data.extend_from_slice(&timestamp.to_le_bytes());
-
-    let hash_result: Hash = hash(&data);
-    hash_result.to_bytes()
-}
-
-// ========== DEPOSIT PROXY INSTRUCTIONS ==========
-
-/// Initialize a new deposit proxy for a user
-#[derive(Accounts)]
-pub struct InitializeProxy<'info> {
-    #[account(
-        init,
-        payer = user,
-        space = 8 + 32 + 32 + 1 + 8 + 8 + 8, // discriminator + owner + savings_program + bump + created_at + last_used + deposit_count
-        seeds = [b"deposit_proxy", user.key().as_ref()],
-        bump
-    )]
-    pub deposit_proxy: Account<'info, DepositProxy>,
-
-    #[account(mut)]
-    pub user: Signer<'info>,
-
-    /// The savings program this proxy will forward to
-    /// CHECK: We validate this is a valid program account
-    pub savings_program: UncheckedAccount<'info>,
-
-    pub system_program: Program<'info, System>,
-}
-
-/// Forward SOL deposit to savings program
-#[derive(Accounts)]
-pub struct ForwardSolDeposit<'info> {
-    #[account(
-        mut,
-        seeds = [b"deposit_proxy", deposit_proxy.owner.as_ref()],
-        bump = deposit_proxy.bump,
-    )]
-    pub deposit_proxy: Account<'info, DepositProxy>,
-
-    #[account(mut)]
-    pub depositor: Signer<'info>,
-
-    /// The proxy owner (beneficiary of the deposit)
-    /// CHECK: This is validated against the proxy owner field
-    #[account(constraint = proxy_owner.key() == deposit_proxy.owner @ ErrorCode::UnauthorizedAccess)]
-    pub proxy_owner: UncheckedAccount<'info>,
-
-    /// The savings program to forward to
-    /// CHECK: We validate this matches the proxy configuration
-    #[account(constraint = savings_program.key() == deposit_proxy.savings_program @ ErrorCode::InvalidSavingsProgram)]
-    pub savings_program: UncheckedAccount<'info>,
-
-    /// Savings account PDA in the target program
-    /// CHECK: This will be validated by the savings program
-    pub savings_account: UncheckedAccount<'info>,
-
-    pub system_program: Program<'info, System>,
-}
-
-/// Forward SPL token deposit to savings program
-#[derive(Accounts)]
-pub struct ForwardSplDeposit<'info> {
-    #[account(
-        mut,
-        seeds = [b"deposit_proxy", deposit_proxy.owner.as_ref()],
-        bump = deposit_proxy.bump,
-    )]
-    pub deposit_proxy: Account<'info, DepositProxy>,
-
-    #[account(mut)]
-    pub depositor: Signer<'info>,
-
-    /// The proxy owner (beneficiary of the deposit)
-    /// CHECK: This is validated against the proxy owner field
-    #[account(constraint = proxy_owner.key() == deposit_proxy.owner @ ErrorCode::UnauthorizedAccess)]
-    pub proxy_owner: UncheckedAccount<'info>,
-
-    /// Depositor's token account
-    #[account(
-        mut,
-        constraint = depositor_token_account.owner == depositor.key(),
-        constraint = depositor_token_account.mint == mint.key()
-    )]
-    pub depositor_token_account: Account<'info, TokenAccount>,
-
-    /// Proxy's token account (intermediate holder)
-    #[account(
-        init_if_needed,
-        payer = depositor,
-        associated_token::mint = mint,
-        associated_token::authority = deposit_proxy,
-    )]
-    pub proxy_token_account: Account<'info, TokenAccount>,
-
-    /// Target savings account for the proxy owner
-    /// CHECK: This will be validated by the savings program
-    pub savings_account: UncheckedAccount<'info>,
-
-    /// Owner's token account in savings program
-    /// CHECK: This will be validated by the savings program
-    pub savings_token_account: UncheckedAccount<'info>,
-
-    /// The mint of the SPL token being deposited
-    pub mint: Account<'info, Mint>,
-
-    /// The savings program to forward to
-    /// CHECK: We validate this matches the proxy configuration
-    #[account(constraint = savings_program.key() == deposit_proxy.savings_program @ ErrorCode::InvalidSavingsProgram)]
-    pub savings_program: UncheckedAccount<'info>,
-
-    pub token_program: Program<'info, Token>,
-    pub associated_token_program: Program<'info, AssociatedToken>,
-    pub system_program: Program<'info, System>,
-}
-
-/// Get proxy address context
-#[derive(Accounts)]
-pub struct GetProxyAddress<'info> {
-    #[account(
-        seeds = [b"deposit_proxy", user.key().as_ref()],
-        bump = deposit_proxy.bump
-    )]
-    pub deposit_proxy: Account<'info, DepositProxy>,
-
-    pub user: Signer<'info>,
-}
-
-// ========== DEPOSIT PROXY INSTRUCTION IMPLEMENTATIONS ==========
-
-/// Initialize deposit proxy instruction
-pub fn initialize_proxy(ctx: Context<InitializeProxy>) -> Result<()> {
-    let deposit_proxy = &mut ctx.accounts.deposit_proxy;
-    let user = &ctx.accounts.user;
-    let savings_program = &ctx.accounts.savings_program;
-    let clock = Clock::get()?;
-
-    // Validate that savings_program is actually a program
-    require!(savings_program.executable, ErrorCode::InvalidSavingsProgram);
-
-    deposit_proxy.owner = user.key();
-    deposit_proxy.savings_program = savings_program.key();
-    deposit_proxy.bump = ctx.bumps.deposit_proxy;
-    deposit_proxy.created_at = clock.unix_timestamp;
-    deposit_proxy.last_used = clock.unix_timestamp;
-    deposit_proxy.deposit_count = 0;
-
-    msg!("Deposit proxy initialized for user: {} -> program: {}",
-         user.key(), savings_program.key());
-
-    Ok(())
-}
-
-/// Forward SOL deposit to savings program - simplified implementation
-pub fn forward_sol_deposit(ctx: Context<ForwardSolDeposit>, amount: u64) -> Result<()> {
-    require!(amount > 0, ErrorCode::InvalidAmount);
-
-    let deposit_proxy = &mut ctx.accounts.deposit_proxy;
-    let depositor = &ctx.accounts.depositor;
-    let proxy_owner = &ctx.accounts.proxy_owner;
-
-    // Record deposit in proxy statistics
-    deposit_proxy.record_deposit()?;
-
-    // TODO: For MVP, we're simplifying this to just record the deposit
-    // The actual fund forwarding logic will be implemented after we verify
-    // the basic program compilation and deployment cost savings
-
-    msg!("Proxy deposit recorded: {} lamports from {} for {}",
-         amount, depositor.key(), proxy_owner.key());
-
-    Ok(())
-}
-
-/// Forward SPL token deposit to savings program - simplified implementation
-pub fn forward_spl_deposit(ctx: Context<ForwardSplDeposit>, amount: u64) -> Result<()> {
-    require!(amount > 0, ErrorCode::InvalidAmount);
-
-    let deposit_proxy = &mut ctx.accounts.deposit_proxy;
-    let depositor = &ctx.accounts.depositor;
-    let proxy_owner = &ctx.accounts.proxy_owner;
-    let mint = &ctx.accounts.mint;
-
-    // Record deposit in proxy statistics
-    deposit_proxy.record_deposit()?;
-
-    // TODO: For MVP, we're simplifying this to just record the deposit
-    // The actual token forwarding logic will be implemented after we verify
-    // the basic program compilation and deployment cost savings
-
-    msg!("Proxy SPL deposit recorded: {} tokens of mint {} from {} for {}",
-         amount, mint.key(), depositor.key(), proxy_owner.key());
-
-    Ok(())
-}
-
-// ========== PENALTY WITHDRAWAL INSTRUCTIONS ==========
-
-/// Withdraw SOL with penalty (instant bypass, penalty goes to treasury)
-#[derive(Accounts)]
-pub struct WithdrawSolWithPenalty<'info> {
-    #[account(
-        mut,
-        seeds = [b"savings", user.key().as_ref()],
-        bump = savings_account.bump,
-        constraint = savings_account.owner == user.key() @ ErrorCode::UnauthorizedAccess
-    )]
-    pub savings_account: Account<'info, SavingsAccount>,
-
-    #[account(mut)]
-    pub user: Signer<'info>,
-
-    #[account(
-        seeds = [b"program_config"],
-        bump = program_config.bump
-    )]
-    pub program_config: Account<'info, ProgramConfig>,
-
-    /// CHECK: Treasury address from config
-    #[account(
-        mut,
-        constraint = treasury_address.key() == program_config.treasury_address @ ErrorCode::InvalidTreasuryAddress
-    )]
-    pub treasury_address: UncheckedAccount<'info>,
-
-    pub system_program: Program<'info, System>,
-}
-
-/// Withdraw SPL tokens with penalty (instant bypass, penalty goes to treasury)
-#[derive(Accounts)]
-pub struct WithdrawSplWithPenalty<'info> {
-    #[account(
-        mut,
-        seeds = [b"savings", user.key().as_ref()],
-        bump = savings_account.bump,
-        constraint = savings_account.owner == user.key() @ ErrorCode::UnauthorizedAccess
-    )]
-    pub savings_account: Account<'info, SavingsAccount>,
-
-    #[account(mut)]
-    pub user: Signer<'info>,
-
-    #[account(
-        seeds = [b"program_config"],
-        bump = program_config.bump
-    )]
-    pub program_config: Account<'info, ProgramConfig>,
-
-    #[account(
-        mut,
-        constraint = user_token_account.owner == user.key(),
-        constraint = user_token_account.mint == mint.key()
-    )]
-    pub user_token_account: Account<'info, TokenAccount>,
-
-    #[account(
-        mut,
-        associated_token::mint = mint,
-        associated_token::authority = savings_account,
-    )]
-    pub savings_token_account: Account<'info, TokenAccount>,
-
-    /// Treasury's token account for receiving the penalty
-    #[account(
-        mut,
-        constraint = treasury_token_account.mint == mint.key()
-    )]
-    pub treasury_token_account: Account<'info, TokenAccount>,
-
-    pub mint: Account<'info, Mint>,
-
-    pub token_program: Program<'info, Token>,
-}
-
-/// Withdraw SOL with penalty - sends penalty to treasury, rest to user
-pub fn withdraw_sol_with_penalty(ctx: Context<WithdrawSolWithPenalty>, amount: u64) -> Result<()> {
-    require!(amount > 0, ErrorCode::InvalidAmount);
-
-    let savings_account = &mut ctx.accounts.savings_account;
-    let user = &ctx.accounts.user;
-    let program_config = &ctx.accounts.program_config;
-    let clock = Clock::get()?;
-
-    require!(savings_account.has_committed_setup, ErrorCode::SetupNotCommitted);
-    require!(savings_account.sol_balance >= amount, ErrorCode::InsufficientBalance);
-
-    let rent = Rent::get()?;
-    let min_balance = rent.minimum_balance(8 + SavingsAccount::INIT_SPACE);
-    let account_balance = savings_account.to_account_info().lamports();
-    require!(
-        account_balance.saturating_sub(amount) >= min_balance,
-        ErrorCode::InsufficientBalance
-    );
-
-    let penalty_rate = program_config.penalty_rate_bps as u64;
-    let penalty_amount = amount
-        .checked_mul(penalty_rate)
-        .ok_or(ErrorCode::ArithmeticOverflow)?
-        / 10000;
-    let user_amount = amount
-        .checked_sub(penalty_amount)
-        .ok_or(ErrorCode::ArithmeticOverflow)?;
-
-    // Transfer user portion
-    **savings_account.to_account_info().try_borrow_mut_lamports()? -= amount;
-    **user.to_account_info().try_borrow_mut_lamports()? += user_amount;
-
-    // Transfer penalty to treasury
-    **ctx.accounts.treasury_address.to_account_info().try_borrow_mut_lamports()? += penalty_amount;
-
-    savings_account.sol_balance = savings_account
-        .sol_balance
-        .checked_sub(amount)
-        .ok_or(ErrorCode::ArithmeticOverflow)?;
-
-    savings_account.updated_at = clock.unix_timestamp;
-
-    msg!(
-        "Penalty withdrawal: {} lamports total, {} to user, {} penalty to treasury ({}bps)",
-        amount, user_amount, penalty_amount, penalty_rate
-    );
-
-    Ok(())
-}
-
-/// Withdraw SPL tokens with penalty - sends penalty to treasury, rest to user
-pub fn withdraw_spl_with_penalty(ctx: Context<WithdrawSplWithPenalty>, amount: u64) -> Result<()> {
-    require!(amount > 0, ErrorCode::InvalidAmount);
-
-    let savings_account = &mut ctx.accounts.savings_account;
-    let mint = &ctx.accounts.mint;
-    let program_config = &ctx.accounts.program_config;
-    let clock = Clock::get()?;
-
-    require!(savings_account.has_committed_setup, ErrorCode::SetupNotCommitted);
-
-    let current_balance = savings_account.get_token_balance(mint.key());
-    require!(current_balance >= amount, ErrorCode::InsufficientBalance);
-
-    let penalty_rate = program_config.penalty_rate_bps as u64;
-    let penalty_amount = amount
-        .checked_mul(penalty_rate)
-        .ok_or(ErrorCode::ArithmeticOverflow)?
-        / 10000;
-    let user_amount = amount
-        .checked_sub(penalty_amount)
-        .ok_or(ErrorCode::ArithmeticOverflow)?;
-
-    let user_key = savings_account.owner;
-    let seeds = &[b"savings", user_key.as_ref(), &[savings_account.bump]];
-    let signer = &[&seeds[..]];
-
-    // Transfer user portion
-    let cpi_accounts_user = Transfer {
-        from: ctx.accounts.savings_token_account.to_account_info(),
-        to: ctx.accounts.user_token_account.to_account_info(),
-        authority: savings_account.to_account_info(),
-    };
-    let cpi_program = ctx.accounts.token_program.to_account_info();
-    token::transfer(
-        CpiContext::new_with_signer(cpi_program.clone(), cpi_accounts_user, signer),
-        user_amount,
-    )?;
-
-    // Transfer penalty to treasury
-    let cpi_accounts_treasury = Transfer {
-        from: ctx.accounts.savings_token_account.to_account_info(),
-        to: ctx.accounts.treasury_token_account.to_account_info(),
-        authority: savings_account.to_account_info(),
-    };
-    token::transfer(
-        CpiContext::new_with_signer(cpi_program, cpi_accounts_treasury, signer),
-        penalty_amount,
-    )?;
-
-    // Update token balance
-    for token_balance in &mut savings_account.spl_balances {
-        if token_balance.mint == mint.key() {
-            token_balance.amount = token_balance
-                .amount
-                .checked_sub(amount)
-                .ok_or(ErrorCode::ArithmeticOverflow)?;
-            break;
-        }
-    }
-
-    savings_account.updated_at = clock.unix_timestamp;
-
-    msg!(
-        "Penalty withdrawal: {} tokens of mint {}, {} to user, {} penalty to treasury ({}bps)",
-        amount, mint.key(), user_amount, penalty_amount, penalty_rate
-    );
-
-    Ok(())
-}
-
-// ========== MONETIZATION ACCOUNT STRUCTS ==========
-
-/// Initialize program configuration (admin only)
 #[derive(Accounts)]
 pub struct InitializeProgramConfig<'info> {
     #[account(
         init,
         payer = admin,
-        space = 8 + ProgramConfig::INIT_SPACE,
+        space = ProgramConfig::INIT_SPACE,
         seeds = [b"program_config"],
-        bump
+        bump,
     )]
     pub program_config: Account<'info, ProgramConfig>,
-
     #[account(mut)]
     pub admin: Signer<'info>,
-
-    /// CHECK: Treasury address can be any valid Pubkey
-    pub treasury_address: UncheckedAccount<'info>,
-
     pub system_program: Program<'info, System>,
 }
 
-/// Update program configuration (admin only)
 #[derive(Accounts)]
 pub struct UpdateProgramConfig<'info> {
     #[account(
         mut,
         seeds = [b"program_config"],
         bump = program_config.bump,
-        constraint = program_config.admin == admin.key() @ ErrorCode::Unauthorized
+        has_one = admin @ ErrorCode::Unauthorized,
     )]
     pub program_config: Account<'info, ProgramConfig>,
-
-    #[account(mut)]
     pub admin: Signer<'info>,
 }
 
-/// Activate permanent address with payment
 #[derive(Accounts)]
-pub struct ActivatePermanentAddressWithPayment<'info> {
+#[instruction(name: String, vault_nonce: u64)]
+pub struct CreateVault<'info> {
     #[account(
-        mut,
-        seeds = [b"savings", user.key().as_ref()],
-        bump = savings_account.bump,
-        constraint = !savings_account.permanent_address_activated @ ErrorCode::AlreadyActivated
+        init,
+        payer = creator,
+        space = Vault::INIT_SPACE,
+        seeds = [b"vault", creator.key().as_ref(), &vault_nonce.to_le_bytes()],
+        bump,
     )]
-    pub savings_account: Account<'info, SavingsAccount>,
-
+    pub vault: Account<'info, Vault>,
     #[account(
-        seeds = [b"program_config"],
-        bump = program_config.bump
+        init,
+        payer = creator,
+        space = VaultMember::INIT_SPACE,
+        seeds = [b"vault_member", vault.key().as_ref(), creator.key().as_ref()],
+        bump,
     )]
-    pub program_config: Account<'info, ProgramConfig>,
-
+    pub vault_member: Account<'info, VaultMember>,
     #[account(mut)]
-    pub user: Signer<'info>,
-
-    /// CHECK: Treasury address from config - must match program_config.treasury_address
-    #[account(
-        mut,
-        constraint = treasury_address.key() == program_config.treasury_address @ ErrorCode::InvalidTreasuryAddress
-    )]
-    pub treasury_address: UncheckedAccount<'info>,
-
+    pub creator: Signer<'info>,
     pub system_program: Program<'info, System>,
 }
 
-// ========== MONETIZATION INSTRUCTION IMPLEMENTATIONS ==========
+#[derive(Accounts)]
+#[instruction(name: String, vault_nonce: u64)]
+pub struct CreateSplVault<'info> {
+    #[account(
+        init,
+        payer = creator,
+        space = Vault::INIT_SPACE,
+        seeds = [b"vault", creator.key().as_ref(), &vault_nonce.to_le_bytes()],
+        bump,
+    )]
+    pub vault: Account<'info, Vault>,
+    #[account(
+        init,
+        payer = creator,
+        space = VaultMember::INIT_SPACE,
+        seeds = [b"vault_member", vault.key().as_ref(), creator.key().as_ref()],
+        bump,
+    )]
+    pub vault_member: Account<'info, VaultMember>,
+    #[account(
+        init,
+        payer = creator,
+        associated_token::mint = token_mint,
+        associated_token::authority = vault,
+    )]
+    pub vault_token_account: Account<'info, TokenAccount>,
+    pub token_mint: Account<'info, Mint>,
+    #[account(mut)]
+    pub creator: Signer<'info>,
+    pub system_program: Program<'info, System>,
+    pub token_program: Program<'info, Token>,
+    pub associated_token_program: Program<'info, AssociatedToken>,
+}
 
-/// Initialize program configuration
+#[derive(Accounts)]
+pub struct JoinVault<'info> {
+    #[account(
+        mut,
+        constraint = vault.vault_type == VaultType::Community @ ErrorCode::PersonalVaultOnly,
+        constraint = vault.is_active @ ErrorCode::VaultNotActive,
+    )]
+    pub vault: Account<'info, Vault>,
+    #[account(
+        init,
+        payer = member,
+        space = VaultMember::INIT_SPACE,
+        seeds = [b"vault_member", vault.key().as_ref(), member.key().as_ref()],
+        bump,
+    )]
+    pub vault_member: Account<'info, VaultMember>,
+    #[account(mut)]
+    pub member: Signer<'info>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct DepositSol<'info> {
+    #[account(
+        mut,
+        constraint = vault.is_sol_vault() @ ErrorCode::ExpectedSolVault,
+        constraint = vault.is_active @ ErrorCode::VaultNotActive,
+    )]
+    pub vault: Account<'info, Vault>,
+    #[account(
+        mut,
+        seeds = [b"vault_member", vault.key().as_ref(), member.key().as_ref()],
+        bump = vault_member.bump,
+        has_one = vault,
+        has_one = member,
+    )]
+    pub vault_member: Account<'info, VaultMember>,
+    #[account(mut)]
+    pub member: Signer<'info>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct DepositSpl<'info> {
+    #[account(
+        mut,
+        constraint = !vault.is_sol_vault() @ ErrorCode::ExpectedSplVault,
+        constraint = vault.is_active @ ErrorCode::VaultNotActive,
+        constraint = vault.token_mint == token_mint.key() @ ErrorCode::TokenMintMismatch,
+    )]
+    pub vault: Account<'info, Vault>,
+    #[account(
+        mut,
+        seeds = [b"vault_member", vault.key().as_ref(), member.key().as_ref()],
+        bump = vault_member.bump,
+        has_one = vault,
+        has_one = member,
+    )]
+    pub vault_member: Account<'info, VaultMember>,
+    #[account(
+        mut,
+        associated_token::mint = token_mint,
+        associated_token::authority = vault,
+    )]
+    pub vault_token_account: Account<'info, TokenAccount>,
+    #[account(
+        mut,
+        associated_token::mint = token_mint,
+        associated_token::authority = member,
+    )]
+    pub member_token_account: Account<'info, TokenAccount>,
+    pub token_mint: Account<'info, Mint>,
+    #[account(mut)]
+    pub member: Signer<'info>,
+    pub token_program: Program<'info, Token>,
+}
+
+#[derive(Accounts)]
+pub struct WithdrawSol<'info> {
+    #[account(
+        mut,
+        constraint = vault.is_sol_vault() @ ErrorCode::ExpectedSolVault,
+        constraint = vault.is_active @ ErrorCode::VaultNotActive,
+    )]
+    pub vault: Account<'info, Vault>,
+    #[account(
+        mut,
+        seeds = [b"vault_member", vault.key().as_ref(), member.key().as_ref()],
+        bump = vault_member.bump,
+        has_one = vault,
+        has_one = member,
+    )]
+    pub vault_member: Account<'info, VaultMember>,
+    #[account(mut)]
+    pub member: Signer<'info>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct WithdrawSpl<'info> {
+    #[account(
+        mut,
+        constraint = !vault.is_sol_vault() @ ErrorCode::ExpectedSplVault,
+        constraint = vault.is_active @ ErrorCode::VaultNotActive,
+        constraint = vault.token_mint == token_mint.key() @ ErrorCode::TokenMintMismatch,
+    )]
+    pub vault: Account<'info, Vault>,
+    #[account(
+        mut,
+        seeds = [b"vault_member", vault.key().as_ref(), member.key().as_ref()],
+        bump = vault_member.bump,
+        has_one = vault,
+        has_one = member,
+    )]
+    pub vault_member: Account<'info, VaultMember>,
+    #[account(
+        mut,
+        associated_token::mint = token_mint,
+        associated_token::authority = vault,
+    )]
+    pub vault_token_account: Account<'info, TokenAccount>,
+    #[account(
+        mut,
+        associated_token::mint = token_mint,
+        associated_token::authority = member,
+    )]
+    pub member_token_account: Account<'info, TokenAccount>,
+    pub token_mint: Account<'info, Mint>,
+    #[account(mut)]
+    pub member: Signer<'info>,
+    pub token_program: Program<'info, Token>,
+}
+
+#[derive(Accounts)]
+pub struct WithdrawSolWithPenalty<'info> {
+    #[account(
+        mut,
+        constraint = vault.is_sol_vault() @ ErrorCode::ExpectedSolVault,
+        constraint = vault.is_active @ ErrorCode::VaultNotActive,
+    )]
+    pub vault: Account<'info, Vault>,
+    #[account(
+        mut,
+        seeds = [b"vault_member", vault.key().as_ref(), member.key().as_ref()],
+        bump = vault_member.bump,
+        has_one = vault,
+        has_one = member,
+    )]
+    pub vault_member: Account<'info, VaultMember>,
+    #[account(
+        seeds = [b"program_config"],
+        bump = program_config.bump,
+    )]
+    pub program_config: Account<'info, ProgramConfig>,
+    /// CHECK: Treasury receives penalty for personal vaults
+    #[account(
+        mut,
+        constraint = treasury.key() == program_config.treasury_address @ ErrorCode::Unauthorized,
+    )]
+    pub treasury: AccountInfo<'info>,
+    #[account(mut)]
+    pub member: Signer<'info>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct WithdrawSplWithPenalty<'info> {
+    #[account(
+        mut,
+        constraint = !vault.is_sol_vault() @ ErrorCode::ExpectedSplVault,
+        constraint = vault.is_active @ ErrorCode::VaultNotActive,
+        constraint = vault.token_mint == token_mint.key() @ ErrorCode::TokenMintMismatch,
+    )]
+    pub vault: Account<'info, Vault>,
+    #[account(
+        mut,
+        seeds = [b"vault_member", vault.key().as_ref(), member.key().as_ref()],
+        bump = vault_member.bump,
+        has_one = vault,
+        has_one = member,
+    )]
+    pub vault_member: Account<'info, VaultMember>,
+    #[account(
+        seeds = [b"program_config"],
+        bump = program_config.bump,
+    )]
+    pub program_config: Account<'info, ProgramConfig>,
+    #[account(
+        mut,
+        associated_token::mint = token_mint,
+        associated_token::authority = vault,
+    )]
+    pub vault_token_account: Account<'info, TokenAccount>,
+    #[account(
+        mut,
+        associated_token::mint = token_mint,
+        associated_token::authority = member,
+    )]
+    pub member_token_account: Account<'info, TokenAccount>,
+    /// Treasury ATA for SPL penalty on personal vaults
+    #[account(
+        mut,
+        associated_token::mint = token_mint,
+        associated_token::authority = treasury,
+    )]
+    pub treasury_token_account: Account<'info, TokenAccount>,
+    /// CHECK: Treasury account
+    #[account(
+        constraint = treasury.key() == program_config.treasury_address @ ErrorCode::Unauthorized,
+    )]
+    pub treasury: AccountInfo<'info>,
+    pub token_mint: Account<'info, Mint>,
+    #[account(mut)]
+    pub member: Signer<'info>,
+    pub token_program: Program<'info, Token>,
+}
+
+#[derive(Accounts)]
+pub struct ClaimPenaltyRewards<'info> {
+    #[account(
+        mut,
+        constraint = vault.is_sol_vault() @ ErrorCode::ExpectedSolVault,
+        constraint = vault.is_active @ ErrorCode::VaultNotActive,
+    )]
+    pub vault: Account<'info, Vault>,
+    #[account(
+        mut,
+        seeds = [b"vault_member", vault.key().as_ref(), member.key().as_ref()],
+        bump = vault_member.bump,
+        has_one = vault,
+        has_one = member,
+    )]
+    pub vault_member: Account<'info, VaultMember>,
+    #[account(mut)]
+    pub member: Signer<'info>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct ClaimSplPenaltyRewards<'info> {
+    #[account(
+        mut,
+        constraint = !vault.is_sol_vault() @ ErrorCode::ExpectedSplVault,
+        constraint = vault.is_active @ ErrorCode::VaultNotActive,
+        constraint = vault.token_mint == token_mint.key() @ ErrorCode::TokenMintMismatch,
+    )]
+    pub vault: Account<'info, Vault>,
+    #[account(
+        mut,
+        seeds = [b"vault_member", vault.key().as_ref(), member.key().as_ref()],
+        bump = vault_member.bump,
+        has_one = vault,
+        has_one = member,
+    )]
+    pub vault_member: Account<'info, VaultMember>,
+    #[account(
+        mut,
+        associated_token::mint = token_mint,
+        associated_token::authority = vault,
+    )]
+    pub vault_token_account: Account<'info, TokenAccount>,
+    #[account(
+        mut,
+        associated_token::mint = token_mint,
+        associated_token::authority = member,
+    )]
+    pub member_token_account: Account<'info, TokenAccount>,
+    pub token_mint: Account<'info, Mint>,
+    #[account(mut)]
+    pub member: Signer<'info>,
+    pub token_program: Program<'info, Token>,
+}
+
+#[derive(Accounts)]
+pub struct LeaveVault<'info> {
+    #[account(mut)]
+    pub vault: Account<'info, Vault>,
+    #[account(
+        mut,
+        seeds = [b"vault_member", vault.key().as_ref(), member.key().as_ref()],
+        bump = vault_member.bump,
+        has_one = vault,
+        has_one = member,
+        close = member,
+    )]
+    pub vault_member: Account<'info, VaultMember>,
+    #[account(mut)]
+    pub member: Signer<'info>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct UpdateVaultRules<'info> {
+    #[account(
+        mut,
+        has_one = creator @ ErrorCode::Unauthorized,
+        constraint = vault.vault_type == VaultType::Personal @ ErrorCode::CommunityVaultImmutable,
+        constraint = vault.is_active @ ErrorCode::VaultNotActive,
+    )]
+    pub vault: Account<'info, Vault>,
+    pub creator: Signer<'info>,
+}
+
+// ============================================================
+// Withdrawal Destination Contexts
+// ============================================================
+
+/// Add a withdrawal destination directly (before setup commit / personal vault pre-lock).
+#[derive(Accounts)]
+pub struct AddWithdrawalDestination<'info> {
+    #[account(
+        constraint = vault.is_active @ ErrorCode::VaultNotActive,
+    )]
+    pub vault: Account<'info, Vault>,
+    #[account(
+        seeds = [b"vault_member", vault.key().as_ref(), member.key().as_ref()],
+        bump = vault_member.bump,
+        has_one = vault,
+        has_one = member,
+    )]
+    pub vault_member: Account<'info, VaultMember>,
+    #[account(
+        init,
+        payer = member,
+        space = WithdrawalDestination::INIT_SPACE,
+        seeds = [b"withdrawal_dest", vault.key().as_ref(), member.key().as_ref(), destination.key().as_ref()],
+        bump,
+    )]
+    pub withdrawal_dest: Account<'info, WithdrawalDestination>,
+    /// CHECK: The destination address being whitelisted
+    pub destination: AccountInfo<'info>,
+    #[account(mut)]
+    pub member: Signer<'info>,
+    pub system_program: Program<'info, System>,
+}
+
+/// Request a withdrawal destination with timelock (post-setup).
+#[derive(Accounts)]
+pub struct RequestWithdrawalDestination<'info> {
+    #[account(
+        constraint = vault.is_active @ ErrorCode::VaultNotActive,
+    )]
+    pub vault: Account<'info, Vault>,
+    #[account(
+        seeds = [b"vault_member", vault.key().as_ref(), member.key().as_ref()],
+        bump = vault_member.bump,
+        has_one = vault,
+        has_one = member,
+    )]
+    pub vault_member: Account<'info, VaultMember>,
+    #[account(
+        init,
+        payer = member,
+        space = PendingDestinationRequest::INIT_SPACE,
+        seeds = [b"pending_dest", vault.key().as_ref(), member.key().as_ref(), destination.key().as_ref()],
+        bump,
+    )]
+    pub pending_request: Account<'info, PendingDestinationRequest>,
+    /// CHECK: The destination address being requested
+    pub destination: AccountInfo<'info>,
+    #[account(mut)]
+    pub member: Signer<'info>,
+    pub system_program: Program<'info, System>,
+}
+
+/// Execute a pending withdrawal destination request after timelock.
+#[derive(Accounts)]
+pub struct ExecuteDestinationRequest<'info> {
+    #[account(
+        constraint = vault.is_active @ ErrorCode::VaultNotActive,
+    )]
+    pub vault: Account<'info, Vault>,
+    #[account(
+        seeds = [b"vault_member", vault.key().as_ref(), member.key().as_ref()],
+        bump = vault_member.bump,
+        has_one = vault,
+        has_one = member,
+    )]
+    pub vault_member: Account<'info, VaultMember>,
+    #[account(
+        mut,
+        seeds = [b"pending_dest", vault.key().as_ref(), member.key().as_ref(), destination.key().as_ref()],
+        bump = pending_request.bump,
+        has_one = vault,
+        has_one = member,
+        close = member,
+    )]
+    pub pending_request: Account<'info, PendingDestinationRequest>,
+    #[account(
+        init,
+        payer = member,
+        space = WithdrawalDestination::INIT_SPACE,
+        seeds = [b"withdrawal_dest", vault.key().as_ref(), member.key().as_ref(), destination.key().as_ref()],
+        bump,
+    )]
+    pub withdrawal_dest: Account<'info, WithdrawalDestination>,
+    /// CHECK: The destination address
+    pub destination: AccountInfo<'info>,
+    #[account(mut)]
+    pub member: Signer<'info>,
+    pub system_program: Program<'info, System>,
+}
+
+/// Cancel a pending withdrawal destination request.
+#[derive(Accounts)]
+pub struct CancelDestinationRequest<'info> {
+    pub vault: Account<'info, Vault>,
+    #[account(
+        seeds = [b"vault_member", vault.key().as_ref(), member.key().as_ref()],
+        bump = vault_member.bump,
+        has_one = vault,
+        has_one = member,
+    )]
+    pub vault_member: Account<'info, VaultMember>,
+    #[account(
+        mut,
+        seeds = [b"pending_dest", vault.key().as_ref(), member.key().as_ref(), destination.key().as_ref()],
+        bump = pending_request.bump,
+        has_one = vault,
+        has_one = member,
+        close = member,
+    )]
+    pub pending_request: Account<'info, PendingDestinationRequest>,
+    /// CHECK: The destination address
+    pub destination: AccountInfo<'info>,
+    #[account(mut)]
+    pub member: Signer<'info>,
+}
+
+/// Remove an approved withdrawal destination.
+#[derive(Accounts)]
+pub struct RemoveWithdrawalDestination<'info> {
+    pub vault: Account<'info, Vault>,
+    #[account(
+        seeds = [b"vault_member", vault.key().as_ref(), member.key().as_ref()],
+        bump = vault_member.bump,
+        has_one = vault,
+        has_one = member,
+    )]
+    pub vault_member: Account<'info, VaultMember>,
+    #[account(
+        mut,
+        seeds = [b"withdrawal_dest", vault.key().as_ref(), member.key().as_ref(), destination.key().as_ref()],
+        bump = withdrawal_dest.bump,
+        has_one = vault,
+        has_one = member,
+        close = member,
+    )]
+    pub withdrawal_dest: Account<'info, WithdrawalDestination>,
+    /// CHECK: The destination address being removed
+    pub destination: AccountInfo<'info>,
+    #[account(mut)]
+    pub member: Signer<'info>,
+}
+
+// ============================================================
+// Rule Change Proposal Contexts
+// ============================================================
+
+/// Propose a rule change on a personal vault (timelock).
+#[derive(Accounts)]
+pub struct ProposeRuleChange<'info> {
+    #[account(
+        has_one = creator @ ErrorCode::Unauthorized,
+        constraint = vault.vault_type == VaultType::Personal @ ErrorCode::CommunityVaultImmutable,
+        constraint = vault.is_active @ ErrorCode::VaultNotActive,
+    )]
+    pub vault: Account<'info, Vault>,
+    #[account(
+        init,
+        payer = creator,
+        space = RuleChangeProposal::INIT_SPACE,
+        seeds = [b"rule_proposal", vault.key().as_ref()],
+        bump,
+    )]
+    pub proposal: Account<'info, RuleChangeProposal>,
+    #[account(mut)]
+    pub creator: Signer<'info>,
+    pub system_program: Program<'info, System>,
+}
+
+/// Execute a rule change proposal after timelock.
+#[derive(Accounts)]
+pub struct ExecuteRuleChange<'info> {
+    #[account(
+        mut,
+        has_one = creator @ ErrorCode::Unauthorized,
+        constraint = vault.vault_type == VaultType::Personal @ ErrorCode::CommunityVaultImmutable,
+        constraint = vault.is_active @ ErrorCode::VaultNotActive,
+    )]
+    pub vault: Account<'info, Vault>,
+    #[account(
+        mut,
+        seeds = [b"rule_proposal", vault.key().as_ref()],
+        bump = proposal.bump,
+        has_one = vault,
+        close = creator,
+    )]
+    pub proposal: Account<'info, RuleChangeProposal>,
+    #[account(mut)]
+    pub creator: Signer<'info>,
+}
+
+/// Cancel a rule change proposal.
+#[derive(Accounts)]
+pub struct CancelRuleChange<'info> {
+    #[account(
+        has_one = creator @ ErrorCode::Unauthorized,
+    )]
+    pub vault: Account<'info, Vault>,
+    #[account(
+        mut,
+        seeds = [b"rule_proposal", vault.key().as_ref()],
+        bump = proposal.bump,
+        has_one = vault,
+        close = creator,
+    )]
+    pub proposal: Account<'info, RuleChangeProposal>,
+    #[account(mut)]
+    pub creator: Signer<'info>,
+}
+
+// ============================================================
+// Bypass Request Contexts
+// ============================================================
+
+/// Request a bypass withdrawal (timelock-based, no penalty).
+#[derive(Accounts)]
+pub struct RequestBypass<'info> {
+    #[account(
+        constraint = vault.is_active @ ErrorCode::VaultNotActive,
+    )]
+    pub vault: Account<'info, Vault>,
+    #[account(
+        seeds = [b"vault_member", vault.key().as_ref(), member.key().as_ref()],
+        bump = vault_member.bump,
+        has_one = vault,
+        has_one = member,
+    )]
+    pub vault_member: Account<'info, VaultMember>,
+    #[account(
+        init,
+        payer = member,
+        space = BypassRequest::INIT_SPACE,
+        seeds = [b"bypass_request", vault.key().as_ref(), member.key().as_ref()],
+        bump,
+    )]
+    pub bypass_request: Account<'info, BypassRequest>,
+    #[account(mut)]
+    pub member: Signer<'info>,
+    pub system_program: Program<'info, System>,
+}
+
+/// Execute a bypass request after timelock — SOL vault.
+#[derive(Accounts)]
+pub struct ExecuteBypassSol<'info> {
+    #[account(
+        mut,
+        constraint = vault.is_sol_vault() @ ErrorCode::ExpectedSolVault,
+        constraint = vault.is_active @ ErrorCode::VaultNotActive,
+    )]
+    pub vault: Account<'info, Vault>,
+    #[account(
+        mut,
+        seeds = [b"vault_member", vault.key().as_ref(), member.key().as_ref()],
+        bump = vault_member.bump,
+        has_one = vault,
+        has_one = member,
+    )]
+    pub vault_member: Account<'info, VaultMember>,
+    #[account(
+        mut,
+        seeds = [b"bypass_request", vault.key().as_ref(), member.key().as_ref()],
+        bump = bypass_request.bump,
+        has_one = vault,
+        has_one = member,
+        close = member,
+    )]
+    pub bypass_request: Account<'info, BypassRequest>,
+    #[account(mut)]
+    pub member: Signer<'info>,
+    pub system_program: Program<'info, System>,
+}
+
+/// Execute a bypass request after timelock — SPL vault.
+#[derive(Accounts)]
+pub struct ExecuteBypassSpl<'info> {
+    #[account(
+        mut,
+        constraint = !vault.is_sol_vault() @ ErrorCode::ExpectedSplVault,
+        constraint = vault.is_active @ ErrorCode::VaultNotActive,
+        constraint = vault.token_mint == token_mint.key() @ ErrorCode::TokenMintMismatch,
+    )]
+    pub vault: Account<'info, Vault>,
+    #[account(
+        mut,
+        seeds = [b"vault_member", vault.key().as_ref(), member.key().as_ref()],
+        bump = vault_member.bump,
+        has_one = vault,
+        has_one = member,
+    )]
+    pub vault_member: Account<'info, VaultMember>,
+    #[account(
+        mut,
+        seeds = [b"bypass_request", vault.key().as_ref(), member.key().as_ref()],
+        bump = bypass_request.bump,
+        has_one = vault,
+        has_one = member,
+        close = member,
+    )]
+    pub bypass_request: Account<'info, BypassRequest>,
+    #[account(
+        mut,
+        associated_token::mint = token_mint,
+        associated_token::authority = vault,
+    )]
+    pub vault_token_account: Account<'info, TokenAccount>,
+    #[account(
+        mut,
+        associated_token::mint = token_mint,
+        associated_token::authority = member,
+    )]
+    pub member_token_account: Account<'info, TokenAccount>,
+    pub token_mint: Account<'info, Mint>,
+    #[account(mut)]
+    pub member: Signer<'info>,
+    pub token_program: Program<'info, Token>,
+}
+
+/// Cancel a bypass request.
+#[derive(Accounts)]
+pub struct CancelBypass<'info> {
+    pub vault: Account<'info, Vault>,
+    #[account(
+        seeds = [b"vault_member", vault.key().as_ref(), member.key().as_ref()],
+        bump = vault_member.bump,
+        has_one = vault,
+        has_one = member,
+    )]
+    pub vault_member: Account<'info, VaultMember>,
+    #[account(
+        mut,
+        seeds = [b"bypass_request", vault.key().as_ref(), member.key().as_ref()],
+        bump = bypass_request.bump,
+        has_one = vault,
+        has_one = member,
+        close = member,
+    )]
+    pub bypass_request: Account<'info, BypassRequest>,
+    #[account(mut)]
+    pub member: Signer<'info>,
+}
+
+// ============================================================
+// Instruction Handlers
+// ============================================================
+
 pub fn initialize_program_config(
     ctx: Context<InitializeProgramConfig>,
-    permanent_address_fee_lamports: u64,
+    default_penalty_rate_bps: u16,
 ) -> Result<()> {
-    let program_config = &mut ctx.accounts.program_config;
-    let admin = &ctx.accounts.admin;
-    let treasury_address = &ctx.accounts.treasury_address;
+    require!(
+        default_penalty_rate_bps > 0 && default_penalty_rate_bps <= MAX_PENALTY_BPS,
+        ErrorCode::InvalidPenaltyRate,
+    );
     let clock = Clock::get()?;
-
-    // Initialize program config
-    program_config.treasury_address = treasury_address.key();
-    program_config.permanent_address_fee_lamports = permanent_address_fee_lamports;
-    program_config.admin = admin.key();
-    program_config.bump = ctx.bumps.program_config;
-    program_config.created_at = clock.unix_timestamp;
-    program_config.updated_at = clock.unix_timestamp;
-    program_config.penalty_rate_bps = ProgramConfig::DEFAULT_PENALTY_RATE_BPS;
-
-    msg!("Program config initialized - Treasury: {}, Fee: {} lamports, Admin: {}",
-         treasury_address.key(), permanent_address_fee_lamports, admin.key());
-
+    let config = &mut ctx.accounts.program_config;
+    config.treasury_address = ctx.accounts.admin.key();
+    config.default_penalty_rate_bps = default_penalty_rate_bps;
+    config.admin = ctx.accounts.admin.key();
+    config.bump = ctx.bumps.program_config;
+    config.created_at = clock.unix_timestamp;
+    config.updated_at = clock.unix_timestamp;
     Ok(())
 }
 
-/// Update program configuration (admin only)
 pub fn update_program_config(
     ctx: Context<UpdateProgramConfig>,
-    new_treasury_address: Option<Pubkey>,
-    new_fee_lamports: Option<u64>,
+    new_treasury: Option<Pubkey>,
     new_penalty_rate_bps: Option<u16>,
 ) -> Result<()> {
-    let program_config = &mut ctx.accounts.program_config;
     let clock = Clock::get()?;
-
-    if let Some(treasury) = new_treasury_address {
-        program_config.treasury_address = treasury;
-        msg!("Treasury address updated to: {}", treasury);
+    let config = &mut ctx.accounts.program_config;
+    if let Some(treasury) = new_treasury {
+        config.treasury_address = treasury;
     }
-
-    if let Some(fee) = new_fee_lamports {
-        program_config.permanent_address_fee_lamports = fee;
-        msg!("Permanent address fee updated to: {} lamports", fee);
-    }
-
     if let Some(rate) = new_penalty_rate_bps {
-        require!(rate <= 5000, ErrorCode::InvalidPenaltyRate);
-        program_config.penalty_rate_bps = rate;
-        msg!("Penalty rate updated to: {} bps ({}%)", rate, rate as f64 / 100.0);
+        require!(rate > 0 && rate <= MAX_PENALTY_BPS, ErrorCode::InvalidPenaltyRate);
+        config.default_penalty_rate_bps = rate;
+    }
+    config.updated_at = clock.unix_timestamp;
+    Ok(())
+}
+
+fn validate_vault_params(
+    name: &str,
+    description: &str,
+    daily_limit: u64,
+    weekly_limit: u64,
+    monthly_limit: u64,
+    limits_are_percentage: bool,
+    penalty_rate_bps: u16,
+) -> Result<()> {
+    require!(
+        !name.is_empty() && name.len() <= MAX_VAULT_NAME_LENGTH,
+        ErrorCode::InvalidVaultName,
+    );
+    require!(description.len() <= MAX_VAULT_DESCRIPTION_LENGTH, ErrorCode::InvalidVaultDescription);
+
+    if limits_are_percentage {
+        require!(daily_limit <= MAX_BPS as u64, ErrorCode::InvalidLimit);
+        require!(weekly_limit <= MAX_BPS as u64, ErrorCode::InvalidLimit);
+        require!(monthly_limit <= MAX_BPS as u64, ErrorCode::InvalidLimit);
     }
 
-    program_config.updated_at = clock.unix_timestamp;
+    require!(
+        daily_limit > 0 || weekly_limit > 0 || monthly_limit > 0,
+        ErrorCode::NoLimitsSet,
+    );
+    require!(
+        penalty_rate_bps > 0 && penalty_rate_bps <= MAX_PENALTY_BPS,
+        ErrorCode::InvalidPenaltyRate,
+    );
+
+    if daily_limit > 0 && weekly_limit > 0 {
+        require!(weekly_limit >= daily_limit, ErrorCode::WeeklyLessThanDaily);
+    }
+    if weekly_limit > 0 && monthly_limit > 0 {
+        require!(monthly_limit >= weekly_limit, ErrorCode::MonthlyLessThanWeekly);
+    }
+    if daily_limit > 0 && monthly_limit > 0 && weekly_limit == 0 {
+        require!(monthly_limit >= daily_limit, ErrorCode::MonthlyLessThanWeekly);
+    }
 
     Ok(())
 }
 
-/// Activate permanent address with payment
-pub fn activate_permanent_address_with_payment(
-    ctx: Context<ActivatePermanentAddressWithPayment>,
+fn init_vault_fields(
+    vault: &mut Account<Vault>,
+    creator: Pubkey,
+    vault_type: VaultType,
+    token_mint: Pubkey,
+    name: String,
+    description: String,
+    daily_limit: u64,
+    weekly_limit: u64,
+    monthly_limit: u64,
+    limits_are_percentage: bool,
+    penalty_rate_bps: u16,
+    vault_nonce: u64,
+    bump: u8,
+    clock: &Clock,
+) {
+    vault.creator = creator;
+    vault.vault_type = vault_type;
+    vault.token_mint = token_mint;
+    vault.name = name;
+    vault.description = description;
+    vault.daily_limit = daily_limit;
+    vault.weekly_limit = weekly_limit;
+    vault.monthly_limit = monthly_limit;
+    vault.limits_are_percentage = limits_are_percentage;
+    vault.penalty_rate_bps = penalty_rate_bps;
+    vault.vault_nonce = vault_nonce;
+    vault.member_count = 1;
+    vault.total_balance = 0;
+    vault.accumulated_penalty_per_share = 0;
+    vault.is_active = true;
+    vault.created_at = clock.unix_timestamp;
+    vault.updated_at = clock.unix_timestamp;
+    vault.bump = bump;
+}
+
+fn init_member_fields(
+    vm: &mut Account<VaultMember>,
+    vault_key: Pubkey,
+    member_key: Pubkey,
+    bump: u8,
+    clock: &Clock,
+) {
+    vm.vault = vault_key;
+    vm.member = member_key;
+    vm.balance = 0;
+    vm.daily_spent = 0;
+    vm.daily_last_reset = clock.unix_timestamp;
+    vm.weekly_spent = 0;
+    vm.weekly_last_reset = clock.unix_timestamp;
+    vm.monthly_spent = 0;
+    vm.monthly_last_reset = clock.unix_timestamp;
+    vm.penalty_debt = 0;
+    vm.unclaimed_penalties = 0;
+    vm.joined_at = clock.unix_timestamp;
+    vm.bump = bump;
+}
+
+/// Create a native SOL vault.
+pub fn create_vault(
+    ctx: Context<CreateVault>,
+    name: String,
+    vault_nonce: u64,
+    description: String,
+    vault_type: VaultType,
+    daily_limit: u64,
+    weekly_limit: u64,
+    monthly_limit: u64,
+    penalty_rate_bps: u16,
+    limits_are_percentage: bool,
 ) -> Result<()> {
-    let savings_account = &mut ctx.accounts.savings_account;
-    let program_config = &ctx.accounts.program_config;
-    let user = &ctx.accounts.user;
-    let treasury_address = &ctx.accounts.treasury_address;
-    let system_program = &ctx.accounts.system_program;
+    validate_vault_params(
+        &name, &description, daily_limit, weekly_limit,
+        monthly_limit, limits_are_percentage, penalty_rate_bps,
+    )?;
     let clock = Clock::get()?;
 
-    // Check user has sufficient funds
-    let user_balance = user.lamports();
-    let fee_amount = program_config.permanent_address_fee_lamports;
-
-    require!(
-        user_balance >= fee_amount,
-        ErrorCode::InsufficientFundsForActivation
+    init_vault_fields(
+        &mut ctx.accounts.vault,
+        ctx.accounts.creator.key(),
+        vault_type,
+        Pubkey::default(),
+        name, description,
+        daily_limit, weekly_limit, monthly_limit,
+        limits_are_percentage, penalty_rate_bps, vault_nonce,
+        ctx.bumps.vault, &clock,
     );
 
-    // Transfer SOL from user to treasury
-    let transfer_instruction = anchor_lang::solana_program::system_instruction::transfer(
-        &user.key(),
-        &treasury_address.key(),
-        fee_amount,
+    init_member_fields(
+        &mut ctx.accounts.vault_member,
+        ctx.accounts.vault.key(),
+        ctx.accounts.creator.key(),
+        ctx.bumps.vault_member,
+        &clock,
     );
 
-    anchor_lang::solana_program::program::invoke(
-        &transfer_instruction,
-        &[
-            user.to_account_info(),
-            treasury_address.to_account_info(),
-            system_program.to_account_info(),
-        ],
+    Ok(())
+}
+
+/// Create an SPL token vault (also creates the vault's ATA).
+pub fn create_spl_vault(
+    ctx: Context<CreateSplVault>,
+    name: String,
+    vault_nonce: u64,
+    description: String,
+    vault_type: VaultType,
+    daily_limit: u64,
+    weekly_limit: u64,
+    monthly_limit: u64,
+    penalty_rate_bps: u16,
+    limits_are_percentage: bool,
+) -> Result<()> {
+    validate_vault_params(
+        &name, &description, daily_limit, weekly_limit,
+        monthly_limit, limits_are_percentage, penalty_rate_bps,
+    )?;
+    let clock = Clock::get()?;
+
+    init_vault_fields(
+        &mut ctx.accounts.vault,
+        ctx.accounts.creator.key(),
+        vault_type,
+        ctx.accounts.token_mint.key(),
+        name, description,
+        daily_limit, weekly_limit, monthly_limit,
+        limits_are_percentage, penalty_rate_bps, vault_nonce,
+        ctx.bumps.vault, &clock,
+    );
+
+    init_member_fields(
+        &mut ctx.accounts.vault_member,
+        ctx.accounts.vault.key(),
+        ctx.accounts.creator.key(),
+        ctx.bumps.vault_member,
+        &clock,
+    );
+
+    Ok(())
+}
+
+/// Join a community vault.
+pub fn join_vault(ctx: Context<JoinVault>) -> Result<()> {
+    let clock = Clock::get()?;
+    let vault = &mut ctx.accounts.vault;
+    vault.member_count = vault.member_count
+        .checked_add(1)
+        .ok_or(ErrorCode::ArithmeticOverflow)?;
+    vault.updated_at = clock.unix_timestamp;
+
+    init_member_fields(
+        &mut ctx.accounts.vault_member,
+        vault.key(),
+        ctx.accounts.member.key(),
+        ctx.bumps.vault_member,
+        &clock,
+    );
+
+    Ok(())
+}
+
+/// Deposit SOL into a SOL vault.
+pub fn deposit_sol(ctx: Context<DepositSol>, amount: u64) -> Result<()> {
+    require!(amount > 0, ErrorCode::InvalidAmount);
+    let clock = Clock::get()?;
+
+    system_program::transfer(
+        CpiContext::new(
+            ctx.accounts.system_program.to_account_info(),
+            system_program::Transfer {
+                from: ctx.accounts.member.to_account_info(),
+                to: ctx.accounts.vault.to_account_info(),
+            },
+        ),
+        amount,
     )?;
 
-    // Activate permanent address
-    savings_account.permanent_address_activated = true;
-    savings_account.activated_at = clock.unix_timestamp;
+    let accumulated = ctx.accounts.vault.accumulated_penalty_per_share;
+    ctx.accounts.vault_member.settle_penalties(accumulated);
 
-    // Store transaction signature for verification (get from slot)
-    let slot = clock.slot;
-    let mut signature_bytes = [0u8; 64];
-    signature_bytes[..8].copy_from_slice(&slot.to_le_bytes());
-    savings_account.activation_payment_signature = Vec::from(signature_bytes);
+    ctx.accounts.vault_member.balance = ctx.accounts.vault_member.balance
+        .checked_add(amount)
+        .ok_or(ErrorCode::ArithmeticOverflow)?;
+    ctx.accounts.vault.total_balance = ctx.accounts.vault.total_balance
+        .checked_add(amount)
+        .ok_or(ErrorCode::ArithmeticOverflow)?;
 
-    savings_account.updated_at = clock.unix_timestamp;
+    ctx.accounts.vault_member.snapshot_debt(ctx.accounts.vault.accumulated_penalty_per_share);
+    ctx.accounts.vault.updated_at = clock.unix_timestamp;
+    Ok(())
+}
 
-    msg!("Permanent address activated! User: {}, Fee paid: {} lamports, Treasury: {}",
-         user.key(), fee_amount, treasury_address.key());
+/// Deposit SPL tokens into an SPL vault.
+pub fn deposit_spl(ctx: Context<DepositSpl>, amount: u64) -> Result<()> {
+    require!(amount > 0, ErrorCode::InvalidAmount);
+    let clock = Clock::get()?;
 
+    token::transfer(
+        CpiContext::new(
+            ctx.accounts.token_program.to_account_info(),
+            Transfer {
+                from: ctx.accounts.member_token_account.to_account_info(),
+                to: ctx.accounts.vault_token_account.to_account_info(),
+                authority: ctx.accounts.member.to_account_info(),
+            },
+        ),
+        amount,
+    )?;
+
+    let accumulated = ctx.accounts.vault.accumulated_penalty_per_share;
+    ctx.accounts.vault_member.settle_penalties(accumulated);
+
+    ctx.accounts.vault_member.balance = ctx.accounts.vault_member.balance
+        .checked_add(amount)
+        .ok_or(ErrorCode::ArithmeticOverflow)?;
+    ctx.accounts.vault.total_balance = ctx.accounts.vault.total_balance
+        .checked_add(amount)
+        .ok_or(ErrorCode::ArithmeticOverflow)?;
+
+    ctx.accounts.vault_member.snapshot_debt(ctx.accounts.vault.accumulated_penalty_per_share);
+    ctx.accounts.vault.updated_at = clock.unix_timestamp;
+    Ok(())
+}
+
+/// Withdraw SOL within spending limits.
+pub fn withdraw_sol(ctx: Context<WithdrawSol>, amount: u64) -> Result<()> {
+    require!(amount > 0, ErrorCode::InvalidAmount);
+    require!(ctx.accounts.vault_member.balance >= amount, ErrorCode::InsufficientBalance);
+    let clock = Clock::get()?;
+
+    let accumulated = ctx.accounts.vault.accumulated_penalty_per_share;
+    ctx.accounts.vault_member.settle_penalties(accumulated);
+
+    let balance = ctx.accounts.vault_member.balance;
+    ctx.accounts.vault_member.check_and_update_limits(
+        amount, balance, &ctx.accounts.vault, clock.unix_timestamp,
+    )?;
+
+    let vault_info = ctx.accounts.vault.to_account_info();
+    let rent = Rent::get()?;
+    let min_balance = rent.minimum_balance(vault_info.data_len());
+    require!(
+        vault_info.lamports() >= min_balance + amount,
+        ErrorCode::InsufficientBalance,
+    );
+
+    **vault_info.try_borrow_mut_lamports()? -= amount;
+    **ctx.accounts.member.to_account_info().try_borrow_mut_lamports()? += amount;
+
+    ctx.accounts.vault_member.balance = ctx.accounts.vault_member.balance
+        .checked_sub(amount)
+        .ok_or(ErrorCode::ArithmeticOverflow)?;
+    ctx.accounts.vault.total_balance = ctx.accounts.vault.total_balance
+        .checked_sub(amount)
+        .ok_or(ErrorCode::ArithmeticOverflow)?;
+
+    ctx.accounts.vault_member.snapshot_debt(ctx.accounts.vault.accumulated_penalty_per_share);
+    ctx.accounts.vault.updated_at = clock.unix_timestamp;
+    Ok(())
+}
+
+/// Withdraw SPL tokens within spending limits.
+pub fn withdraw_spl(ctx: Context<WithdrawSpl>, amount: u64) -> Result<()> {
+    require!(amount > 0, ErrorCode::InvalidAmount);
+    require!(ctx.accounts.vault_member.balance >= amount, ErrorCode::InsufficientBalance);
+    let clock = Clock::get()?;
+
+    let accumulated = ctx.accounts.vault.accumulated_penalty_per_share;
+    ctx.accounts.vault_member.settle_penalties(accumulated);
+
+    let balance = ctx.accounts.vault_member.balance;
+    ctx.accounts.vault_member.check_and_update_limits(
+        amount, balance, &ctx.accounts.vault, clock.unix_timestamp,
+    )?;
+
+    let vault = &ctx.accounts.vault;
+    let creator = vault.creator;
+    let nonce_bytes = vault.vault_nonce.to_le_bytes();
+    let bump = [vault.bump];
+    let seeds: &[&[u8]] = &[b"vault", creator.as_ref(), nonce_bytes.as_ref(), &bump];
+
+    token::transfer(
+        CpiContext::new_with_signer(
+            ctx.accounts.token_program.to_account_info(),
+            Transfer {
+                from: ctx.accounts.vault_token_account.to_account_info(),
+                to: ctx.accounts.member_token_account.to_account_info(),
+                authority: ctx.accounts.vault.to_account_info(),
+            },
+            &[seeds],
+        ),
+        amount,
+    )?;
+
+    ctx.accounts.vault_member.balance = ctx.accounts.vault_member.balance
+        .checked_sub(amount)
+        .ok_or(ErrorCode::ArithmeticOverflow)?;
+    ctx.accounts.vault.total_balance = ctx.accounts.vault.total_balance
+        .checked_sub(amount)
+        .ok_or(ErrorCode::ArithmeticOverflow)?;
+
+    ctx.accounts.vault_member.snapshot_debt(ctx.accounts.vault.accumulated_penalty_per_share);
+    ctx.accounts.vault.updated_at = clock.unix_timestamp;
+    Ok(())
+}
+
+/// Withdraw SOL with penalty — bypasses limits.
+/// Community vault: penalty redistributed to other members.
+/// Personal vault: penalty sent to treasury.
+pub fn withdraw_sol_with_penalty(ctx: Context<WithdrawSolWithPenalty>, amount: u64) -> Result<()> {
+    require!(amount > 0, ErrorCode::InvalidAmount);
+    require!(ctx.accounts.vault_member.balance >= amount, ErrorCode::InsufficientBalance);
+    let clock = Clock::get()?;
+
+    let accumulated = ctx.accounts.vault.accumulated_penalty_per_share;
+    ctx.accounts.vault_member.settle_penalties(accumulated);
+
+    let penalty_bps = ctx.accounts.vault.penalty_rate_bps;
+    let penalty_amount = ((amount as u128) * (penalty_bps as u128) / (MAX_BPS as u128)) as u64;
+    let user_amount = amount.checked_sub(penalty_amount).ok_or(ErrorCode::ArithmeticOverflow)?;
+
+    ctx.accounts.vault_member.balance = ctx.accounts.vault_member.balance
+        .checked_sub(amount)
+        .ok_or(ErrorCode::ArithmeticOverflow)?;
+
+    let vault_info = ctx.accounts.vault.to_account_info();
+    let rent = Rent::get()?;
+    let min_balance = rent.minimum_balance(vault_info.data_len());
+
+    if ctx.accounts.vault.vault_type == VaultType::Community {
+        ctx.accounts.vault.total_balance = ctx.accounts.vault.total_balance
+            .checked_sub(amount)
+            .ok_or(ErrorCode::ArithmeticOverflow)?;
+        ctx.accounts.vault.record_penalty(penalty_amount);
+
+        require!(
+            vault_info.lamports() >= min_balance + user_amount,
+            ErrorCode::InsufficientBalance,
+        );
+        **vault_info.try_borrow_mut_lamports()? -= user_amount;
+        **ctx.accounts.member.to_account_info().try_borrow_mut_lamports()? += user_amount;
+    } else {
+        ctx.accounts.vault.total_balance = ctx.accounts.vault.total_balance
+            .checked_sub(amount)
+            .ok_or(ErrorCode::ArithmeticOverflow)?;
+
+        require!(
+            vault_info.lamports() >= min_balance + user_amount + penalty_amount,
+            ErrorCode::InsufficientBalance,
+        );
+        **vault_info.try_borrow_mut_lamports()? -= user_amount + penalty_amount;
+        **ctx.accounts.member.to_account_info().try_borrow_mut_lamports()? += user_amount;
+        **ctx.accounts.treasury.to_account_info().try_borrow_mut_lamports()? += penalty_amount;
+    }
+
+    ctx.accounts.vault_member.snapshot_debt(ctx.accounts.vault.accumulated_penalty_per_share);
+    ctx.accounts.vault.updated_at = clock.unix_timestamp;
+    Ok(())
+}
+
+/// Withdraw SPL tokens with penalty — bypasses limits.
+pub fn withdraw_spl_with_penalty(ctx: Context<WithdrawSplWithPenalty>, amount: u64) -> Result<()> {
+    require!(amount > 0, ErrorCode::InvalidAmount);
+    require!(ctx.accounts.vault_member.balance >= amount, ErrorCode::InsufficientBalance);
+    let clock = Clock::get()?;
+
+    let accumulated = ctx.accounts.vault.accumulated_penalty_per_share;
+    ctx.accounts.vault_member.settle_penalties(accumulated);
+
+    let penalty_bps = ctx.accounts.vault.penalty_rate_bps;
+    let penalty_amount = ((amount as u128) * (penalty_bps as u128) / (MAX_BPS as u128)) as u64;
+    let user_amount = amount.checked_sub(penalty_amount).ok_or(ErrorCode::ArithmeticOverflow)?;
+
+    ctx.accounts.vault_member.balance = ctx.accounts.vault_member.balance
+        .checked_sub(amount)
+        .ok_or(ErrorCode::ArithmeticOverflow)?;
+
+    let vault = &ctx.accounts.vault;
+    let creator = vault.creator;
+    let nonce_bytes = vault.vault_nonce.to_le_bytes();
+    let bump = [vault.bump];
+    let seeds: &[&[u8]] = &[b"vault", creator.as_ref(), nonce_bytes.as_ref(), &bump];
+
+    if ctx.accounts.vault.vault_type == VaultType::Community {
+        ctx.accounts.vault.total_balance = ctx.accounts.vault.total_balance
+            .checked_sub(amount)
+            .ok_or(ErrorCode::ArithmeticOverflow)?;
+        ctx.accounts.vault.record_penalty(penalty_amount);
+
+        token::transfer(
+            CpiContext::new_with_signer(
+                ctx.accounts.token_program.to_account_info(),
+                Transfer {
+                    from: ctx.accounts.vault_token_account.to_account_info(),
+                    to: ctx.accounts.member_token_account.to_account_info(),
+                    authority: ctx.accounts.vault.to_account_info(),
+                },
+                &[seeds],
+            ),
+            user_amount,
+        )?;
+    } else {
+        ctx.accounts.vault.total_balance = ctx.accounts.vault.total_balance
+            .checked_sub(amount)
+            .ok_or(ErrorCode::ArithmeticOverflow)?;
+
+        token::transfer(
+            CpiContext::new_with_signer(
+                ctx.accounts.token_program.to_account_info(),
+                Transfer {
+                    from: ctx.accounts.vault_token_account.to_account_info(),
+                    to: ctx.accounts.member_token_account.to_account_info(),
+                    authority: ctx.accounts.vault.to_account_info(),
+                },
+                &[seeds],
+            ),
+            user_amount,
+        )?;
+
+        token::transfer(
+            CpiContext::new_with_signer(
+                ctx.accounts.token_program.to_account_info(),
+                Transfer {
+                    from: ctx.accounts.vault_token_account.to_account_info(),
+                    to: ctx.accounts.treasury_token_account.to_account_info(),
+                    authority: ctx.accounts.vault.to_account_info(),
+                },
+                &[seeds],
+            ),
+            penalty_amount,
+        )?;
+    }
+
+    ctx.accounts.vault_member.snapshot_debt(ctx.accounts.vault.accumulated_penalty_per_share);
+    ctx.accounts.vault.updated_at = clock.unix_timestamp;
+    Ok(())
+}
+
+/// Claim accumulated penalty rewards (SOL vault).
+pub fn claim_penalty_rewards(ctx: Context<ClaimPenaltyRewards>) -> Result<()> {
+    let accumulated = ctx.accounts.vault.accumulated_penalty_per_share;
+    ctx.accounts.vault_member.settle_penalties(accumulated);
+
+    let rewards = ctx.accounts.vault_member.unclaimed_penalties;
+    require!(rewards > 0, ErrorCode::NoPenaltyRewards);
+
+    let vault_info = ctx.accounts.vault.to_account_info();
+    let rent = Rent::get()?;
+    let min_balance = rent.minimum_balance(vault_info.data_len());
+    require!(
+        vault_info.lamports() >= min_balance + rewards,
+        ErrorCode::InsufficientBalance,
+    );
+
+    **vault_info.try_borrow_mut_lamports()? -= rewards;
+    **ctx.accounts.member.to_account_info().try_borrow_mut_lamports()? += rewards;
+
+    ctx.accounts.vault_member.unclaimed_penalties = 0;
+
+    let clock = Clock::get()?;
+    ctx.accounts.vault.updated_at = clock.unix_timestamp;
+    Ok(())
+}
+
+/// Claim accumulated penalty rewards (SPL vault).
+pub fn claim_spl_penalty_rewards(ctx: Context<ClaimSplPenaltyRewards>) -> Result<()> {
+    let accumulated = ctx.accounts.vault.accumulated_penalty_per_share;
+    ctx.accounts.vault_member.settle_penalties(accumulated);
+
+    let rewards = ctx.accounts.vault_member.unclaimed_penalties;
+    require!(rewards > 0, ErrorCode::NoPenaltyRewards);
+
+    let vault = &ctx.accounts.vault;
+    let creator = vault.creator;
+    let nonce_bytes = vault.vault_nonce.to_le_bytes();
+    let bump = [vault.bump];
+    let seeds: &[&[u8]] = &[b"vault", creator.as_ref(), nonce_bytes.as_ref(), &bump];
+
+    token::transfer(
+        CpiContext::new_with_signer(
+            ctx.accounts.token_program.to_account_info(),
+            Transfer {
+                from: ctx.accounts.vault_token_account.to_account_info(),
+                to: ctx.accounts.member_token_account.to_account_info(),
+                authority: ctx.accounts.vault.to_account_info(),
+            },
+            &[seeds],
+        ),
+        rewards,
+    )?;
+
+    ctx.accounts.vault_member.unclaimed_penalties = 0;
+
+    let clock = Clock::get()?;
+    ctx.accounts.vault.updated_at = clock.unix_timestamp;
+    Ok(())
+}
+
+/// Leave a vault. Balance and unclaimed penalties must be zero.
+pub fn leave_vault(ctx: Context<LeaveVault>) -> Result<()> {
+    require!(ctx.accounts.vault_member.balance == 0, ErrorCode::BalanceNotZero);
+    require!(ctx.accounts.vault_member.unclaimed_penalties == 0, ErrorCode::BalanceNotZero);
+
+    let vault = &mut ctx.accounts.vault;
+    vault.member_count = vault.member_count.saturating_sub(1);
+
+    let clock = Clock::get()?;
+    vault.updated_at = clock.unix_timestamp;
+
+    Ok(())
+}
+
+/// Update rules on a personal vault (creator only).
+pub fn update_vault_rules(
+    ctx: Context<UpdateVaultRules>,
+    daily_limit: Option<u64>,
+    weekly_limit: Option<u64>,
+    monthly_limit: Option<u64>,
+    penalty_rate_bps: Option<u16>,
+    limits_are_percentage: Option<bool>,
+) -> Result<()> {
+    let vault = &mut ctx.accounts.vault;
+    let daily = daily_limit.unwrap_or(vault.daily_limit);
+    let weekly = weekly_limit.unwrap_or(vault.weekly_limit);
+    let monthly = monthly_limit.unwrap_or(vault.monthly_limit);
+    let penalty = penalty_rate_bps.unwrap_or(vault.penalty_rate_bps);
+    let pct_mode = limits_are_percentage.unwrap_or(vault.limits_are_percentage);
+
+    validate_vault_params(&vault.name, &vault.description, daily, weekly, monthly, pct_mode, penalty)?;
+
+    vault.daily_limit = daily;
+    vault.weekly_limit = weekly;
+    vault.monthly_limit = monthly;
+    vault.limits_are_percentage = pct_mode;
+    vault.penalty_rate_bps = penalty;
+
+    let clock = Clock::get()?;
+    vault.updated_at = clock.unix_timestamp;
+    Ok(())
+}
+
+// ============================================================
+// Withdrawal Destination Handlers
+// ============================================================
+
+fn validate_destination_title(title: &str) -> Result<()> {
+    require!(
+        !title.is_empty() && title.len() <= WithdrawalDestination::MAX_TITLE_LENGTH,
+        ErrorCode::InvalidDestinationTitle,
+    );
+    Ok(())
+}
+
+pub fn add_withdrawal_destination(
+    ctx: Context<AddWithdrawalDestination>,
+    title: String,
+) -> Result<()> {
+    validate_destination_title(&title)?;
+    require!(
+        ctx.accounts.destination.key() != ctx.accounts.member.key(),
+        ErrorCode::CannotAddSelfAsDestination,
+    );
+
+    let clock = Clock::get()?;
+    let dest = &mut ctx.accounts.withdrawal_dest;
+    dest.vault = ctx.accounts.vault.key();
+    dest.member = ctx.accounts.member.key();
+    dest.destination = ctx.accounts.destination.key();
+    dest.title = title;
+    dest.added_at = clock.unix_timestamp;
+    dest.bump = ctx.bumps.withdrawal_dest;
+    Ok(())
+}
+
+pub fn request_withdrawal_destination(
+    ctx: Context<RequestWithdrawalDestination>,
+    title: String,
+) -> Result<()> {
+    validate_destination_title(&title)?;
+    require!(
+        ctx.accounts.destination.key() != ctx.accounts.member.key(),
+        ErrorCode::CannotAddSelfAsDestination,
+    );
+
+    let clock = Clock::get()?;
+    let req = &mut ctx.accounts.pending_request;
+    req.vault = ctx.accounts.vault.key();
+    req.member = ctx.accounts.member.key();
+    req.destination = ctx.accounts.destination.key();
+    req.title = title;
+    req.execute_after = clock.unix_timestamp
+        .checked_add(WITHDRAWAL_DESTINATION_TIMELOCK)
+        .ok_or(ErrorCode::ArithmeticOverflow)?;
+    req.created_at = clock.unix_timestamp;
+    req.bump = ctx.bumps.pending_request;
+    Ok(())
+}
+
+pub fn execute_destination_request(ctx: Context<ExecuteDestinationRequest>) -> Result<()> {
+    let clock = Clock::get()?;
+    require!(
+        clock.unix_timestamp >= ctx.accounts.pending_request.execute_after,
+        ErrorCode::TimelockNotExpired,
+    );
+
+    let req = &ctx.accounts.pending_request;
+    let dest = &mut ctx.accounts.withdrawal_dest;
+    dest.vault = req.vault;
+    dest.member = req.member;
+    dest.destination = req.destination;
+    dest.title = req.title.clone();
+    dest.added_at = clock.unix_timestamp;
+    dest.bump = ctx.bumps.withdrawal_dest;
+    Ok(())
+}
+
+pub fn cancel_destination_request(_ctx: Context<CancelDestinationRequest>) -> Result<()> {
+    Ok(())
+}
+
+pub fn remove_withdrawal_destination(_ctx: Context<RemoveWithdrawalDestination>) -> Result<()> {
+    Ok(())
+}
+
+// ============================================================
+// Rule Change Proposal Handlers
+// ============================================================
+
+pub fn propose_rule_change(
+    ctx: Context<ProposeRuleChange>,
+    new_daily_limit: Option<u64>,
+    new_weekly_limit: Option<u64>,
+    new_monthly_limit: Option<u64>,
+    new_penalty_rate_bps: Option<u16>,
+    new_limits_are_percentage: Option<bool>,
+) -> Result<()> {
+    let vault = &ctx.accounts.vault;
+
+    let daily = new_daily_limit.unwrap_or(vault.daily_limit);
+    let weekly = new_weekly_limit.unwrap_or(vault.weekly_limit);
+    let monthly = new_monthly_limit.unwrap_or(vault.monthly_limit);
+    let penalty = new_penalty_rate_bps.unwrap_or(vault.penalty_rate_bps);
+    let pct_mode = new_limits_are_percentage.unwrap_or(vault.limits_are_percentage);
+    validate_vault_params(&vault.name, &vault.description, daily, weekly, monthly, pct_mode, penalty)?;
+
+    let clock = Clock::get()?;
+    let proposal = &mut ctx.accounts.proposal;
+    proposal.vault = vault.key();
+    proposal.proposer = ctx.accounts.creator.key();
+    proposal.new_daily_limit = new_daily_limit;
+    proposal.new_weekly_limit = new_weekly_limit;
+    proposal.new_monthly_limit = new_monthly_limit;
+    proposal.new_limits_are_percentage = new_limits_are_percentage;
+    proposal.new_penalty_rate_bps = new_penalty_rate_bps;
+    proposal.execute_after = clock.unix_timestamp
+        .checked_add(PROPOSAL_TIMELOCK)
+        .ok_or(ErrorCode::ArithmeticOverflow)?;
+    proposal.created_at = clock.unix_timestamp;
+    proposal.bump = ctx.bumps.proposal;
+    Ok(())
+}
+
+pub fn execute_rule_change(ctx: Context<ExecuteRuleChange>) -> Result<()> {
+    let clock = Clock::get()?;
+    require!(
+        clock.unix_timestamp >= ctx.accounts.proposal.execute_after,
+        ErrorCode::TimelockNotExpired,
+    );
+
+    let proposal = &ctx.accounts.proposal;
+    let vault = &mut ctx.accounts.vault;
+
+    if let Some(daily) = proposal.new_daily_limit {
+        vault.daily_limit = daily;
+    }
+    if let Some(weekly) = proposal.new_weekly_limit {
+        vault.weekly_limit = weekly;
+    }
+    if let Some(monthly) = proposal.new_monthly_limit {
+        vault.monthly_limit = monthly;
+    }
+    if let Some(pct) = proposal.new_limits_are_percentage {
+        vault.limits_are_percentage = pct;
+    }
+    if let Some(penalty) = proposal.new_penalty_rate_bps {
+        vault.penalty_rate_bps = penalty;
+    }
+
+    vault.updated_at = clock.unix_timestamp;
+    Ok(())
+}
+
+pub fn cancel_rule_change(_ctx: Context<CancelRuleChange>) -> Result<()> {
+    Ok(())
+}
+
+// ============================================================
+// Bypass Request Handlers
+// ============================================================
+
+pub fn request_bypass(
+    ctx: Context<RequestBypass>,
+    amount: u64,
+    is_sol: bool,
+) -> Result<()> {
+    require!(amount > 0, ErrorCode::InvalidAmount);
+    require!(ctx.accounts.vault_member.balance >= amount, ErrorCode::InsufficientBalance);
+
+    let clock = Clock::get()?;
+    let req = &mut ctx.accounts.bypass_request;
+    req.vault = ctx.accounts.vault.key();
+    req.member = ctx.accounts.member.key();
+    req.amount = amount;
+    req.is_sol = is_sol;
+    req.token_mint = ctx.accounts.vault.token_mint;
+    req.execute_after = clock.unix_timestamp
+        .checked_add(BYPASS_REQUEST_TIMELOCK)
+        .ok_or(ErrorCode::ArithmeticOverflow)?;
+    req.created_at = clock.unix_timestamp;
+    req.bump = ctx.bumps.bypass_request;
+    Ok(())
+}
+
+pub fn execute_bypass_sol(ctx: Context<ExecuteBypassSol>) -> Result<()> {
+    let clock = Clock::get()?;
+    require!(
+        clock.unix_timestamp >= ctx.accounts.bypass_request.execute_after,
+        ErrorCode::TimelockNotExpired,
+    );
+
+    let amount = ctx.accounts.bypass_request.amount;
+    require!(ctx.accounts.vault_member.balance >= amount, ErrorCode::InsufficientBalance);
+
+    let accumulated = ctx.accounts.vault.accumulated_penalty_per_share;
+    ctx.accounts.vault_member.settle_penalties(accumulated);
+
+    let vault_info = ctx.accounts.vault.to_account_info();
+    let rent = Rent::get()?;
+    let min_balance = rent.minimum_balance(vault_info.data_len());
+    require!(
+        vault_info.lamports() >= min_balance + amount,
+        ErrorCode::InsufficientBalance,
+    );
+
+    **vault_info.try_borrow_mut_lamports()? -= amount;
+    **ctx.accounts.member.to_account_info().try_borrow_mut_lamports()? += amount;
+
+    ctx.accounts.vault_member.balance = ctx.accounts.vault_member.balance
+        .checked_sub(amount)
+        .ok_or(ErrorCode::ArithmeticOverflow)?;
+    ctx.accounts.vault.total_balance = ctx.accounts.vault.total_balance
+        .checked_sub(amount)
+        .ok_or(ErrorCode::ArithmeticOverflow)?;
+
+    ctx.accounts.vault_member.snapshot_debt(ctx.accounts.vault.accumulated_penalty_per_share);
+    ctx.accounts.vault.updated_at = clock.unix_timestamp;
+    Ok(())
+}
+
+pub fn execute_bypass_spl(ctx: Context<ExecuteBypassSpl>) -> Result<()> {
+    let clock = Clock::get()?;
+    require!(
+        clock.unix_timestamp >= ctx.accounts.bypass_request.execute_after,
+        ErrorCode::TimelockNotExpired,
+    );
+
+    let amount = ctx.accounts.bypass_request.amount;
+    require!(ctx.accounts.vault_member.balance >= amount, ErrorCode::InsufficientBalance);
+
+    let accumulated = ctx.accounts.vault.accumulated_penalty_per_share;
+    ctx.accounts.vault_member.settle_penalties(accumulated);
+
+    let vault = &ctx.accounts.vault;
+    let creator = vault.creator;
+    let nonce_bytes = vault.vault_nonce.to_le_bytes();
+    let bump = [vault.bump];
+    let seeds: &[&[u8]] = &[b"vault", creator.as_ref(), nonce_bytes.as_ref(), &bump];
+
+    token::transfer(
+        CpiContext::new_with_signer(
+            ctx.accounts.token_program.to_account_info(),
+            Transfer {
+                from: ctx.accounts.vault_token_account.to_account_info(),
+                to: ctx.accounts.member_token_account.to_account_info(),
+                authority: ctx.accounts.vault.to_account_info(),
+            },
+            &[seeds],
+        ),
+        amount,
+    )?;
+
+    ctx.accounts.vault_member.balance = ctx.accounts.vault_member.balance
+        .checked_sub(amount)
+        .ok_or(ErrorCode::ArithmeticOverflow)?;
+    ctx.accounts.vault.total_balance = ctx.accounts.vault.total_balance
+        .checked_sub(amount)
+        .ok_or(ErrorCode::ArithmeticOverflow)?;
+
+    ctx.accounts.vault_member.snapshot_debt(ctx.accounts.vault.accumulated_penalty_per_share);
+    ctx.accounts.vault.updated_at = clock.unix_timestamp;
+    Ok(())
+}
+
+pub fn cancel_bypass(_ctx: Context<CancelBypass>) -> Result<()> {
     Ok(())
 }

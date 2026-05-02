@@ -52,6 +52,7 @@ const BalanceDisplay = ({
   // Callbacks for App.js state updates
   onBalanceUpdate,
   connectWallet,
+  refreshTrigger,
 }) => {
   // PoolTogether state
   const [vaultStates, setVaultStates] = useState({});
@@ -202,7 +203,7 @@ const BalanceDisplay = ({
     };
 
     loadBalances();
-  }, [transactionManager, savingsContract, signer, provider, solanaConnected, networkType, selectedNetwork]);
+  }, [transactionManager, savingsContract, signer, provider, solanaConnected, networkType, selectedNetwork, refreshTrigger]);
 
   // No default balance setting needed - balances come from parent props
   return (

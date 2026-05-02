@@ -13,7 +13,7 @@ import {
 } from "../../styles";
 
 // Import utilities
-import { formatCountdown, detectExceedingPeriod } from "../../utils/walletUtils.js";
+import { formatCountdown, detectExceedingPeriod, getCurrentNetwork } from "../../utils/walletUtils.js";
 import { ethers } from "ethers";
 
 // Import services
@@ -44,7 +44,6 @@ const WithdrawalInterface = ({
   networkType,
   selectedNetwork,
   getCurrentUserAddress,
-  getCurrentNetwork,
 
   // Wallet state
   solanaConnected,
@@ -145,8 +144,10 @@ const WithdrawalInterface = ({
   }, [transactionManager, savingsContract, solanaConnected, networkType]);
 
   useEffect(() => {
-    if (transactionManager && typeof transactionManager.getPenaltyRate === 'function') {
-      transactionManager.getPenaltyRate().then(rate => setPenaltyRate(rate)).catch(() => {});
+    if (transactionManager) {
+      transactionManager.getPersonalVault().then(vault => {
+        if (vault?.penaltyRateBps) setPenaltyRate(vault.penaltyRateBps);
+      }).catch(() => {});
     }
   }, [transactionManager]);
 
@@ -168,16 +169,8 @@ const WithdrawalInterface = ({
 
     setIsLoading(true);
     try {
-      const adapter = transactionManager.getCurrentAdapter();
       const amountValue = parseFloat(withdrawalAmount);
-      const network = getCurrentNetwork(networkType, selectedNetwork);
-      const tokenInfo = network.tokens[selectedToken];
-      const decimals = selectedToken === "SOL" ? 9 : (tokenInfo?.decimals || 6);
-      const tokenAddress = selectedToken === "SOL" ? "SOL" : tokenInfo?.address;
-
-      if (!tokenAddress) throw new Error(`Token ${selectedToken} not found`);
-
-      const txHash = await adapter.withdrawWithPenalty(tokenAddress, amountValue, decimals);
+      const txHash = await transactionManager.penaltyWithdrawFromPersonalVault(amountValue);
       alert(`Penalty withdrawal successful!\n\nYou received: ${userReceives} ${selectedToken}\nPenalty: ${penaltyAmount} ${selectedToken}\nTx: ${txHash}`);
       setWithdrawalAmount("");
 
@@ -215,19 +208,8 @@ const WithdrawalInterface = ({
       if (networkType === "solana") {
         console.log("💸 Solana: Withdrawing with limits", withdrawalAmount, selectedToken, selectedWithdrawalDestination);
 
-        const adapter = transactionManager.getCurrentAdapter();
         const amountValue = parseFloat(withdrawalAmount);
-
-        const network = getCurrentNetwork(networkType, selectedNetwork);
-        const tokenInfo = network.tokens[selectedToken];
-        const decimals = selectedToken === "SOL" ? 9 : (tokenInfo?.decimals || 6);
-        const tokenAddress = selectedToken === "SOL" ? "SOL" : tokenInfo?.address;
-
-        if (!tokenAddress) {
-          throw new Error(`Token ${selectedToken} not found in network configuration`);
-        }
-
-        const txHash = await adapter.withdrawWithLimits(tokenAddress, amountValue, decimals);
+        const txHash = await transactionManager.withdrawFromPersonalVault(amountValue);
 
         let destinationLabel = selectedWithdrawalDestination === "self"
           ? "self (wallet)"
@@ -306,45 +288,9 @@ const WithdrawalInterface = ({
     setIsLoading(true);
     try {
       if (networkType === "solana") {
-        // Solana bypass request logic
         console.log("🔒 Solana: Requesting bypass for", withdrawalAmount, selectedToken, exceedingPeriod);
-        const adapter = transactionManager.getCurrentAdapter();
-        let tokenAddress;
-        let destination = selectedWithdrawalDestination;
-
-        // Handle "self" destination
-        if (selectedWithdrawalDestination === "self") {
-          if (!solanaPublicKey) {
-            throw new Error("Solana wallet not connected");
-          }
-          destination = solanaPublicKey.toString();
-        }
-
-        // Determine token address
-        if (selectedToken === "SOL") {
-          tokenAddress = "So11111111111111111111111111111111111111112"; // SOL mint
-        } else {
-          const currentNetwork = getCurrentNetwork(networkType, selectedNetwork);
-          const token = currentNetwork.tokens[selectedToken];
-          if (token) {
-            tokenAddress = token.address;
-          } else {
-            alert("Please select a valid token");
-            return;
-          }
-        }
-
         const amountValue = parseFloat(withdrawalAmount);
-        const amountInSmallestUnit = selectedToken === "SOL"
-          ? Math.floor(amountValue * Math.pow(10, 9)) // Convert to lamports
-          : Math.floor(amountValue * Math.pow(10, currentNetwork.tokens[selectedToken].decimals));
-
-        const txHash = await adapter.requestWithdrawalBypass(
-          tokenAddress,
-          amountInSmallestUnit,
-          destination,
-          exceedingPeriod
-        );
+        const txHash = await transactionManager.requestBypass(amountValue);
 
         alert(`✅ Solana bypass request submitted!\n\nTransaction: ${txHash}\nAmount: ${withdrawalAmount} ${selectedToken}\nPeriod: ${exceedingPeriod}\n\nYou can execute this request after the 24-hour waiting period.`);
       } else {
@@ -396,13 +342,11 @@ const WithdrawalInterface = ({
     setIsLoading(true);
     try {
       if (networkType === "solana") {
-        const adapter = transactionManager.getCurrentAdapter();
-        const txHash = await adapter.removeWithdrawalDestination(destination);
+        const txHash = await transactionManager.removeWithdrawalAddress(destination);
         alert(`✅ Solana withdrawal address removed!\n\nTransaction: ${txHash}\nRemoved: ${destination.slice(0, 8)}...${destination.slice(-4)}`);
       } else {
-        const tx = await savingsContract.removeWithdrawalDestination(destination);
-        await tx.wait();
-        alert(`✅ EVM withdrawal address removed!\n\nTransaction: ${tx.hash}\nRemoved: ${destination.slice(0, 8)}...${destination.slice(-4)}`);
+        const txHash = await transactionManager.removeWithdrawalAddress(destination);
+        alert(`✅ EVM withdrawal address removed!\n\nTransaction: ${txHash}\nRemoved: ${destination.slice(0, 8)}...${destination.slice(-4)}`);
       }
 
       // Refresh internal data
@@ -424,8 +368,7 @@ const WithdrawalInterface = ({
     setIsLoading(true);
     try {
       if (networkType === "solana") {
-        const adapter = transactionManager.getCurrentAdapter();
-        const txHash = await adapter.executeWithdrawalBypass(requestId);
+        const txHash = await transactionManager.executeBypass();
         alert(`✅ Solana bypass request executed!\n\nTransaction: ${txHash}`);
       } else {
         const tx = await savingsContract.executeWithdrawalBypass(requestId);
@@ -456,8 +399,7 @@ const WithdrawalInterface = ({
     setIsLoading(true);
     try {
       if (networkType === "solana") {
-        const adapter = transactionManager.getCurrentAdapter();
-        const txHash = await adapter.cancelWithdrawalBypass(requestId);
+        const txHash = await transactionManager.cancelBypass();
         alert(`✅ Solana bypass request cancelled!\n\nTransaction: ${txHash}`);
       } else {
         const tx = await savingsContract.cancelBypassRequest(requestId);
@@ -483,14 +425,12 @@ const WithdrawalInterface = ({
 
     setIsLoading(true);
     try {
+      const destinationAddress = request.destination || request.requestId || request;
       if (networkType === "solana") {
-        const adapter = transactionManager.getCurrentAdapter();
-        const txHash = await adapter.executeWithdrawalDestinationRequest(request.requestId || request);
+        const txHash = await transactionManager.executeWithdrawalAddressRequest(destinationAddress);
         alert(`✅ Solana withdrawal address approved!\n\nTransaction: ${txHash}`);
       } else {
-        // EVM execution logic
-        const adapter = transactionManager.getCurrentAdapter();
-        const txHash = await adapter.executeWithdrawalAddressRequest(request.requestId || request);
+        const txHash = await transactionManager.executeWithdrawalAddressRequest(destinationAddress);
         alert(`✅ EVM withdrawal address approved!\n\nTransaction: ${txHash}`);
       }
 
@@ -513,8 +453,8 @@ const WithdrawalInterface = ({
     setIsLoading(true);
     try {
       if (networkType === "solana") {
-        const adapter = transactionManager.getCurrentAdapter();
-        const txHash = await adapter.cancelWithdrawalDestinationRequest(requestId);
+        const destinationAddress = requestId?.destination || requestId;
+        const txHash = await transactionManager.cancelWithdrawalAddressRequest(destinationAddress);
         alert(`✅ Solana withdrawal address request cancelled!\n\nTransaction: ${txHash}`);
       } else {
         const tx = await savingsContract.cancelWithdrawalAddressRequest(requestId);
@@ -547,14 +487,12 @@ const WithdrawalInterface = ({
 
     try {
       if (networkType === "solana") {
-        // Solana address request logic
         if (address.length !== 44) {
           alert("Please enter a valid Solana address (44 characters)");
           return;
         }
 
-        const adapter = transactionManager.getCurrentAdapter();
-        const txHash = await adapter.addWithdrawalDestination(address, title);
+        const txHash = await transactionManager.addWithdrawalAddress(title, address);
 
         alert(
           `✅ Solana withdrawal address processed successfully!\n\n` +
@@ -564,15 +502,12 @@ const WithdrawalInterface = ({
           `The address has been processed. Check the withdrawal destinations or pending requests sections.`
         );
       } else {
-        // EVM address request logic
         if (!ethers.isAddress(address)) {
           alert("Please enter a valid Ethereum address");
           return;
         }
 
-        // Use the unified adapter interface we just implemented
-        const adapter = transactionManager.getCurrentAdapter();
-        const txHash = await adapter.addWithdrawalDestination(address, title);
+        const txHash = await transactionManager.addWithdrawalAddress(title, address);
 
         alert(
           `✅ EVM withdrawal address processed successfully!\n\n` +
@@ -1300,7 +1235,6 @@ WithdrawalInterface.propTypes = {
   networkType: PropTypes.string.isRequired,
   selectedNetwork: PropTypes.string.isRequired,
   getCurrentUserAddress: PropTypes.func.isRequired,
-  getCurrentNetwork: PropTypes.func.isRequired,
 
   // Wallet state
   solanaConnected: PropTypes.bool,

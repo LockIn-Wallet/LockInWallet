@@ -128,48 +128,25 @@ const WithdrawalAddressSetupStep = ({
 
     try {
       if (networkType === "solana") {
-        // Solana address request logic (with timelock, same as EVM)
-        // Basic Solana address validation (44 characters, base58)
         if (address.length !== 44) {
           alert("Please enter a valid Solana address (44 characters)");
           return;
         }
-
-        const adapter = transactionManager.getCurrentAdapter();
-        const txHash = await adapter.addWithdrawalDestination(
-          address,
-          title
-        );
-
-        alert(
-          `✅ Solana withdrawal address processed successfully!\n\n` +
-            `Title: ${title}\n` +
-            `Address: ${address}\n` +
-            `Transaction: ${txHash}\n\n` +
-            `The address has been processed based on your contract lock status. Check the withdrawal destinations or pending requests sections.`
-        );
       } else {
-        // EVM address request logic (now uses adapter's smart routing)
-        // Validate address format
         if (!ethers.isAddress(address)) {
           alert("Please enter a valid Ethereum address");
           return;
         }
-
-        const adapter = transactionManager.getCurrentAdapter();
-        const txHash = await adapter.addWithdrawalDestination(
-          address,
-          title
-        );
-
-        alert(
-          `✅ EVM withdrawal address processed successfully!\n\n` +
-            `Title: ${title}\n` +
-            `Address: ${address}\n` +
-            `Transaction: ${txHash}\n\n` +
-            `The address has been processed based on your setup status. Check the withdrawal destinations or pending requests sections.`
-        );
       }
+
+      const txHash = await transactionManager.addWithdrawalAddress(title, address);
+      alert(
+        `✅ Withdrawal address processed successfully!\n\n` +
+          `Title: ${title}\n` +
+          `Address: ${address}\n` +
+          `Transaction: ${txHash}\n\n` +
+          `The address has been processed. Check the withdrawal destinations or pending requests sections.`
+      );
 
       // Refresh internal data
       await fetchWithdrawalData();
@@ -210,28 +187,11 @@ const WithdrawalAddressSetupStep = ({
   // Remove withdrawal address function (moved from App.js)
   const removeWithdrawalAddress = async (destination) => {
     try {
-      if (networkType === "solana") {
-        // Solana implementation
-        if (!transactionManager) {
-          throw new Error("Transaction manager not initialized");
-        }
-
-        const solanaAdapter = transactionManager.getCurrentAdapter();
-        const txHash = await solanaAdapter.removeWithdrawalDestination(
-          destination
-        );
-        console.log("Solana withdrawal address removal transaction:", txHash);
-        alert("Withdrawal address removed successfully!");
-      } else {
-        // EVM implementation
-        if (!transactionManager) {
-          throw new Error("Transaction manager not initialized");
-        }
-
-        const adapter = transactionManager.getCurrentAdapter();
-        const txHash = await adapter.removeWithdrawalAddress(destination);
-        alert("Withdrawal address removed successfully!");
+      if (!transactionManager) {
+        throw new Error("Transaction manager not initialized");
       }
+      await transactionManager.removeWithdrawalAddress(destination);
+      alert("Withdrawal address removed successfully!");
 
       // Refresh internal data
       await fetchWithdrawalData();

@@ -1,7 +1,6 @@
 import React from "react";
 import PropTypes from "prop-types";
 
-// Import styles
 import {
   stepStyles,
   layoutStyles,
@@ -10,6 +9,7 @@ import {
   fontSize,
   getStepContainerStyle,
 } from "../../styles";
+import { getCurrentNetwork } from "../../utils/walletUtils.js";
 
 /**
  * SetupCommitStep Component
@@ -85,7 +85,6 @@ const SetupCommitStep = ({
       const weekly = limitEdits.Weekly?.value ? parseFloat(limitEdits.Weekly.value) : 0;
       const monthly = limitEdits.Monthly?.value ? parseFloat(limitEdits.Monthly.value) : 0;
 
-      // Validate that at least one spending limit is set
       if (daily === 0 && weekly === 0 && monthly === 0) {
         alert("Please set at least one spending limit");
         setIsCommitting(false);
@@ -94,8 +93,15 @@ const SetupCommitStep = ({
 
       console.log("🔄 Committing setup with spending limits...");
 
-      // Single unified call that sets limits AND commits setup
-      const txHash = await transactionManager.commitSetup(daily, weekly, monthly);
+      const selectedNetwork = localStorage.getItem("preferred_solana_network") || "localhost";
+      const network = getCurrentNetwork("solana", selectedNetwork);
+      const defaultToken = network?.tokens?.USDT;
+      const tokenMint = defaultToken?.address || null;
+      const tokenDecimals = defaultToken?.decimals || 6;
+
+      const txHash = await transactionManager.commitSetup(
+        daily, weekly, monthly, false, tokenMint, tokenDecimals
+      );
 
       console.log("✅ Setup committed successfully:", txHash);
       alert("Setup locked in successfully! Your savings wallet is now active with spending limit protection.")

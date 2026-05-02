@@ -1,100 +1,82 @@
 use anchor_lang::prelude::*;
 
-/// Custom error codes for the savings program
 #[error_code]
 pub enum ErrorCode {
-    #[msg("Invalid amount: amount must be greater than zero")]
+    #[msg("Amount must be greater than zero")]
     InvalidAmount,
 
-    #[msg("Math overflow occurred")]
+    #[msg("Arithmetic overflow")]
     ArithmeticOverflow,
 
-    #[msg("Too many different tokens in account (max 10 supported)")]
-    TokenLimitExceeded,
-
-    #[msg("Insufficient balance for this operation")]
+    #[msg("Insufficient balance")]
     InsufficientBalance,
 
-    #[msg("Unauthorized access to this savings account")]
-    UnauthorizedAccess,
-
-    #[msg("Account not properly initialized")]
-    AccountNotInitialized,
-
-    // Spending limits related errors
-    #[msg("Spending limit exceeded for this time period")]
+    #[msg("Spending limit exceeded for this period")]
     SpendingLimitExceeded,
 
-    #[msg("Invalid spending limit parameters")]
-    InvalidLimitParameters,
+    #[msg("Vault name is empty or too long")]
+    InvalidVaultName,
 
-    #[msg("Setup must be committed before withdrawals are allowed")]
-    SetupNotCommitted,
+    #[msg("Vault description is too long")]
+    InvalidVaultDescription,
 
-    #[msg("Spending limits account not found")]
-    SpendingLimitsNotFound,
+    #[msg("Invalid limit: percentage mode values must be 0-10000 basis points")]
+    InvalidLimit,
 
-    #[msg("Period limit not found")]
-    PeriodLimitNotFound,
+    #[msg("Invalid penalty rate: must be 1-5000 basis points (0.01%-50%)")]
+    InvalidPenaltyRate,
 
-    // Withdrawal destinations related errors
-    #[msg("Invalid parameters provided")]
-    InvalidParameters,
+    #[msg("At least one withdrawal limit must be set")]
+    NoLimitsSet,
 
-    #[msg("Too many withdrawal destinations (max 20 allowed)")]
-    TooManyDestinations,
+    #[msg("Only personal vaults allow rule changes")]
+    CommunityVaultImmutable,
 
-    #[msg("Destination address already exists")]
-    DestinationAlreadyExists,
+    #[msg("Cannot join a personal vault")]
+    PersonalVaultOnly,
 
-    #[msg("Cannot set own address as withdrawal destination")]
-    CannotSetOwnAddress,
+    #[msg("Vault is not active")]
+    VaultNotActive,
 
-    #[msg("Withdrawal destination not found")]
-    DestinationNotFound,
+    #[msg("Already a member of this vault")]
+    AlreadyMember,
 
-    #[msg("Destination is not approved for withdrawals")]
-    DestinationNotApproved,
+    #[msg("Member balance must be zero to leave")]
+    BalanceNotZero,
 
-    // Bypass requests related errors
-    #[msg("Too many bypass requests (max 10 allowed)")]
-    TooManyBypassRequests,
+    #[msg("No penalty rewards to claim")]
+    NoPenaltyRewards,
 
-    #[msg("Request is still in timelock period")]
-    RequestStillInTimelock,
-
-    #[msg("Bypass request not found")]
-    RequestNotFound,
-
-    // Proxy related errors
-    #[msg("Invalid savings program")]
-    InvalidSavingsProgram,
-
-    #[msg("Proxy already exists for this user")]
-    ProxyAlreadyExists,
-
-    #[msg("Cross-program invocation failed")]
-    CpiCallFailed,
-
-    // Payment activation related errors
-    #[msg("Permanent address already activated")]
-    AlreadyActivated,
-
-    #[msg("Invalid treasury address")]
-    InvalidTreasuryAddress,
+    #[msg("Token mint does not match vault")]
+    TokenMintMismatch,
 
     #[msg("Unauthorized: only admin can perform this action")]
     Unauthorized,
 
-    #[msg("Permanent address not activated - payment required")]
-    PermanentAddressNotActivated,
+    #[msg("Vault is a SOL vault, use SOL instructions")]
+    ExpectedSolVault,
 
-    #[msg("Insufficient funds for activation fee")]
-    InsufficientFundsForActivation,
+    #[msg("Vault is an SPL vault, use SPL instructions")]
+    ExpectedSplVault,
 
-    #[msg("Invalid penalty rate: must be between 0 and 5000 basis points (50%)")]
-    InvalidPenaltyRate,
+    #[msg("Weekly limit must be >= daily limit")]
+    WeeklyLessThanDaily,
 
-    #[msg("Program config not initialized - penalty rate not available")]
-    ProgramConfigNotInitialized,
+    #[msg("Monthly limit must be >= weekly limit")]
+    MonthlyLessThanWeekly,
+
+    #[msg("Timelock has not expired yet")]
+    TimelockNotExpired,
+
+    #[msg("Destination title is empty or too long")]
+    InvalidDestinationTitle,
+
+    #[msg("Cannot add own address as withdrawal destination")]
+    CannotAddSelfAsDestination,
+
+    #[msg("Active bypass request already exists")]
+    BypassRequestExists,
+
+    #[msg("Active rule change proposal already exists")]
+    ProposalAlreadyExists,
 }
