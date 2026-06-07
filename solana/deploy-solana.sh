@@ -696,13 +696,13 @@ const discriminatorEntries = Object.entries(discriminators)
     .map(([key, value]) => `      '${key}': [${value.join(', ')}]`)
     .join(',\n');
 
-const newDiscriminatorBlock = `// Actual discriminators from anchor build IDL (auto-generated)
-    const discriminators = {
+const newDiscriminatorBlock = `// Instruction discriminators from the program IDL
+const DISC = {
 ${discriminatorEntries}
-    };`;
+};`;
 
 // Find and replace the discriminator section
-const discriminatorRegex = /(\/\/ .*discriminators.*\n\s*const discriminators = \{)([\s\S]*?)(\};)/;
+const discriminatorRegex = /(\/\/ .*discriminators.*\n\s*const DISC = \{)([\s\S]*?)(\};)/;
 
 if (discriminatorRegex.test(adapterContent)) {
     adapterContent = adapterContent.replace(discriminatorRegex, newDiscriminatorBlock);
