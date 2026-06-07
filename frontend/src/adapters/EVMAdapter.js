@@ -3,6 +3,7 @@ import { BlockchainAdapter } from "./BlockchainAdapter.js";
 import SavingsABI from "../SavingsABI.json";
 import MockUSDT_ABI from "../MockUSDT_ABI.json";
 import ProxyDeploymentModuleABI from "../ProxyDeploymentModuleABI.json";
+import TimePeriodLimitsModuleABI from "../TimePeriodLimitsModuleABI.json";
 
 /**
  * EVM Blockchain Adapter for MetaMask and ethers.js integration
@@ -361,6 +362,8 @@ export class EVMAdapter extends BlockchainAdapter {
     );
     const [names, limits, spent, remaining, durations, active] = spendingData;
 
+    const resetData = await this._fetchLimitResetTimes(userAddress, names, durations, active);
+
     const fetchedLimits = [];
     for (let i = 0; i < names.length; i++) {
       fetchedLimits.push({
@@ -370,17 +373,47 @@ export class EVMAdapter extends BlockchainAdapter {
         remaining: Number(this.formatAmount(remaining[i], 6)),
         duration: durations[i].toString(),
         active: active[i],
+        resetAt: resetData[i],
       });
     }
 
-    // Get setup committed status from contract
     const isSetupCommitted = await this.getIsSetupCommitted();
 
-    // Return unified format that matches the service expectation
     return {
       limits: fetchedLimits,
       isSetupCommitted: isSetupCommitted,
     };
+  }
+
+  async _fetchLimitResetTimes(userAddress, names, durations, active) {
+    const resetData = [];
+    try {
+      const TIME_PERIOD_LIMITS_ID = ethers.keccak256(
+        ethers.toUtf8Bytes("TIME_PERIOD_LIMITS"),
+      );
+      const moduleAddress = await this.savingsContract.getModule(TIME_PERIOD_LIMITS_ID);
+      if (!moduleAddress || moduleAddress === ethers.ZeroAddress) {
+        return names.map(() => 0);
+      }
+      const limitsModule = new ethers.Contract(
+        moduleAddress,
+        TimePeriodLimitsModuleABI,
+        this.signer,
+      );
+      for (let i = 0; i < names.length; i++) {
+        if (!active[i]) {
+          resetData.push(0);
+          continue;
+        }
+        const periodData = await limitsModule.getTimePeriodLimit(userAddress, names[i]);
+        const lastReset = Number(periodData.lastReset);
+        const duration = Number(durations[i]);
+        resetData.push(lastReset + duration);
+      }
+    } catch {
+      return names.map(() => 0);
+    }
+    return resetData;
   }
 
   async setSpendingLimits(daily, weekly, monthly) {

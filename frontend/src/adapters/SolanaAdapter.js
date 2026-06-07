@@ -2462,11 +2462,12 @@ export class SolanaAdapter extends BlockchainAdapter {
 
       limits.push({
         name: limit.name,
-        limit: limitAmount,      // Frontend expects 'limit' not 'amount'
+        limit: limitAmount,
         spent: spentAmount,
         remaining: remainingAmount,
         timeRemaining,
-        active: true,            // Frontend expects 'active' not 'isActive'
+        resetAt: nextReset,
+        active: true,
         duration: duration
       });
     });
