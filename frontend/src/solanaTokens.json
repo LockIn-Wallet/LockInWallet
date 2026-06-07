@@ -1,29 +1,29 @@
 {
   "solanaTokens": {
     "USDT": {
-      "address": "DjjiJ3PGhANM8RxocGRJEBuZQS7P7JTpsd3uBrpWGq7W",
+      "address": "Dx1NBTsXuHT8X2dFuzBWA8NgbdHNevth9GSCXXuJSB2C",
       "symbol": "USDT",
       "name": "Test USDT",
       "decimals": 6,
       "recommended": true,
-      "userTokenAccount": "nvUvsqxZJNM7Xf4fkhJGxsxR7YRVAiP2NFVd5EA6ktD"
+      "userTokenAccount": "9Yh6GWUMWXQqj6TUBN9HK2EoFbdAg3Hv3dsHfRhrEoLf"
     },
     "USDC": {
-      "address": "FwKa91j5onFebaV3WkxjaPUCc1bZFHru49Z994u61i2c",
+      "address": "DUv2Few2vhWJbTpGsWGgUyfnSMTmaharpffdno4ghHkJ",
       "symbol": "USDC",
       "name": "Test USDC",
       "decimals": 6,
       "recommended": true,
-      "userTokenAccount": "6aRDgQK3JHJUqVtUFo9QbWebBRUVhEnk7LBq5Vqv9Sfd"
+      "userTokenAccount": "Cx1U9vSGawKuQYh7H2F6MdcebQSqh8PBNSayPEHFbhDN"
     },
     "DAI": {
-      "address": "BtnL955jtsbZfpQDTpt57SCdRkUoZapargv8pksMPVVR",
+      "address": "Ej85iDKN8DJ1E3NDLwWbCpSUtB8oDawd87aaTxcgR9P",
       "symbol": "DAI",
       "name": "Test DAI",
       "decimals": 6,
       "recommended": true,
-      "userTokenAccount": "Fe3XZWLb4L64WWoVkRApAKeLrxNh8rSgXX3NkaudCn8A"
+      "userTokenAccount": "AQTjYo9Q5rgaRUGNhLGECYrPqacwxZSYH1YZMen84mSm"
     }
   },
-  "createdAt": "2026-04-29T17:01:55.966Z"
+  "createdAt": "2026-06-07T12:39:51.986Z"
 }
