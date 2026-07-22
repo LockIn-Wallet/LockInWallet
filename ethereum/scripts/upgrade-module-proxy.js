@@ -8,7 +8,8 @@ const MODULE_IDS = {
   'ProposalSystemModule': ethers.keccak256(ethers.toUtf8Bytes("PROPOSAL_SYSTEM")),
   'BypassSystemModule': ethers.keccak256(ethers.toUtf8Bytes("BYPASS_SYSTEM")),
   'ApprovalSystemModule': ethers.keccak256(ethers.toUtf8Bytes("APPROVAL_SYSTEM")),
-  'ProxyDeploymentModule': ethers.keccak256(ethers.toUtf8Bytes("PROXY_DEPLOYMENT"))
+  'ProxyDeploymentModule': ethers.keccak256(ethers.toUtf8Bytes("PROXY_DEPLOYMENT")),
+  'VaultSystemModule': ethers.keccak256(ethers.toUtf8Bytes("VAULT_SYSTEM"))
 };
 
 async function main() {

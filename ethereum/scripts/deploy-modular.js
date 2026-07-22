@@ -132,6 +132,26 @@ async function main() {
     moduleAddresses.poolTogether = await poolTogetherModule.getAddress();
     console.log(`   ✅ PoolTogetherModule proxy deployed to: ${moduleAddresses.poolTogether}`);
 
+    // 7. Deploy Vault System Module
+    // This module CUSTODIES vault funds, so an already-registered proxy must be
+    // upgraded in place — redeploying it would strand user deposits.
+    console.log("   🏦 Deploying VaultSystemModule (proxy)...");
+    const VaultSystemModule = await ethers.getContractFactory("VaultSystemModule");
+    const vaultSystemId = ethers.keccak256(ethers.toUtf8Bytes("VAULT_SYSTEM"));
+    const existingVaultSystem = isUpgrade ? await savingsCore.getModule(vaultSystemId) : ethers.ZeroAddress;
+    let vaultSystemModule;
+    if (existingVaultSystem !== ethers.ZeroAddress) {
+      vaultSystemModule = await upgrades.upgradeProxy(existingVaultSystem, VaultSystemModule);
+      await vaultSystemModule.waitForDeployment();
+      moduleAddresses.vaultSystem = existingVaultSystem;
+      console.log(`   ✅ VaultSystemModule proxy upgraded in place at: ${moduleAddresses.vaultSystem}`);
+    } else {
+      vaultSystemModule = await upgrades.deployProxy(VaultSystemModule, [savingsAddress], { initializer: "initialize" });
+      await vaultSystemModule.waitForDeployment();
+      moduleAddresses.vaultSystem = await vaultSystemModule.getAddress();
+      console.log(`   ✅ VaultSystemModule proxy deployed to: ${moduleAddresses.vaultSystem}`);
+    }
+
     // Register modules with core contract
     console.log("\n🔗 Registering modules with core contract...");
 
@@ -181,6 +201,11 @@ async function main() {
       ethers.keccak256(ethers.toUtf8Bytes("POOL_TOGETHER")),
       moduleAddresses.poolTogether
     );
+    await tx.wait();
+
+    // Register VaultSystemModule
+    console.log("   Registering VaultSystemModule...");
+    tx = await savingsCore.registerModule(vaultSystemId, moduleAddresses.vaultSystem);
     await tx.wait();
 
     console.log("   ✅ All modules registered successfully");
@@ -385,6 +410,11 @@ async function main() {
       fs.writeFileSync(frontendPoolTogetherABIPath, JSON.stringify(poolTogetherArtifact.abi, null, 2));
       console.log("✅ PoolTogetherModule ABI updated");
 
+      const vaultSystemArtifact = require("../artifacts/contracts/VaultSystemModule.sol/VaultSystemModule.json");
+      const frontendVaultSystemABIPath = path.join(__dirname, "../../frontend/src/VaultSystemModuleABI.json");
+      fs.writeFileSync(frontendVaultSystemABIPath, JSON.stringify(vaultSystemArtifact.abi, null, 2));
+      console.log("✅ VaultSystemModule ABI updated");
+
       // Copy MockUSDT ABI
       if (usdtAddress) {
         const usdtArtifact = require("../artifacts/contracts/MockUSDT.sol/MockUSDT.json");
@@ -416,6 +446,7 @@ async function main() {
     console.log(`  ApprovalSystem:      ${moduleAddresses.approvalSystem}`);
     console.log(`  ProxyDeployment:     ${moduleAddresses.proxyDeployment}`);
     console.log(`  PoolTogether:        ${moduleAddresses.poolTogether}`);
+    console.log(`  VaultSystem:         ${moduleAddresses.vaultSystem}`);
     if (usdtAddress) {
       console.log(`MockUSDT Address:      ${usdtAddress}`);
     }
