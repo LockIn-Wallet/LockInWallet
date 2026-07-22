@@ -291,6 +291,26 @@ describe("VaultSystemModule", function () {
       await expect(vaultModule.connect(user2).claimPenaltyRewards(1)).to.be.revertedWith("Nothing to claim");
     });
 
+    it("excludes the withdrawer's remaining balance from their own penalty", async function () {
+      const { vaultModule, user1, user2 } = await loadFixture(deployVaultSystemFixture);
+      await vaultModule.connect(user1).createVault(ethVaultParams({ vaultType: VAULT_TYPE_COMMUNITY }));
+      await vaultModule.connect(user2).joinVault(1);
+
+      const deposit = hre.ethers.parseEther("100");
+      await vaultModule.connect(user1).deposit(1, deposit, { value: deposit });
+      await vaultModule.connect(user2).deposit(1, deposit, { value: deposit });
+
+      // Partial withdrawal: user1 keeps 50 ETH in the vault after paying a 10 ETH penalty
+      await vaultModule.connect(user1).withdrawWithPenalty(1, hre.ethers.parseEther("50"));
+
+      // The withdrawer must not be refunded any share of their own penalty
+      expect(await vaultModule.pendingPenaltyRewards(1, user1.address)).to.equal(0);
+      // user2's share: 10 ETH spread over the remaining 150 ETH, of which user2 holds 100.
+      // Tolerance covers the 1e12 accumulator's truncation dust (< 1e-10 ETH per unit).
+      const expected = (hre.ethers.parseEther("10") * deposit) / hre.ethers.parseEther("150");
+      expect(await vaultModule.pendingPenaltyRewards(1, user2.address)).to.be.closeTo(expected, 10n ** 9n);
+    });
+
     it("falls back to the treasury when no balance remains to redistribute", async function () {
       const { vaultModule, owner, user1 } = await loadFixture(deployVaultSystemFixture);
       await vaultModule.connect(user1).createVault(ethVaultParams({ vaultType: VAULT_TYPE_COMMUNITY }));
@@ -335,10 +355,9 @@ describe("VaultSystemModule", function () {
   });
 
   describe("Rule updates", function () {
-    it("lets only the creator update rules, with validation", async function () {
+    it("lets only the creator update personal vault rules, with validation", async function () {
       const { vaultModule, user1, user2 } = await loadFixture(deployVaultSystemFixture);
-      await vaultModule.connect(user1).createVault(ethVaultParams({ vaultType: VAULT_TYPE_COMMUNITY }));
-      await vaultModule.connect(user2).joinVault(1);
+      await vaultModule.connect(user1).createVault(ethVaultParams());
 
       await expect(
         vaultModule.connect(user2).updateVaultRules(1, 100, 200, 300, false, 1000)
@@ -352,6 +371,14 @@ describe("VaultSystemModule", function () {
       const vault = await vaultModule.getVault(1);
       expect(vault.dailyLimit).to.equal(100);
       expect(vault.penaltyRateBps).to.equal(1000);
+    });
+
+    it("keeps community vault rules immutable, even for the creator", async function () {
+      const { vaultModule, user1 } = await loadFixture(deployVaultSystemFixture);
+      await vaultModule.connect(user1).createVault(ethVaultParams({ vaultType: VAULT_TYPE_COMMUNITY }));
+      await expect(
+        vaultModule.connect(user1).updateVaultRules(1, 100, 200, 300, false, 1000)
+      ).to.be.revertedWith("Community rules immutable");
     });
   });
 

@@ -75,6 +75,10 @@ function CreateVault({ transactionManager, navigate, networkConfig }) {
     setError(null);
 
     if (!name.trim()) { setError("Vault name is required"); return; }
+    if (tokenValue === "custom" && !customToken.trim()) {
+      setError("Enter the token address, or pick a listed token");
+      return;
+    }
     const dailyVal = parseFloat(daily) || 0;
     const weeklyVal = parseFloat(weekly) || 0;
     const monthlyVal = parseFloat(monthly) || 0;

@@ -5,6 +5,7 @@ import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "./SavingsInterfaces.sol";
 
 /// @title VaultSystemModule
@@ -20,6 +21,8 @@ import "./SavingsInterfaces.sol";
 /// @dev This module custodies vault funds itself; upgrade it only via
 /// `upgrade-module` (UUPS upgradeProxy) so the proxy address keeps the funds.
 contract VaultSystemModule is Initializable, UUPSUpgradeable, OwnableUpgradeable, IVaultSystemModule {
+    using SafeERC20 for IERC20;
+
     ISavingsCore public savingsCore;
     address public treasury;
     uint256 public vaultCount;
@@ -143,6 +146,8 @@ contract VaultSystemModule is Initializable, UUPSUpgradeable, OwnableUpgradeable
     ) external {
         VaultInfo storage vault = _activeVault(vaultId);
         require(msg.sender == vault.creator, "Only creator");
+        // Community vault rules are immutable — members join under fixed terms
+        require(vault.vaultType == VAULT_TYPE_PERSONAL, "Community rules immutable");
         _validateVaultParams(vault.name, vault.description, dailyLimit, weeklyLimit, monthlyLimit, limitsArePercentage, penaltyRateBps);
 
         vault.dailyLimit = dailyLimit;
@@ -161,19 +166,26 @@ contract VaultSystemModule is Initializable, UUPSUpgradeable, OwnableUpgradeable
         VaultInfo storage vault = _activeVault(vaultId);
         VaultMemberInfo storage member = vaultMembers[vaultId][msg.sender];
 
+        uint256 credited = amount;
         if (vault.token == address(0)) {
             require(msg.value == amount, "Incorrect ETH amount");
         } else {
             require(msg.value == 0, "ETH not accepted");
-            require(IERC20(vault.token).transferFrom(msg.sender, address(this), amount), "Transfer failed");
+            // Credit what actually arrived so fee-on-transfer tokens cannot
+            // make recorded balances exceed the module's holdings
+            IERC20 token = IERC20(vault.token);
+            uint256 balanceBefore = token.balanceOf(address(this));
+            token.safeTransferFrom(msg.sender, address(this), amount);
+            credited = token.balanceOf(address(this)) - balanceBefore;
+            require(credited > 0, "Nothing received");
         }
 
         _settlePenalties(vault, member);
-        member.balance += amount;
-        vault.totalBalance += amount;
+        member.balance += credited;
+        vault.totalBalance += credited;
         _snapshotDebt(vault, member);
         vault.updatedAt = block.timestamp;
-        emit VaultDeposit(vaultId, msg.sender, amount);
+        emit VaultDeposit(vaultId, msg.sender, credited);
     }
 
     /// @notice Withdraw within the vault's spending limits.
@@ -207,7 +219,6 @@ contract VaultSystemModule is Initializable, UUPSUpgradeable, OwnableUpgradeable
 
         member.balance -= amount;
         vault.totalBalance -= amount;
-        _snapshotDebt(vault, member);
         vault.updatedAt = block.timestamp;
 
         bool redistribute = vault.vaultType == VAULT_TYPE_COMMUNITY && vault.totalBalance > 0;
@@ -215,6 +226,9 @@ contract VaultSystemModule is Initializable, UUPSUpgradeable, OwnableUpgradeable
             // Reward-per-share accrual over the members still in the vault
             vault.accPenaltyPerShare += (penalty * PENALTY_PRECISION) / vault.totalBalance;
         }
+        // Snapshot AFTER the accrual so the withdrawer's remaining balance is
+        // excluded from the penalty they just paid
+        _snapshotDebt(vault, member);
 
         _payOut(vault.token, msg.sender, userAmount);
         if (!redistribute && penalty > 0) {
@@ -395,9 +409,12 @@ contract VaultSystemModule is Initializable, UUPSUpgradeable, OwnableUpgradeable
 
     function _payOut(address token, address to, uint256 amount) private {
         if (token == address(0)) {
-            payable(to).transfer(amount);
+            // .call instead of .transfer so smart-contract wallets can receive;
+            // all callers are nonReentrant and update state before paying out
+            (bool success, ) = payable(to).call{value: amount}("");
+            require(success, "ETH transfer failed");
         } else {
-            require(IERC20(token).transfer(to, amount), "Transfer failed");
+            IERC20(token).safeTransfer(to, amount);
         }
     }
 }

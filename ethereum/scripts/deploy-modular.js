@@ -57,8 +57,17 @@ async function main() {
         console.log(`   Proxy address (preserved): ${savingsAddress}`);
 
       } catch (error) {
-        console.log(`❌ Upgrade failed: ${error.message}`);
-        console.log(`⚠️  Proxy at ${PROXY_ADDRESS} not found or not accessible`);
+        // Only fall back to a fresh deployment when the proxy genuinely does
+        // not exist. If a contract lives at the address, a transient upgrade
+        // failure must halt: redeploying would orphan module-custodied funds
+        // (VaultSystemModule holds user deposits).
+        const code = await ethers.provider.getCode(PROXY_ADDRESS).catch(() => "0x");
+        if (code && code !== "0x") {
+          console.log(`❌ Upgrade failed but a contract exists at ${PROXY_ADDRESS}: ${error.message}`);
+          console.log("🛑 Aborting instead of redeploying over a live system.");
+          process.exit(1);
+        }
+        console.log(`⚠️  No contract found at ${PROXY_ADDRESS} (${error.message})`);
         console.log("🔄 Proceeding with fresh deployment...\n");
         isUpgrade = false;
       }

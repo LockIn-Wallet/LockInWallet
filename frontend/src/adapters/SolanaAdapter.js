@@ -497,7 +497,11 @@ export class SolanaAdapter extends BlockchainAdapter {
 
     // Limits arrive in business units (percent or token amounts) and are
     // converted to raw units (bps or base units) here.
-    const { decimals } = getTokenMeta(this.networkConfig, tokenMint);
+    const meta = getTokenMeta(this.networkConfig, tokenMint);
+    const decimals =
+      tokenMint && meta.symbol === "TOKEN"
+        ? await this._resolveMintDecimals(tokenMint)
+        : meta.decimals;
     const toRawLimit = (value) => {
       if (!value || value <= 0) return 0;
       return limitsArePercentage ? Math.round(value * 100) : Math.round(value * 10 ** decimals);
@@ -846,15 +850,34 @@ export class SolanaAdapter extends BlockchainAdapter {
 
   // ---- Vault rules (personal only) ----
 
-  async updateVaultRules(vaultAddress, { dailyLimit, weeklyLimit, monthlyLimit, penaltyRateBps, limitsArePercentage }) {
+  async updateVaultRules(vaultAddress, { dailyLimit, weeklyLimit, monthlyLimit, penaltyRateBps, limitsArePercentage } = {}) {
     const vaultPubkey = new PublicKey(vaultAddress);
     const creator = this.wallet.publicKey;
 
+    // Limits arrive in business units (percent or token amounts); omitted
+    // fields (undefined) keep their current on-chain value.
+    const vault = await this.getVaultInfo(vaultAddress);
+    if (!vault) throw new Error("Vault not found");
+    const pctMode = limitsArePercentage ?? vault.limitsArePercentage;
+    if (
+      pctMode !== vault.limitsArePercentage &&
+      (dailyLimit == null || weeklyLimit == null || monthlyLimit == null)
+    ) {
+      // Stored raw limits are meaningless under the other mode, so a mode
+      // switch must respecify every limit
+      throw new Error("Provide daily, weekly and monthly limits when changing the limit type");
+    }
+    const toRawLimit = (value) => {
+      if (value == null) return undefined;
+      if (value <= 0) return 0;
+      return pctMode ? Math.round(value * 100) : Math.round(value * 10 ** vault.tokenDecimals);
+    };
+
     const data = Buffer.concat([
       Buffer.from(DISC.UpdateVaultRules),
-      encodeOptionU64(dailyLimit),
-      encodeOptionU64(weeklyLimit),
-      encodeOptionU64(monthlyLimit),
+      encodeOptionU64(toRawLimit(dailyLimit)),
+      encodeOptionU64(toRawLimit(weeklyLimit)),
+      encodeOptionU64(toRawLimit(monthlyLimit)),
       encodeOptionU16(penaltyRateBps),
       encodeOptionBool(limitsArePercentage),
     ]);
@@ -907,6 +930,21 @@ export class SolanaAdapter extends BlockchainAdapter {
 
   // ---- Read operations ----
 
+  /**
+   * Read decimals from the mint account for tokens missing from the network
+   * config — a wrong-decimals fallback would misprice every amount.
+   */
+  async _resolveMintDecimals(tokenMint) {
+    if (!this._mintDecimalsCache) this._mintDecimalsCache = {};
+    if (this._mintDecimalsCache[tokenMint] != null) return this._mintDecimalsCache[tokenMint];
+
+    const info = await this.connection.getAccountInfo(new PublicKey(tokenMint));
+    if (!info) throw new Error("Token mint not found");
+    const decimals = info.data[44]; // SPL mint layout: decimals u8 at offset 44
+    this._mintDecimalsCache[tokenMint] = decimals;
+    return decimals;
+  }
+
   /** Attach chain-agnostic token metadata used by the unified UI. */
   _enrichVault(vault) {
     const meta = getTokenMeta(this.networkConfig, vault.isSolVault ? null : vault.tokenMint);
@@ -918,11 +956,20 @@ export class SolanaAdapter extends BlockchainAdapter {
     };
   }
 
+  /** Like _enrichVault, but resolves unknown mints' decimals on-chain. */
+  async _enrichVaultAsync(vault) {
+    const enriched = this._enrichVault(vault);
+    if (!enriched.isNativeToken && enriched.tokenSymbol === "TOKEN") {
+      enriched.tokenDecimals = await this._resolveMintDecimals(enriched.tokenMint);
+    }
+    return enriched;
+  }
+
   async getVaultInfo(vaultAddress) {
     const vaultPubkey = new PublicKey(vaultAddress);
     const accountInfo = await this.connection.getAccountInfo(vaultPubkey);
     if (!accountInfo) return null;
-    return this._enrichVault({
+    return this._enrichVaultAsync({
       ...deserializeVault(Buffer.from(accountInfo.data)),
       address: vaultAddress,
     });
@@ -975,11 +1022,13 @@ export class SolanaAdapter extends BlockchainAdapter {
 
     const accounts = await this.connection.getProgramAccounts(PROGRAM_ID, { filters });
 
-    const vaults = accounts.map(({ pubkey, account }) =>
-      this._enrichVault({
-        ...deserializeVault(Buffer.from(account.data)),
-        address: pubkey.toString(),
-      })
+    const vaults = await Promise.all(
+      accounts.map(({ pubkey, account }) =>
+        this._enrichVaultAsync({
+          ...deserializeVault(Buffer.from(account.data)),
+          address: pubkey.toString(),
+        })
+      )
     );
 
     // Client-side filter by token mint if specified

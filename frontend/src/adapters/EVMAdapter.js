@@ -695,6 +695,10 @@ export class EVMAdapter extends BlockchainAdapter {
   async _initializeContracts() {
     if (!this.signer || !this.networkConfig.savingsContract) return;
 
+    // Drop caches tied to the previous network/signer
+    this.vaultModule = null;
+    this._tokenMetaCache = null;
+
     // Initialize savings contract
     this.savingsContract = new ethers.Contract(
       this.networkConfig.savingsContract,
@@ -1022,9 +1026,28 @@ export class EVMAdapter extends BlockchainAdapter {
     return this.vaultModule;
   }
 
-  _mapVault(vaultId, raw) {
+  /**
+   * Resolve token symbol/decimals, falling back to the token contract itself
+   * for tokens missing from the network config (e.g. custom vault tokens) —
+   * a wrong-decimals fallback would misprice every amount by orders of magnitude.
+   */
+  async _resolveTokenMeta(tokenAddress) {
+    const meta = getTokenMeta(this.networkConfig, tokenAddress);
+    if (!tokenAddress || meta.symbol !== "TOKEN") return meta;
+
+    if (!this._tokenMetaCache) this._tokenMetaCache = {};
+    if (this._tokenMetaCache[tokenAddress]) return this._tokenMetaCache[tokenAddress];
+
+    const token = new ethers.Contract(tokenAddress, ERC20ABI, this.provider);
+    const decimals = Number(await token.decimals());
+    const symbol = await token.symbol().catch(() => "TOKEN");
+    const resolved = { symbol, decimals, isNative: false };
+    this._tokenMetaCache[tokenAddress] = resolved;
+    return resolved;
+  }
+
+  _mapVault(vaultId, raw, meta) {
     const token = raw.token === ethers.ZeroAddress ? null : raw.token;
-    const meta = getTokenMeta(this.networkConfig, token);
     return {
       address: vaultId.toString(),
       creator: raw.creator,
@@ -1066,10 +1089,16 @@ export class EVMAdapter extends BlockchainAdapter {
     };
   }
 
+  _toBaseUnits(amount, decimals) {
+    // toFixed avoids scientific notation ("1e-7") and over-precise input,
+    // both of which parseUnits rejects
+    return ethers.parseUnits(Number(amount).toFixed(decimals), decimals);
+  }
+
   _toRawLimit(value, limitsArePercentage, decimals) {
     if (!value || value <= 0) return 0n;
     if (limitsArePercentage) return BigInt(Math.round(value * 100)); // percent -> bps
-    return ethers.parseUnits(value.toString(), decimals);
+    return this._toBaseUnits(value, decimals);
   }
 
   async createVault({
@@ -1085,7 +1114,7 @@ export class EVMAdapter extends BlockchainAdapter {
   }) {
     const vaultModule = await this._getVaultModule();
     const token = tokenMint || ethers.ZeroAddress;
-    const { decimals } = getTokenMeta(this.networkConfig, tokenMint);
+    const { decimals } = await this._resolveTokenMeta(tokenMint);
 
     const tx = await vaultModule.createVault({
       name,
@@ -1132,24 +1161,31 @@ export class EVMAdapter extends BlockchainAdapter {
 
   async updateVaultRules(vaultAddress, rules = {}) {
     const vaultModule = await this._getVaultModule();
-    const vault = await this.getVaultInfo(vaultAddress);
-    if (!vault) throw new Error("Vault not found");
+    // Merge against the raw on-chain values so untouched limits keep their
+    // exact stored amounts (Number round-trips lose wei-level precision).
+    const current = await vaultModule.getVault(vaultAddress);
 
-    const limitsArePercentage = rules.limitsArePercentage ?? vault.limitsArePercentage;
-    const rawCurrent = (value) => BigInt(Math.round(value));
+    const limitsArePercentage = rules.limitsArePercentage ?? current.limitsArePercentage;
+    if (
+      limitsArePercentage !== current.limitsArePercentage &&
+      (rules.dailyLimit == null || rules.weeklyLimit == null || rules.monthlyLimit == null)
+    ) {
+      // Stored raw limits are meaningless under the other mode, so a mode
+      // switch must respecify every limit
+      throw new Error("Provide daily, weekly and monthly limits when changing the limit type");
+    }
+    const token = current.token === ethers.ZeroAddress ? null : current.token;
+    const { decimals } = await this._resolveTokenMeta(token);
+    const mergeLimit = (value, rawCurrent) =>
+      value != null ? this._toRawLimit(value, limitsArePercentage, decimals) : rawCurrent;
+
     const tx = await vaultModule.updateVaultRules(
       vaultAddress,
-      rules.dailyLimit != null
-        ? this._toRawLimit(rules.dailyLimit, limitsArePercentage, vault.tokenDecimals)
-        : rawCurrent(vault.dailyLimit),
-      rules.weeklyLimit != null
-        ? this._toRawLimit(rules.weeklyLimit, limitsArePercentage, vault.tokenDecimals)
-        : rawCurrent(vault.weeklyLimit),
-      rules.monthlyLimit != null
-        ? this._toRawLimit(rules.monthlyLimit, limitsArePercentage, vault.tokenDecimals)
-        : rawCurrent(vault.monthlyLimit),
+      mergeLimit(rules.dailyLimit, current.dailyLimit),
+      mergeLimit(rules.weeklyLimit, current.weeklyLimit),
+      mergeLimit(rules.monthlyLimit, current.monthlyLimit),
       limitsArePercentage,
-      rules.penaltyRateBps ?? vault.penaltyRateBps
+      rules.penaltyRateBps ?? current.penaltyRateBps
     );
     await tx.wait();
     return tx.hash;
@@ -1160,7 +1196,7 @@ export class EVMAdapter extends BlockchainAdapter {
     const vault = await this.getVaultInfo(vaultAddress);
     if (!vault) throw new Error("Vault not found");
 
-    const rawAmount = ethers.parseUnits(amount.toString(), vault.tokenDecimals);
+    const rawAmount = this._toBaseUnits(amount, vault.tokenDecimals);
     if (vault.isNativeToken) {
       const tx = await vaultModule.deposit(vaultAddress, rawAmount, { value: rawAmount });
       await tx.wait();
@@ -1171,6 +1207,11 @@ export class EVMAdapter extends BlockchainAdapter {
     const moduleAddress = await vaultModule.getAddress();
     const allowance = await token.allowance(this.userAddress, moduleAddress);
     if (allowance < rawAmount) {
+      if (allowance > 0n) {
+        // Tokens like USDT reject raising a non-zero allowance directly
+        const resetTx = await token.approve(moduleAddress, 0);
+        await resetTx.wait();
+      }
       const approveTx = await token.approve(moduleAddress, rawAmount);
       await approveTx.wait();
     }
@@ -1184,7 +1225,7 @@ export class EVMAdapter extends BlockchainAdapter {
     const vault = await this.getVaultInfo(vaultAddress);
     if (!vault) throw new Error("Vault not found");
 
-    const rawAmount = ethers.parseUnits(amount.toString(), vault.tokenDecimals);
+    const rawAmount = this._toBaseUnits(amount, vault.tokenDecimals);
     const tx = withPenalty
       ? await vaultModule.withdrawWithPenalty(vaultAddress, rawAmount)
       : await vaultModule.withdraw(vaultAddress, rawAmount);
@@ -1209,12 +1250,16 @@ export class EVMAdapter extends BlockchainAdapter {
 
   async getVaultInfo(vaultAddress) {
     const vaultModule = await this._getVaultModule();
+    let raw;
     try {
-      const raw = await vaultModule.getVault(vaultAddress);
-      return this._mapVault(vaultAddress, raw);
+      raw = await vaultModule.getVault(vaultAddress);
     } catch {
+      // getVault reverts with "Vault not found" for unknown ids
       return null;
     }
+    const token = raw.token === ethers.ZeroAddress ? null : raw.token;
+    const meta = await this._resolveTokenMeta(token);
+    return this._mapVault(vaultAddress, raw, meta);
   }
 
   async getVaultMemberInfo(vaultAddress, memberAddress = null) {
