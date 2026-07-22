@@ -162,6 +162,35 @@ function MainFlow({
     setUserVaults(vaults);
   };
 
+  // The main wallet flow always operates on the personal vault, so list it
+  // first and mark it as current. On EVM the initial setup lives in the legacy
+  // savings account rather than a vault, so it is represented by a synthetic
+  // "Personal Savings" card.
+  const personalVaultAddress = transactionManager?.getPersonalVaultAddress?.() || null;
+  const hasPersonalVault = userVaults.some(({ vault }) => vault.address === personalVaultAddress);
+  const displayVaults = [
+    ...(hasPersonalVault
+      ? []
+      : [{
+          vault: {
+            address: "personal-savings",
+            vaultType: "Personal",
+            name: "Personal Savings",
+            tokenSymbol: "All tokens",
+            dailyLimit: 0,
+            weeklyLimit: 0,
+            monthlyLimit: 0,
+            penaltyRateBps: 0,
+            memberCount: 1,
+          },
+          membership: null,
+          isCurrent: true,
+        }]),
+    ...userVaults
+      .map((entry) => ({ ...entry, isCurrent: entry.vault.address === personalVaultAddress }))
+      .sort((a, b) => Number(b.isCurrent) - Number(a.isCurrent)),
+  ];
+
   const refreshBalances = useCallback(async () => {
     await fetchSpendingLimits();
     setBalanceRefreshTrigger((prev) => prev + 1);
@@ -209,33 +238,30 @@ function MainFlow({
             </div>
           </div>
 
-          {userVaults.length === 0 ? (
-            <div style={{
-              textAlign: "center",
-              padding: spacing.xxl,
-              color: colors.text.secondary,
-              backgroundColor: colors.background.primary,
-              borderRadius: "8px",
-              border: "1px dashed #4a5568",
-            }}>
-              <p>Create additional vaults with their own withdrawal limits — e.g. one for savings, one for fun money.</p>
-            </div>
-          ) : (
-            <div style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))",
-              gap: spacing.lg,
-            }}>
-              {userVaults.map(({ vault, membership: m }) => (
-                <VaultCard
-                  key={vault.address}
-                  vault={vault}
-                  membership={m}
-                  onClick={() => navigate(`/vault/${vault.address}`)}
-                />
-              ))}
-            </div>
-          )}
+          <div style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))",
+            gap: spacing.lg,
+          }}>
+            {displayVaults.map(({ vault, membership: m, isCurrent }) => (
+              <VaultCard
+                key={vault.address}
+                vault={vault}
+                membership={m}
+                isSelected={isCurrent}
+                onClick={isCurrent ? undefined : () => navigate(`/vault/${vault.address}`)}
+              />
+            ))}
+          </div>
+          <p style={{
+            fontSize: fontSize.xs,
+            color: colors.text.secondary,
+            marginTop: spacing.sm,
+            marginBottom: 0,
+          }}>
+            The balances and limits below belong to your current vault. Click another vault to
+            manage it, or create one for a separate purpose — e.g. savings vs. fun money.
+          </p>
         </div>
       )}
 

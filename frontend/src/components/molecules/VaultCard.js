@@ -2,11 +2,16 @@ import React from "react";
 import { colors, spacing, fontSize, borderRadius } from "../../styles";
 import { getTokenDecimals, getTokenSymbol, formatTokenAmount, formatLimit, formatPenalty } from "../../utils/formatUtils";
 
-function VaultCard({ vault, membership, onClick }) {
+function VaultCard({ vault, membership, onClick, isSelected = false }) {
   const isPersonal = vault.vaultType === "Personal";
-  const borderColor = isPersonal ? colors.success.main : "#805ad5";
+  const borderColor = isSelected
+    ? colors.success.light
+    : isPersonal
+    ? colors.success.main
+    : "#805ad5";
   const decimals = getTokenDecimals(vault);
   const tokenLabel = getTokenSymbol(vault);
+  const isClickable = !!onClick;
 
   return (
     <div
@@ -16,16 +21,21 @@ function VaultCard({ vault, membership, onClick }) {
         border: `2px solid ${borderColor}`,
         borderRadius: borderRadius.md,
         padding: spacing.xl,
-        cursor: "pointer",
+        cursor: isClickable ? "pointer" : "default",
+        boxShadow: isSelected ? "0 0 0 2px rgba(154, 230, 180, 0.35)" : "none",
         transition: "transform 0.15s, box-shadow 0.15s",
       }}
       onMouseEnter={(e) => {
+        if (!isClickable) return;
         e.currentTarget.style.transform = "translateY(-2px)";
         e.currentTarget.style.boxShadow = `0 4px 12px rgba(0,0,0,0.3)`;
       }}
       onMouseLeave={(e) => {
+        if (!isClickable) return;
         e.currentTarget.style.transform = "translateY(0)";
-        e.currentTarget.style.boxShadow = "none";
+        e.currentTarget.style.boxShadow = isSelected
+          ? "0 0 0 2px rgba(154, 230, 180, 0.35)"
+          : "none";
       }}
     >
       {/* Header */}
@@ -33,15 +43,29 @@ function VaultCard({ vault, membership, onClick }) {
         <h3 style={{ margin: 0, color: "white", fontSize: fontSize.lg }}>
           {vault.name}
         </h3>
-        <span style={{
-          fontSize: fontSize.xs,
-          padding: "2px 8px",
-          borderRadius: borderRadius.sm,
-          backgroundColor: isPersonal ? "rgba(72,187,120,0.2)" : "rgba(128,90,213,0.2)",
-          color: isPersonal ? colors.success.light : "#d6bcfa",
-        }}>
-          {vault.vaultType}
-        </span>
+        <div style={{ display: "flex", gap: spacing.sm }}>
+          {isSelected && (
+            <span style={{
+              fontSize: fontSize.xs,
+              padding: "2px 8px",
+              borderRadius: borderRadius.sm,
+              backgroundColor: colors.success.main,
+              color: "#1a202c",
+              fontWeight: "bold",
+            }}>
+              ✓ Current
+            </span>
+          )}
+          <span style={{
+            fontSize: fontSize.xs,
+            padding: "2px 8px",
+            borderRadius: borderRadius.sm,
+            backgroundColor: isPersonal ? "rgba(72,187,120,0.2)" : "rgba(128,90,213,0.2)",
+            color: isPersonal ? colors.success.light : "#d6bcfa",
+          }}>
+            {vault.vaultType}
+          </span>
+        </div>
       </div>
 
       {/* Token */}
