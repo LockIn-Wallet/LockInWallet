@@ -102,7 +102,23 @@ async function fetchSolanaWithdrawalAddresses(params) {
  * @returns {Promise<Array>} - Array of formatted EVM withdrawal addresses
  */
 async function fetchEvmWithdrawalAddresses(params) {
-  const { savingsContract, userAddress } = params;
+  const { savingsContract, userAddress, transactionManager } = params;
+
+  // The transaction manager routes to the legacy account or the selected
+  // vault (which has no destination whitelist on EVM yet, so it returns [])
+  if (transactionManager) {
+    const addresses = await transactionManager.getWithdrawalAddresses();
+    return (addresses || []).map((a) => {
+      const timestamp = a.addedTimestamp ?? a.addedAt ?? 0;
+      return {
+        title: a.title,
+        destination: a.destination,
+        addedTimestamp: timestamp,
+        addedDate: new Date(timestamp * 1000).toLocaleDateString(),
+        networkType: 'evm',
+      };
+    });
+  }
 
   if (!savingsContract || !userAddress) {
     console.log('⏭️ Skipping fetchWithdrawalAddresses for EVM - missing contract or user');

@@ -67,6 +67,11 @@ export class TransactionManager {
     return this.activeVaultAddress || this.personalVaultAddress;
   }
 
+  /** True when the user explicitly selected a vault (not the default account). */
+  isVaultSelected() {
+    return !!this.activeVaultAddress;
+  }
+
   _usesLegacyAccount() {
     // EVM's initial setup lives in the legacy savings account; only an
     // explicitly selected vault routes through the vault module

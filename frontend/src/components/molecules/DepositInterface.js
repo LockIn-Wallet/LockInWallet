@@ -58,54 +58,29 @@ const DepositInterface = ({
   const [depositAddress, setDepositAddress] = useState("");
   const [isProxyDeployed, setIsProxyDeployed] = useState(false);
 
-  // Proxy status checking function (moved from App.js)
+  // Proxy status checking — the transaction manager resolves the deposit
+  // address for the legacy account or the currently selected vault
   const checkProxyStatus = async () => {
-    if (networkType === "evm") {
-      // EVM proxy status check
-      if (!savingsContract || !signer) {
-        console.log("❌ No contract or signer available for EVM proxy check");
-        return;
-      }
+    if (!transactionManager) {
+      console.log("❌ No transaction manager available for proxy check");
+      return;
+    }
 
-      try {
-        const userAddress = await signer.getAddress();
-        console.log(`🔍 Checking EVM proxy status for user: ${userAddress}`);
+    try {
+      const userAddress = await transactionManager.getAddress();
+      console.log(`🔍 Checking deposit address status for user: ${userAddress}`);
 
-        const proxyDeployed = await savingsContract.isProxyDeployed(userAddress);
-        const depositAddress = await savingsContract.getUserDepositAddress(userAddress);
+      const proxyDeployed = await transactionManager.isProxyDeployed(userAddress);
+      const depositAddress = await transactionManager.getDepositAddress(userAddress);
 
-        console.log(`✅ EVM proxy status: deployed=${proxyDeployed}, address=${depositAddress}`);
+      console.log(`✅ Deposit address status: deployed=${proxyDeployed}, address=${depositAddress}`);
 
-        setIsProxyDeployed(proxyDeployed);
-        setDepositAddress(proxyDeployed ? depositAddress : "");
-      } catch (error) {
-        console.error("❌ Error checking EVM proxy status:", error);
-        setIsProxyDeployed(false);
-        setDepositAddress("");
-      }
-    } else if (networkType === "solana") {
-      // Solana proxy status check
-      if (!transactionManager) {
-        console.log("❌ No transaction manager available for Solana proxy check");
-        return;
-      }
-
-      try {
-        const userAddress = await transactionManager.getAddress();
-        console.log(`🔍 Checking Solana proxy status for user: ${userAddress}`);
-
-        const proxyDeployed = await transactionManager.isProxyDeployed(userAddress);
-        const depositAddress = await transactionManager.getDepositAddress(userAddress);
-
-        console.log(`✅ Solana proxy status: deployed=${proxyDeployed}, address=${depositAddress}`);
-
-        setIsProxyDeployed(proxyDeployed);
-        setDepositAddress(proxyDeployed ? depositAddress : "");
-      } catch (error) {
-        console.error("❌ Error checking Solana proxy status:", error);
-        setIsProxyDeployed(false);
-        setDepositAddress("");
-      }
+      setIsProxyDeployed(proxyDeployed);
+      setDepositAddress(proxyDeployed ? depositAddress : "");
+    } catch (error) {
+      console.error("❌ Error checking deposit address status:", error);
+      setIsProxyDeployed(false);
+      setDepositAddress("");
     }
   };
 

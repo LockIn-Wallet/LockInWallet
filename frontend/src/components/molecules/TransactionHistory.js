@@ -137,6 +137,10 @@ const TransactionHistory = ({
       let history = [];
       if (networkType === "solana") {
         history = await fetchSolanaTransactionHistory({ transactionManager });
+      } else if (transactionManager?.isVaultSelected?.()) {
+        // EVM vault events live on the vault module, not the savings contract;
+        // per-vault history is not implemented yet
+        history = [];
       } else {
         const tokens = getTokens();
         history = await fetchTransactionHistory({

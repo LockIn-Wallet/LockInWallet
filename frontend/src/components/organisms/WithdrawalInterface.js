@@ -218,7 +218,8 @@ const WithdrawalInterface = ({
 
         alert(`✅ Solana withdrawal successful!\n\nTransaction: ${txHash}\nAmount: ${withdrawalAmount} ${selectedToken}\nDestination: ${destinationLabel}`);
       } else {
-        // EVM withdrawal to destination logic
+        // EVM withdrawal routed through the transaction manager so it targets
+        // the legacy account or the currently selected vault
         console.log("💸 EVM: Withdrawing to destination", withdrawalAmount, selectedToken, selectedWithdrawalDestination);
 
         let destinationAddress = selectedWithdrawalDestination;
@@ -228,24 +229,21 @@ const WithdrawalInterface = ({
           destinationAddress = getCurrentUserAddress();
         }
 
-        let tx;
-        if (selectedToken === "ETH") {
-          // Withdraw ETH to destination
-          const amountWei = ethers.parseEther(withdrawalAmount);
-          tx = await savingsContract.withdrawTo(amountWei, ethers.ZeroAddress, destinationAddress);
-        } else {
-          // Withdraw ERC20 token to destination
-          const network = getCurrentNetwork(networkType, selectedNetwork);
-          const tokenInfo = network.tokens[selectedToken];
-          if (!tokenInfo) {
-            throw new Error(`Token ${selectedToken} not found in network configuration`);
-          }
-          const amountTokens = ethers.parseUnits(withdrawalAmount, tokenInfo.decimals);
-          tx = await savingsContract.withdrawTo(amountTokens, tokenInfo.address, destinationAddress);
+        const network = getCurrentNetwork(networkType, selectedNetwork);
+        const tokenAddress = selectedToken === "ETH"
+          ? ethers.ZeroAddress
+          : network.tokens[selectedToken]?.address;
+        if (!tokenAddress) {
+          throw new Error(`Token ${selectedToken} not found in network configuration`);
         }
 
-        await tx.wait();
-        alert(`✅ EVM withdrawal successful!\n\nTransaction: ${tx.hash}\nAmount: ${withdrawalAmount} ${selectedToken}\nDestination: ${destinationAddress.slice(0, 8)}...${destinationAddress.slice(-4)}`);
+        const result = await transactionManager.withdraw(
+          parseFloat(withdrawalAmount),
+          tokenAddress,
+          destinationAddress
+        );
+        const txHash = result?.hash || result;
+        alert(`✅ EVM withdrawal successful!\n\nTransaction: ${txHash}\nAmount: ${withdrawalAmount} ${selectedToken}\nDestination: ${destinationAddress.slice(0, 8)}...${destinationAddress.slice(-4)}`);
       }
 
       // Clear form and notify parent components

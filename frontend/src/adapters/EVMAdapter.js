@@ -297,17 +297,19 @@ export class EVMAdapter extends BlockchainAdapter {
   async withdraw(amount, tokenAddress, destination = null) {
     if (!this.savingsContract) throw new Error("Contract not initialized");
 
-    const amountWei = this.parseAmount(amount, 6); // Assuming USDT decimals
+    const token = !tokenAddress || tokenAddress === this.ETH_ADDRESS ? null : tokenAddress;
+    const { decimals } = await this._resolveTokenMeta(token);
+    const rawAmount = this._toBaseUnits(amount, decimals);
 
     let tx;
     if (destination) {
       tx = await this.savingsContract.withdrawTo(
-        amountWei,
-        tokenAddress,
+        rawAmount,
+        token || this.ETH_ADDRESS,
         destination,
       );
     } else {
-      tx = await this.savingsContract.withdraw(amountWei, tokenAddress);
+      tx = await this.savingsContract.withdraw(rawAmount, token || this.ETH_ADDRESS);
     }
 
     const receipt = await tx.wait();
