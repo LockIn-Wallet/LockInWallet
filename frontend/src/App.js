@@ -43,6 +43,9 @@ import {
   hasProductionNetworks,
 } from "./utils/networkFilter.js";
 
+// Import feature flags
+import { isSolanaEnabled } from "./utils/featureFlags.js";
+
 
 // Import provider management utilities
 import {
@@ -99,6 +102,11 @@ const USDT_ADDRESS = "0x610178dA211FEF7D417bC0e6FeD39F05609AD788"; // Updated: 0
 function AppContent() {
   // Network state management - try to restore from localStorage
   const [networkType, setNetworkType] = useState(() => {
+    // Solana login is feature-flagged off until its programs are deployed
+    if (!isSolanaEnabled()) {
+      return "evm";
+    }
+
     // Check localStorage first
     const saved = localStorage.getItem("preferredNetworkType");
     if (saved === "solana" || saved === "evm") {
@@ -416,7 +424,7 @@ function AppContentInner({
     const detectSolanaConnection = async () => {
       // Only run if user preferred Solana or if we need to auto-detect
       const savedNetworkType = localStorage.getItem("preferredNetworkType");
-      if (savedNetworkType === "solana" && !solanaConnected) {
+      if (isSolanaEnabled() && savedNetworkType === "solana" && !solanaConnected) {
         // Try to auto-connect to existing Solana wallet
         if (solanaWallet && !solanaConnected) {
           try {

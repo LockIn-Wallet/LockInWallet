@@ -1,31 +1,27 @@
 import React from "react";
 
-import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
-
 import bobbyLeeVideo from "../../assets/video/bobby_lee.mp4";
+import lockinWalletImage from "../../assets/images/lockinwallet.jpg";
 
-import {
-  layoutStyles,
-  spacing,
-  buttonStyles,
-  buttonHoverEffects,
-  colors,
-  fontSize,
-  fontWeight,
-  borderRadius,
-} from "../../styles";
+import TypewriterText from "../atoms/TypewriterText.js";
+import WalletConnectButtons from "./WalletConnectButtons.js";
+import TimeLockShowcase from "../organisms/TimeLockShowcase.js";
+import PrizeSavingsShowcase from "../organisms/PrizeSavingsShowcase.js";
 
-import { getAvailableNetworks } from "../../utils/networkFilter.js";
+import { homeStyles } from "../../styles";
 
-const hasMetaMaskInstalled = () => !!window.ethereum;
-const hasPhantomInstalled = () =>
-  !!(window.phantom?.solana || window.solana?.isPhantom);
+const HERO_TYPEWRITER_WORDS = [
+  "Hackers can't drain it.",
+  "Stealers hit a wall.",
+  "Your savings stay yours.",
+  "And it can win prizes.",
+];
 
-const hasEvmNetworks = () =>
-  getAvailableNetworks("evm").some((n) => n.deployed || n.isLocal);
-const hasSolanaNetworks = () =>
-  getAvailableNetworks("solana").some((n) => n.deployed || n.isLocal);
-
+/**
+ * WalletConnectionPrompt - the logged-out homepage. Shows connect options
+ * plus a product showcase: the time-lock security demo and the opt-in
+ * no-loss prize savings demo.
+ */
 const WalletConnectionPrompt = ({
   provider,
   networkType,
@@ -43,125 +39,69 @@ const WalletConnectionPrompt = ({
     return null;
   }
 
-  const canUseMetaMask = hasMetaMaskInstalled() && hasEvmNetworks();
-  const canUsePhantom = hasPhantomInstalled() && hasSolanaNetworks();
-  const isInSolanaMode = networkType === "solana";
-
   return (
-    <div style={layoutStyles.emptyState}>
-      <div
-        style={{
-          textAlign: "center",
-          marginBottom: spacing.xxxxl,
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          gap: spacing.md,
-        }}
-      >
-        {isInSolanaMode ? (
-          <>
-            <WalletMultiButton />
-            {canUseMetaMask && (
-              <button
-                onClick={connectWallet}
-                style={buttonStyles.metamask}
-                onMouseEnter={buttonHoverEffects.metamaskHover}
-                onMouseLeave={buttonHoverEffects.metamaskReset}
-              >
-                🦊 Connect MetaMask
-              </button>
-            )}
-          </>
-        ) : (
-          <>
-            {canUseMetaMask && (
-              <button
-                onClick={connectWallet}
-                style={buttonStyles.metamask}
-                onMouseEnter={buttonHoverEffects.metamaskHover}
-                onMouseLeave={buttonHoverEffects.metamaskReset}
-              >
-                🦊 Connect MetaMask
-              </button>
-            )}
-            {canUsePhantom && onConnectPhantom && (
-              <button
-                onClick={onConnectPhantom}
-                style={buttonStyles.phantom}
-                onMouseEnter={buttonHoverEffects.phantomHover}
-                onMouseLeave={buttonHoverEffects.phantomReset}
-              >
-                👻 Connect Phantom
-              </button>
-            )}
-          </>
-        )}
-      </div>
-
-      {/* Hero Image */}
-      <div
-        style={{
-          textAlign: "center",
-          marginTop: spacing.xl,
-          marginBottom: spacing.xl,
-        }}
-      >
-        <img
-          src={require("../../assets/images/lockinwallet.jpg")}
-          alt="LockIn Wallet"
-          style={{
-            maxWidth: "100%",
-            height: "auto",
-            maxHeight: "300px",
-            borderRadius: borderRadius.lg,
-            boxShadow: "0 4px 12px rgba(0, 0, 0, 0.2)",
-          }}
+    <div style={homeStyles.container}>
+      {/* Hero */}
+      <div style={homeStyles.hero}>
+        <h2 style={homeStyles.heroTitle}>
+          Time-lock your crypto.
+          <br />
+          <TypewriterText
+            words={HERO_TYPEWRITER_WORDS}
+            style={homeStyles.heroTypewriter}
+          />
+        </h2>
+        <p style={homeStyles.heroSubtitle}>
+          LockInWallet keeps your savings behind on-chain time locks and
+          spending limits you set yourself. Even a stolen private key can only
+          leak a trickle — and your locked funds can join a no-loss prize pool
+          while they sit safe.
+        </p>
+        <WalletConnectButtons
+          networkType={networkType}
+          connectWallet={connectWallet}
+          onConnectPhantom={onConnectPhantom}
         />
       </div>
 
-      {/* Video */}
-      <div
-        style={{
-          textAlign: "center",
-          marginBottom: spacing.xl,
-        }}
-      >
+      {/* Feature demo: time-locked funds vs a stolen key */}
+      <TimeLockShowcase />
+
+      {/* Feature demo: PoolTogether-style no-loss prize savings */}
+      <PrizeSavingsShowcase />
+
+      {/* Brand media */}
+      <div style={homeStyles.mediaSection}>
+        <img
+          src={lockinWalletImage}
+          alt="LockIn Wallet"
+          style={homeStyles.mediaImage}
+        />
+      </div>
+
+      <div style={homeStyles.mediaSection}>
         <video
           src={bobbyLeeVideo}
           controls
           loop
           playsInline
-          style={{
-            maxWidth: "100%",
-            height: "auto",
-            maxHeight: "400px",
-            borderRadius: borderRadius.lg,
-            boxShadow: "0 4px 12px rgba(0, 0, 0, 0.2)",
-          }}
+          style={homeStyles.mediaVideo}
         />
       </div>
 
-      {/* Descriptive Text */}
-      <div
-        style={{
-          textAlign: "center",
-          marginBottom: spacing.xl,
-          padding: `0 ${spacing.lg}`,
-        }}
-      >
-        <p
-          style={{
-            fontSize: fontSize.xl,
-            fontWeight: fontWeight.medium,
-            color: colors.text.primary,
-            lineHeight: "1.6",
-            margin: 0,
-          }}
-        >
-          Fully on chain timelocked wallet that limits the amount you can
-          withdraw to keep you alive and happy.
-        </p>
+      <p style={homeStyles.footerTagline}>
+        Fully on chain timelocked wallet that limits the amount you can
+        withdraw to keep you alive and happy.
+      </p>
+
+      {/* Closing CTA */}
+      <div style={homeStyles.ctaSection}>
+        <h2 style={homeStyles.ctaTitle}>Ready to lock it in?</h2>
+        <WalletConnectButtons
+          networkType={networkType}
+          connectWallet={connectWallet}
+          onConnectPhantom={onConnectPhantom}
+        />
       </div>
     </div>
   );

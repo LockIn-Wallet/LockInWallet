@@ -1,4 +1,5 @@
 import networkConfig from "../networkConfig.json";
+import { isSolanaEnabled } from "./featureFlags.js";
 
 /**
  * Network filtering utilities for production vs development environments
@@ -35,6 +36,11 @@ export const isNetworkDeployed = (networkType, networkKey) => {
  * @returns {Array} Array of {key, name, deployed} objects
  */
 export const getAvailableNetworks = (networkType, environment = process.env.NODE_ENV) => {
+  // Solana is feature-flagged off until its programs are deployed
+  if (networkType === "solana" && !isSolanaEnabled()) {
+    return [];
+  }
+
   const networks = networkConfig[networkType] || {};
   const networkList = Object.entries(networks).map(([key, config]) => ({
     key,

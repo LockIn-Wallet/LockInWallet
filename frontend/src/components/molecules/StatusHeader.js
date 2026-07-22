@@ -73,7 +73,7 @@ const StatusHeader = ({
       </h1>
 
       {/* Tagline - Only show when wallet is disconnected */}
-      {(!provider && networkType !== "solana") ||
+      {/* {(!provider && networkType !== "solana") ||
       (networkType === "solana" && (!solanaConnected || !solanaWallet)) ? (
         <div
           style={{
@@ -106,7 +106,7 @@ const StatusHeader = ({
             even from yourself
           </p>
         </div>
-      ) : null}
+      ) : null} */}
 
       {/* Status Info Card */}
       {(provider || (networkType === "solana" && solanaWallet)) && (
