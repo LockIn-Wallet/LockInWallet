@@ -103,7 +103,7 @@ function VaultDetail({ transactionManager, wallet }) {
       <div style={{ textAlign: "center", padding: "40px" }}>
         <p style={{ color: "#fc8181" }}>Vault not found</p>
         <button style={buttonStyles.secondary} onClick={() => navigate("/")}>
-          Go to Dashboard
+          Back to Wallet
         </button>
       </div>
     );

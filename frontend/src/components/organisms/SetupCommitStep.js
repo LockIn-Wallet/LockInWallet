@@ -38,6 +38,9 @@ const SetupCommitStep = ({
   onSetupCommitted,
   onSpendingLimitsRefresh,
   // onSaveSpendingLimits, // Temporarily disabled to prevent auto-triggering transactions
+
+  // "fixed" or "percent" — how the entered limits should be interpreted
+  limitsMode = "fixed",
 }) => {
   // Check for both saved spending limits AND unsaved changes in limit edits
   const hasSavedSpendingLimits = spendingLimits &&
@@ -93,14 +96,20 @@ const SetupCommitStep = ({
 
       console.log("🔄 Committing setup with spending limits...");
 
+      const limitsArePercentage = limitsMode === "percent";
+      if (limitsArePercentage && (daily > 100 || weekly > 100 || monthly > 100)) {
+        alert("Percentage limits cannot exceed 100%");
+        setIsCommitting(false);
+        return;
+      }
+
       const selectedNetwork = localStorage.getItem("preferred_solana_network") || "localhost";
       const network = getCurrentNetwork("solana", selectedNetwork);
       const defaultToken = network?.tokens?.USDT;
       const tokenMint = defaultToken?.address || null;
-      const tokenDecimals = defaultToken?.decimals || 6;
 
       const txHash = await transactionManager.commitSetup(
-        daily, weekly, monthly, false, tokenMint, tokenDecimals
+        daily, weekly, monthly, limitsArePercentage, tokenMint
       );
 
       console.log("✅ Setup committed successfully:", txHash);

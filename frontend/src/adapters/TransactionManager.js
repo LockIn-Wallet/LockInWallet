@@ -88,6 +88,13 @@ export class TransactionManager {
     return !!this.personalVaultAddress;
   }
 
+  supportsPercentSetupLimits() {
+    // Solana setup creates a personal vault, which supports percent-of-balance
+    // limits; EVM setup still uses the legacy TimePeriodLimits module, which
+    // only knows fixed amounts
+    return this.networkType === "solana";
+  }
+
   async getPersonalVault() {
     if (!this.personalVaultAddress) return null;
     return this.getAdapter().getVaultInfo(this.personalVaultAddress);

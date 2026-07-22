@@ -18,6 +18,9 @@ import {
   fetchPendingLimitProposals as fetchPendingLimitProposalsService,
 } from "../../services";
 
+import LimitModeToggle from "../molecules/LimitModeToggle.js";
+import LimitPeriodCards from "../molecules/LimitPeriodCards.js";
+
 /**
  * SpendingLimitsSetup - Spending limits configuration component
  * Complete spending limits configuration component preserving all original styling
@@ -38,6 +41,11 @@ const SpendingLimitsSetup = ({
   getCurrentUserAddress: getUserAddress,
   onSpendingLimitsUpdate,
   onSetSaveCallback, // New callback to set save function
+
+  // Limit mode (fixed vs % of balance) during initial setup
+  limitsMode = "fixed",
+  onLimitsModeChange,
+  showModeToggle = false,
 }) => {
   // Use parent spending limits when available, otherwise internal state for loading
   const [spendingLimits, setSpendingLimits] = useState(parentSpendingLimits || []);
@@ -471,6 +479,22 @@ const SpendingLimitsSetup = ({
         <h4 style={{ color: "#9ae6b4", margin: "0 0 15px 0" }}>
           🎯 Standard Time Periods
         </h4>
+        {!isSetupCommitted ? (
+          <>
+            {showModeToggle && onLimitsModeChange && (
+              <LimitModeToggle mode={limitsMode} onChange={onLimitsModeChange} />
+            )}
+            <LimitPeriodCards
+              values={{
+                Daily: limitEdits.Daily?.value || "",
+                Weekly: limitEdits.Weekly?.value || "",
+                Monthly: limitEdits.Monthly?.value || "",
+              }}
+              onChange={updateLimitEdit}
+              unit={limitsMode === "percent" ? "%" : tokenSymbol}
+            />
+          </>
+        ) : (
         <div
           style={{
             display: "grid",
@@ -1005,6 +1029,7 @@ const SpendingLimitsSetup = ({
             );
           })}
         </div>
+        )}
 
         <div
           style={{

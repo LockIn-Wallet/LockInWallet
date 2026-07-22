@@ -8,33 +8,19 @@ import {
   borderRadius,
 } from "../../styles";
 import { getTokenMeta, isStablecoin } from "../../utils/tokenUtils.js";
+import LimitModeToggle from "../molecules/LimitModeToggle.js";
+import LimitPeriodCards from "../molecules/LimitPeriodCards.js";
 
 const EVM_ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
-
-const LIMIT_MODES = [
-  {
-    key: "percent",
-    label: "% of balance",
-    hint: "The limit scales with your balance — best for volatile assets whose price moves a lot.",
-  },
-  {
-    key: "fixed",
-    label: "Fixed amount",
-    hint: "A predictable amount per period — best for stablecoins.",
-  },
-];
 
 function CreateVault({ transactionManager, navigate, networkConfig }) {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
-  const [vaultType, setVaultType] = useState("Personal");
   const [tokenValue, setTokenValue] = useState(null);
   const [customToken, setCustomToken] = useState("");
   const [limitMode, setLimitMode] = useState("percent");
   const [modeTouched, setModeTouched] = useState(false);
-  const [daily, setDaily] = useState("5");
-  const [weekly, setWeekly] = useState("");
-  const [monthly, setMonthly] = useState("");
+  const [limits, setLimits] = useState({ Daily: "5", Weekly: "", Monthly: "" });
   const [penaltyPct, setPenaltyPct] = useState("20");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -53,7 +39,6 @@ function CreateVault({ transactionManager, navigate, networkConfig }) {
   const resolvedToken = tokenValue === "custom" ? customToken.trim() || null : tokenValue;
   const selectedMeta = getTokenMeta(networkConfig, resolvedToken);
   const isPercent = limitMode === "percent";
-  const limitUnit = isPercent ? "%" : selectedMeta.symbol;
 
   const handleTokenChange = (value) => {
     setTokenValue(value);
@@ -79,9 +64,9 @@ function CreateVault({ transactionManager, navigate, networkConfig }) {
       setError("Enter the token address, or pick a listed token");
       return;
     }
-    const dailyVal = parseFloat(daily) || 0;
-    const weeklyVal = parseFloat(weekly) || 0;
-    const monthlyVal = parseFloat(monthly) || 0;
+    const dailyVal = parseFloat(limits.Daily) || 0;
+    const weeklyVal = parseFloat(limits.Weekly) || 0;
+    const monthlyVal = parseFloat(limits.Monthly) || 0;
     if (!dailyVal && !weeklyVal && !monthlyVal) {
       setError("At least one withdrawal limit is required");
       return;
@@ -96,7 +81,7 @@ function CreateVault({ transactionManager, navigate, networkConfig }) {
       const result = await transactionManager.createVault({
         name: name.trim(),
         description: description.trim(),
-        vaultType,
+        vaultType: "Personal",
         tokenMint: resolvedToken,
         dailyLimit: dailyVal,
         weeklyLimit: weeklyVal,
@@ -131,40 +116,6 @@ function CreateVault({ transactionManager, navigate, networkConfig }) {
       <h2 style={{ color: "white", marginBottom: spacing.xl }}>Create Vault</h2>
 
       <form onSubmit={handleSubmit}>
-        {/* Vault Type */}
-        <div style={{ marginBottom: spacing.xl }}>
-          <label style={formStyles.label}>Vault Type</label>
-          <div style={{ display: "flex", gap: spacing.md }}>
-            {["Personal", "Community"].map((type) => (
-              <button
-                key={type}
-                type="button"
-                onClick={() => setVaultType(type)}
-                style={{
-                  ...buttonStyles.secondary,
-                  flex: 1,
-                  border: `2px solid ${vaultType === type
-                    ? (type === "Personal" ? colors.success.main : "#805ad5")
-                    : "transparent"
-                  }`,
-                  backgroundColor: vaultType === type
-                    ? "rgba(255,255,255,0.1)"
-                    : "rgba(255,255,255,0.03)",
-                }}
-              >
-                <div style={{ fontWeight: "bold", marginBottom: "4px" }}>
-                  {type === "Personal" ? "Personal" : "Community"}
-                </div>
-                <div style={{ fontSize: fontSize.xs, color: colors.text.secondary }}>
-                  {type === "Personal"
-                    ? "Only you. Mutable rules."
-                    : "Shareable. Immutable rules."}
-                </div>
-              </button>
-            ))}
-          </div>
-        </div>
-
         {/* Name */}
         <div style={{ marginBottom: spacing.lg }}>
           <label style={formStyles.label}>Vault Name *</label>
@@ -213,70 +164,17 @@ function CreateVault({ transactionManager, navigate, networkConfig }) {
           )}
         </div>
 
-        {/* Limit mode */}
+        {/* Withdrawal Limits — same UI as the initial wallet setup */}
         <div style={{ marginBottom: spacing.lg }}>
-          <label style={formStyles.label}>Withdrawal Limit Type</label>
-          <div style={{ display: "flex", gap: spacing.md }}>
-            {LIMIT_MODES.map((mode) => (
-              <button
-                key={mode.key}
-                type="button"
-                onClick={() => handleModeChange(mode.key)}
-                style={{
-                  ...buttonStyles.secondary,
-                  flex: 1,
-                  border: `2px solid ${limitMode === mode.key ? colors.success.main : "transparent"}`,
-                  backgroundColor: limitMode === mode.key
-                    ? "rgba(255,255,255,0.1)"
-                    : "rgba(255,255,255,0.03)",
-                }}
-              >
-                <div style={{ fontWeight: "bold", marginBottom: "4px" }}>{mode.label}</div>
-                <div style={{ fontSize: fontSize.xs, color: colors.text.secondary }}>
-                  {mode.hint}
-                </div>
-              </button>
-            ))}
-          </div>
-          {!modeTouched && (
-            <p style={{ fontSize: fontSize.xs, color: colors.text.secondary, marginTop: spacing.sm }}>
-              Suggested automatically for the selected token — stablecoins default to fixed
-              amounts, volatile assets to a share of your balance.
-            </p>
-          )}
-        </div>
-
-        {/* Withdrawal Limits */}
-        <div style={{ marginBottom: spacing.lg }}>
-          <label style={formStyles.label}>
-            Withdrawal Limits ({isPercent ? "% of your balance" : selectedMeta.symbol})
-          </label>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: spacing.md }}>
-            {[
-              { label: "Daily", value: daily, set: setDaily, placeholder: isPercent ? "e.g. 5" : "e.g. 100" },
-              { label: "Weekly", value: weekly, set: setWeekly, placeholder: isPercent ? "e.g. 20" : "e.g. 500" },
-              { label: "Monthly", value: monthly, set: setMonthly, placeholder: isPercent ? "e.g. 50" : "e.g. 2000" },
-            ].map((field) => (
-              <div key={field.label}>
-                <label style={{ ...formStyles.label, fontSize: fontSize.xs }}>
-                  {field.label} ({limitUnit})
-                </label>
-                <input
-                  style={inputStyle}
-                  type="number"
-                  step="any"
-                  min="0"
-                  max={isPercent ? "100" : undefined}
-                  value={field.value}
-                  onChange={(e) => field.set(e.target.value)}
-                  placeholder={field.placeholder}
-                />
-              </div>
-            ))}
-          </div>
+          <label style={formStyles.label}>Withdrawal Limits</label>
+          <LimitModeToggle mode={limitMode} onChange={handleModeChange} />
+          <LimitPeriodCards
+            values={limits}
+            onChange={(period, value) => setLimits((prev) => ({ ...prev, [period]: value }))}
+            unit={isPercent ? "%" : selectedMeta.symbol}
+          />
           <p style={{ fontSize: fontSize.xs, color: colors.text.secondary, marginTop: spacing.sm }}>
-            Set at least one limit. Leave empty to skip a period. Each period must allow at
-            least as much as the shorter one.
+            Set at least one limit. Leave empty to skip a period. Daily ≤ Weekly ≤ Monthly.
           </p>
         </div>
 
@@ -293,10 +191,7 @@ function CreateVault({ transactionManager, navigate, networkConfig }) {
             onChange={(e) => setPenaltyPct(e.target.value)}
           />
           <p style={{ fontSize: fontSize.xs, color: colors.text.secondary, marginTop: spacing.sm }}>
-            Fee charged for withdrawals that bypass limits.
-            {vaultType === "Community"
-              ? " Redistributed to other vault members."
-              : " Sent to platform treasury."}
+            Fee charged for withdrawals that bypass limits. Sent to platform treasury.
           </p>
         </div>
 

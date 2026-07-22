@@ -59,7 +59,6 @@ import VaultCard from "./components/molecules/VaultCard.js";
 
 import CreateVault from "./components/pages/CreateVault.js";
 import VaultDetail from "./components/pages/VaultDetail.js";
-import Explore from "./components/pages/Explore.js";
 
 function MainFlow({
   transactionManager,
@@ -67,6 +66,7 @@ function MainFlow({
   networkConfig,
   networkType,
   selectedNetwork,
+  onSetupCommitted,
   // Solana props
   wallet,
   connection,
@@ -99,6 +99,7 @@ function MainFlow({
 
   const [userVaults, setUserVaults] = useState([]);
   const [balanceRefreshTrigger, setBalanceRefreshTrigger] = useState(0);
+  const [limitsMode, setLimitsMode] = useState("fixed");
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(Date.now()), 1000);
@@ -185,8 +186,8 @@ function MainFlow({
 
   return (
     <div>
-      {/* My Vaults Section (once setup is committed on Solana; always on EVM) */}
-      {(networkType === "evm" || isSetupCommitted) && (
+      {/* My Vaults Section (unlocked once the personal wallet setup is committed) */}
+      {isSetupCommitted && (
         <div style={{ marginBottom: spacing.xl }}>
           <div style={{
             display: "flex",
@@ -198,9 +199,6 @@ function MainFlow({
             <div style={{ display: "flex", gap: spacing.sm }}>
               <button style={buttonStyles.primary} onClick={() => navigate("/create")}>
                 + Create Vault
-              </button>
-              <button style={buttonStyles.secondary} onClick={() => navigate("/explore")}>
-                Explore
               </button>
               <button
                 style={{ ...buttonStyles.secondary, fontSize: fontSize.xs }}
@@ -220,7 +218,7 @@ function MainFlow({
               borderRadius: "8px",
               border: "1px dashed #4a5568",
             }}>
-              <p>Create named vaults with their own withdrawal limits, or join community vaults.</p>
+              <p>Create additional vaults with their own withdrawal limits — e.g. one for savings, one for fun money.</p>
             </div>
           ) : (
             <div style={{
@@ -342,6 +340,9 @@ function MainFlow({
           getCurrentUserAddress={getCurrentUserAddress}
           spendingLimits={spendingLimits}
           onSpendingLimitsUpdate={handleSpendingLimitsUpdate}
+          limitsMode={limitsMode}
+          onLimitsModeChange={setLimitsMode}
+          showModeToggle={transactionManager?.supportsPercentSetupLimits?.() || false}
         />
       )}
 
@@ -371,11 +372,13 @@ function MainFlow({
           solanaConnected={solanaConnected}
           onSetupCommitted={(committed) => {
             setIsSetupCommitted(committed);
+            onSetupCommitted?.(committed);
             if (committed) {
               loadUserVaults();
             }
           }}
           onSpendingLimitsRefresh={fetchSpendingLimits}
+          limitsMode={limitsMode}
         />
       )}
 
@@ -735,12 +738,18 @@ function AppContentInner({
     ? (NETWORKS.solana?.[selectedNetwork] || NETWORKS.solana?.localhost)
     : (NETWORKS.evm?.[selectedNetwork] || {});
 
+  // Additional vaults unlock only after the personal wallet setup is committed.
+  // TM answers synchronously on Solana (personal vault presence); on EVM it
+  // returns null and we fall back to the on-chain setup check done at connect.
+  const vaultsUnlocked = transactionManager?.isSetupCommitted() ?? isSetupCommitted;
+
   const mainFlowProps = {
     transactionManager,
     navigate,
     networkConfig,
     networkType,
     selectedNetwork,
+    onSetupCommitted: setIsSetupCommitted,
     wallet: networkType === "solana" ? { connected: solanaConnected, publicKey: solanaPublicKey } : null,
     connection,
     provider,
@@ -774,30 +783,28 @@ function AppContentInner({
           <Route
             path="/create"
             element={
-              <CreateVault
-                transactionManager={transactionManager}
-                navigate={navigate}
-                networkConfig={networkConfig}
-              />
+              vaultsUnlocked ? (
+                <CreateVault
+                  transactionManager={transactionManager}
+                  navigate={navigate}
+                  networkConfig={networkConfig}
+                />
+              ) : (
+                <Navigate to="/" replace />
+              )
             }
           />
           <Route
             path="/vault/:address"
             element={
-              <VaultDetail
-                transactionManager={transactionManager}
-                wallet={mainFlowProps.wallet}
-              />
-            }
-          />
-          <Route
-            path="/explore"
-            element={
-              <Explore
-                transactionManager={transactionManager}
-                navigate={navigate}
-                wallet={mainFlowProps.wallet}
-              />
+              vaultsUnlocked ? (
+                <VaultDetail
+                  transactionManager={transactionManager}
+                  wallet={mainFlowProps.wallet}
+                />
+              ) : (
+                <Navigate to="/" replace />
+              )
             }
           />
           <Route path="*" element={<Navigate to="/" replace />} />
