@@ -3,6 +3,7 @@ import { SolanaAdapter } from "./SolanaAdapter.js";
 import { getTokenMeta } from "../utils/tokenUtils.js";
 
 const PERSONAL_VAULT_KEY = "personal_vault_address";
+const ACTIVE_VAULT_KEY = "active_vault_address";
 
 export class TransactionManager {
   constructor() {
@@ -10,6 +11,9 @@ export class TransactionManager {
     this.networkType = null;
     this.networkConfig = null;
     this.personalVaultAddress = null;
+    // The vault the main wallet UI currently operates on.
+    // null = the default: the personal vault (Solana) or legacy account (EVM).
+    this.activeVaultAddress = null;
   }
 
   async initialize(networkType, networkConfig, walletConfig = {}) {
@@ -33,7 +37,60 @@ export class TransactionManager {
       throw new Error(`Unsupported network type: ${networkType}`);
     }
 
+    this._restoreActiveVault();
     return this;
+  }
+
+  // ---- Active vault selection ----
+
+  _walletKey() {
+    return this.getAdapter().userAddress || null;
+  }
+
+  _restoreActiveVault() {
+    const walletAddr = this._walletKey();
+    if (!walletAddr) return;
+    this.activeVaultAddress = localStorage.getItem(`${ACTIVE_VAULT_KEY}_${walletAddr}`) || null;
+  }
+
+  /** Select which vault the main wallet UI operates on (null = personal). */
+  setActiveVault(vaultAddress) {
+    this.activeVaultAddress = vaultAddress || null;
+    const walletAddr = this._walletKey();
+    if (!walletAddr) return;
+    const key = `${ACTIVE_VAULT_KEY}_${walletAddr}`;
+    if (vaultAddress) localStorage.setItem(key, vaultAddress);
+    else localStorage.removeItem(key);
+  }
+
+  getActiveVaultAddress() {
+    return this.activeVaultAddress || this.personalVaultAddress;
+  }
+
+  _usesLegacyAccount() {
+    // EVM's initial setup lives in the legacy savings account; only an
+    // explicitly selected vault routes through the vault module
+    return this.networkType === "evm" && !this.activeVaultAddress;
+  }
+
+  _requireActiveVault() {
+    const address = this.getActiveVaultAddress();
+    if (!address) throw new Error("No vault selected. Complete setup first.");
+    return address;
+  }
+
+  /** Feature support of the currently selected vault. */
+  getActiveVaultCapabilities() {
+    // The EVM vault module has no timelocked rule proposals, bypass requests
+    // or destination whitelists yet — rule changes apply immediately there
+    const full = this.networkType !== "evm" || !this.activeVaultAddress;
+    return { proposals: full, bypass: full, destinations: full };
+  }
+
+  _requireCapability(name) {
+    if (!this.getActiveVaultCapabilities()[name]) {
+      throw new Error("This feature is not available for this vault yet");
+    }
   }
 
   getNetworkType() { return this.networkType; }
@@ -95,14 +152,16 @@ export class TransactionManager {
     return this.networkType === "solana";
   }
 
-  async getPersonalVault() {
-    if (!this.personalVaultAddress) return null;
-    return this.getAdapter().getVaultInfo(this.personalVaultAddress);
+  async getActiveVault() {
+    const address = this.getActiveVaultAddress();
+    if (!address) return null;
+    return this.getAdapter().getVaultInfo(address);
   }
 
-  async getPersonalMembership() {
-    if (!this.personalVaultAddress) return null;
-    return this.getAdapter().getVaultMemberInfo(this.personalVaultAddress);
+  async getActiveMembership() {
+    const address = this.getActiveVaultAddress();
+    if (!address) return null;
+    return this.getAdapter().getVaultMemberInfo(address);
   }
 
   // ---- Compatibility layer (old UI flow) ----
@@ -137,43 +196,13 @@ export class TransactionManager {
     return result.signature;
   }
 
-  async getPersonalVaultLimits() {
-    const vault = await this.getPersonalVault();
-    if (!vault) return { daily: 0, weekly: 0, monthly: 0, penaltyPct: 0, limitsArePercentage: false };
-    if (vault.limitsArePercentage) {
-      return {
-        daily: vault.dailyLimit / 100,
-        weekly: vault.weeklyLimit / 100,
-        monthly: vault.monthlyLimit / 100,
-        penaltyPct: vault.penaltyRateBps / 100,
-        limitsArePercentage: true,
-      };
-    }
-    const factor = 10 ** this._getTokenDecimals(vault);
-    return {
-      daily: vault.dailyLimit / factor,
-      weekly: vault.weeklyLimit / factor,
-      monthly: vault.monthlyLimit / factor,
-      penaltyPct: vault.penaltyRateBps / 100,
-      limitsArePercentage: false,
-    };
-  }
-
-  async getPersonalVaultBalance() {
-    const vault = await this.getPersonalVault();
-    const membership = await this.getPersonalMembership();
-    if (!membership) return 0;
-    const factor = 10 ** this._getTokenDecimals(vault);
-    return membership.balance / factor;
-  }
-
   async getAllBalances(userAddress) {
-    if (this.networkType === "evm") {
+    if (this._usesLegacyAccount()) {
       return this.getAdapter().getAllBalances(userAddress);
     }
 
-    const vault = await this.getPersonalVault();
-    const membership = await this.getPersonalMembership();
+    const vault = await this.getActiveVault();
+    const membership = await this.getActiveMembership();
     if (!vault || !membership) return {};
 
     const decimals = this._getTokenDecimals(vault);
@@ -190,24 +219,20 @@ export class TransactionManager {
     return parseFloat(formatted).toString();
   }
 
-  async depositToPersonalVault(amount) {
-    if (!this.personalVaultAddress) throw new Error("No personal vault. Complete setup first.");
-    return this.getAdapter().depositToVault(this.personalVaultAddress, amount);
+  async depositToActiveVault(amount) {
+    return this.getAdapter().depositToVault(this._requireActiveVault(), amount);
   }
 
-  async withdrawFromPersonalVault(amount) {
-    if (!this.personalVaultAddress) throw new Error("No personal vault");
-    return this.getAdapter().withdrawFromVault(this.personalVaultAddress, amount);
+  async withdrawFromActiveVault(amount) {
+    return this.getAdapter().withdrawFromVault(this._requireActiveVault(), amount);
   }
 
-  async penaltyWithdrawFromPersonalVault(amount) {
-    if (!this.personalVaultAddress) throw new Error("No personal vault");
-    return this.getAdapter().withdrawFromVaultWithPenalty(this.personalVaultAddress, amount);
+  async penaltyWithdrawFromActiveVault(amount) {
+    return this.getAdapter().withdrawFromVaultWithPenalty(this._requireActiveVault(), amount);
   }
 
-  async updatePersonalVaultRules(rules) {
-    if (!this.personalVaultAddress) throw new Error("No personal vault");
-    return this.getAdapter().updateVaultRules(this.personalVaultAddress, rules);
+  async updateActiveVaultRules(rules) {
+    return this.getAdapter().updateVaultRules(this._requireActiveVault(), rules);
   }
 
   // ---- Old service compatibility layer ----
@@ -215,14 +240,16 @@ export class TransactionManager {
   getCurrentAdapter() { return this.getAdapter(); }
 
   async getSpendingLimits(userAddress) {
-    if (this.networkType === "evm") {
+    if (this._usesLegacyAccount()) {
       return this.getAdapter().getSpendingLimits(userAddress);
     }
 
-    const vault = await this.getPersonalVault();
-    const membership = await this.getPersonalMembership();
+    const vault = await this.getActiveVault();
+    const membership = await this.getActiveMembership();
     if (!vault || !membership) {
-      return { limits: [], isSetupCommitted: !!this.personalVaultAddress };
+      // On EVM a vault is only selectable after setup, so report committed
+      const committed = this.networkType === "evm" ? true : !!this.personalVaultAddress;
+      return { limits: [], isSetupCommitted: committed };
     }
 
     const decimals = this._getTokenDecimals(vault);
@@ -272,7 +299,7 @@ export class TransactionManager {
   }
 
   async getPendingWithdrawalDestinationRequests(userAddress) {
-    if (this.networkType === "evm") {
+    if (this._usesLegacyAccount()) {
       return this.getAdapter().getPendingWithdrawalDestinationRequests(userAddress);
     }
 
@@ -287,13 +314,14 @@ export class TransactionManager {
   }
 
   async fetchPendingBypassRequests(userAddress) {
-    if (this.networkType === "evm") {
+    if (this._usesLegacyAccount()) {
       return this.getAdapter().fetchPendingBypassRequests(userAddress);
     }
+    if (!this.getActiveVaultCapabilities().bypass) return [];
 
     const req = await this.getBypassRequest();
     if (!req) return [];
-    const vault = await this.getPersonalVault();
+    const vault = await this.getActiveVault();
     const factor = 10 ** this._getTokenDecimals(vault);
     return [{
       amount: req.amount / factor,
@@ -321,21 +349,16 @@ export class TransactionManager {
 
   async getDepositAddress(userAddress) {
     if (this.networkType === "evm") return this.getAdapter().getDepositAddress(userAddress);
-    return this.personalVaultAddress || "";
+    return this.getActiveVaultAddress() || "";
   }
 
   async deposit(tokenAddress, amount, decimals) {
-    if (this.networkType === "evm") {
+    if (this._usesLegacyAccount()) {
       return this.getAdapter().deposit(tokenAddress, amount, decimals);
     }
 
-    if (!this.personalVaultAddress) throw new Error("No personal vault. Complete setup first.");
-    const numAmount = parseFloat(amount);
-    if (tokenAddress === "native" || tokenAddress === "SOL") {
-      const sig = await this.getAdapter().depositSol(this.personalVaultAddress, numAmount);
-      return { hash: sig };
-    }
-    const sig = await this.getAdapter().depositSpl(this.personalVaultAddress, tokenAddress, numAmount, decimals);
+    // A vault holds a single token, so the deposit always uses the vault's own
+    const sig = await this.depositToActiveVault(parseFloat(amount));
     return { hash: sig };
   }
 
@@ -344,36 +367,36 @@ export class TransactionManager {
   getContract() { return this.networkType === "evm" ? this.getAdapter().getContract() : null; }
   getProvider() { return this.networkType === "evm" ? this.getAdapter().getProvider() : null; }
 
-  // ---- EVM proposal methods ----
+  // ---- Legacy-shaped proposal methods ----
   async proposeLimitChange(periodName, newLimit) {
-    if (this.networkType === "evm") return this.getAdapter().proposeLimitChange(periodName, newLimit);
+    if (this._usesLegacyAccount()) return this.getAdapter().proposeLimitChange(periodName, newLimit);
     return this.proposeRuleChange({ [`${periodName.toLowerCase()}Limit`]: newLimit });
   }
   async fetchPendingProposals(userAddress) {
-    if (this.networkType === "evm") return this.getAdapter().fetchPendingProposals(userAddress);
+    if (this._usesLegacyAccount()) return this.getAdapter().fetchPendingProposals(userAddress);
     const proposal = await this.getRuleChangeProposal();
     return proposal ? [proposal] : [];
   }
   async executeLimitProposal(proposalId) {
-    if (this.networkType === "evm") return this.getAdapter().executeLimitProposal(proposalId);
+    if (this._usesLegacyAccount()) return this.getAdapter().executeLimitProposal(proposalId);
     return this.executeRuleChange();
   }
   async cancelLimitProposal(proposalId) {
-    if (this.networkType === "evm") return this.getAdapter().cancelLimitProposal(proposalId);
+    if (this._usesLegacyAccount()) return this.getAdapter().cancelLimitProposal(proposalId);
     return this.cancelRuleChange();
   }
 
-  // ---- EVM withdrawal address methods ----
+  // ---- Legacy-shaped withdrawal address methods ----
   async fetchWithdrawalAddresses(userAddress) {
-    if (this.networkType === "evm") return this.getAdapter().fetchWithdrawalAddresses(userAddress);
+    if (this._usesLegacyAccount()) return this.getAdapter().fetchWithdrawalAddresses(userAddress);
     return this.getWithdrawalAddresses();
   }
   async addWithdrawalDestinationDirect(address, title) {
-    if (this.networkType === "evm") return this.getAdapter().addWithdrawalDestinationDirect(address, title);
+    if (this._usesLegacyAccount()) return this.getAdapter().addWithdrawalDestinationDirect(address, title);
     return this.addWithdrawalAddress(title, address);
   }
   async requestWithdrawalDestinationAddition(address, title) {
-    if (this.networkType === "evm") return this.getAdapter().requestWithdrawalDestinationAddition(address, title);
+    if (this._usesLegacyAccount()) return this.getAdapter().requestWithdrawalDestinationAddition(address, title);
     return this.requestWithdrawalAddress(title, address);
   }
 
@@ -387,8 +410,8 @@ export class TransactionManager {
     return !!this.personalVaultAddress;
   }
   async setSpendingLimits(daily, weekly, monthly) {
-    if (this.networkType === "evm") return this.getAdapter().setSpendingLimits(daily, weekly, monthly);
-    return this.updatePersonalVaultRules({ dailyLimit: daily, weeklyLimit: weekly, monthlyLimit: monthly });
+    if (this._usesLegacyAccount()) return this.getAdapter().setSpendingLimits(daily, weekly, monthly);
+    return this.updateActiveVaultRules({ dailyLimit: daily, weeklyLimit: weekly, monthlyLimit: monthly });
   }
 
   // ---- EVM PoolTogether methods ----
@@ -401,30 +424,31 @@ export class TransactionManager {
 
   // ---- EVM withdraw ----
   async withdraw(amount, tokenAddress, destination) {
-    if (this.networkType === "evm") return this.getAdapter().withdraw(amount, tokenAddress, destination);
-    return this.withdrawFromPersonalVault(amount);
+    if (this._usesLegacyAccount()) return this.getAdapter().withdraw(amount, tokenAddress, destination);
+    return this.withdrawFromActiveVault(amount);
   }
   async withdrawWithPenalty(tokenAddress, amount, tokenDecimals) {
-    if (this.networkType === "evm") throw new Error("Penalty withdrawal not supported on EVM");
-    return this.penaltyWithdrawFromPersonalVault(amount);
+    if (this._usesLegacyAccount()) throw new Error("Penalty withdrawal not supported on EVM");
+    return this.penaltyWithdrawFromActiveVault(amount);
   }
   async getPenaltyRate() {
-    if (this.networkType === "evm") return 0;
-    const vault = await this.getPersonalVault();
+    if (this._usesLegacyAccount()) return 0;
+    const vault = await this.getActiveVault();
     return vault ? vault.penaltyRateBps / 100 : 0;
   }
 
   async getTransactionHistory() {
     if (this.networkType === "evm") return [];
-    if (!this.personalVaultAddress) return [];
+    const vaultAddress = this.getActiveVaultAddress();
+    if (!vaultAddress) return [];
     try {
       const adapter = this.getAdapter();
       const connection = adapter.connection;
       const { PublicKey } = await import("@solana/web3.js");
-      const vaultPubkey = new PublicKey(this.personalVaultAddress);
+      const vaultPubkey = new PublicKey(vaultAddress);
 
       const sigs = await connection.getSignaturesForAddress(vaultPubkey, { limit: 30 });
-      const vault = await this.getPersonalVault();
+      const vault = await this.getActiveVault();
       const decimals = this._getTokenDecimals(vault);
       const symbol = this._getTokenSymbol(vault);
       const factor = 10 ** decimals;
@@ -515,96 +539,123 @@ export class TransactionManager {
   // ---- Withdrawal destinations (personal vault compat) ----
 
   async addWithdrawalAddress(title, destinationAddress) {
-    if (this.networkType === "evm") return this.getAdapter().addWithdrawalDestinationDirect(destinationAddress, title);
-    if (!this.personalVaultAddress) throw new Error("No personal vault");
-    return this.getAdapter().addWithdrawalDestination(this.personalVaultAddress, destinationAddress, title);
+    if (this._usesLegacyAccount()) return this.getAdapter().addWithdrawalDestinationDirect(destinationAddress, title);
+    this._requireCapability("destinations");
+    return this.getAdapter().addWithdrawalDestination(this._requireActiveVault(), destinationAddress, title);
   }
 
   async requestWithdrawalAddress(title, destinationAddress) {
-    if (this.networkType === "evm") return this.getAdapter().requestWithdrawalDestinationAddition(destinationAddress, title);
-    if (!this.personalVaultAddress) throw new Error("No personal vault");
-    return this.getAdapter().requestWithdrawalDestination(this.personalVaultAddress, destinationAddress, title);
+    if (this._usesLegacyAccount()) return this.getAdapter().requestWithdrawalDestinationAddition(destinationAddress, title);
+    this._requireCapability("destinations");
+    return this.getAdapter().requestWithdrawalDestination(this._requireActiveVault(), destinationAddress, title);
   }
 
   async executeWithdrawalAddressRequest(destinationAddress) {
-    if (this.networkType === "evm") return this.getAdapter().executeWithdrawalAddressRequest(destinationAddress);
-    if (!this.personalVaultAddress) throw new Error("No personal vault");
-    return this.getAdapter().executeDestinationRequest(this.personalVaultAddress, destinationAddress);
+    if (this._usesLegacyAccount()) return this.getAdapter().executeWithdrawalAddressRequest(destinationAddress);
+    this._requireCapability("destinations");
+    return this.getAdapter().executeDestinationRequest(this._requireActiveVault(), destinationAddress);
   }
 
   async cancelWithdrawalAddressRequest(destinationAddress) {
-    if (this.networkType === "evm") return this.getAdapter().cancelWithdrawalAddressRequest?.(destinationAddress);
-    if (!this.personalVaultAddress) throw new Error("No personal vault");
-    return this.getAdapter().cancelDestinationRequest(this.personalVaultAddress, destinationAddress);
+    if (this._usesLegacyAccount()) return this.getAdapter().cancelWithdrawalAddressRequest?.(destinationAddress);
+    this._requireCapability("destinations");
+    return this.getAdapter().cancelDestinationRequest(this._requireActiveVault(), destinationAddress);
   }
 
   async removeWithdrawalAddress(destinationAddress) {
-    if (this.networkType === "evm") return this.getAdapter().removeWithdrawalAddress(destinationAddress);
-    if (!this.personalVaultAddress) throw new Error("No personal vault");
-    return this.getAdapter().removeWithdrawalDestination(this.personalVaultAddress, destinationAddress);
+    if (this._usesLegacyAccount()) return this.getAdapter().removeWithdrawalAddress(destinationAddress);
+    this._requireCapability("destinations");
+    return this.getAdapter().removeWithdrawalDestination(this._requireActiveVault(), destinationAddress);
   }
 
   async getWithdrawalAddresses() {
-    if (this.networkType === "evm") return this.getAdapter().fetchWithdrawalAddresses();
-    if (!this.personalVaultAddress) return [];
-    return this.getAdapter().getWithdrawalDestinations(this.personalVaultAddress);
+    if (this._usesLegacyAccount()) return this.getAdapter().fetchWithdrawalAddresses();
+    if (!this.getActiveVaultCapabilities().destinations) return [];
+    const vaultAddress = this.getActiveVaultAddress();
+    if (!vaultAddress) return [];
+    return this.getAdapter().getWithdrawalDestinations(vaultAddress);
   }
 
   async getPendingWithdrawalAddresses() {
-    if (this.networkType === "evm") return this.getAdapter().getPendingWithdrawalDestinationRequests();
-    if (!this.personalVaultAddress) return [];
-    return this.getAdapter().getPendingDestinationRequests(this.personalVaultAddress);
+    if (this._usesLegacyAccount()) return this.getAdapter().getPendingWithdrawalDestinationRequests();
+    if (!this.getActiveVaultCapabilities().destinations) return [];
+    const vaultAddress = this.getActiveVaultAddress();
+    if (!vaultAddress) return [];
+    return this.getAdapter().getPendingDestinationRequests(vaultAddress);
   }
 
   // ---- Rule change proposals (personal vault compat) ----
 
   async proposeRuleChange(rules) {
-    if (!this.personalVaultAddress) throw new Error("No personal vault");
-    return this.getAdapter().proposeRuleChange(this.personalVaultAddress, rules);
+    const vaultAddress = this._requireActiveVault();
+    if (!this.getActiveVaultCapabilities().proposals) {
+      // The EVM vault module has no timelocked proposals yet — rule changes
+      // apply immediately. Callers pass raw units (legacy shape), while
+      // updateVaultRules expects business units, so convert back.
+      const vault = await this.getActiveVault();
+      const pct = rules.limitsArePercentage ?? vault.limitsArePercentage;
+      const factor = 10 ** this._getTokenDecimals(vault);
+      const toBusiness = (value) =>
+        value == null ? undefined : pct ? value / 100 : value / factor;
+      return this.updateActiveVaultRules({
+        dailyLimit: toBusiness(rules.dailyLimit),
+        weeklyLimit: toBusiness(rules.weeklyLimit),
+        monthlyLimit: toBusiness(rules.monthlyLimit),
+        penaltyRateBps: rules.penaltyRateBps,
+        limitsArePercentage: rules.limitsArePercentage,
+      });
+    }
+    return this.getAdapter().proposeRuleChange(vaultAddress, rules);
   }
 
   async executeRuleChange() {
-    if (!this.personalVaultAddress) throw new Error("No personal vault");
-    return this.getAdapter().executeRuleChange(this.personalVaultAddress);
+    this._requireCapability("proposals");
+    return this.getAdapter().executeRuleChange(this._requireActiveVault());
   }
 
   async cancelRuleChange() {
-    if (!this.personalVaultAddress) throw new Error("No personal vault");
-    return this.getAdapter().cancelRuleChange(this.personalVaultAddress);
+    this._requireCapability("proposals");
+    return this.getAdapter().cancelRuleChange(this._requireActiveVault());
   }
 
   async getRuleChangeProposal() {
-    if (!this.personalVaultAddress) return null;
-    return this.getAdapter().getRuleChangeProposal(this.personalVaultAddress);
+    if (!this.getActiveVaultCapabilities().proposals) return null;
+    const vaultAddress = this.getActiveVaultAddress();
+    if (!vaultAddress) return null;
+    return this.getAdapter().getRuleChangeProposal(vaultAddress);
   }
 
   // ---- Bypass requests (personal vault compat) ----
 
   async requestBypass(amount) {
-    if (!this.personalVaultAddress) throw new Error("No personal vault");
-    const vault = await this.getPersonalVault();
+    this._requireCapability("bypass");
+    const vaultAddress = this._requireActiveVault();
+    const vault = await this.getActiveVault();
     const isSol = vault ? vault.isSolVault : true;
     const rawAmount = isSol ? amount : Math.round(amount * 10 ** this._getTokenDecimals(vault));
-    return this.getAdapter().requestBypass(this.personalVaultAddress, rawAmount, isSol);
+    return this.getAdapter().requestBypass(vaultAddress, rawAmount, isSol);
   }
 
   async executeBypass() {
-    if (!this.personalVaultAddress) throw new Error("No personal vault");
-    const vault = await this.getPersonalVault();
+    this._requireCapability("bypass");
+    const vaultAddress = this._requireActiveVault();
+    const vault = await this.getActiveVault();
     if (vault && !vault.isSolVault) {
-      return this.getAdapter().executeBypassSpl(this.personalVaultAddress, vault.tokenMint);
+      return this.getAdapter().executeBypassSpl(vaultAddress, vault.tokenMint);
     }
-    return this.getAdapter().executeBypassSol(this.personalVaultAddress);
+    return this.getAdapter().executeBypassSol(vaultAddress);
   }
 
   async cancelBypass() {
-    if (!this.personalVaultAddress) throw new Error("No personal vault");
-    return this.getAdapter().cancelBypass(this.personalVaultAddress);
+    this._requireCapability("bypass");
+    return this.getAdapter().cancelBypass(this._requireActiveVault());
   }
 
   async getBypassRequest() {
-    if (!this.personalVaultAddress) return null;
-    return this.getAdapter().getBypassRequest(this.personalVaultAddress);
+    if (!this.getActiveVaultCapabilities().bypass) return null;
+    const vaultAddress = this.getActiveVaultAddress();
+    if (!vaultAddress) return null;
+    return this.getAdapter().getBypassRequest(vaultAddress);
   }
 
   // ---- Withdrawal destinations (vault-level) ----

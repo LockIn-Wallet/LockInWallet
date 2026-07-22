@@ -46,6 +46,9 @@ const SpendingLimitsSetup = ({
   limitsMode = "fixed",
   onLimitsModeChange,
   showModeToggle = false,
+
+  // Refetch when the selected vault changes
+  activeVaultAddress,
 }) => {
   // Use parent spending limits when available, otherwise internal state for loading
   const [spendingLimits, setSpendingLimits] = useState(parentSpendingLimits || []);
@@ -167,7 +170,7 @@ const SpendingLimitsSetup = ({
     };
 
     loadData();
-  }, [transactionManager, savingsContract, solanaConnected, networkType]);
+  }, [transactionManager, savingsContract, solanaConnected, networkType, activeVaultAddress]);
 
   // Notify parent whenever limit edits change (for unsaved changes)
   useEffect(() => {
@@ -302,7 +305,7 @@ const SpendingLimitsSetup = ({
     try {
       const newLimit = parseFloat(edit.value);
 
-      const vault = await transactionManager.getPersonalVault();
+      const vault = await transactionManager.getActiveVault();
       const currentRules = {
         dailyLimit: vault?.dailyLimit || 0,
         weeklyLimit: vault?.weeklyLimit || 0,
@@ -387,7 +390,7 @@ const SpendingLimitsSetup = ({
 
     try {
       if (isSetupCommitted) {
-        const vault = await transactionManager.getPersonalVault();
+        const vault = await transactionManager.getActiveVault();
         const currentRules = {
           dailyLimit: vault?.dailyLimit || 0,
           weeklyLimit: vault?.weeklyLimit || 0,

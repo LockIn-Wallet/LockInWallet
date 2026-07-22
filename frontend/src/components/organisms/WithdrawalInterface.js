@@ -44,6 +44,7 @@ const WithdrawalInterface = ({
   networkType,
   selectedNetwork,
   getCurrentUserAddress,
+  activeVaultAddress,
 
   // Wallet state
   solanaConnected,
@@ -141,15 +142,15 @@ const WithdrawalInterface = ({
     if (transactionManager) {
       fetchWithdrawalData();
     }
-  }, [transactionManager, savingsContract, solanaConnected, networkType]);
+  }, [transactionManager, savingsContract, solanaConnected, networkType, activeVaultAddress]);
 
   useEffect(() => {
     if (transactionManager) {
-      transactionManager.getPersonalVault().then(vault => {
+      transactionManager.getActiveVault().then(vault => {
         if (vault?.penaltyRateBps) setPenaltyRate(vault.penaltyRateBps);
       }).catch(() => {});
     }
-  }, [transactionManager]);
+  }, [transactionManager, activeVaultAddress]);
 
   const withdrawWithPenalty = async () => {
     if (!transactionManager || !withdrawalAmount || parseFloat(withdrawalAmount) <= 0) return;
@@ -170,7 +171,7 @@ const WithdrawalInterface = ({
     setIsLoading(true);
     try {
       const amountValue = parseFloat(withdrawalAmount);
-      const txHash = await transactionManager.penaltyWithdrawFromPersonalVault(amountValue);
+      const txHash = await transactionManager.penaltyWithdrawFromActiveVault(amountValue);
       alert(`Penalty withdrawal successful!\n\nYou received: ${userReceives} ${selectedToken}\nPenalty: ${penaltyAmount} ${selectedToken}\nTx: ${txHash}`);
       setWithdrawalAmount("");
 
@@ -209,7 +210,7 @@ const WithdrawalInterface = ({
         console.log("💸 Solana: Withdrawing with limits", withdrawalAmount, selectedToken, selectedWithdrawalDestination);
 
         const amountValue = parseFloat(withdrawalAmount);
-        const txHash = await transactionManager.withdrawFromPersonalVault(amountValue);
+        const txHash = await transactionManager.withdrawFromActiveVault(amountValue);
 
         let destinationLabel = selectedWithdrawalDestination === "self"
           ? "self (wallet)"

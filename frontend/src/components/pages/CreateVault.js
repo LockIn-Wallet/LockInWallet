@@ -89,7 +89,9 @@ function CreateVault({ transactionManager, navigate, networkConfig }) {
         penaltyRateBps: Math.round(parseFloat(penaltyPct || "20") * 100),
         limitsArePercentage: isPercent,
       });
-      navigate(`/vault/${result.vaultAddress}`);
+      // Switch the main wallet flow to the new vault and go home
+      transactionManager.setActiveVault(result.vaultAddress);
+      navigate("/");
     } catch (err) {
       console.error("Create vault failed:", err);
       setError(err.message || "Failed to create vault");

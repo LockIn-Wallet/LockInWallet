@@ -74,7 +74,7 @@ async function fetchSolanaProposals(params) {
 
   console.log(`✅ Found ${rawProposals.length} pending proposals for Solana`);
 
-  const vault = await transactionManager.getPersonalVault().catch(() => null);
+  const vault = await transactionManager.getActiveVault().catch(() => null);
   const decimals = vault?.tokenDecimals ?? (vault?.isSolVault ? 9 : 6);
   const factor = 10 ** decimals;
 
@@ -127,6 +127,12 @@ async function fetchEvmProposals(params) {
 
   if (!savingsContract) {
     console.log("❌ Savings contract not available, skipping proposal fetch");
+    return [];
+  }
+
+  // Vaults on EVM have no timelocked proposals yet — rule changes are immediate
+  if (transactionManager?.getActiveVaultCapabilities &&
+      !transactionManager.getActiveVaultCapabilities().proposals) {
     return [];
   }
 

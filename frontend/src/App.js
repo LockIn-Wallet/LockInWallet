@@ -58,7 +58,6 @@ import WithdrawalInterface from "./components/organisms/WithdrawalInterface.js";
 import VaultCard from "./components/molecules/VaultCard.js";
 
 import CreateVault from "./components/pages/CreateVault.js";
-import VaultDetail from "./components/pages/VaultDetail.js";
 
 function MainFlow({
   transactionManager,
@@ -162,18 +161,30 @@ function MainFlow({
     setUserVaults(vaults);
   };
 
-  // The main wallet flow always operates on the personal vault, so list it
-  // first and mark it as current. On EVM the initial setup lives in the legacy
-  // savings account rather than a vault, so it is represented by a synthetic
-  // "Personal Savings" card.
+  // The main wallet flow operates on the currently selected ("active") vault —
+  // the personal vault by default. Selecting a card switches the whole flow
+  // (balances, deposits, withdrawals, limits) to that vault. On EVM the initial
+  // setup lives in the legacy savings account rather than a vault, so it is
+  // represented by a synthetic "Savings" card.
   const personalVaultAddress = transactionManager?.getPersonalVaultAddress?.() || null;
+  const currentVaultAddress = transactionManager?.getActiveVaultAddress?.() || null;
   const hasPersonalVault = userVaults.some(({ vault }) => vault.address === personalVaultAddress);
+
+  const handleSelectVault = async (vaultAddress) => {
+    // null selects the default: personal vault / legacy account
+    transactionManager.setActiveVault(
+      vaultAddress === personalVaultAddress ? null : vaultAddress
+    );
+    await fetchSpendingLimits();
+    setBalanceRefreshTrigger((prev) => prev + 1);
+  };
+
   const displayVaults = [
     ...(hasPersonalVault
       ? []
       : [{
           vault: {
-            address: "personal-savings",
+            address: null,
             vaultType: "Personal",
             name: "Savings",
             tokenSymbol: "All tokens",
@@ -184,10 +195,10 @@ function MainFlow({
             memberCount: 1,
           },
           membership: null,
-          isCurrent: true,
+          isCurrent: currentVaultAddress === null,
         }]),
     ...userVaults
-      .map((entry) => ({ ...entry, isCurrent: entry.vault.address === personalVaultAddress }))
+      .map((entry) => ({ ...entry, isCurrent: entry.vault.address === currentVaultAddress }))
       .sort((a, b) => Number(b.isCurrent) - Number(a.isCurrent)),
   ];
 
@@ -245,11 +256,11 @@ function MainFlow({
           }}>
             {displayVaults.map(({ vault, membership: m, isCurrent }) => (
               <VaultCard
-                key={vault.address}
+                key={vault.address || "default"}
                 vault={vault}
                 membership={m}
                 isSelected={isCurrent}
-                onClick={isCurrent ? undefined : () => navigate(`/vault/${vault.address}`)}
+                onClick={isCurrent ? undefined : () => handleSelectVault(vault.address)}
               />
             ))}
           </div>
@@ -259,8 +270,8 @@ function MainFlow({
             marginTop: spacing.sm,
             marginBottom: 0,
           }}>
-            The balances and limits below belong to your current vault. Click another vault to
-            manage it, or create one for a separate purpose — e.g. savings vs. fun money.
+            Everything below — balances, deposits, withdrawals and limits — belongs to the
+            selected vault. Click a vault to switch, or create one for a separate purpose.
           </p>
         </div>
       )}
@@ -353,6 +364,7 @@ function MainFlow({
             getCurrentUserAddress={getCurrentUserAddress}
             spendingLimits={spendingLimits}
             onSpendingLimitsUpdate={handleSpendingLimitsUpdate}
+            activeVaultAddress={currentVaultAddress}
           />
         </CollapsibleSection>
       ) : (
@@ -413,6 +425,7 @@ function MainFlow({
         <CollapsibleSection title="Withdraw Funds" icon="💸" defaultExpanded={true}>
           <WithdrawalInterface
             transactionManager={transactionManager}
+            activeVaultAddress={currentVaultAddress}
             savingsContract={savingsContract}
             signer={signer}
             connection={connection}
@@ -814,19 +827,6 @@ function AppContentInner({
                   transactionManager={transactionManager}
                   navigate={navigate}
                   networkConfig={networkConfig}
-                />
-              ) : (
-                <Navigate to="/" replace />
-              )
-            }
-          />
-          <Route
-            path="/vault/:address"
-            element={
-              vaultsUnlocked ? (
-                <VaultDetail
-                  transactionManager={transactionManager}
-                  wallet={mainFlowProps.wallet}
                 />
               ) : (
                 <Navigate to="/" replace />
