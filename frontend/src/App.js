@@ -275,6 +275,11 @@ function MainFlow({
         </div>
       )}
 
+      {/* Everything below operates on the selected vault. The key remounts
+          these sections on vault switch so each one refetches its data
+          (balances, deposit address, limits, history) for the new vault. */}
+      <div key={currentVaultAddress || "default"}>
+
       {/* Balance Display (only when setup committed) */}
       {isSetupCommitted && (
         <BalanceDisplay
@@ -458,6 +463,8 @@ function MainFlow({
           />
         </CollapsibleSection>
       )}
+
+      </div>
     </div>
   );
 }
