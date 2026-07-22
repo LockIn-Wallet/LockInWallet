@@ -201,6 +201,11 @@ export class TransactionManager {
       return this.getAdapter().getAllBalances(userAddress);
     }
 
+    // Credit anything sitting on the vault's permanent deposit address first
+    if (this.networkType === "evm") {
+      await this.getAdapter().checkAndSweepVaultProxy?.(this.getActiveVaultAddress());
+    }
+
     const vault = await this.getActiveVault();
     const membership = await this.getActiveMembership();
     if (!vault || !membership) return {};
@@ -343,12 +348,18 @@ export class TransactionManager {
   }
 
   async isProxyDeployed(userAddress) {
-    if (this.networkType === "evm") return this.getAdapter().isProxyDeployed(userAddress);
-    return !!this.personalVaultAddress;
+    if (this._usesLegacyAccount()) return this.getAdapter().isProxyDeployed(userAddress);
+    if (this.networkType === "evm") {
+      return !!(await this.getAdapter().getVaultDepositAddress(this.getActiveVaultAddress()));
+    }
+    return !!this.getActiveVaultAddress();
   }
 
   async getDepositAddress(userAddress) {
-    if (this.networkType === "evm") return this.getAdapter().getDepositAddress(userAddress);
+    if (this._usesLegacyAccount()) return this.getAdapter().getDepositAddress(userAddress);
+    if (this.networkType === "evm") {
+      return (await this.getAdapter().getVaultDepositAddress(this.getActiveVaultAddress())) || "";
+    }
     return this.getActiveVaultAddress() || "";
   }
 
@@ -402,7 +413,10 @@ export class TransactionManager {
 
   // ---- EVM proxy/setup methods ----
   async deployProxy() {
-    if (this.networkType === "evm") return this.getAdapter().deployProxy();
+    if (this._usesLegacyAccount()) return this.getAdapter().deployProxy();
+    if (this.networkType === "evm") {
+      return this.getAdapter().deployVaultDepositAddress(this.getActiveVaultAddress());
+    }
     throw new Error("Proxy deployment is only available on EVM");
   }
   async getIsSetupCommitted(userAddress) {

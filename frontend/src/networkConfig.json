@@ -18,10 +18,10 @@
       "blockExplorerUrls": [
         ""
       ],
-      "savingsContract": "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512",
+      "savingsContract": "0xf5059a5D33d5853360D16C683c16e67980206f36",
       "tokens": {
         "USDT": {
-          "address": "0xa85233C63b9Ee964Add6F2cffe00Fd84eb32338f",
+          "address": "0x82e01223d51Eb87e16A03E24687EDF0F294da6f1",
           "symbol": "USDT",
           "name": "Tether USD",
           "decimals": 6,

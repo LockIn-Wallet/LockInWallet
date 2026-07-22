@@ -354,6 +354,68 @@ describe("VaultSystemModule", function () {
     });
   });
 
+  describe("Permanent deposit addresses", function () {
+    it("deploys one address per vault, creator only, once", async function () {
+      const { vaultModule, user1, user2 } = await loadFixture(deployVaultSystemFixture);
+      await vaultModule.connect(user1).createVault(ethVaultParams());
+
+      await expect(vaultModule.connect(user2).deployVaultDepositAddress(1))
+        .to.be.revertedWith("Only creator");
+
+      await expect(vaultModule.connect(user1).deployVaultDepositAddress(1))
+        .to.emit(vaultModule, "VaultDepositAddressDeployed");
+      const proxy = await vaultModule.getVaultDepositAddress(1);
+      expect(proxy).to.not.equal(hre.ethers.ZeroAddress);
+
+      await expect(vaultModule.connect(user1).deployVaultDepositAddress(1))
+        .to.be.revertedWith("Already deployed");
+    });
+
+    it("credits ETH sent to the deposit address straight into the vault", async function () {
+      const { vaultModule, user1, user2 } = await loadFixture(deployVaultSystemFixture);
+      await vaultModule.connect(user1).createVault(ethVaultParams());
+      await vaultModule.connect(user1).deployVaultDepositAddress(1);
+      const proxy = await vaultModule.getVaultDepositAddress(1);
+
+      // Anyone (e.g. an exchange hot wallet) can send; the creator is credited
+      const amount = hre.ethers.parseEther("2");
+      await user2.sendTransaction({ to: proxy, value: amount });
+
+      expect((await vaultModule.getVaultMember(1, user1.address)).balance).to.equal(amount);
+      expect((await vaultModule.getVault(1)).totalBalance).to.equal(amount);
+    });
+
+    it("sweeps ERC20 tokens sent to the deposit address into the vault", async function () {
+      const { vaultModule, usdt, user1, user2 } = await loadFixture(deployVaultSystemFixture);
+      await vaultModule.connect(user1).createVault(ethVaultParams({
+        token: usdt.target,
+        dailyLimit: hre.ethers.parseUnits("100", 6),
+        weeklyLimit: 0,
+        monthlyLimit: 0,
+      }));
+      await vaultModule.connect(user1).deployVaultDepositAddress(1);
+      const proxyAddress = await vaultModule.getVaultDepositAddress(1);
+
+      const amount = hre.ethers.parseUnits("500", 6);
+      await usdt.connect(user2).transfer(proxyAddress, amount);
+
+      // Permissionless sweep credits the vault creator
+      const proxy = await hre.ethers.getContractAt("VaultDepositProxy", proxyAddress);
+      await proxy.connect(user2).sweepERC20(usdt.target);
+
+      expect((await vaultModule.getVaultMember(1, user1.address)).balance).to.equal(amount);
+      await expect(proxy.sweepERC20(usdt.target)).to.be.revertedWith("Nothing to sweep");
+    });
+
+    it("rejects depositFor to a non-member beneficiary", async function () {
+      const { vaultModule, user1, user2 } = await loadFixture(deployVaultSystemFixture);
+      await vaultModule.connect(user1).createVault(ethVaultParams());
+      await expect(
+        vaultModule.connect(user2).depositFor(1, 100, user2.address, { value: 100 })
+      ).to.be.revertedWith("Not a vault member");
+    });
+  });
+
   describe("Rule updates", function () {
     it("lets only the creator update personal vault rules, with validation", async function () {
       const { vaultModule, user1, user2 } = await loadFixture(deployVaultSystemFixture);

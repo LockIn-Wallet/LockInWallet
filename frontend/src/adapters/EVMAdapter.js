@@ -1248,6 +1248,49 @@ export class EVMAdapter extends BlockchainAdapter {
     return tx.hash;
   }
 
+  // ---- Permanent per-vault deposit addresses ----
+
+  async getVaultDepositAddress(vaultId) {
+    const vaultModule = await this._getVaultModule();
+    const address = await vaultModule.getVaultDepositAddress(vaultId);
+    return address === ethers.ZeroAddress ? null : address;
+  }
+
+  async deployVaultDepositAddress(vaultId) {
+    const vaultModule = await this._getVaultModule();
+    const tx = await vaultModule.deployVaultDepositAddress(vaultId);
+    await tx.wait();
+    return this.getVaultDepositAddress(vaultId);
+  }
+
+  /** Forward any funds sitting on the vault's deposit address into the vault. */
+  async checkAndSweepVaultProxy(vaultId) {
+    try {
+      const proxyAddress = await this.getVaultDepositAddress(vaultId);
+      if (!proxyAddress) return;
+      const vault = await this.getVaultInfo(vaultId);
+      if (!vault) return;
+
+      const proxy = new ethers.Contract(
+        proxyAddress,
+        ["function sweepETH() external", "function sweepERC20(address token) external"],
+        this.signer,
+      );
+
+      if (vault.isNativeToken) {
+        // receive() forwards ETH automatically; sweep only catches strays
+        const balance = await this.provider.getBalance(proxyAddress);
+        if (balance > 0n) await (await proxy.sweepETH()).wait();
+      } else {
+        const token = new ethers.Contract(vault.tokenMint, ERC20ABI, this.provider);
+        const balance = await token.balanceOf(proxyAddress);
+        if (balance > 0n) await (await proxy.sweepERC20(vault.tokenMint)).wait();
+      }
+    } catch (error) {
+      console.warn("Vault proxy sweep check failed:", error.message);
+    }
+  }
+
   async getVaultInfo(vaultAddress) {
     const vaultModule = await this._getVaultModule();
     let raw;

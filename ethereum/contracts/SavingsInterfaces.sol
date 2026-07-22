@@ -276,9 +276,14 @@ interface IVaultSystemModule {
 
     // Funds
     function deposit(uint256 vaultId, uint256 amount) external payable;
+    function depositFor(uint256 vaultId, uint256 amount, address beneficiary) external payable;
     function withdraw(uint256 vaultId, uint256 amount) external;
     function withdrawWithPenalty(uint256 vaultId, uint256 amount) external;
     function claimPenaltyRewards(uint256 vaultId) external;
+
+    // Permanent deposit addresses
+    function deployVaultDepositAddress(uint256 vaultId) external returns (address proxy);
+    function getVaultDepositAddress(uint256 vaultId) external view returns (address);
 
     // Views
     function getVault(uint256 vaultId) external view returns (VaultInfo memory);
@@ -294,6 +299,7 @@ interface IVaultSystemModule {
     event VaultLeft(uint256 indexed vaultId, address indexed member);
     event VaultRulesUpdated(uint256 indexed vaultId);
     event VaultDeposit(uint256 indexed vaultId, address indexed member, uint256 amount);
+    event VaultDepositAddressDeployed(uint256 indexed vaultId, address indexed proxy);
     event VaultWithdrawal(uint256 indexed vaultId, address indexed member, uint256 amount, uint256 penalty);
     event PenaltyRewardsClaimed(uint256 indexed vaultId, address indexed member, uint256 amount);
 }

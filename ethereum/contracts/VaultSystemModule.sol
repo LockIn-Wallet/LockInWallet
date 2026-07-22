@@ -7,6 +7,7 @@ import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "./SavingsInterfaces.sol";
+import "./VaultDepositProxy.sol";
 
 /// @title VaultSystemModule
 /// @notice Named savings vaults with per-member time-window withdrawal limits.
@@ -34,6 +35,9 @@ contract VaultSystemModule is Initializable, UUPSUpgradeable, OwnableUpgradeable
     mapping(address => uint256[]) private userVaultIds;
 
     bool private locked;
+
+    // Appended for upgrades: permanent per-vault deposit addresses
+    mapping(uint256 => address) private vaultDepositProxies;
 
     uint8 private constant VAULT_TYPE_PERSONAL = 0;
     uint8 private constant VAULT_TYPE_COMMUNITY = 1;
@@ -162,9 +166,21 @@ contract VaultSystemModule is Initializable, UUPSUpgradeable, OwnableUpgradeable
     // ========== FUNDS ==========
 
     function deposit(uint256 vaultId, uint256 amount) external payable nonReentrant onlyMember(vaultId) {
+        _deposit(vaultId, amount, msg.sender);
+    }
+
+    /// @notice Deposit on behalf of an existing member — used by the vault's
+    /// permanent deposit address to credit funds sent from exchanges.
+    function depositFor(uint256 vaultId, uint256 amount, address beneficiary) external payable nonReentrant {
+        require(vaultMembers[vaultId][beneficiary].exists, "Not a vault member");
+        _deposit(vaultId, amount, beneficiary);
+    }
+
+    /// @dev Funds always come from msg.sender; the credit goes to `beneficiary`.
+    function _deposit(uint256 vaultId, uint256 amount, address beneficiary) private {
         require(amount > 0, "Invalid amount");
         VaultInfo storage vault = _activeVault(vaultId);
-        VaultMemberInfo storage member = vaultMembers[vaultId][msg.sender];
+        VaultMemberInfo storage member = vaultMembers[vaultId][beneficiary];
 
         uint256 credited = amount;
         if (vault.token == address(0)) {
@@ -185,7 +201,26 @@ contract VaultSystemModule is Initializable, UUPSUpgradeable, OwnableUpgradeable
         vault.totalBalance += credited;
         _snapshotDebt(vault, member);
         vault.updatedAt = block.timestamp;
-        emit VaultDeposit(vaultId, msg.sender, credited);
+        emit VaultDeposit(vaultId, beneficiary, credited);
+    }
+
+    // ========== PERMANENT DEPOSIT ADDRESSES ==========
+
+    /// @notice Deploy the vault's permanent deposit address. Anything sent to
+    /// it (ETH or the vault's token) is forwarded into the vault and credited
+    /// to the creator, so exchanges can withdraw straight into this vault.
+    function deployVaultDepositAddress(uint256 vaultId) external returns (address proxy) {
+        VaultInfo storage vault = _activeVault(vaultId);
+        require(msg.sender == vault.creator, "Only creator");
+        require(vaultDepositProxies[vaultId] == address(0), "Already deployed");
+
+        proxy = address(new VaultDepositProxy{salt: bytes32(vaultId)}(address(this), vaultId, vault.creator));
+        vaultDepositProxies[vaultId] = proxy;
+        emit VaultDepositAddressDeployed(vaultId, proxy);
+    }
+
+    function getVaultDepositAddress(uint256 vaultId) external view returns (address) {
+        return vaultDepositProxies[vaultId];
     }
 
     /// @notice Withdraw within the vault's spending limits.
