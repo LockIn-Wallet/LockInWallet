@@ -1,5 +1,6 @@
 import { EVMAdapter } from "./EVMAdapter.js";
 import { SolanaAdapter } from "./SolanaAdapter.js";
+import { getTokenMeta } from "../utils/tokenUtils.js";
 
 const PERSONAL_VAULT_KEY = "personal_vault_address";
 
@@ -45,23 +46,13 @@ export class TransactionManager {
   // ---- Personal vault management ----
 
   _getTokenDecimals(vault) {
-    if (!vault) return 9;
-    if (vault.isSolVault) return 9;
-    const tokens = this.networkConfig?.tokens || {};
-    const match = Object.values(tokens).find(
-      (t) => t.address === vault.tokenMint
-    );
-    return match?.decimals ?? 6;
+    if (vault?.tokenDecimals != null) return vault.tokenDecimals;
+    return getTokenMeta(this.networkConfig, vault?.isSolVault ? null : vault?.tokenMint).decimals;
   }
 
   _getTokenSymbol(vault) {
-    if (!vault) return "SOL";
-    if (vault.isSolVault) return "SOL";
-    const tokens = this.networkConfig?.tokens || {};
-    const match = Object.values(tokens).find(
-      (t) => t.address === vault.tokenMint
-    );
-    return match?.symbol ?? "TOKEN";
+    if (vault?.tokenSymbol) return vault.tokenSymbol;
+    return getTokenMeta(this.networkConfig, vault?.isSolVault ? null : vault?.tokenMint).symbol;
   }
 
   async _loadPersonalVault() {
@@ -109,36 +100,24 @@ export class TransactionManager {
 
   // ---- Compatibility layer (old UI flow) ----
 
-  async commitSetup(daily, weekly, monthly, limitsArePercentage = false, tokenMint = null, tokenDecimals = 6) {
+  async commitSetup(daily, weekly, monthly, limitsArePercentage = false, tokenMint = null) {
     if (this.networkType === "evm") {
       return this.getAdapter().commitSetup(daily, weekly, monthly);
     }
 
-    let dailyVal, weeklyVal, monthlyVal;
-    const decimals = tokenMint ? tokenDecimals : 9;
-
-    if (limitsArePercentage) {
-      if (daily > 100 || weekly > 100 || monthly > 100) {
-        throw new Error("Percentage values must be between 0 and 100");
-      }
-      dailyVal = daily > 0 ? Math.round(daily * 100) : 0;
-      weeklyVal = weekly > 0 ? Math.round(weekly * 100) : 0;
-      monthlyVal = monthly > 0 ? Math.round(monthly * 100) : 0;
-    } else {
-      const factor = 10 ** decimals;
-      dailyVal = daily > 0 ? Math.round(daily * factor) : 0;
-      weeklyVal = weekly > 0 ? Math.round(weekly * factor) : 0;
-      monthlyVal = monthly > 0 ? Math.round(monthly * factor) : 0;
+    if (limitsArePercentage && (daily > 100 || weekly > 100 || monthly > 100)) {
+      throw new Error("Percentage values must be between 0 and 100");
     }
 
+    // Adapters accept business units (percent or token amounts) directly
     const result = await this.getAdapter().createVault({
       name: "Personal Savings",
       description: "My personal savings vault",
       vaultType: "Personal",
       tokenMint,
-      dailyLimit: dailyVal,
-      weeklyLimit: weeklyVal,
-      monthlyLimit: monthlyVal,
+      dailyLimit: daily,
+      weeklyLimit: weekly,
+      monthlyLimit: monthly,
       penaltyRateBps: 2000,
       limitsArePercentage,
     });
@@ -206,32 +185,17 @@ export class TransactionManager {
 
   async depositToPersonalVault(amount) {
     if (!this.personalVaultAddress) throw new Error("No personal vault. Complete setup first.");
-    const vault = await this.getPersonalVault();
-    if (vault && !vault.isSolVault) {
-      const decimals = this._getTokenDecimals(vault);
-      return this.getAdapter().depositSpl(this.personalVaultAddress, vault.tokenMint, amount, decimals);
-    }
-    return this.getAdapter().depositSol(this.personalVaultAddress, amount);
+    return this.getAdapter().depositToVault(this.personalVaultAddress, amount);
   }
 
   async withdrawFromPersonalVault(amount) {
     if (!this.personalVaultAddress) throw new Error("No personal vault");
-    const vault = await this.getPersonalVault();
-    if (vault && !vault.isSolVault) {
-      const decimals = this._getTokenDecimals(vault);
-      return this.getAdapter().withdrawSpl(this.personalVaultAddress, vault.tokenMint, amount, decimals);
-    }
-    return this.getAdapter().withdrawSol(this.personalVaultAddress, amount);
+    return this.getAdapter().withdrawFromVault(this.personalVaultAddress, amount);
   }
 
   async penaltyWithdrawFromPersonalVault(amount) {
     if (!this.personalVaultAddress) throw new Error("No personal vault");
-    const vault = await this.getPersonalVault();
-    if (vault && !vault.isSolVault) {
-      const decimals = this._getTokenDecimals(vault);
-      return this.getAdapter().withdrawSplWithPenalty(this.personalVaultAddress, vault.tokenMint, amount, decimals);
-    }
-    return this.getAdapter().withdrawSolWithPenalty(this.personalVaultAddress, amount);
+    return this.getAdapter().withdrawFromVaultWithPenalty(this.personalVaultAddress, amount);
   }
 
   async updatePersonalVaultRules(rules) {
@@ -520,27 +484,20 @@ export class TransactionManager {
   joinVault(vaultAddress) { return this.getAdapter().joinVault(vaultAddress); }
   leaveVault(vaultAddress) { return this.getAdapter().leaveVault(vaultAddress); }
 
-  // ---- Deposits ----
-  depositSol(vaultAddress, amount) { return this.getAdapter().depositSol(vaultAddress, amount); }
-  depositSpl(vaultAddress, tokenMint, amount, decimals) {
-    return this.getAdapter().depositSpl(vaultAddress, tokenMint, amount, decimals);
+  // ---- Deposits / withdrawals (chain-agnostic, business units) ----
+  depositToVault(vaultAddress, amount) {
+    return this.getAdapter().depositToVault(vaultAddress, amount);
   }
-
-  // ---- Withdrawals ----
-  withdrawSol(vaultAddress, amount) { return this.getAdapter().withdrawSol(vaultAddress, amount); }
-  withdrawSpl(vaultAddress, tokenMint, amount, decimals) {
-    return this.getAdapter().withdrawSpl(vaultAddress, tokenMint, amount, decimals);
+  withdrawFromVault(vaultAddress, amount) {
+    return this.getAdapter().withdrawFromVault(vaultAddress, amount);
   }
-  withdrawSolWithPenalty(vaultAddress, amount) {
-    return this.getAdapter().withdrawSolWithPenalty(vaultAddress, amount);
-  }
-  withdrawSplWithPenalty(vaultAddress, tokenMint, amount, decimals) {
-    return this.getAdapter().withdrawSplWithPenalty(vaultAddress, tokenMint, amount, decimals);
+  withdrawFromVaultWithPenalty(vaultAddress, amount) {
+    return this.getAdapter().withdrawFromVaultWithPenalty(vaultAddress, amount);
   }
 
   // ---- Penalty rewards ----
-  claimPenaltyRewards(vaultAddress, isSpl, tokenMint) {
-    return this.getAdapter().claimPenaltyRewards(vaultAddress, isSpl, tokenMint);
+  claimVaultPenaltyRewards(vaultAddress) {
+    return this.getAdapter().claimVaultPenaltyRewards(vaultAddress);
   }
 
   // ---- Vault management ----

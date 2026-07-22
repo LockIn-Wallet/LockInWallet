@@ -75,7 +75,7 @@ async function fetchSolanaProposals(params) {
   console.log(`✅ Found ${rawProposals.length} pending proposals for Solana`);
 
   const vault = await transactionManager.getPersonalVault().catch(() => null);
-  const decimals = vault ? (vault.isSolVault ? 9 : 6) : 6;
+  const decimals = vault?.tokenDecimals ?? (vault?.isSolVault ? 9 : 6);
   const factor = 10 ** decimals;
 
   return rawProposals.map(proposal => {

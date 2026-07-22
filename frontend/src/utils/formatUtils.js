@@ -1,5 +1,11 @@
 export function getTokenDecimals(vault) {
-  return vault.isSolVault ? 9 : 6;
+  if (vault?.tokenDecimals != null) return vault.tokenDecimals;
+  return vault?.isNativeToken ?? vault?.isSolVault ? 9 : 6;
+}
+
+export function getTokenSymbol(vault) {
+  if (vault?.tokenSymbol) return vault.tokenSymbol;
+  return vault?.isNativeToken ?? vault?.isSolVault ? "SOL" : "TOKEN";
 }
 
 export function formatTokenAmount(raw, decimals) {
@@ -13,9 +19,7 @@ export function formatLimit(raw, vault) {
   if (vault.limitsArePercentage) {
     return `${parseFloat((raw / 100).toFixed(1))}%`;
   }
-  const decimals = getTokenDecimals(vault);
-  const symbol = vault.isSolVault ? "SOL" : "USD";
-  return `${formatTokenAmount(raw, decimals)} ${symbol}`;
+  return `${formatTokenAmount(raw, getTokenDecimals(vault))} ${getTokenSymbol(vault)}`;
 }
 
 export function formatPenalty(bps) {

@@ -64,40 +64,19 @@ function VaultDetail({ transactionManager, wallet }) {
   const handleDeposit = () => {
     const val = parseFloat(amount);
     if (!val || val <= 0) { setError("Enter a valid amount"); return; }
-
-    if (vault.isSolVault) {
-      handleAction(() => transactionManager.depositSol(address, val));
-    } else {
-      handleAction(() =>
-        transactionManager.depositSpl(address, vault.tokenMint, val, 6)
-      );
-    }
+    handleAction(() => transactionManager.depositToVault(address, val));
   };
 
   const handleWithdraw = () => {
     const val = parseFloat(amount);
     if (!val || val <= 0) { setError("Enter a valid amount"); return; }
-
-    if (vault.isSolVault) {
-      handleAction(() => transactionManager.withdrawSol(address, val));
-    } else {
-      handleAction(() =>
-        transactionManager.withdrawSpl(address, vault.tokenMint, val, 6)
-      );
-    }
+    handleAction(() => transactionManager.withdrawFromVault(address, val));
   };
 
   const handlePenaltyWithdraw = () => {
     const val = parseFloat(amount);
     if (!val || val <= 0) { setError("Enter a valid amount"); return; }
-
-    if (vault.isSolVault) {
-      handleAction(() => transactionManager.withdrawSolWithPenalty(address, val));
-    } else {
-      handleAction(() =>
-        transactionManager.withdrawSplWithPenalty(address, vault.tokenMint, val, 6)
-      );
-    }
+    handleAction(() => transactionManager.withdrawFromVaultWithPenalty(address, val));
   };
 
   const handleJoin = () => handleAction(() => transactionManager.joinVault(address));
@@ -105,9 +84,7 @@ function VaultDetail({ transactionManager, wallet }) {
   const handleLeave = () => handleAction(() => transactionManager.leaveVault(address));
 
   const handleClaimRewards = () =>
-    handleAction(() =>
-      transactionManager.claimPenaltyRewards(address, !vault.isSolVault, vault.isSolVault ? null : vault.tokenMint)
-    );
+    handleAction(() => transactionManager.claimVaultPenaltyRewards(address));
 
   const copyShareLink = () => {
     navigator.clipboard.writeText(window.location.href);
@@ -135,8 +112,11 @@ function VaultDetail({ transactionManager, wallet }) {
   const isPersonal = vault.vaultType === "Personal";
   const isMember = !!membership;
   const decimals = getTokenDecimals(vault);
-  const tokenSymbol = vault.isSolVault ? "SOL" : "USD";
-  const tokenLabel = vault.isSolVault ? "SOL" : vault.tokenMint.slice(0, 8) + "...";
+  const tokenSymbol = vault.tokenSymbol || "TOKEN";
+  const tokenLabel =
+    tokenSymbol !== "TOKEN" || !vault.tokenMint
+      ? tokenSymbol
+      : vault.tokenMint.slice(0, 8) + "...";
   const myBalance = membership
     ? formatTokenAmount(membership.balance, decimals)
     : "0";
@@ -308,7 +288,7 @@ function VaultDetail({ transactionManager, wallet }) {
                 min="0"
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
-                placeholder={`Amount in ${vault.isSolVault ? "SOL" : "tokens"}`}
+                placeholder={`Amount in ${tokenSymbol}`}
               />
               <button
                 style={{

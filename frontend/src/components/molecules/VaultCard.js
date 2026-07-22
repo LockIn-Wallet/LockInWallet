@@ -1,12 +1,12 @@
 import React from "react";
 import { colors, spacing, fontSize, borderRadius } from "../../styles";
-import { getTokenDecimals, formatTokenAmount, formatLimit, formatPenalty } from "../../utils/formatUtils";
+import { getTokenDecimals, getTokenSymbol, formatTokenAmount, formatLimit, formatPenalty } from "../../utils/formatUtils";
 
 function VaultCard({ vault, membership, onClick }) {
   const isPersonal = vault.vaultType === "Personal";
   const borderColor = isPersonal ? colors.success.main : "#805ad5";
   const decimals = getTokenDecimals(vault);
-  const tokenLabel = vault.isSolVault ? "SOL" : "USD";
+  const tokenLabel = getTokenSymbol(vault);
 
   return (
     <div
@@ -46,7 +46,9 @@ function VaultCard({ vault, membership, onClick }) {
 
       {/* Token */}
       <div style={{ fontSize: fontSize.sm, color: colors.text.secondary, marginBottom: spacing.md }}>
-        {vault.isSolVault ? "SOL" : `SPL: ${vault.tokenMint.slice(0, 8)}...`}
+        {tokenLabel !== "TOKEN" || !vault.tokenMint
+          ? tokenLabel
+          : `${vault.tokenMint.slice(0, 8)}...`}
       </div>
 
       {/* Your balance */}

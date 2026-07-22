@@ -302,7 +302,7 @@ const SpendingLimitsSetup = ({
         penaltyRateBps: vault?.penaltyRateBps || 2000,
         limitsArePercentage: vault?.limitsArePercentage || false,
       };
-      const decimals = vault?.isSolVault ? 9 : 6;
+      const decimals = vault?.tokenDecimals ?? (vault?.isSolVault ? 9 : 6);
       const factor = 10 ** decimals;
       const periodKey = periodName.toLowerCase() + "Limit";
       currentRules[periodKey] = Math.round(newLimit * factor);

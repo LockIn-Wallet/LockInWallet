@@ -15,6 +15,7 @@ import {
 import { Buffer } from "buffer";
 import bs58 from "bs58";
 import { BlockchainAdapter } from "./BlockchainAdapter.js";
+import { getTokenMeta } from "../utils/tokenUtils.js";
 
 const PROGRAM_ID = new PublicKey(
   "9j511uJuYwoFRFiU1h5wy2oi1Xc8n1FdoK91QxoXHRh2"
@@ -494,15 +495,23 @@ export class SolanaAdapter extends BlockchainAdapter {
 
     const typeIndex = vaultType === "Community" ? VAULT_TYPE.Community : VAULT_TYPE.Personal;
 
+    // Limits arrive in business units (percent or token amounts) and are
+    // converted to raw units (bps or base units) here.
+    const { decimals } = getTokenMeta(this.networkConfig, tokenMint);
+    const toRawLimit = (value) => {
+      if (!value || value <= 0) return 0;
+      return limitsArePercentage ? Math.round(value * 100) : Math.round(value * 10 ** decimals);
+    };
+
     const dataBuffers = [
       Buffer.from(isSpl ? DISC.CreateSplVault : DISC.CreateVault),
       encodeString(name),
       encodeU64(vaultNonce),
       encodeString(description),
       encodeU8(typeIndex),
-      encodeU64(dailyLimit),
-      encodeU64(weeklyLimit),
-      encodeU64(monthlyLimit),
+      encodeU64(toRawLimit(dailyLimit)),
+      encodeU64(toRawLimit(weeklyLimit)),
+      encodeU64(toRawLimit(monthlyLimit)),
       encodeU16(penaltyRateBps),
       encodeBool(limitsArePercentage),
     ];
@@ -863,13 +872,60 @@ export class SolanaAdapter extends BlockchainAdapter {
     return this.sendTransaction(tx);
   }
 
+  // ---- Unified vault operations (same interface as EVMAdapter) ----
+
+  async depositToVault(vaultAddress, amount) {
+    const vault = await this.getVaultInfo(vaultAddress);
+    if (!vault) throw new Error("Vault not found");
+    if (vault.isNativeToken) return this.depositSol(vaultAddress, amount);
+    return this.depositSpl(vaultAddress, vault.tokenMint, amount, vault.tokenDecimals);
+  }
+
+  async withdrawFromVault(vaultAddress, amount) {
+    const vault = await this.getVaultInfo(vaultAddress);
+    if (!vault) throw new Error("Vault not found");
+    if (vault.isNativeToken) return this.withdrawSol(vaultAddress, amount);
+    return this.withdrawSpl(vaultAddress, vault.tokenMint, amount, vault.tokenDecimals);
+  }
+
+  async withdrawFromVaultWithPenalty(vaultAddress, amount) {
+    const vault = await this.getVaultInfo(vaultAddress);
+    if (!vault) throw new Error("Vault not found");
+    if (vault.isNativeToken) return this.withdrawSolWithPenalty(vaultAddress, amount);
+    return this.withdrawSplWithPenalty(vaultAddress, vault.tokenMint, amount, vault.tokenDecimals);
+  }
+
+  async claimVaultPenaltyRewards(vaultAddress) {
+    const vault = await this.getVaultInfo(vaultAddress);
+    if (!vault) throw new Error("Vault not found");
+    return this.claimPenaltyRewards(
+      vaultAddress,
+      !vault.isNativeToken,
+      vault.isNativeToken ? null : vault.tokenMint
+    );
+  }
+
   // ---- Read operations ----
+
+  /** Attach chain-agnostic token metadata used by the unified UI. */
+  _enrichVault(vault) {
+    const meta = getTokenMeta(this.networkConfig, vault.isSolVault ? null : vault.tokenMint);
+    return {
+      ...vault,
+      isNativeToken: vault.isSolVault,
+      tokenSymbol: meta.symbol,
+      tokenDecimals: meta.decimals,
+    };
+  }
 
   async getVaultInfo(vaultAddress) {
     const vaultPubkey = new PublicKey(vaultAddress);
     const accountInfo = await this.connection.getAccountInfo(vaultPubkey);
     if (!accountInfo) return null;
-    return { ...deserializeVault(Buffer.from(accountInfo.data)), address: vaultAddress };
+    return this._enrichVault({
+      ...deserializeVault(Buffer.from(accountInfo.data)),
+      address: vaultAddress,
+    });
   }
 
   async getVaultMemberInfo(vaultAddress, memberAddress = null) {
@@ -914,15 +970,17 @@ export class SolanaAdapter extends BlockchainAdapter {
     // Filter by vault_type if specified (offset: 8 + 32 = 40 for vault_type byte)
     if (vaultType !== null) {
       const typeByte = vaultType === "Community" ? 1 : 0;
-      filters.push({ memcmp: { offset: 40, bytes: Buffer.from([typeByte]).toString("base64") } });
+      filters.push({ memcmp: { offset: 40, bytes: bs58.encode(Buffer.from([typeByte])) } });
     }
 
     const accounts = await this.connection.getProgramAccounts(PROGRAM_ID, { filters });
 
-    const vaults = accounts.map(({ pubkey, account }) => ({
-      ...deserializeVault(Buffer.from(account.data)),
-      address: pubkey.toString(),
-    }));
+    const vaults = accounts.map(({ pubkey, account }) =>
+      this._enrichVault({
+        ...deserializeVault(Buffer.from(account.data)),
+        address: pubkey.toString(),
+      })
+    );
 
     // Client-side filter by token mint if specified
     if (tokenMint) {

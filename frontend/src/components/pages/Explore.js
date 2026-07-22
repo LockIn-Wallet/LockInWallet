@@ -12,7 +12,7 @@ import VaultCard from "../molecules/VaultCard.js";
 function Explore({ transactionManager, navigate, wallet }) {
   const [vaults, setVaults] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState("all"); // "all", "community", "sol", "spl"
+  const [filter, setFilter] = useState("all"); // "all", "community", "native", "token"
   const [search, setSearch] = useState("");
 
   const loadVaults = useCallback(async () => {
@@ -32,8 +32,8 @@ function Explore({ transactionManager, navigate, wallet }) {
   useEffect(() => { loadVaults(); }, [loadVaults]);
 
   const filtered = vaults.filter((v) => {
-    if (filter === "sol" && !v.isSolVault) return false;
-    if (filter === "spl" && v.isSolVault) return false;
+    if (filter === "native" && !v.isNativeToken) return false;
+    if (filter === "token" && v.isNativeToken) return false;
     if (search && !v.name.toLowerCase().includes(search.toLowerCase())) return false;
     return true;
   });
@@ -63,7 +63,7 @@ function Explore({ transactionManager, navigate, wallet }) {
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search by name..."
         />
-        {["all", "community", "sol", "spl"].map((f) => (
+        {["all", "community", "native", "token"].map((f) => (
           <button
             key={f}
             style={{
@@ -73,7 +73,7 @@ function Explore({ transactionManager, navigate, wallet }) {
             }}
             onClick={() => setFilter(f)}
           >
-            {f === "all" ? "All" : f === "spl" ? "SPL Tokens" : f === "sol" ? "SOL" : "Community"}
+            {f === "all" ? "All" : f === "token" ? "Tokens" : f === "native" ? "Native Coin" : "Community"}
           </button>
         ))}
       </div>

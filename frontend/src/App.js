@@ -135,6 +135,7 @@ function MainFlow({
           if (committed) {
             await fetchSpendingLimits();
           }
+          await loadUserVaults();
         }
       } catch (err) {
         console.error("Setup check failed:", err);
@@ -156,7 +157,6 @@ function MainFlow({
   }, [spendingLimits]);
 
   const loadUserVaults = async () => {
-    if (networkType !== "solana") return;
     const vaults = await transactionManager.getUserVaults().catch(() => []);
     setUserVaults(vaults);
   };
@@ -185,8 +185,8 @@ function MainFlow({
 
   return (
     <div>
-      {/* My Vaults Section (Solana only, when committed) */}
-      {networkType === "solana" && isSetupCommitted && (
+      {/* My Vaults Section (once setup is committed on Solana; always on EVM) */}
+      {(networkType === "evm" || isSetupCommitted) && (
         <div style={{ marginBottom: spacing.xl }}>
           <div style={{
             display: "flex",
@@ -220,7 +220,7 @@ function MainFlow({
               borderRadius: "8px",
               border: "1px dashed #4a5568",
             }}>
-              <p>Create additional vaults for SPL tokens, or join community vaults.</p>
+              <p>Create named vaults with their own withdrawal limits, or join community vaults.</p>
             </div>
           ) : (
             <div style={{
@@ -371,7 +371,7 @@ function MainFlow({
           solanaConnected={solanaConnected}
           onSetupCommitted={(committed) => {
             setIsSetupCommitted(committed);
-            if (committed && networkType === "solana") {
+            if (committed) {
               loadUserVaults();
             }
           }}
@@ -771,39 +771,35 @@ function AppContentInner({
       {isWalletConnected && transactionManager ? (
         <Routes>
           <Route path="/" element={<MainFlow {...mainFlowProps} />} />
-          {networkType === "solana" && (
-            <>
-              <Route
-                path="/create"
-                element={
-                  <CreateVault
-                    transactionManager={transactionManager}
-                    navigate={navigate}
-                    networkConfig={networkConfig}
-                  />
-                }
+          <Route
+            path="/create"
+            element={
+              <CreateVault
+                transactionManager={transactionManager}
+                navigate={navigate}
+                networkConfig={networkConfig}
               />
-              <Route
-                path="/vault/:address"
-                element={
-                  <VaultDetail
-                    transactionManager={transactionManager}
-                    wallet={{ connected: solanaConnected, publicKey: solanaPublicKey }}
-                  />
-                }
+            }
+          />
+          <Route
+            path="/vault/:address"
+            element={
+              <VaultDetail
+                transactionManager={transactionManager}
+                wallet={mainFlowProps.wallet}
               />
-              <Route
-                path="/explore"
-                element={
-                  <Explore
-                    transactionManager={transactionManager}
-                    navigate={navigate}
-                    wallet={{ connected: solanaConnected, publicKey: solanaPublicKey }}
-                  />
-                }
+            }
+          />
+          <Route
+            path="/explore"
+            element={
+              <Explore
+                transactionManager={transactionManager}
+                navigate={navigate}
+                wallet={mainFlowProps.wallet}
               />
-            </>
-          )}
+            }
+          />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       ) : (

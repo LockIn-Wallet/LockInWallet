@@ -4,6 +4,12 @@ import SavingsABI from "../SavingsABI.json";
 import MockUSDT_ABI from "../MockUSDT_ABI.json";
 import ProxyDeploymentModuleABI from "../ProxyDeploymentModuleABI.json";
 import TimePeriodLimitsModuleABI from "../TimePeriodLimitsModuleABI.json";
+import VaultSystemModuleABI from "../VaultSystemModuleABI.json";
+import ERC20ABI from "../ERC20ABI.json";
+import { getTokenMeta } from "../utils/tokenUtils.js";
+
+const VAULT_SYSTEM_MODULE_ID = ethers.keccak256(ethers.toUtf8Bytes("VAULT_SYSTEM"));
+const VAULT_TYPE_NAMES = ["Personal", "Community"];
 
 /**
  * EVM Blockchain Adapter for MetaMask and ethers.js integration
@@ -15,6 +21,7 @@ export class EVMAdapter extends BlockchainAdapter {
     this.signer = null;
     this.savingsContract = null;
     this.proxyDeploymentModule = null;
+    this.vaultModule = null;
     this.userAddress = null;
     this.ETH_ADDRESS = "0x0000000000000000000000000000000000000000";
   }
@@ -69,6 +76,7 @@ export class EVMAdapter extends BlockchainAdapter {
     this.signer = null;
     this.savingsContract = null;
     this.proxyDeploymentModule = null;
+    this.vaultModule = null;
     this.userAddress = null;
   }
 
@@ -999,5 +1007,263 @@ export class EVMAdapter extends BlockchainAdapter {
     const tx = await this.savingsContract.claimPoolTogetherPrize(tokenAddress, tier);
     await tx.wait();
     return tx.hash;
+  }
+
+  // ========== VAULTS ==========
+
+  async _getVaultModule() {
+    if (this.vaultModule) return this.vaultModule;
+    if (!this.savingsContract) throw new Error("Contract not initialized");
+    const moduleAddress = await this.savingsContract.getModule(VAULT_SYSTEM_MODULE_ID);
+    if (moduleAddress === ethers.ZeroAddress) {
+      throw new Error("Vaults are not available on this network yet");
+    }
+    this.vaultModule = new ethers.Contract(moduleAddress, VaultSystemModuleABI, this.signer);
+    return this.vaultModule;
+  }
+
+  _mapVault(vaultId, raw) {
+    const token = raw.token === ethers.ZeroAddress ? null : raw.token;
+    const meta = getTokenMeta(this.networkConfig, token);
+    return {
+      address: vaultId.toString(),
+      creator: raw.creator,
+      vaultType: VAULT_TYPE_NAMES[Number(raw.vaultType)] || "Personal",
+      tokenMint: token,
+      isNativeToken: meta.isNative,
+      tokenSymbol: meta.symbol,
+      tokenDecimals: meta.decimals,
+      name: raw.name,
+      description: raw.description,
+      dailyLimit: Number(raw.dailyLimit),
+      weeklyLimit: Number(raw.weeklyLimit),
+      monthlyLimit: Number(raw.monthlyLimit),
+      limitsArePercentage: raw.limitsArePercentage,
+      penaltyRateBps: Number(raw.penaltyRateBps),
+      memberCount: Number(raw.memberCount),
+      totalBalance: Number(raw.totalBalance),
+      accumulatedPenalty: Number(raw.accPenaltyPerShare),
+      isActive: raw.isActive,
+      createdAt: Number(raw.createdAt),
+      updatedAt: Number(raw.updatedAt),
+    };
+  }
+
+  _mapVaultMember(vaultId, memberAddress, raw) {
+    return {
+      vault: vaultId.toString(),
+      member: memberAddress,
+      balance: Number(raw.balance),
+      dailySpent: Number(raw.dailySpent),
+      dailyLastReset: Number(raw.dailyLastReset),
+      weeklySpent: Number(raw.weeklySpent),
+      weeklyLastReset: Number(raw.weeklyLastReset),
+      monthlySpent: Number(raw.monthlySpent),
+      monthlyLastReset: Number(raw.monthlyLastReset),
+      penaltyDebt: Number(raw.penaltyDebt),
+      unclaimedPenalties: Number(raw.unclaimedPenalties),
+      joinedAt: Number(raw.joinedAt),
+    };
+  }
+
+  _toRawLimit(value, limitsArePercentage, decimals) {
+    if (!value || value <= 0) return 0n;
+    if (limitsArePercentage) return BigInt(Math.round(value * 100)); // percent -> bps
+    return ethers.parseUnits(value.toString(), decimals);
+  }
+
+  async createVault({
+    name,
+    description = "",
+    vaultType = "Personal",
+    tokenMint = null,
+    dailyLimit = 0,
+    weeklyLimit = 0,
+    monthlyLimit = 0,
+    penaltyRateBps = 2000,
+    limitsArePercentage = false,
+  }) {
+    const vaultModule = await this._getVaultModule();
+    const token = tokenMint || ethers.ZeroAddress;
+    const { decimals } = getTokenMeta(this.networkConfig, tokenMint);
+
+    const tx = await vaultModule.createVault({
+      name,
+      description,
+      vaultType: vaultType === "Community" ? 1 : 0,
+      token,
+      dailyLimit: this._toRawLimit(dailyLimit, limitsArePercentage, decimals),
+      weeklyLimit: this._toRawLimit(weeklyLimit, limitsArePercentage, decimals),
+      monthlyLimit: this._toRawLimit(monthlyLimit, limitsArePercentage, decimals),
+      limitsArePercentage,
+      penaltyRateBps,
+    });
+    const receipt = await tx.wait();
+
+    let vaultId = null;
+    for (const log of receipt.logs) {
+      try {
+        const parsed = vaultModule.interface.parseLog(log);
+        if (parsed?.name === "VaultCreated") {
+          vaultId = parsed.args.vaultId.toString();
+          break;
+        }
+      } catch {
+        // Log from another contract — ignore
+      }
+    }
+    if (!vaultId) throw new Error("Vault creation event not found");
+    return { signature: tx.hash, vaultAddress: vaultId };
+  }
+
+  async joinVault(vaultAddress) {
+    const vaultModule = await this._getVaultModule();
+    const tx = await vaultModule.joinVault(vaultAddress);
+    await tx.wait();
+    return tx.hash;
+  }
+
+  async leaveVault(vaultAddress) {
+    const vaultModule = await this._getVaultModule();
+    const tx = await vaultModule.leaveVault(vaultAddress);
+    await tx.wait();
+    return tx.hash;
+  }
+
+  async updateVaultRules(vaultAddress, rules = {}) {
+    const vaultModule = await this._getVaultModule();
+    const vault = await this.getVaultInfo(vaultAddress);
+    if (!vault) throw new Error("Vault not found");
+
+    const limitsArePercentage = rules.limitsArePercentage ?? vault.limitsArePercentage;
+    const rawCurrent = (value) => BigInt(Math.round(value));
+    const tx = await vaultModule.updateVaultRules(
+      vaultAddress,
+      rules.dailyLimit != null
+        ? this._toRawLimit(rules.dailyLimit, limitsArePercentage, vault.tokenDecimals)
+        : rawCurrent(vault.dailyLimit),
+      rules.weeklyLimit != null
+        ? this._toRawLimit(rules.weeklyLimit, limitsArePercentage, vault.tokenDecimals)
+        : rawCurrent(vault.weeklyLimit),
+      rules.monthlyLimit != null
+        ? this._toRawLimit(rules.monthlyLimit, limitsArePercentage, vault.tokenDecimals)
+        : rawCurrent(vault.monthlyLimit),
+      limitsArePercentage,
+      rules.penaltyRateBps ?? vault.penaltyRateBps
+    );
+    await tx.wait();
+    return tx.hash;
+  }
+
+  async depositToVault(vaultAddress, amount) {
+    const vaultModule = await this._getVaultModule();
+    const vault = await this.getVaultInfo(vaultAddress);
+    if (!vault) throw new Error("Vault not found");
+
+    const rawAmount = ethers.parseUnits(amount.toString(), vault.tokenDecimals);
+    if (vault.isNativeToken) {
+      const tx = await vaultModule.deposit(vaultAddress, rawAmount, { value: rawAmount });
+      await tx.wait();
+      return tx.hash;
+    }
+
+    const token = new ethers.Contract(vault.tokenMint, ERC20ABI, this.signer);
+    const moduleAddress = await vaultModule.getAddress();
+    const allowance = await token.allowance(this.userAddress, moduleAddress);
+    if (allowance < rawAmount) {
+      const approveTx = await token.approve(moduleAddress, rawAmount);
+      await approveTx.wait();
+    }
+    const tx = await vaultModule.deposit(vaultAddress, rawAmount);
+    await tx.wait();
+    return tx.hash;
+  }
+
+  async _withdrawFromVault(vaultAddress, amount, withPenalty) {
+    const vaultModule = await this._getVaultModule();
+    const vault = await this.getVaultInfo(vaultAddress);
+    if (!vault) throw new Error("Vault not found");
+
+    const rawAmount = ethers.parseUnits(amount.toString(), vault.tokenDecimals);
+    const tx = withPenalty
+      ? await vaultModule.withdrawWithPenalty(vaultAddress, rawAmount)
+      : await vaultModule.withdraw(vaultAddress, rawAmount);
+    await tx.wait();
+    return tx.hash;
+  }
+
+  async withdrawFromVault(vaultAddress, amount) {
+    return this._withdrawFromVault(vaultAddress, amount, false);
+  }
+
+  async withdrawFromVaultWithPenalty(vaultAddress, amount) {
+    return this._withdrawFromVault(vaultAddress, amount, true);
+  }
+
+  async claimVaultPenaltyRewards(vaultAddress) {
+    const vaultModule = await this._getVaultModule();
+    const tx = await vaultModule.claimPenaltyRewards(vaultAddress);
+    await tx.wait();
+    return tx.hash;
+  }
+
+  async getVaultInfo(vaultAddress) {
+    const vaultModule = await this._getVaultModule();
+    try {
+      const raw = await vaultModule.getVault(vaultAddress);
+      return this._mapVault(vaultAddress, raw);
+    } catch {
+      return null;
+    }
+  }
+
+  async getVaultMemberInfo(vaultAddress, memberAddress = null) {
+    const vaultModule = await this._getVaultModule();
+    const member = memberAddress || this.userAddress;
+    const raw = await vaultModule.getVaultMember(vaultAddress, member);
+    if (!raw.exists) return null;
+    return this._mapVaultMember(vaultAddress, member, raw);
+  }
+
+  async getUserVaults() {
+    const vaultModule = await this._getVaultModule();
+    const vaultIds = await vaultModule.getUserVaultIds(this.userAddress);
+
+    const results = [];
+    for (const vaultId of vaultIds) {
+      const vault = await this.getVaultInfo(vaultId.toString());
+      const membership = await this.getVaultMemberInfo(vaultId.toString());
+      if (vault && membership) {
+        results.push({ vault, membership });
+      }
+    }
+    return results;
+  }
+
+  async discoverVaults({ tokenMint = null, vaultType = null } = {}) {
+    const vaultModule = await this._getVaultModule();
+    const count = Number(await vaultModule.getVaultCount());
+
+    const vaults = [];
+    for (let vaultId = 1; vaultId <= count; vaultId++) {
+      const vault = await this.getVaultInfo(vaultId.toString());
+      if (!vault || !vault.isActive) continue;
+      if (vaultType && vault.vaultType !== vaultType) continue;
+      if (tokenMint && vault.tokenMint !== tokenMint) continue;
+      vaults.push(vault);
+    }
+    return vaults;
+  }
+
+  async getVaultMembers(vaultAddress) {
+    const vaultModule = await this._getVaultModule();
+    const addresses = await vaultModule.getVaultMembers(vaultAddress);
+
+    const members = [];
+    for (const address of addresses) {
+      const membership = await this.getVaultMemberInfo(vaultAddress, address);
+      if (membership) members.push(membership);
+    }
+    return members;
   }
 }

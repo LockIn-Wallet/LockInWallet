@@ -2,54 +2,90 @@ import React, { useState } from "react";
 import {
   buttonStyles,
   formStyles,
-  cardStyles,
   colors,
   spacing,
   fontSize,
   borderRadius,
 } from "../../styles";
+import { getTokenMeta, isStablecoin } from "../../utils/tokenUtils.js";
 
-const TOKEN_OPTIONS = [
-  { label: "SOL (Native)", value: null, decimals: 9 },
+const EVM_ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
+
+const LIMIT_MODES = [
+  {
+    key: "percent",
+    label: "% of balance",
+    hint: "The limit scales with your balance — best for volatile assets whose price moves a lot.",
+  },
+  {
+    key: "fixed",
+    label: "Fixed amount",
+    hint: "A predictable amount per period — best for stablecoins.",
+  },
 ];
 
 function CreateVault({ transactionManager, navigate, networkConfig }) {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [vaultType, setVaultType] = useState("Personal");
-  const [tokenMint, setTokenMint] = useState(null);
-  const [customMint, setCustomMint] = useState("");
-  const [dailyPct, setDailyPct] = useState("5");
-  const [weeklyPct, setWeeklyPct] = useState("");
-  const [monthlyPct, setMonthlyPct] = useState("");
+  const [tokenValue, setTokenValue] = useState(null);
+  const [customToken, setCustomToken] = useState("");
+  const [limitMode, setLimitMode] = useState("percent");
+  const [modeTouched, setModeTouched] = useState(false);
+  const [daily, setDaily] = useState("5");
+  const [weekly, setWeekly] = useState("");
+  const [monthly, setMonthly] = useState("");
   const [penaltyPct, setPenaltyPct] = useState("20");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  // Build token options from network config
-  const splTokens = networkConfig?.tokens
-    ? Object.entries(networkConfig.tokens)
-        .filter(([, t]) => t.address && t.address !== "native")
-        .map(([symbol, t]) => ({ label: symbol, value: t.address, decimals: t.decimals || 6 }))
-    : [];
-  const allTokenOptions = [...TOKEN_OPTIONS, ...splTokens, { label: "Custom SPL Token", value: "custom" }];
+  const nativeMeta = getTokenMeta(networkConfig, null);
+  const tokenOptions = [
+    { label: `${nativeMeta.symbol} (Native)`, value: null, symbol: nativeMeta.symbol },
+    ...(networkConfig?.tokens
+      ? Object.entries(networkConfig.tokens)
+          .filter(([, t]) => t.address && t.address !== "native" && t.address !== EVM_ZERO_ADDRESS)
+          .map(([symbol, t]) => ({ label: symbol, value: t.address, symbol }))
+      : []),
+    { label: "Custom token address", value: "custom", symbol: null },
+  ];
+
+  const resolvedToken = tokenValue === "custom" ? customToken.trim() || null : tokenValue;
+  const selectedMeta = getTokenMeta(networkConfig, resolvedToken);
+  const isPercent = limitMode === "percent";
+  const limitUnit = isPercent ? "%" : selectedMeta.symbol;
+
+  const handleTokenChange = (value) => {
+    setTokenValue(value);
+    // Suggest the mode that fits the token unless the user chose one explicitly:
+    // fixed amounts for stablecoins, percentages for volatile assets.
+    if (!modeTouched && value !== "custom") {
+      const meta = getTokenMeta(networkConfig, value);
+      setLimitMode(isStablecoin(meta.symbol) ? "fixed" : "percent");
+    }
+  };
+
+  const handleModeChange = (mode) => {
+    setLimitMode(mode);
+    setModeTouched(true);
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError(null);
 
     if (!name.trim()) { setError("Vault name is required"); return; }
-    if (!dailyPct && !weeklyPct && !monthlyPct) {
+    const dailyVal = parseFloat(daily) || 0;
+    const weeklyVal = parseFloat(weekly) || 0;
+    const monthlyVal = parseFloat(monthly) || 0;
+    if (!dailyVal && !weeklyVal && !monthlyVal) {
       setError("At least one withdrawal limit is required");
       return;
     }
-
-    const daily = dailyPct ? Math.round(parseFloat(dailyPct) * 100) : 0;
-    const weekly = weeklyPct ? Math.round(parseFloat(weeklyPct) * 100) : 0;
-    const monthly = monthlyPct ? Math.round(parseFloat(monthlyPct) * 100) : 0;
-    const penalty = Math.round(parseFloat(penaltyPct || "20") * 100);
-
-    const resolvedMint = tokenMint === "custom" ? customMint || null : tokenMint;
+    if (isPercent && (dailyVal > 100 || weeklyVal > 100 || monthlyVal > 100)) {
+      setError("Percentage limits cannot exceed 100%");
+      return;
+    }
 
     try {
       setLoading(true);
@@ -57,12 +93,12 @@ function CreateVault({ transactionManager, navigate, networkConfig }) {
         name: name.trim(),
         description: description.trim(),
         vaultType,
-        tokenMint: resolvedMint,
-        dailyLimit: daily,
-        weeklyLimit: weekly,
-        monthlyLimit: monthly,
-        penaltyRateBps: penalty,
-        limitsArePercentage: true,
+        tokenMint: resolvedToken,
+        dailyLimit: dailyVal,
+        weeklyLimit: weeklyVal,
+        monthlyLimit: monthlyVal,
+        penaltyRateBps: Math.round(parseFloat(penaltyPct || "20") * 100),
+        limitsArePercentage: isPercent,
       });
       navigate(`/vault/${result.vaultAddress}`);
     } catch (err) {
@@ -132,7 +168,7 @@ function CreateVault({ transactionManager, navigate, networkConfig }) {
             style={inputStyle}
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="e.g. My Savings, Diamond Hands BONK"
+            placeholder="e.g. Personal Savings, Gambling Budget"
             maxLength={32}
           />
         </div>
@@ -154,71 +190,89 @@ function CreateVault({ transactionManager, navigate, networkConfig }) {
           <label style={formStyles.label}>Token</label>
           <select
             style={inputStyle}
-            value={tokenMint || "null"}
-            onChange={(e) => setTokenMint(e.target.value === "null" ? null : e.target.value)}
+            value={tokenValue || "null"}
+            onChange={(e) => handleTokenChange(e.target.value === "null" ? null : e.target.value)}
           >
-            {allTokenOptions.map((opt) => (
+            {tokenOptions.map((opt) => (
               <option key={opt.value || "null"} value={opt.value || "null"}>
                 {opt.label}
               </option>
             ))}
           </select>
-          {tokenMint === "custom" && (
+          {tokenValue === "custom" && (
             <input
               style={{ ...inputStyle, marginTop: spacing.sm }}
-              value={customMint}
-              onChange={(e) => setCustomMint(e.target.value)}
-              placeholder="SPL token mint address"
+              value={customToken}
+              onChange={(e) => setCustomToken(e.target.value)}
+              placeholder="Token contract / mint address"
             />
+          )}
+        </div>
+
+        {/* Limit mode */}
+        <div style={{ marginBottom: spacing.lg }}>
+          <label style={formStyles.label}>Withdrawal Limit Type</label>
+          <div style={{ display: "flex", gap: spacing.md }}>
+            {LIMIT_MODES.map((mode) => (
+              <button
+                key={mode.key}
+                type="button"
+                onClick={() => handleModeChange(mode.key)}
+                style={{
+                  ...buttonStyles.secondary,
+                  flex: 1,
+                  border: `2px solid ${limitMode === mode.key ? colors.success.main : "transparent"}`,
+                  backgroundColor: limitMode === mode.key
+                    ? "rgba(255,255,255,0.1)"
+                    : "rgba(255,255,255,0.03)",
+                }}
+              >
+                <div style={{ fontWeight: "bold", marginBottom: "4px" }}>{mode.label}</div>
+                <div style={{ fontSize: fontSize.xs, color: colors.text.secondary }}>
+                  {mode.hint}
+                </div>
+              </button>
+            ))}
+          </div>
+          {!modeTouched && (
+            <p style={{ fontSize: fontSize.xs, color: colors.text.secondary, marginTop: spacing.sm }}>
+              Suggested automatically for the selected token — stablecoins default to fixed
+              amounts, volatile assets to a share of your balance.
+            </p>
           )}
         </div>
 
         {/* Withdrawal Limits */}
         <div style={{ marginBottom: spacing.lg }}>
-          <label style={formStyles.label}>Withdrawal Limits (% of balance)</label>
+          <label style={formStyles.label}>
+            Withdrawal Limits ({isPercent ? "% of your balance" : selectedMeta.symbol})
+          </label>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: spacing.md }}>
-            <div>
-              <label style={{ ...formStyles.label, fontSize: fontSize.xs }}>Daily %</label>
-              <input
-                style={inputStyle}
-                type="number"
-                step="0.1"
-                min="0"
-                max="100"
-                value={dailyPct}
-                onChange={(e) => setDailyPct(e.target.value)}
-                placeholder="e.g. 5"
-              />
-            </div>
-            <div>
-              <label style={{ ...formStyles.label, fontSize: fontSize.xs }}>Weekly %</label>
-              <input
-                style={inputStyle}
-                type="number"
-                step="0.1"
-                min="0"
-                max="100"
-                value={weeklyPct}
-                onChange={(e) => setWeeklyPct(e.target.value)}
-                placeholder="e.g. 20"
-              />
-            </div>
-            <div>
-              <label style={{ ...formStyles.label, fontSize: fontSize.xs }}>Monthly %</label>
-              <input
-                style={inputStyle}
-                type="number"
-                step="0.1"
-                min="0"
-                max="100"
-                value={monthlyPct}
-                onChange={(e) => setMonthlyPct(e.target.value)}
-                placeholder="e.g. 50"
-              />
-            </div>
+            {[
+              { label: "Daily", value: daily, set: setDaily, placeholder: isPercent ? "e.g. 5" : "e.g. 100" },
+              { label: "Weekly", value: weekly, set: setWeekly, placeholder: isPercent ? "e.g. 20" : "e.g. 500" },
+              { label: "Monthly", value: monthly, set: setMonthly, placeholder: isPercent ? "e.g. 50" : "e.g. 2000" },
+            ].map((field) => (
+              <div key={field.label}>
+                <label style={{ ...formStyles.label, fontSize: fontSize.xs }}>
+                  {field.label} ({limitUnit})
+                </label>
+                <input
+                  style={inputStyle}
+                  type="number"
+                  step="any"
+                  min="0"
+                  max={isPercent ? "100" : undefined}
+                  value={field.value}
+                  onChange={(e) => field.set(e.target.value)}
+                  placeholder={field.placeholder}
+                />
+              </div>
+            ))}
           </div>
           <p style={{ fontSize: fontSize.xs, color: colors.text.secondary, marginTop: spacing.sm }}>
-            Set at least one limit. Leave empty to skip a period.
+            Set at least one limit. Leave empty to skip a period. Each period must allow at
+            least as much as the shorter one.
           </p>
         </div>
 
