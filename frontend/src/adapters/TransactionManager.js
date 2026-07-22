@@ -1,3 +1,4 @@
+import { EVMAdapter } from "./EVMAdapter.js";
 import { SolanaAdapter } from "./SolanaAdapter.js";
 
 const PERSONAL_VAULT_KEY = "personal_vault_address";
@@ -5,24 +6,36 @@ const PERSONAL_VAULT_KEY = "personal_vault_address";
 export class TransactionManager {
   constructor() {
     this.adapter = null;
+    this.networkType = null;
     this.networkConfig = null;
     this.personalVaultAddress = null;
   }
 
-  async initialize(networkConfig, walletConfig) {
-    const { wallet, connection } = walletConfig;
-    if (!wallet || !connection) {
-      throw new Error("Solana wallet and connection required");
-    }
+  async initialize(networkType, networkConfig, walletConfig = {}) {
+    this.networkType = networkType;
     this.networkConfig = networkConfig;
-    this.adapter = new SolanaAdapter(networkConfig, wallet, connection);
-    if (wallet.connected) {
-      this.adapter.userAddress = wallet.publicKey.toString();
+
+    if (networkType === "evm") {
+      this.adapter = new EVMAdapter(networkConfig);
+      await this.adapter.connect(walletConfig);
+    } else if (networkType === "solana") {
+      const { wallet, connection } = walletConfig;
+      if (!wallet || !connection) {
+        throw new Error("Solana wallet and connection required");
+      }
+      this.adapter = new SolanaAdapter(networkConfig, wallet, connection);
+      if (wallet.connected) {
+        this.adapter.userAddress = wallet.publicKey.toString();
+      }
+      await this._loadPersonalVault();
+    } else {
+      throw new Error(`Unsupported network type: ${networkType}`);
     }
 
-    await this._loadPersonalVault();
     return this;
   }
+
+  getNetworkType() { return this.networkType; }
 
   getAdapter() {
     if (!this.adapter) throw new Error("TransactionManager not initialized");
@@ -80,6 +93,7 @@ export class TransactionManager {
   }
 
   isSetupCommitted() {
+    if (this.networkType === "evm") return null;
     return !!this.personalVaultAddress;
   }
 
@@ -96,6 +110,10 @@ export class TransactionManager {
   // ---- Compatibility layer (old UI flow) ----
 
   async commitSetup(daily, weekly, monthly, limitsArePercentage = false, tokenMint = null, tokenDecimals = 6) {
+    if (this.networkType === "evm") {
+      return this.getAdapter().commitSetup(daily, weekly, monthly);
+    }
+
     let dailyVal, weeklyVal, monthlyVal;
     const decimals = tokenMint ? tokenDecimals : 9;
 
@@ -163,7 +181,11 @@ export class TransactionManager {
     return membership.balance / factor;
   }
 
-  async getAllBalances() {
+  async getAllBalances(userAddress) {
+    if (this.networkType === "evm") {
+      return this.getAdapter().getAllBalances(userAddress);
+    }
+
     const vault = await this.getPersonalVault();
     const membership = await this.getPersonalMembership();
     if (!vault || !membership) return {};
@@ -221,7 +243,11 @@ export class TransactionManager {
 
   getCurrentAdapter() { return this.getAdapter(); }
 
-  async getSpendingLimits() {
+  async getSpendingLimits(userAddress) {
+    if (this.networkType === "evm") {
+      return this.getAdapter().getSpendingLimits(userAddress);
+    }
+
     const vault = await this.getPersonalVault();
     const membership = await this.getPersonalMembership();
     if (!vault || !membership) {
@@ -269,7 +295,11 @@ export class TransactionManager {
     return { limits, isSetupCommitted: true, limitsArePercentage: isPercentage, tokenSymbol };
   }
 
-  async getPendingWithdrawalDestinationRequests() {
+  async getPendingWithdrawalDestinationRequests(userAddress) {
+    if (this.networkType === "evm") {
+      return this.getAdapter().getPendingWithdrawalDestinationRequests(userAddress);
+    }
+
     const pending = await this.getPendingWithdrawalAddresses();
     return pending.map((p) => ({
       title: p.title,
@@ -280,7 +310,11 @@ export class TransactionManager {
     }));
   }
 
-  async fetchPendingBypassRequests() {
+  async fetchPendingBypassRequests(userAddress) {
+    if (this.networkType === "evm") {
+      return this.getAdapter().fetchPendingBypassRequests(userAddress);
+    }
+
     const req = await this.getBypassRequest();
     if (!req) return [];
     const vault = await this.getPersonalVault();
@@ -299,11 +333,26 @@ export class TransactionManager {
   isConnected() { return this.getAdapter().isConnected(); }
   getAddress() { return this.getAdapter().getAddress(); }
 
-  async isCorrectNetwork() { return true; }
-  async isProxyDeployed() { return !!this.personalVaultAddress; }
-  async getDepositAddress() { return this.personalVaultAddress || ""; }
+  async isCorrectNetwork() {
+    if (this.networkType === "evm") return this.getAdapter().isCorrectNetwork();
+    return true;
+  }
+
+  async isProxyDeployed(userAddress) {
+    if (this.networkType === "evm") return this.getAdapter().isProxyDeployed(userAddress);
+    return !!this.personalVaultAddress;
+  }
+
+  async getDepositAddress(userAddress) {
+    if (this.networkType === "evm") return this.getAdapter().getDepositAddress(userAddress);
+    return this.personalVaultAddress || "";
+  }
 
   async deposit(tokenAddress, amount, decimals) {
+    if (this.networkType === "evm") {
+      return this.getAdapter().deposit(tokenAddress, amount, decimals);
+    }
+
     if (!this.personalVaultAddress) throw new Error("No personal vault. Complete setup first.");
     const numAmount = parseFloat(amount);
     if (tokenAddress === "native" || tokenAddress === "SOL") {
@@ -314,7 +363,83 @@ export class TransactionManager {
     return { hash: sig };
   }
 
+  // ---- EVM-specific accessors ----
+  getSigner() { return this.networkType === "evm" ? this.getAdapter().getSigner() : null; }
+  getContract() { return this.networkType === "evm" ? this.getAdapter().getContract() : null; }
+  getProvider() { return this.networkType === "evm" ? this.getAdapter().getProvider() : null; }
+
+  // ---- EVM proposal methods ----
+  async proposeLimitChange(periodName, newLimit) {
+    if (this.networkType === "evm") return this.getAdapter().proposeLimitChange(periodName, newLimit);
+    return this.proposeRuleChange({ [`${periodName.toLowerCase()}Limit`]: newLimit });
+  }
+  async fetchPendingProposals(userAddress) {
+    if (this.networkType === "evm") return this.getAdapter().fetchPendingProposals(userAddress);
+    const proposal = await this.getRuleChangeProposal();
+    return proposal ? [proposal] : [];
+  }
+  async executeLimitProposal(proposalId) {
+    if (this.networkType === "evm") return this.getAdapter().executeLimitProposal(proposalId);
+    return this.executeRuleChange();
+  }
+  async cancelLimitProposal(proposalId) {
+    if (this.networkType === "evm") return this.getAdapter().cancelLimitProposal(proposalId);
+    return this.cancelRuleChange();
+  }
+
+  // ---- EVM withdrawal address methods ----
+  async fetchWithdrawalAddresses(userAddress) {
+    if (this.networkType === "evm") return this.getAdapter().fetchWithdrawalAddresses(userAddress);
+    return this.getWithdrawalAddresses();
+  }
+  async addWithdrawalDestinationDirect(address, title) {
+    if (this.networkType === "evm") return this.getAdapter().addWithdrawalDestinationDirect(address, title);
+    return this.addWithdrawalAddress(title, address);
+  }
+  async requestWithdrawalDestinationAddition(address, title) {
+    if (this.networkType === "evm") return this.getAdapter().requestWithdrawalDestinationAddition(address, title);
+    return this.requestWithdrawalAddress(title, address);
+  }
+
+  // ---- EVM proxy/setup methods ----
+  async deployProxy() {
+    if (this.networkType === "evm") return this.getAdapter().deployProxy();
+    throw new Error("Proxy deployment is only available on EVM");
+  }
+  async getIsSetupCommitted(userAddress) {
+    if (this.networkType === "evm") return this.getAdapter().getIsSetupCommitted(userAddress);
+    return !!this.personalVaultAddress;
+  }
+  async setSpendingLimits(daily, weekly, monthly) {
+    if (this.networkType === "evm") return this.getAdapter().setSpendingLimits(daily, weekly, monthly);
+    return this.updatePersonalVaultRules({ dailyLimit: daily, weeklyLimit: weekly, monthlyLimit: monthly });
+  }
+
+  // ---- EVM PoolTogether methods ----
+  async hasPoolTogetherVault(tokenAddress) { return this.getAdapter().hasPoolTogetherVault?.(tokenAddress) ?? false; }
+  async getPoolTogetherBalance(tokenAddress) { return this.getAdapter().getPoolTogetherBalance?.(tokenAddress) ?? "0"; }
+  async getPoolTogetherGrandPrize() { return this.getAdapter().getPoolTogetherGrandPrize?.() ?? null; }
+  async depositToPoolTogether(tokenAddress, amount) { return this.getAdapter().depositToPoolTogether?.(tokenAddress, amount); }
+  async withdrawFromPoolTogether(tokenAddress, shares) { return this.getAdapter().withdrawFromPoolTogether?.(tokenAddress, shares); }
+  async claimPoolTogetherPrize(tokenAddress, tier) { return this.getAdapter().claimPoolTogetherPrize?.(tokenAddress, tier); }
+
+  // ---- EVM withdraw ----
+  async withdraw(amount, tokenAddress, destination) {
+    if (this.networkType === "evm") return this.getAdapter().withdraw(amount, tokenAddress, destination);
+    return this.withdrawFromPersonalVault(amount);
+  }
+  async withdrawWithPenalty(tokenAddress, amount, tokenDecimals) {
+    if (this.networkType === "evm") throw new Error("Penalty withdrawal not supported on EVM");
+    return this.penaltyWithdrawFromPersonalVault(amount);
+  }
+  async getPenaltyRate() {
+    if (this.networkType === "evm") return 0;
+    const vault = await this.getPersonalVault();
+    return vault ? vault.penaltyRateBps / 100 : 0;
+  }
+
   async getTransactionHistory() {
+    if (this.networkType === "evm") return [];
     if (!this.personalVaultAddress) return [];
     try {
       const adapter = this.getAdapter();
@@ -421,36 +546,43 @@ export class TransactionManager {
   // ---- Withdrawal destinations (personal vault compat) ----
 
   async addWithdrawalAddress(title, destinationAddress) {
+    if (this.networkType === "evm") return this.getAdapter().addWithdrawalDestinationDirect(destinationAddress, title);
     if (!this.personalVaultAddress) throw new Error("No personal vault");
     return this.getAdapter().addWithdrawalDestination(this.personalVaultAddress, destinationAddress, title);
   }
 
   async requestWithdrawalAddress(title, destinationAddress) {
+    if (this.networkType === "evm") return this.getAdapter().requestWithdrawalDestinationAddition(destinationAddress, title);
     if (!this.personalVaultAddress) throw new Error("No personal vault");
     return this.getAdapter().requestWithdrawalDestination(this.personalVaultAddress, destinationAddress, title);
   }
 
   async executeWithdrawalAddressRequest(destinationAddress) {
+    if (this.networkType === "evm") return this.getAdapter().executeWithdrawalAddressRequest(destinationAddress);
     if (!this.personalVaultAddress) throw new Error("No personal vault");
     return this.getAdapter().executeDestinationRequest(this.personalVaultAddress, destinationAddress);
   }
 
   async cancelWithdrawalAddressRequest(destinationAddress) {
+    if (this.networkType === "evm") return this.getAdapter().cancelWithdrawalAddressRequest?.(destinationAddress);
     if (!this.personalVaultAddress) throw new Error("No personal vault");
     return this.getAdapter().cancelDestinationRequest(this.personalVaultAddress, destinationAddress);
   }
 
   async removeWithdrawalAddress(destinationAddress) {
+    if (this.networkType === "evm") return this.getAdapter().removeWithdrawalAddress(destinationAddress);
     if (!this.personalVaultAddress) throw new Error("No personal vault");
     return this.getAdapter().removeWithdrawalDestination(this.personalVaultAddress, destinationAddress);
   }
 
   async getWithdrawalAddresses() {
+    if (this.networkType === "evm") return this.getAdapter().fetchWithdrawalAddresses();
     if (!this.personalVaultAddress) return [];
     return this.getAdapter().getWithdrawalDestinations(this.personalVaultAddress);
   }
 
   async getPendingWithdrawalAddresses() {
+    if (this.networkType === "evm") return this.getAdapter().getPendingWithdrawalDestinationRequests();
     if (!this.personalVaultAddress) return [];
     return this.getAdapter().getPendingDestinationRequests(this.personalVaultAddress);
   }
