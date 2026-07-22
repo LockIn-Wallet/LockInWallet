@@ -98,19 +98,21 @@ function VaultCard({ vault, membership, onClick, isSelected = false }) {
         )}
       </div>
 
-      {/* Footer stats */}
-      <div style={{
-        display: "flex",
-        justifyContent: "space-between",
-        fontSize: fontSize.xs,
-        color: colors.text.secondary,
-        borderTop: `1px solid ${colors.border?.default || "#4a5568"}`,
-        paddingTop: spacing.sm,
-        marginTop: spacing.sm,
-      }}>
-        <span>{vault.memberCount} member{vault.memberCount !== 1 ? "s" : ""}</span>
-        <span>Penalty: {formatPenalty(vault.penaltyRateBps)}</span>
-      </div>
+      {/* Footer stats (community only — members and penalty are meaningless on a personal vault) */}
+      {!isPersonal && (
+        <div style={{
+          display: "flex",
+          justifyContent: "space-between",
+          fontSize: fontSize.xs,
+          color: colors.text.secondary,
+          borderTop: `1px solid ${colors.border?.default || "#4a5568"}`,
+          paddingTop: spacing.sm,
+          marginTop: spacing.sm,
+        }}>
+          <span>{vault.memberCount} member{vault.memberCount !== 1 ? "s" : ""}</span>
+          <span>Penalty: {formatPenalty(vault.penaltyRateBps)}</span>
+        </div>
+      )}
     </div>
   );
 }

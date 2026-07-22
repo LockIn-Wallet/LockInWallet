@@ -182,9 +182,9 @@ function VaultDetail({ transactionManager, wallet }) {
           marginTop: spacing.xl,
         }}>
           <StatBox label="Token" value={tokenLabel} />
-          <StatBox label="Members" value={vault.memberCount} />
+          {!isPersonal && <StatBox label="Members" value={vault.memberCount} />}
           <StatBox label="Total Locked" value={`${formatTokenAmount(vault.totalBalance, decimals)} ${tokenSymbol}`} />
-          <StatBox label="Penalty" value={formatPenalty(vault.penaltyRateBps)} />
+          {!isPersonal && <StatBox label="Penalty" value={formatPenalty(vault.penaltyRateBps)} />}
         </div>
 
         {/* Limits */}
@@ -355,8 +355,8 @@ function VaultDetail({ transactionManager, wallet }) {
         </div>
       )}
 
-      {/* Members list */}
-      {members.length > 0 && (
+      {/* Members list (community only) */}
+      {!isPersonal && members.length > 0 && (
         <div style={{
           backgroundColor: colors.background.primary,
           borderRadius: borderRadius.md,

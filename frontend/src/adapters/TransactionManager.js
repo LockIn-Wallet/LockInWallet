@@ -118,7 +118,7 @@ export class TransactionManager {
 
     // Adapters accept business units (percent or token amounts) directly
     const result = await this.getAdapter().createVault({
-      name: "Personal Savings",
+      name: "Savings",
       description: "My personal savings vault",
       vaultType: "Personal",
       tokenMint,

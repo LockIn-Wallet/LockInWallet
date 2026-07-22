@@ -175,7 +175,7 @@ function MainFlow({
           vault: {
             address: "personal-savings",
             vaultType: "Personal",
-            name: "Personal Savings",
+            name: "Savings",
             tokenSymbol: "All tokens",
             dailyLimit: 0,
             weeklyLimit: 0,
