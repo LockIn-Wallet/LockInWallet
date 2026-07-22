@@ -1,15 +1,14 @@
 import React from "react";
 import { colors, spacing, fontSize, borderRadius } from "../../styles";
-import { getTokenDecimals, getTokenSymbol, formatTokenAmount, formatLimit, formatPenalty } from "../../utils/formatUtils";
+import { getTokenSymbol, formatPenalty } from "../../utils/formatUtils";
 
-function VaultCard({ vault, membership, onClick, isSelected = false }) {
+function VaultCard({ vault, onClick, isSelected = false }) {
   const isPersonal = vault.vaultType === "Personal";
   const borderColor = isSelected
     ? colors.success.light
     : isPersonal
     ? colors.success.main
     : "#805ad5";
-  const decimals = getTokenDecimals(vault);
   const tokenLabel = getTokenSymbol(vault);
   const isClickable = !!onClick;
 
@@ -69,33 +68,10 @@ function VaultCard({ vault, membership, onClick, isSelected = false }) {
       </div>
 
       {/* Token */}
-      <div style={{ fontSize: fontSize.sm, color: colors.text.secondary, marginBottom: spacing.md }}>
+      <div style={{ fontSize: fontSize.sm, color: colors.text.secondary }}>
         {tokenLabel !== "TOKEN" || !vault.tokenMint
           ? tokenLabel
           : `${vault.tokenMint.slice(0, 8)}...`}
-      </div>
-
-      {/* Your balance */}
-      {membership && (
-        <div style={{ marginBottom: spacing.md }}>
-          <div style={{ fontSize: fontSize.xs, color: colors.text.secondary }}>Your Balance</div>
-          <div style={{ fontSize: fontSize.xl, color: "white", fontWeight: "bold" }}>
-            {formatTokenAmount(membership.balance, decimals)} {tokenLabel}
-          </div>
-        </div>
-      )}
-
-      {/* Limits */}
-      <div style={{ display: "flex", gap: spacing.md, flexWrap: "wrap", marginBottom: spacing.sm }}>
-        {vault.dailyLimit > 0 && (
-          <LimitBadge label="Daily" value={formatLimit(vault.dailyLimit, vault)} />
-        )}
-        {vault.weeklyLimit > 0 && (
-          <LimitBadge label="Weekly" value={formatLimit(vault.weeklyLimit, vault)} />
-        )}
-        {vault.monthlyLimit > 0 && (
-          <LimitBadge label="Monthly" value={formatLimit(vault.monthlyLimit, vault)} />
-        )}
       </div>
 
       {/* Footer stats (community only — members and penalty are meaningless on a personal vault) */}
@@ -114,20 +90,6 @@ function VaultCard({ vault, membership, onClick, isSelected = false }) {
         </div>
       )}
     </div>
-  );
-}
-
-function LimitBadge({ label, value }) {
-  return (
-    <span style={{
-      fontSize: fontSize.xs,
-      padding: "2px 6px",
-      borderRadius: borderRadius.sm,
-      backgroundColor: "rgba(255,255,255,0.05)",
-      color: colors.text.secondary,
-    }}>
-      {label}: {value}
-    </span>
   );
 }
 

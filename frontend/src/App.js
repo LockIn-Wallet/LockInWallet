@@ -254,11 +254,10 @@ function MainFlow({
             gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))",
             gap: spacing.lg,
           }}>
-            {displayVaults.map(({ vault, membership: m, isCurrent }) => (
+            {displayVaults.map(({ vault, isCurrent }) => (
               <VaultCard
                 key={vault.address || "default"}
                 vault={vault}
-                membership={m}
                 isSelected={isCurrent}
                 onClick={isCurrent ? undefined : () => handleSelectVault(vault.address)}
               />
