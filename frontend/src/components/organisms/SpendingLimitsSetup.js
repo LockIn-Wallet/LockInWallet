@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 
 // Import styles directly from theme and components
 import { colors, fontWeight } from "../../styles/theme.js";
 import { layoutStyles } from "../../styles/components/layout.js";
 import { stepStyles } from "../../styles/components/steps.js";
+import { cardStyles } from "../../styles/components/cards.js";
 
 // Import utility functions directly instead of passing as props
 import {
@@ -172,6 +173,19 @@ const SpendingLimitsSetup = ({
     await fetchSpendingLimits();
     await fetchPendingLimitProposals();
   };
+
+  // Auto-refresh when a spending limit countdown reaches zero
+  const lastResetRefreshRef = useRef(0);
+  useEffect(() => {
+    if (!spendingLimits || spendingLimits.length === 0) return;
+    const expiredLimit = spendingLimits.find(
+      (l) => l.active && l.resetAt && l.resetAt <= currentTime && l.remaining <= 0,
+    );
+    if (expiredLimit && lastResetRefreshRef.current !== expiredLimit.resetAt) {
+      lastResetRefreshRef.current = expiredLimit.resetAt;
+      fetchSpendingLimits();
+    }
+  }, [currentTime, spendingLimits]);
 
   // Internal proposal and limit management functions
   const saveLimitChanges = useCallback(async (isUserInitiated = false) => {
@@ -481,6 +495,10 @@ const SpendingLimitsSetup = ({
               : 0;
             const isNearLimit = progressPercent > 80;
             const isAtLimit = progressPercent >= 100;
+            const liveTimeRemaining =
+              isAtLimit && existingLimit?.resetAt
+                ? Math.max(0, existingLimit.resetAt - currentTime)
+                : 0;
 
             // Determine card state for styling
             const isBeingConfigured =
@@ -707,6 +725,13 @@ const SpendingLimitsSetup = ({
                         }}
                       />
                     </div>
+                    {isAtLimit && liveTimeRemaining > 0 && (
+                      <div style={cardStyles.limitResetCountdown}>
+                        <span style={cardStyles.limitResetText}>
+                          Resets in {formatTimeRemaining(liveTimeRemaining)}
+                        </span>
+                      </div>
+                    )}
                   </div>
                 ) : (
                   !isActive &&

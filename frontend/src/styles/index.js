@@ -46,6 +46,13 @@ export {
 
 export { layoutStyles, default as layout } from "./components/layout.js";
 
+export {
+  homeStyles,
+  getBarFillStyle,
+  getConfettiPieceStyle,
+  default as home,
+} from "./components/home.js";
+
 // Utility styles
 export {
   utilityStyles,
@@ -63,6 +70,7 @@ import * as cards from "./components/cards.js";
 import * as forms from "./components/forms.js";
 import * as steps from "./components/steps.js";
 import * as layout from "./components/layout.js";
+import * as home from "./components/home.js";
 import * as utilities from "./utilities.js";
 
 // =====================================
@@ -187,6 +195,7 @@ export default {
   forms,
   steps,
   layout,
+  home,
   utilities,
 
   // Convenience object
@@ -207,5 +216,6 @@ export default {
   formStyles: forms.formStyles,
   stepStyles: steps.stepStyles,
   layoutStyles: layout.layoutStyles,
+  homeStyles: home.homeStyles,
   utilityStyles: utilities.utilityStyles,
 };

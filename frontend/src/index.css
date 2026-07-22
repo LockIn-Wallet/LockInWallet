@@ -88,3 +88,115 @@ a {
 a:hover {
   text-decoration: underline;
 }
+
+/* ---- Homepage showcase animations ---- */
+@keyframes homePulse {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+}
+
+@keyframes homeGlow {
+  0%,
+  100% {
+    box-shadow: 0 0 10px rgba(214, 158, 46, 0.25);
+  }
+  50% {
+    box-shadow: 0 0 28px rgba(214, 158, 46, 0.55);
+  }
+}
+
+@keyframes homeWinnerPop {
+  0% {
+    transform: scale(0.5) translateY(8px);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(1.1) translateY(0);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1) translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes homeShake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  20% {
+    transform: translateX(-5px);
+  }
+  40% {
+    transform: translateX(5px);
+  }
+  60% {
+    transform: translateX(-3px);
+  }
+  80% {
+    transform: translateX(3px);
+  }
+}
+
+@keyframes homeConfettiFall {
+  0% {
+    transform: translateY(-8px) rotate(0deg);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(110px) rotate(360deg);
+    opacity: 0;
+  }
+}
+
+@keyframes homeFadeUp {
+  from {
+    transform: translateY(6px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.home-pulse {
+  animation: homePulse 2.6s ease-in-out infinite;
+}
+
+.home-glow {
+  animation: homeGlow 3s ease-in-out infinite;
+}
+
+.home-winner-pop {
+  animation: homeWinnerPop 0.5s ease-out;
+}
+
+.home-shake {
+  animation: homeShake 0.5s ease-in-out;
+}
+
+.home-confetti {
+  animation: homeConfettiFall 1.6s linear infinite;
+}
+
+.home-fade-up {
+  animation: homeFadeUp 0.4s ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .home-pulse,
+  .home-glow,
+  .home-winner-pop,
+  .home-shake,
+  .home-confetti,
+  .home-fade-up {
+    animation: none;
+  }
+}

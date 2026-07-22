@@ -22,6 +22,7 @@ import {
   getDefaultNetwork,
   getAvailableNetworks,
 } from "./utils/networkFilter.js";
+import { isSolanaEnabled } from "./utils/featureFlags.js";
 import {
   ensureCorrectNetwork,
   createProviderAndSigner,
@@ -823,6 +824,8 @@ function AppContentInner({
 
 function AppContent() {
   const [networkType, setNetworkType] = useState(() => {
+    // Solana login is feature-flagged off until its programs are deployed
+    if (!isSolanaEnabled()) return "evm";
     const saved = localStorage.getItem("preferredNetworkType");
     if (saved === "solana" || saved === "evm") return saved;
     return localStorage.getItem("walletName") ? "solana" : "evm";

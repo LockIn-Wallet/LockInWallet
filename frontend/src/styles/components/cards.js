@@ -139,6 +139,25 @@ export const cardStyles = {
     border: `2px solid ${colors.success.main}`,
   },
 
+  // Countdown timer for fully-used spending limits
+  limitResetCountdown: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    marginTop: spacing.sm,
+    padding: `${spacing.sm}px ${spacing.md}px`,
+    backgroundColor: 'rgba(229, 62, 62, 0.1)',
+    borderRadius: borderRadius.sm,
+    border: `1px solid ${colors.error.main}`,
+  },
+
+  limitResetText: {
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.bold,
+    color: colors.error.light,
+  },
+
   // Custom period card
   customPeriodCard: {
     backgroundColor: colors.background.dark,

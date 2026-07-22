@@ -261,9 +261,9 @@ export class TransactionManager {
     const limits = [];
 
     const periods = [
-      { name: "Daily", limitRaw: vault.dailyLimit, spent: membership.dailySpent, duration: 86400 },
-      { name: "Weekly", limitRaw: vault.weeklyLimit, spent: membership.weeklySpent, duration: 604800 },
-      { name: "Monthly", limitRaw: vault.monthlyLimit, spent: membership.monthlySpent, duration: 2592000 },
+      { name: "Daily", limitRaw: vault.dailyLimit, spent: membership.dailySpent, lastReset: membership.dailyLastReset, duration: 86400 },
+      { name: "Weekly", limitRaw: vault.weeklyLimit, spent: membership.weeklySpent, lastReset: membership.weeklyLastReset, duration: 604800 },
+      { name: "Monthly", limitRaw: vault.monthlyLimit, spent: membership.monthlySpent, lastReset: membership.monthlyLastReset, duration: 2592000 },
     ];
 
     for (const p of periods) {
@@ -273,12 +273,17 @@ export class TransactionManager {
       } else {
         limitAmt = p.limitRaw / factor;
       }
-      const spent = p.spent / factor;
+      // On-chain spent counters stay stale until the next transaction, so an
+      // elapsed window counts as already reset for display purposes.
+      const resetAt = (p.lastReset + p.duration) * 1000;
+      const windowElapsed = Date.now() >= resetAt;
+      const spent = windowElapsed ? 0 : p.spent / factor;
       limits.push({
         name: p.name,
         limit: limitAmt.toString(),
         spent: spent.toString(),
         remaining: Math.max(0, limitAmt - spent),
+        resetAt: windowElapsed ? null : resetAt,
         duration: p.duration.toString(),
         active: p.limitRaw > 0,
         isActive: p.limitRaw > 0,
