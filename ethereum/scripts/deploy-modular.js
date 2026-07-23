@@ -2,17 +2,22 @@ const { ethers, upgrades } = require("hardhat");
 const fs = require("fs");
 const path = require("path");
 
-// Auto-detect existing proxy address from frontend
+const TARGET_NETWORK = hre.network.name === "hardhat" ? "localhost" : hre.network.name;
+const NETWORK_CONFIG_PATH = path.join(__dirname, "../../frontend/src/networkConfig.json");
+
+function readNetworkConfig() {
+  return JSON.parse(fs.readFileSync(NETWORK_CONFIG_PATH, "utf8"));
+}
+
+// Auto-detect existing proxy address from the frontend network config
 function getExistingProxyAddress() {
   try {
-    const frontendPath = path.join(__dirname, "../../frontend/src/App.js");
-    const frontendContent = fs.readFileSync(frontendPath, "utf8");
-    const match = frontendContent.match(/savingsContract: "([^"]+)"/);
-    if (match && match[1] !== "0x0000000000000000000000000000000000000000") {
-      return match[1];
+    const address = readNetworkConfig().evm?.[TARGET_NETWORK]?.savingsContract;
+    if (address && address !== "0x0000000000000000000000000000000000000000") {
+      return address;
     }
   } catch (error) {
-    console.log("Could not read existing address from frontend");
+    console.log("Could not read existing address from network config");
   }
   return null;
 }
@@ -90,133 +95,64 @@ async function main() {
     // Get core contract instance
     const savingsCore = await ethers.getContractAt("SavingsCore", savingsAddress);
 
-    // Deploy modules (each as UUPS proxy)
-    console.log("\n🧩 Deploying upgradeable modules...");
+    // Deploy or upgrade modules (each a UUPS proxy). Modules already
+    // registered on the core are upgraded IN PLACE so their storage —
+    // spending limits, setup flags, approval addresses, custodied vault
+    // funds — persists across updates. Fresh proxies are only deployed for
+    // modules the core does not know yet.
+    async function deployOrUpgradeModule(name, moduleIdString, emoji, opts = {}) {
+      const Factory = await ethers.getContractFactory(name);
+      const moduleId = ethers.keccak256(ethers.toUtf8Bytes(moduleIdString));
+      const existing = isUpgrade ? await savingsCore.getModule(moduleId) : ethers.ZeroAddress;
 
-    // 1. Deploy Time Period Limits Module
-    console.log("   📊 Deploying TimePeriodLimitsModule (proxy)...");
-    const TimePeriodLimitsModule = await ethers.getContractFactory("TimePeriodLimitsModule");
-    const timePeriodLimitsModule = await upgrades.deployProxy(TimePeriodLimitsModule, [savingsAddress], { initializer: "initialize" });
-    await timePeriodLimitsModule.waitForDeployment();
-    moduleAddresses.timePeriodLimits = await timePeriodLimitsModule.getAddress();
-    console.log(`   ✅ TimePeriodLimitsModule proxy deployed to: ${moduleAddresses.timePeriodLimits}`);
+      if (existing !== ethers.ZeroAddress) {
+        console.log(`   ${emoji} Upgrading ${name} in place at ${existing}...`);
+        let upgraded;
+        try {
+          upgraded = await upgrades.upgradeProxy(existing, Factory, opts);
+        } catch (error) {
+          // Proxy unknown to this machine's OZ manifest (e.g. fresh clone) —
+          // import it, then retry the upgrade
+          await upgrades.forceImport(existing, Factory, opts);
+          upgraded = await upgrades.upgradeProxy(existing, Factory, opts);
+        }
+        await upgraded.waitForDeployment();
+        console.log(`   ✅ ${name} upgraded (address and data preserved)`);
+        return { address: existing, contract: upgraded, isNew: false, moduleId };
+      }
 
-    // 2. Deploy Proposal System Module
-    console.log("   📝 Deploying ProposalSystemModule (proxy)...");
-    const ProposalSystemModule = await ethers.getContractFactory("ProposalSystemModule");
-    const proposalSystemModule = await upgrades.deployProxy(ProposalSystemModule, [savingsAddress], { initializer: "initialize" });
-    await proposalSystemModule.waitForDeployment();
-    moduleAddresses.proposalSystem = await proposalSystemModule.getAddress();
-    console.log(`   ✅ ProposalSystemModule proxy deployed to: ${moduleAddresses.proposalSystem}`);
-
-    // 3. Deploy Bypass System Module
-    console.log("   🚨 Deploying BypassSystemModule (proxy)...");
-    const BypassSystemModule = await ethers.getContractFactory("BypassSystemModule");
-    const bypassSystemModule = await upgrades.deployProxy(BypassSystemModule, [savingsAddress], { initializer: "initialize" });
-    await bypassSystemModule.waitForDeployment();
-    moduleAddresses.bypassSystem = await bypassSystemModule.getAddress();
-    console.log(`   ✅ BypassSystemModule proxy deployed to: ${moduleAddresses.bypassSystem}`);
-
-    // 4. Deploy Approval System Module
-    console.log("   🔐 Deploying ApprovalSystemModule (proxy)...");
-    const ApprovalSystemModule = await ethers.getContractFactory("ApprovalSystemModule");
-    const approvalSystemModule = await upgrades.deployProxy(ApprovalSystemModule, [savingsAddress], { initializer: "initialize" });
-    await approvalSystemModule.waitForDeployment();
-    moduleAddresses.approvalSystem = await approvalSystemModule.getAddress();
-    console.log(`   ✅ ApprovalSystemModule proxy deployed to: ${moduleAddresses.approvalSystem}`);
-
-    // 5. Deploy Proxy Deployment Module
-    console.log("   🔑 Deploying ProxyDeploymentModule (proxy)...");
-    const ProxyDeploymentModule = await ethers.getContractFactory("ProxyDeploymentModule");
-    const proxyDeploymentModule = await upgrades.deployProxy(ProxyDeploymentModule, [savingsAddress], { initializer: "initialize", unsafeAllow: ["constructor"] });
-    await proxyDeploymentModule.waitForDeployment();
-    moduleAddresses.proxyDeployment = await proxyDeploymentModule.getAddress();
-    console.log(`   ✅ ProxyDeploymentModule proxy deployed to: ${moduleAddresses.proxyDeployment}`);
-
-    // 6. Deploy PoolTogether Module
-    console.log("   🎰 Deploying PoolTogetherModule (proxy)...");
-    const PoolTogetherModule = await ethers.getContractFactory("PoolTogetherModule");
-    const poolTogetherModule = await upgrades.deployProxy(PoolTogetherModule, [savingsAddress], { initializer: "initialize" });
-    await poolTogetherModule.waitForDeployment();
-    moduleAddresses.poolTogether = await poolTogetherModule.getAddress();
-    console.log(`   ✅ PoolTogetherModule proxy deployed to: ${moduleAddresses.poolTogether}`);
-
-    // 7. Deploy Vault System Module
-    // This module CUSTODIES vault funds, so an already-registered proxy must be
-    // upgraded in place — redeploying it would strand user deposits.
-    console.log("   🏦 Deploying VaultSystemModule (proxy)...");
-    const VaultSystemModule = await ethers.getContractFactory("VaultSystemModule");
-    const vaultSystemId = ethers.keccak256(ethers.toUtf8Bytes("VAULT_SYSTEM"));
-    const existingVaultSystem = isUpgrade ? await savingsCore.getModule(vaultSystemId) : ethers.ZeroAddress;
-    let vaultSystemModule;
-    if (existingVaultSystem !== ethers.ZeroAddress) {
-      vaultSystemModule = await upgrades.upgradeProxy(existingVaultSystem, VaultSystemModule);
-      await vaultSystemModule.waitForDeployment();
-      moduleAddresses.vaultSystem = existingVaultSystem;
-      console.log(`   ✅ VaultSystemModule proxy upgraded in place at: ${moduleAddresses.vaultSystem}`);
-    } else {
-      vaultSystemModule = await upgrades.deployProxy(VaultSystemModule, [savingsAddress], { initializer: "initialize" });
-      await vaultSystemModule.waitForDeployment();
-      moduleAddresses.vaultSystem = await vaultSystemModule.getAddress();
-      console.log(`   ✅ VaultSystemModule proxy deployed to: ${moduleAddresses.vaultSystem}`);
+      console.log(`   ${emoji} Deploying ${name} (proxy)...`);
+      const proxy = await upgrades.deployProxy(Factory, [savingsAddress], { initializer: "initialize", ...opts });
+      await proxy.waitForDeployment();
+      const address = await proxy.getAddress();
+      console.log(`   ✅ ${name} proxy deployed to: ${address}`);
+      return { address, contract: proxy, isNew: true, moduleId };
     }
 
-    // Register modules with core contract
+    console.log("\n🧩 Deploying/upgrading modules...");
+    const modules = {
+      timePeriodLimits: await deployOrUpgradeModule("TimePeriodLimitsModule", "TIME_PERIOD_LIMITS", "📊"),
+      proposalSystem: await deployOrUpgradeModule("ProposalSystemModule", "PROPOSAL_SYSTEM", "📝"),
+      bypassSystem: await deployOrUpgradeModule("BypassSystemModule", "BYPASS_SYSTEM", "🚨"),
+      approvalSystem: await deployOrUpgradeModule("ApprovalSystemModule", "APPROVAL_SYSTEM", "🔐"),
+      proxyDeployment: await deployOrUpgradeModule("ProxyDeploymentModule", "PROXY_DEPLOYMENT", "🔑", { unsafeAllow: ["constructor"] }),
+      poolTogether: await deployOrUpgradeModule("PoolTogetherModule", "POOL_TOGETHER", "🎰"),
+      vaultSystem: await deployOrUpgradeModule("VaultSystemModule", "VAULT_SYSTEM", "🏦"),
+    };
+    for (const [key, m] of Object.entries(modules)) moduleAddresses[key] = m.address;
+    const proxyDeploymentModule = modules.proxyDeployment.contract;
+    const poolTogetherModule = modules.poolTogether.contract;
+
+    // Register newly deployed modules with the core contract (upgraded-in-place
+    // modules keep their existing registration)
     console.log("\n🔗 Registering modules with core contract...");
-
-    // Register TimePeriodLimitsModule
-    console.log("   Registering TimePeriodLimitsModule...");
-    let tx = await savingsCore.registerModule(
-      ethers.keccak256(ethers.toUtf8Bytes("TIME_PERIOD_LIMITS")),
-      moduleAddresses.timePeriodLimits
-    );
-    await tx.wait();
-
-    // Register ProposalSystemModule
-    console.log("   Registering ProposalSystemModule...");
-    tx = await savingsCore.registerModule(
-      ethers.keccak256(ethers.toUtf8Bytes("PROPOSAL_SYSTEM")),
-      moduleAddresses.proposalSystem
-    );
-    await tx.wait();
-
-    // Register BypassSystemModule
-    console.log("   Registering BypassSystemModule...");
-    tx = await savingsCore.registerModule(
-      ethers.keccak256(ethers.toUtf8Bytes("BYPASS_SYSTEM")),
-      moduleAddresses.bypassSystem
-    );
-    await tx.wait();
-
-    // Register ApprovalSystemModule
-    console.log("   Registering ApprovalSystemModule...");
-    tx = await savingsCore.registerModule(
-      ethers.keccak256(ethers.toUtf8Bytes("APPROVAL_SYSTEM")),
-      moduleAddresses.approvalSystem
-    );
-    await tx.wait();
-
-    // Register ProxyDeploymentModule
-    console.log("   Registering ProxyDeploymentModule...");
-    tx = await savingsCore.registerModule(
-      ethers.keccak256(ethers.toUtf8Bytes("PROXY_DEPLOYMENT")),
-      moduleAddresses.proxyDeployment
-    );
-    await tx.wait();
-
-    // Register PoolTogetherModule
-    console.log("   Registering PoolTogetherModule...");
-    tx = await savingsCore.registerModule(
-      ethers.keccak256(ethers.toUtf8Bytes("POOL_TOGETHER")),
-      moduleAddresses.poolTogether
-    );
-    await tx.wait();
-
-    // Register VaultSystemModule
-    console.log("   Registering VaultSystemModule...");
-    tx = await savingsCore.registerModule(vaultSystemId, moduleAddresses.vaultSystem);
-    await tx.wait();
-
+    let tx;
+    for (const [key, moduleInfo] of Object.entries(modules)) {
+      if (!moduleInfo.isNew) continue;
+      console.log(`   Registering ${key}...`);
+      tx = await savingsCore.registerModule(moduleInfo.moduleId, moduleInfo.address);
+      await tx.wait();
+    }
     console.log("   ✅ All modules registered successfully");
 
     // Set up module cross-references
@@ -244,19 +180,16 @@ async function main() {
       console.log(`✅ MockUSDT deployed to: ${usdtAddress}`);
       console.log(`   Deployer USDT balance: ${ethers.formatUnits(usdtBalance, 6)} USDT`);
     } else {
-      // For upgrades, try to get the existing USDT address from frontend config
+      // For upgrades, reuse the existing token address from the network config
       try {
-        const frontendPath = path.join(__dirname, "../../frontend/src/App.js");
-        const frontendContent = fs.readFileSync(frontendPath, "utf8");
-        const usdtMatch = frontendContent.match(/address: "([^"]+)",\s*symbol: "USDT"/);
-        if (usdtMatch) {
-          usdtAddress = usdtMatch[1];
-          console.log(`\n📄 Using existing MockUSDT: ${usdtAddress}`);
+        usdtAddress = readNetworkConfig().evm?.[TARGET_NETWORK]?.tokens?.USDT?.address;
+        if (usdtAddress) {
+          console.log(`\n📄 Using existing USDT: ${usdtAddress}`);
         } else {
-          console.log("\n⚠️  Could not find existing USDT address in frontend config");
+          console.log("\n⚠️  Could not find existing USDT address in network config");
         }
       } catch (error) {
-        console.log("\n⚠️  Could not read frontend config for USDT address");
+        console.log("\n⚠️  Could not read network config for USDT address");
       }
     }
 
@@ -331,13 +264,13 @@ async function main() {
 
       let addressChanged = false;
 
-      // Update Savings contract address for localhost
-      const currentSavingsAddress = networkConfig.evm?.localhost?.savingsContract;
+      // Update Savings contract address for the target network
+      const currentSavingsAddress = networkConfig.evm?.[TARGET_NETWORK]?.savingsContract;
       if (currentSavingsAddress !== savingsAddress) {
         if (!networkConfig.evm) networkConfig.evm = {};
-        if (!networkConfig.evm.localhost) networkConfig.evm.localhost = {};
+        if (!networkConfig.evm[TARGET_NETWORK]) networkConfig.evm[TARGET_NETWORK] = {};
 
-        networkConfig.evm.localhost.savingsContract = savingsAddress;
+        networkConfig.evm[TARGET_NETWORK].savingsContract = savingsAddress;
         addressChanged = true;
         console.log(`   Updated Savings address: ${savingsAddress}`);
       } else {
@@ -346,12 +279,12 @@ async function main() {
 
       // Update USDT address only if we have a new one
       if (usdtAddress) {
-        const currentUsdtAddress = networkConfig.evm?.localhost?.tokens?.USDT?.address;
+        const currentUsdtAddress = networkConfig.evm?.[TARGET_NETWORK]?.tokens?.USDT?.address;
         if (currentUsdtAddress !== usdtAddress) {
-          if (!networkConfig.evm.localhost.tokens) networkConfig.evm.localhost.tokens = {};
-          if (!networkConfig.evm.localhost.tokens.USDT) networkConfig.evm.localhost.tokens.USDT = {};
+          if (!networkConfig.evm[TARGET_NETWORK].tokens) networkConfig.evm[TARGET_NETWORK].tokens = {};
+          if (!networkConfig.evm[TARGET_NETWORK].tokens.USDT) networkConfig.evm[TARGET_NETWORK].tokens.USDT = {};
 
-          networkConfig.evm.localhost.tokens.USDT.address = usdtAddress;
+          networkConfig.evm[TARGET_NETWORK].tokens.USDT.address = usdtAddress;
           addressChanged = true;
           console.log(`   Updated USDT address: ${usdtAddress}`);
         } else {
