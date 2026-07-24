@@ -12,7 +12,8 @@ import { homeStyles } from "../../styles";
 
 const HERO_TYPEWRITER_WORDS = [
   "Hackers can't drain it.",
-  "Stealers hit a wall.",
+  "You can't impulse spend it.",
+  "Devs can't steal it.",
   "Your savings stay yours.",
   "And it can win prizes.",
 ];
