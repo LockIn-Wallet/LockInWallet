@@ -73,6 +73,16 @@ export class BlockchainAdapter {
     throw new Error('setSpendingLimits must be implemented by subclass');
   }
 
+  // Referrals — default no-op implementation for chains that don't support
+  // referral recording yet, so components never need network conditionals
+  async getReferralInfo(userAddress) {
+    return null;
+  }
+
+  async getReferredUsers(userAddress) {
+    return { count: 0, users: [] };
+  }
+
   // Utility Methods
   formatAmount(amount, decimals) {
     throw new Error('formatAmount must be implemented by subclass');

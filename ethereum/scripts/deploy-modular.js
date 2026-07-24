@@ -138,6 +138,7 @@ async function main() {
       proxyDeployment: await deployOrUpgradeModule("ProxyDeploymentModule", "PROXY_DEPLOYMENT", "🔑", { unsafeAllow: ["constructor"] }),
       poolTogether: await deployOrUpgradeModule("PoolTogetherModule", "POOL_TOGETHER", "🎰"),
       vaultSystem: await deployOrUpgradeModule("VaultSystemModule", "VAULT_SYSTEM", "🏦"),
+      referral: await deployOrUpgradeModule("ReferralModule", "REFERRAL", "🤝"),
     };
     for (const [key, m] of Object.entries(modules)) moduleAddresses[key] = m.address;
     const proxyDeploymentModule = modules.proxyDeployment.contract;
@@ -356,6 +357,11 @@ async function main() {
       const frontendVaultSystemABIPath = path.join(__dirname, "../../frontend/src/VaultSystemModuleABI.json");
       fs.writeFileSync(frontendVaultSystemABIPath, JSON.stringify(vaultSystemArtifact.abi, null, 2));
       console.log("✅ VaultSystemModule ABI updated");
+
+      const referralArtifact = require("../artifacts/contracts/ReferralModule.sol/ReferralModule.json");
+      const frontendReferralABIPath = path.join(__dirname, "../../frontend/src/ReferralModuleABI.json");
+      fs.writeFileSync(frontendReferralABIPath, JSON.stringify(referralArtifact.abi, null, 2));
+      console.log("✅ ReferralModule ABI updated");
 
       // Copy MockUSDT ABI
       if (usdtAddress) {

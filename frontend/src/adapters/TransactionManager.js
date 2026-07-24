@@ -1,6 +1,7 @@
 import { EVMAdapter } from "./EVMAdapter.js";
 import { SolanaAdapter } from "./SolanaAdapter.js";
 import { getTokenMeta } from "../utils/tokenUtils.js";
+import { clearPendingReferrer } from "../services/referral.service.js";
 
 const PERSONAL_VAULT_KEY = "personal_vault_address";
 const ACTIVE_VAULT_KEY = "active_vault_address";
@@ -150,6 +151,11 @@ export class TransactionManager {
     return !!this.personalVaultAddress;
   }
 
+  supportsReferrals() {
+    // Referral recording lives in the EVM ReferralModule; Solana parity later
+    return this.networkType === "evm";
+  }
+
   supportsPercentSetupLimits() {
     // Solana setup creates a personal vault, which supports percent-of-balance
     // limits; EVM setup still uses the legacy TimePeriodLimits module, which
@@ -171,9 +177,11 @@ export class TransactionManager {
 
   // ---- Compatibility layer (old UI flow) ----
 
-  async commitSetup(daily, weekly, monthly, limitsArePercentage = false, tokenMint = null) {
+  async commitSetup(daily, weekly, monthly, limitsArePercentage = false, tokenMint = null, referrer = null) {
     if (this.networkType === "evm") {
-      return this.getAdapter().commitSetup(daily, weekly, monthly);
+      const hash = await this.getAdapter().commitSetup(daily, weekly, monthly, referrer);
+      clearPendingReferrer();
+      return hash;
     }
 
     if (limitsArePercentage && (daily > 100 || weekly > 100 || monthly > 100)) {
@@ -198,7 +206,18 @@ export class TransactionManager {
     if (walletAddr) {
       localStorage.setItem(`${PERSONAL_VAULT_KEY}_${walletAddr}`, result.vaultAddress);
     }
+    // Referral recording isn't supported on this chain yet, but the signup is
+    // complete, so the captured referrer is no longer pending
+    clearPendingReferrer();
     return result.signature;
+  }
+
+  // ---- Referrals ----
+  getReferralInfo(userAddress) {
+    return this.getAdapter().getReferralInfo(userAddress);
+  }
+  getReferredUsers(userAddress) {
+    return this.getAdapter().getReferredUsers(userAddress);
   }
 
   async getAllBalances(userAddress) {

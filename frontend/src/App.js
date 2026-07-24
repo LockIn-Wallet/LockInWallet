@@ -40,6 +40,7 @@ import {
 import { TransactionManager } from "./adapters/TransactionManager.js";
 import {
   fetchSpendingLimits as fetchSpendingLimitsService,
+  captureReferrerFromUrl,
 } from "./services";
 
 import SolanaWalletProvider from "./components/SolanaWalletProvider.js";
@@ -55,6 +56,7 @@ import SpendingLimitsSetup from "./components/organisms/SpendingLimitsSetup.js";
 import SetupCommitStep from "./components/organisms/SetupCommitStep.js";
 import WithdrawalAddressSetupStep from "./components/organisms/WithdrawalAddressSetupStep.js";
 import WithdrawalInterface from "./components/organisms/WithdrawalInterface.js";
+import ReferralSection from "./components/organisms/ReferralSection.js";
 import VaultCard from "./components/molecules/VaultCard.js";
 
 import CreateVault from "./components/pages/CreateVault.js";
@@ -412,6 +414,7 @@ function MainFlow({
           savingsContract={savingsContract}
           networkType={networkType}
           solanaConnected={solanaConnected}
+          userAddress={userAddress}
           onSetupCommitted={(committed) => {
             setIsSetupCommitted(committed);
             onSetupCommitted?.(committed);
@@ -460,6 +463,16 @@ function MainFlow({
             networkType={networkType}
             selectedNetwork={selectedNetwork}
             transactionManager={transactionManager}
+          />
+        </CollapsibleSection>
+      )}
+
+      {/* Referral Program (only when committed) */}
+      {isSetupCommitted && transactionManager?.supportsReferrals?.() && (
+        <CollapsibleSection title="Invite & Earn" icon="🤝" defaultExpanded={false}>
+          <ReferralSection
+            transactionManager={transactionManager}
+            userAddress={getCurrentUserAddress()}
           />
         </CollapsibleSection>
       )}
@@ -516,6 +529,11 @@ function AppContentInner({
   const [isSetupCommitted, setIsSetupCommitted] = useState(false);
 
   const navigate = useNavigate();
+
+  // Capture a ?ref= referral link once on load, before any wallet connects
+  useEffect(() => {
+    captureReferrerFromUrl();
+  }, []);
 
   const clearAllState = useCallback(() => {
     setProvider(null);

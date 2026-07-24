@@ -426,8 +426,36 @@ contract SavingsCore is Initializable, UUPSUpgradeable, OwnableUpgradeable, ISav
         uint256 weeklyLimit,
         uint256 monthlyLimit
     ) external {
-        address user = msg.sender; // Store the original caller
+        _commitSetup(msg.sender, dailyLimit, weeklyLimit, monthlyLimit);
+    }
 
+    /**
+     * @dev Same as commitSetup but also records who referred the user.
+     *      Recording happens before commitInitialSetup, whose "Already committed"
+     *      guard atomically rolls back the referral on any repeat attempt —
+     *      the referrer is therefore immutable once setup is committed.
+     * @param referrer Address that referred the user (address(0) to skip recording)
+     */
+    function commitSetupWithReferrer(
+        uint256 dailyLimit,
+        uint256 weeklyLimit,
+        uint256 monthlyLimit,
+        address referrer
+    ) external {
+        if (referrer != address(0)) {
+            IReferralModule referralModule = IReferralModule(modules[ModuleIds.REFERRAL]);
+            require(address(referralModule) != address(0), "ReferralModule not registered");
+            referralModule.recordReferral(msg.sender, referrer);
+        }
+        _commitSetup(msg.sender, dailyLimit, weeklyLimit, monthlyLimit);
+    }
+
+    function _commitSetup(
+        address user,
+        uint256 dailyLimit,
+        uint256 weeklyLimit,
+        uint256 monthlyLimit
+    ) internal {
         // First set the spending limits - use internal calls to preserve user context
         ITimePeriodLimitsModule limitsModule = ITimePeriodLimitsModule(modules[ModuleIds.TIME_PERIOD_LIMITS]);
         require(address(limitsModule) != address(0), "TimePeriodLimitsModule not registered");

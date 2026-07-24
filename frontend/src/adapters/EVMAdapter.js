@@ -5,10 +5,13 @@ import MockUSDT_ABI from "../MockUSDT_ABI.json";
 import ProxyDeploymentModuleABI from "../ProxyDeploymentModuleABI.json";
 import TimePeriodLimitsModuleABI from "../TimePeriodLimitsModuleABI.json";
 import VaultSystemModuleABI from "../VaultSystemModuleABI.json";
+import ReferralModuleABI from "../ReferralModuleABI.json";
 import ERC20ABI from "../ERC20ABI.json";
 import { getTokenMeta } from "../utils/tokenUtils.js";
 
 const VAULT_SYSTEM_MODULE_ID = ethers.keccak256(ethers.toUtf8Bytes("VAULT_SYSTEM"));
+const REFERRAL_MODULE_ID = ethers.keccak256(ethers.toUtf8Bytes("REFERRAL"));
+const REFERRAL_PAGE_SIZE = 100;
 const VAULT_TYPE_NAMES = ["Personal", "Community"];
 
 /**
@@ -656,9 +659,10 @@ export class EVMAdapter extends BlockchainAdapter {
    * @param {number} dailyLimit Daily spending limit (0 to disable)
    * @param {number} weeklyLimit Weekly spending limit (0 to disable)
    * @param {number} monthlyLimit Monthly spending limit (0 to disable)
+   * @param {string|null} referrer Wallet address that referred the user (optional)
    * @returns {Promise<string>} Transaction hash
    */
-  async commitSetup(dailyLimit, weeklyLimit, monthlyLimit) {
+  async commitSetup(dailyLimit, weeklyLimit, monthlyLimit, referrer = null) {
     if (!this.savingsContract) throw new Error("Contract not initialized");
 
     // Convert to Wei (contract expects 6 decimal places for USDT-compatible amounts)
@@ -669,13 +673,26 @@ export class EVMAdapter extends BlockchainAdapter {
     const monthlyWei =
       monthlyLimit > 0 ? ethers.parseUnits(monthlyLimit.toString(), 6) : 0;
 
+    // Recording a referrer must never block setup: fall back to the plain
+    // commit whenever the referrer is unusable (invalid, self, or the module
+    // isn't deployed on this network)
+    const validReferrer =
+      referrer &&
+      ethers.isAddress(referrer) &&
+      referrer.toLowerCase() !== this.userAddress?.toLowerCase() &&
+      (await this._getReferralModule()) !== null
+        ? referrer
+        : null;
+
     try {
-      // Call the unified commitSetup method we added to the contract
-      const tx = await this.savingsContract.commitSetup(
-        dailyWei,
-        weeklyWei,
-        monthlyWei,
-      );
+      const tx = validReferrer
+        ? await this.savingsContract.commitSetupWithReferrer(
+            dailyWei,
+            weeklyWei,
+            monthlyWei,
+            validReferrer,
+          )
+        : await this.savingsContract.commitSetup(dailyWei, weeklyWei, monthlyWei);
       await tx.wait(); // Wait for transaction confirmation
 
       return tx.hash; // Return consistent format (transaction hash as string)
@@ -693,12 +710,71 @@ export class EVMAdapter extends BlockchainAdapter {
     }
   }
 
+  // ========== REFERRALS ==========
+
+  async _getReferralModule() {
+    if (this.referralModule !== undefined) return this.referralModule;
+    if (!this.savingsContract) throw new Error("Contract not initialized");
+    try {
+      const moduleAddress = await this.savingsContract.getModule(REFERRAL_MODULE_ID);
+      this.referralModule =
+        moduleAddress && moduleAddress !== ethers.ZeroAddress
+          ? new ethers.Contract(moduleAddress, ReferralModuleABI, this.signer)
+          : null;
+    } catch {
+      this.referralModule = null;
+    }
+    return this.referralModule;
+  }
+
+  /**
+   * Who referred the given user, if anyone.
+   * @returns {Promise<{referrer: string, referredAt: Date}|null>}
+   */
+  async getReferralInfo(userAddress = null) {
+    const module = await this._getReferralModule();
+    if (!module) return null;
+
+    const targetAddress = userAddress || this.userAddress;
+    const [referrer, referredAt] = await module.getReferrer(targetAddress);
+    if (referrer === ethers.ZeroAddress) return null;
+    return { referrer, referredAt: new Date(Number(referredAt) * 1000) };
+  }
+
+  /**
+   * Users the given address has referred.
+   * @returns {Promise<{count: number, users: {address: string, joinedAt: Date}[]}>}
+   */
+  async getReferredUsers(userAddress = null) {
+    const module = await this._getReferralModule();
+    if (!module) return { count: 0, users: [] };
+
+    const targetAddress = userAddress || this.userAddress;
+    const count = Number(await module.getReferralCount(targetAddress));
+    const users = [];
+    for (let offset = 0; offset < count; offset += REFERRAL_PAGE_SIZE) {
+      const [addresses, joinedAt] = await module.getReferredUsers(
+        targetAddress,
+        offset,
+        REFERRAL_PAGE_SIZE,
+      );
+      for (let i = 0; i < addresses.length; i++) {
+        users.push({
+          address: addresses[i],
+          joinedAt: new Date(Number(joinedAt[i]) * 1000),
+        });
+      }
+    }
+    return { count, users };
+  }
+
   // Private Methods
   async _initializeContracts() {
     if (!this.signer || !this.networkConfig.savingsContract) return;
 
     // Drop caches tied to the previous network/signer
     this.vaultModule = null;
+    this.referralModule = undefined;
     this._tokenMetaCache = null;
 
     // Initialize savings contract

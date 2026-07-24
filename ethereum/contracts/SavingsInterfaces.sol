@@ -304,6 +304,20 @@ interface IVaultSystemModule {
     event PenaltyRewardsClaimed(uint256 indexed vaultId, address indexed member, uint256 amount);
 }
 
+interface IReferralModule {
+    // Referral recording
+    function recordReferral(address user, address referrer) external;
+
+    // View functions
+    function getReferrer(address user) external view returns (address referrer, uint256 referredAt);
+    function getReferralCount(address referrer) external view returns (uint256);
+    function getReferredUsers(address referrer, uint256 offset, uint256 limit)
+        external view returns (address[] memory users, uint256[] memory joinedAt);
+
+    // Events
+    event ReferralRecorded(address indexed user, address indexed referrer, uint256 timestamp);
+}
+
 interface IProxyDeploymentModule {
     function deployUserProxy(address user) external payable returns (address proxy);
     function isProxyDeployed(address user) external view returns (bool);
@@ -357,4 +371,5 @@ library ModuleIds {
     bytes32 public constant PROXY_DEPLOYMENT = keccak256("PROXY_DEPLOYMENT");
     bytes32 public constant POOL_TOGETHER = keccak256("POOL_TOGETHER");
     bytes32 public constant VAULT_SYSTEM = keccak256("VAULT_SYSTEM");
+    bytes32 public constant REFERRAL = keccak256("REFERRAL");
 }

@@ -4,12 +4,15 @@ import PropTypes from "prop-types";
 import {
   stepStyles,
   layoutStyles,
+  utilityStyles,
   colors,
   spacing,
   fontSize,
   getStepContainerStyle,
 } from "../../styles";
 import { getCurrentNetwork } from "../../utils/walletUtils.js";
+import { getPendingReferrerFor } from "../../services/referral.service.js";
+import { truncateAddress } from "../../utils/addressUtils.js";
 
 /**
  * SetupCommitStep Component
@@ -33,6 +36,7 @@ const SetupCommitStep = ({
   savingsContract,
   networkType,
   solanaConnected,
+  userAddress,
 
   // Callbacks for parent state updates
   onSetupCommitted,
@@ -62,6 +66,9 @@ const SetupCommitStep = ({
   // Debug logging removed - button activation issue resolved
   // Flag to prevent multiple simultaneous commit attempts
   const [isCommitting, setIsCommitting] = React.useState(false);
+
+  // Referrer captured from a ?ref= link, excluding self-referrals
+  const pendingReferrer = getPendingReferrerFor(userAddress);
 
   // Internal commit setup function (moved from App.js)
   const commitSetup = async () => {
@@ -109,7 +116,7 @@ const SetupCommitStep = ({
       const tokenMint = defaultToken?.address || null;
 
       const txHash = await transactionManager.commitSetup(
-        daily, weekly, monthly, limitsArePercentage, tokenMint
+        daily, weekly, monthly, limitsArePercentage, tokenMint, pendingReferrer
       );
 
       console.log("✅ Setup committed successfully:", txHash);
@@ -183,6 +190,13 @@ const SetupCommitStep = ({
             </div>
           )}
 
+          {pendingReferrer && (
+            <div style={{ ...utilityStyles.textSecondary, marginBottom: spacing.md }}>
+              🤝 Referred by {truncateAddress(pendingReferrer)} — this will be
+              recorded when you lock in.
+            </div>
+          )}
+
           <div style={layoutStyles.textCenter}>
             <button
               onClick={commitSetup}
@@ -251,6 +265,7 @@ SetupCommitStep.propTypes = {
   savingsContract: PropTypes.object,
   networkType: PropTypes.oneOf(['evm', 'solana']).isRequired,
   solanaConnected: PropTypes.bool,
+  userAddress: PropTypes.string,
 
   // Callbacks for parent state updates
   onSetupCommitted: PropTypes.func.isRequired,
