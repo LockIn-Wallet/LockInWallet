@@ -64,6 +64,14 @@ contract TimePeriodLimitsModule is Initializable, UUPSUpgradeable, OwnableUpgrad
         proposalSystemModule = IProposalSystemModule(_proposalSystemModule);
     }
 
+    /// @dev After lock-in, existing limits may only change through the
+    ///      timelocked proposal flow — never instantly.
+    function _isCommitted(address user) internal view returns (bool) {
+        return
+            address(proposalSystemModule) != address(0) &&
+            proposalSystemModule.isSetupCommitted(user);
+    }
+
     // ========== PERIOD MANAGEMENT ==========
 
     function addTimePeriodLimit(
@@ -89,6 +97,9 @@ contract TimePeriodLimitsModule is Initializable, UUPSUpgradeable, OwnableUpgrad
         }
 
         if (periodExists) {
+            // Overwriting an existing period after lock-in would bypass the
+            // proposal timelock; new (tightening) periods remain allowed
+            require(!_isCommitted(user), "Setup committed - use proposals");
             // Update existing period
             TimePeriodLimit storage existing = userLimits.periods[existingIndex];
             existing.limit = limit;
@@ -424,6 +435,7 @@ contract TimePeriodLimitsModule is Initializable, UUPSUpgradeable, OwnableUpgrad
         uint256 weeklyLimit,
         uint256 monthlyLimit
     ) external onlyAuthorizedOrSelf(user) {
+        require(!_isCommitted(user), "Setup committed - use proposals");
         require(dailyLimit > 0 || weeklyLimit > 0 || monthlyLimit > 0, "At least one limit must be set");
 
         // Validate basic limit ordering - allow restrictive limits

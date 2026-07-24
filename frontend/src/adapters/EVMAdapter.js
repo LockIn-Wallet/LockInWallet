@@ -433,19 +433,26 @@ export class EVMAdapter extends BlockchainAdapter {
       monthly > 0 ? this.parseAmount(monthly.toString(), 6) : 0;
 
     const limitsModule = await this._getModuleContract("timePeriodLimits");
-    const tx = await limitsModule.setCommonPeriodLimits(
-      this.userAddress,
-      dailyLimitWei,
-      weeklyLimitWei,
-      monthlyLimitWei,
-    );
+    try {
+      const tx = await limitsModule.setCommonPeriodLimits(
+        this.userAddress,
+        dailyLimitWei,
+        weeklyLimitWei,
+        monthlyLimitWei,
+      );
 
-    const receipt = await tx.wait();
-    return {
-      hash: tx.hash,
-      receipt: receipt,
-      success: true,
-    };
+      const receipt = await tx.wait();
+      return {
+        hash: tx.hash,
+        receipt: receipt,
+        success: true,
+      };
+    } catch (error) {
+      if (error.message.includes("Setup committed")) {
+        throw new Error("Limits are locked — submit a limit change proposal instead");
+      }
+      throw error;
+    }
   }
 
   async addSpendingLimit(periodName, limit) {
@@ -466,15 +473,22 @@ export class EVMAdapter extends BlockchainAdapter {
     }
 
     const limitsModule = await this._getModuleContract("timePeriodLimits");
-    const tx = await limitsModule.addTimePeriodLimit(
-      this.userAddress,
-      periodName,
-      limitWei,
-      duration,
-    );
+    try {
+      const tx = await limitsModule.addTimePeriodLimit(
+        this.userAddress,
+        periodName,
+        limitWei,
+        duration,
+      );
 
-    await tx.wait();
-    return tx.hash;
+      await tx.wait();
+      return tx.hash;
+    } catch (error) {
+      if (error.message.includes("Setup committed")) {
+        throw new Error("This limit is locked — submit a limit change proposal instead");
+      }
+      throw error;
+    }
   }
 
   // Proposal Management

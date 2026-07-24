@@ -325,6 +325,41 @@ describe("Savings Wallet Modules", function () {
       ).to.be.revertedWith("Not authorized");
     });
 
+    it("Should freeze existing limits after lock-in until a proposal passes", async function () {
+      const { timeLimitsModule, proposalModule, user1 } = await loadFixture(deployModulesFixture);
+
+      const daily = hre.ethers.parseUnits("1.0", 6);
+      const weekly = hre.ethers.parseUnits("7.0", 6);
+      const monthly = hre.ethers.parseUnits("30.0", 6);
+      await proposalModule.connect(user1).commitSetup(daily, weekly, monthly);
+
+      // No instant overrides once locked
+      await expect(
+        timeLimitsModule.connect(user1).setCommonPeriodLimits(user1.address, daily * 100n, weekly * 100n, monthly * 100n)
+      ).to.be.revertedWith("Setup committed - use proposals");
+
+      // "Adding" an existing period is an overwrite in disguise — also blocked
+      await expect(
+        timeLimitsModule.connect(user1).addTimePeriodLimit(user1.address, "Daily", daily * 100n, 86400)
+      ).to.be.revertedWith("Setup committed - use proposals");
+
+      // A brand-new period only tightens, so it stays allowed
+      await expect(
+        timeLimitsModule.connect(user1).addTimePeriodLimit(user1.address, "Hourly", hre.ethers.parseUnits("0.1", 6), 3600)
+      ).not.to.be.reverted;
+
+      // The proposal flow remains the one path to change a locked limit
+      const newDaily = hre.ethers.parseUnits("2.0", 6);
+      await proposalModule.connect(user1).proposeLimitChange(user1.address, "Daily", newDaily);
+      const [proposalIds] = await proposalModule.getUserPendingProposals(user1.address);
+      const proposalId = proposalIds[0];
+      await time.increase(31); // dev-mode timelock
+      await proposalModule.connect(user1).executeLimitProposal(user1.address, proposalId);
+
+      const limit = await timeLimitsModule.findPeriodLimit(user1.address, "Daily");
+      expect(limit).to.equal(newDaily);
+    });
+
     it("Should keep timelock-protected limit mutations module-only", async function () {
       const { timeLimitsModule, user1 } = await loadFixture(deployModulesFixture);
 

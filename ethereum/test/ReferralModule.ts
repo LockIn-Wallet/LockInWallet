@@ -154,10 +154,11 @@ describe("ReferralModule", function () {
 
       await proposalModule.connect(user1).commitSetup(dailyLimit, weeklyLimit, monthlyLimit);
 
-      // Referral write succeeds first but the whole tx reverts on "Already committed"
+      // Referral write happens first but the whole tx reverts — the post-lock
+      // limits freeze now fires before commitInitialSetup's own guard
       await expect(
         proposalModule.connect(user1).commitSetupWithReferrer(dailyLimit, weeklyLimit, monthlyLimit, referrer.address)
-      ).to.be.revertedWith("Already committed");
+      ).to.be.revertedWith("Setup committed - use proposals");
 
       const [recordedReferrer] = await referralModule.getReferrer(user1.address);
       expect(recordedReferrer).to.equal(hre.ethers.ZeroAddress);
