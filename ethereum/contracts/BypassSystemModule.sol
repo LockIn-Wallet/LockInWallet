@@ -46,6 +46,18 @@ contract BypassSystemModule is Initializable, UUPSUpgradeable, OwnableUpgradeabl
         _;
     }
 
+    // Users act on their own data directly; the core and modules keep access
+    // for cross-module orchestration (Pattern B self-authentication)
+    modifier onlyAuthorizedOrSelf(address user) {
+        require(
+            msg.sender == user ||
+            msg.sender == address(savingsCore) ||
+            savingsCore.isAuthorizedModule(msg.sender),
+            "Not authorized"
+        );
+        _;
+    }
+
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
         _disableInitializers();
@@ -73,7 +85,7 @@ contract BypassSystemModule is Initializable, UUPSUpgradeable, OwnableUpgradeabl
         uint256 amount,
         string calldata skipPeriod,
         address token
-    ) external onlyAuthorized returns (bytes32 requestId) {
+    ) external onlyAuthorizedOrSelf(user) returns (bytes32 requestId) {
         require(amount > 0 && bytes(skipPeriod).length > 0, "Invalid input");
         require(amount <= savingsCore.getTokenBalance(user, token), "Insufficient balance");
 
@@ -102,7 +114,7 @@ contract BypassSystemModule is Initializable, UUPSUpgradeable, OwnableUpgradeabl
         return requestId;
     }
 
-    function executeBypassWithdrawal(address user, bytes32 requestId) external onlyAuthorized nonReentrant {
+    function executeBypassWithdrawal(address user, bytes32 requestId) external onlyAuthorizedOrSelf(user) nonReentrant {
         BypassRequest storage request = userBypassRequests[user][requestId];
 
         require(request.exists && !request.executed, "Invalid request");
@@ -134,7 +146,7 @@ contract BypassSystemModule is Initializable, UUPSUpgradeable, OwnableUpgradeabl
         emit BypassExecuted(user, requestId, request.skipPeriod, request.amount, request.token);
     }
 
-    function cancelBypassRequest(address user, bytes32 requestId) external onlyAuthorized {
+    function cancelBypassRequest(address user, bytes32 requestId) external onlyAuthorizedOrSelf(user) {
         BypassRequest storage request = userBypassRequests[user][requestId];
         require(request.exists && !request.executed, "Invalid request");
 

@@ -296,10 +296,11 @@ const WithdrawalInterface = ({
         // EVM bypass request logic
         console.log("🔒 EVM: Requesting bypass for", withdrawalAmount, selectedToken, exceedingPeriod);
 
-        let tx;
+        const adapter = transactionManager.getCurrentAdapter();
+        let txHash;
         if (selectedToken === "ETH") {
           const amountWei = ethers.parseEther(withdrawalAmount);
-          tx = await savingsContract.requestLimitBypass(amountWei, exceedingPeriod, ethers.ZeroAddress);
+          txHash = await adapter.requestLimitBypass(amountWei, exceedingPeriod, ethers.ZeroAddress);
         } else {
           const network = getCurrentNetwork(networkType, selectedNetwork);
           const tokenInfo = network.tokens[selectedToken];
@@ -307,11 +308,10 @@ const WithdrawalInterface = ({
             throw new Error(`Token ${selectedToken} not found in network configuration`);
           }
           const amountTokens = ethers.parseUnits(withdrawalAmount, tokenInfo.decimals);
-          tx = await savingsContract.requestLimitBypass(amountTokens, exceedingPeriod, tokenInfo.address);
+          txHash = await adapter.requestLimitBypass(amountTokens, exceedingPeriod, tokenInfo.address);
         }
 
-        await tx.wait();
-        alert(`✅ EVM bypass request submitted!\n\nTransaction: ${tx.hash}\nAmount: ${withdrawalAmount} ${selectedToken}\nPeriod: ${exceedingPeriod}\n\nYou can execute this request after the 24-hour waiting period.`);
+        alert(`✅ EVM bypass request submitted!\n\nTransaction: ${txHash}\nAmount: ${withdrawalAmount} ${selectedToken}\nPeriod: ${exceedingPeriod}\n\nYou can execute this request after the 24-hour waiting period.`);
       }
 
       // Clear form and refresh data
@@ -370,9 +370,8 @@ const WithdrawalInterface = ({
         const txHash = await transactionManager.executeBypass();
         alert(`✅ Solana bypass request executed!\n\nTransaction: ${txHash}`);
       } else {
-        const tx = await savingsContract.executeWithdrawalBypass(requestId);
-        await tx.wait();
-        alert(`✅ EVM bypass request executed!\n\nTransaction: ${tx.hash}`);
+        const txHash = await transactionManager.getCurrentAdapter().executeBypassWithdrawal(requestId);
+        alert(`✅ EVM bypass request executed!\n\nTransaction: ${txHash}`);
       }
 
       // Notify parent components of state changes
@@ -401,9 +400,8 @@ const WithdrawalInterface = ({
         const txHash = await transactionManager.cancelBypass();
         alert(`✅ Solana bypass request cancelled!\n\nTransaction: ${txHash}`);
       } else {
-        const tx = await savingsContract.cancelBypassRequest(requestId);
-        await tx.wait();
-        alert(`✅ EVM bypass request cancelled!\n\nTransaction: ${tx.hash}`);
+        const txHash = await transactionManager.getCurrentAdapter().cancelBypassRequest(requestId);
+        alert(`✅ EVM bypass request cancelled!\n\nTransaction: ${txHash}`);
       }
 
       // Refresh internal data
@@ -456,9 +454,8 @@ const WithdrawalInterface = ({
         const txHash = await transactionManager.cancelWithdrawalAddressRequest(destinationAddress);
         alert(`✅ Solana withdrawal address request cancelled!\n\nTransaction: ${txHash}`);
       } else {
-        const tx = await savingsContract.cancelWithdrawalAddressRequest(requestId);
-        await tx.wait();
-        alert(`✅ EVM withdrawal address request cancelled!\n\nTransaction: ${tx.hash}`);
+        const txHash = await transactionManager.cancelWithdrawalAddressRequest(requestId);
+        alert(`✅ EVM withdrawal address request cancelled!\n\nTransaction: ${txHash}`);
       }
 
       // Refresh internal data

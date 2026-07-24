@@ -42,6 +42,18 @@ contract PoolTogetherModule is Initializable, UUPSUpgradeable, OwnableUpgradeabl
         _;
     }
 
+    // Users act on their own data directly; the core and modules keep access
+    // for cross-module orchestration (Pattern B self-authentication)
+    modifier onlyAuthorizedOrSelf(address user) {
+        require(
+            msg.sender == user ||
+            msg.sender == address(savingsCore) ||
+            savingsCore.isAuthorizedModule(msg.sender),
+            "Not authorized"
+        );
+        _;
+    }
+
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
         _disableInitializers();
@@ -74,7 +86,7 @@ contract PoolTogetherModule is Initializable, UUPSUpgradeable, OwnableUpgradeabl
     // ========== DEPOSIT TO VAULT ==========
 
     /// @notice Deposit user's tokens from SavingsCore into PoolTogether Prize Vault
-    function depositToVault(address user, address token, uint256 amount) external onlyCore {
+    function depositToVault(address user, address token, uint256 amount) external onlyAuthorizedOrSelf(user) {
         require(amount > 0, "Amount must be > 0");
         address vault = prizeVaults[token];
         require(vault != address(0), "No vault for token");
@@ -97,7 +109,7 @@ contract PoolTogetherModule is Initializable, UUPSUpgradeable, OwnableUpgradeabl
     // ========== WITHDRAW FROM VAULT ==========
 
     /// @notice Withdraw user's tokens from Prize Vault back to SavingsCore
-    function withdrawFromVault(address user, address token, uint256 sharesToRedeem) external onlyCore {
+    function withdrawFromVault(address user, address token, uint256 sharesToRedeem) external onlyAuthorizedOrSelf(user) {
         require(sharesToRedeem > 0, "Shares must be > 0");
         require(userVaultShares[user][token] >= sharesToRedeem, "Insufficient shares");
         address vault = prizeVaults[token];
@@ -151,7 +163,7 @@ contract PoolTogetherModule is Initializable, UUPSUpgradeable, OwnableUpgradeabl
     // ========== PRIZE CLAIM ==========
 
     /// @notice Claim a prize for a user from the PrizePool and credit to SavingsCore
-    function claimPrize(address user, address token, uint8 tier) external onlyCore returns (uint256 prizeAmount) {
+    function claimPrize(address user, address token, uint8 tier) external onlyAuthorizedOrSelf(user) returns (uint256 prizeAmount) {
         require(prizePool != address(0), "PrizePool not configured");
         address vault = prizeVaults[token];
         require(vault != address(0), "No vault for token");

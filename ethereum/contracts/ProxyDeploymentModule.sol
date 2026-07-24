@@ -29,6 +29,18 @@ contract ProxyDeploymentModule is Initializable, UUPSUpgradeable, OwnableUpgrade
         _;
     }
 
+    // Users act on their own data directly; the core and modules keep access
+    // for cross-module orchestration (Pattern B self-authentication)
+    modifier onlyAuthorizedOrSelf(address user) {
+        require(
+            msg.sender == user ||
+            msg.sender == address(savingsCore) ||
+            savingsCore.isAuthorizedModule(msg.sender),
+            "Not authorized"
+        );
+        _;
+    }
+
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
         _disableInitializers();
@@ -43,7 +55,7 @@ contract ProxyDeploymentModule is Initializable, UUPSUpgradeable, OwnableUpgrade
 
     function _authorizeUpgrade(address) internal override onlyOwner {}
 
-    function deployUserProxy(address user) external payable onlyCore returns (address proxy) {
+    function deployUserProxy(address user) external payable onlyAuthorizedOrSelf(user) returns (address proxy) {
         require(userProxies[user] == address(0), "Already deployed");
 
         if (proxyDeploymentFee > 0) {

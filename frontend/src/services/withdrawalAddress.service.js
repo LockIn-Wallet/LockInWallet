@@ -120,27 +120,10 @@ async function fetchEvmWithdrawalAddresses(params) {
     });
   }
 
-  if (!savingsContract || !userAddress) {
-    console.log('⏭️ Skipping fetchWithdrawalAddresses for EVM - missing contract or user');
-    return [];
-  }
-
-  const addressData = await savingsContract.getUserWithdrawalAddresses();
-  const [titles, destinations, timestamps] = addressData;
-
-  const addresses = [];
-  for (let i = 0; i < titles.length; i++) {
-    addresses.push({
-      title: titles[i],
-      destination: destinations[i],
-      addedTimestamp: Number(timestamps[i]),
-      addedDate: new Date(Number(timestamps[i]) * 1000).toLocaleDateString(),
-      networkType: 'evm'
-    });
-  }
-
-  console.log(`📋 Loaded ${addresses.length} EVM withdrawal addresses for ${userAddress}`);
-  return addresses;
+  // Without a transaction manager there is no adapter to resolve the
+  // ApprovalSystemModule, so there is nothing to fetch
+  console.log('⏭️ Skipping fetchWithdrawalAddresses for EVM - transaction manager not available');
+  return [];
 }
 
 /**

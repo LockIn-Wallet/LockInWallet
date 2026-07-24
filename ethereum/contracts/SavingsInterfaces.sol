@@ -97,6 +97,7 @@ interface ITimePeriodLimitsModule {
     function removeTimePeriodLimit(address user, string calldata periodName) external;
     function updateTimePeriodLimit(address user, string calldata periodName, uint256 newLimit) external;
     function setCommonPeriodLimits(address user, uint256 dailyLimit, uint256 weeklyLimit, uint256 monthlyLimit) external;
+    function setProposalSystemModule(address _proposalSystemModule) external;
 
     // Limit checking and spending
     function checkAllTimePeriodLimits(address user, uint256 amount) external;
@@ -139,8 +140,11 @@ interface IProposalSystemModule {
 
     // Setup management
     function commitInitialSetup(address user) external;
+    function commitSetup(uint256 dailyLimit, uint256 weeklyLimit, uint256 monthlyLimit) external;
+    function commitSetupWithReferrer(uint256 dailyLimit, uint256 weeklyLimit, uint256 monthlyLimit, address referrer) external;
     function recalculateTotalLockedValue(address user) external;
     function setTimePeriodLimitsModule(address _timePeriodLimitsModule) external;
+    function setReferralModule(address _referralModule) external;
 
     // View functions
     function getProposal(address user, bytes32 proposalId) external view returns (

@@ -20,8 +20,12 @@ contract ReferralModule is Initializable, UUPSUpgradeable, OwnableUpgradeable, I
     // Referrer => list of invitees
     mapping(address => address[]) private referredUsers;
 
-    modifier onlyCore() {
-        require(msg.sender == address(savingsCore), "Only core contract");
+    modifier onlyAuthorized() {
+        require(
+            msg.sender == address(savingsCore) ||
+            savingsCore.isAuthorizedModule(msg.sender),
+            "Not authorized"
+        );
         _;
     }
 
@@ -41,7 +45,7 @@ contract ReferralModule is Initializable, UUPSUpgradeable, OwnableUpgradeable, I
 
     // ========== REFERRAL RECORDING ==========
 
-    function recordReferral(address user, address referrer) external onlyCore {
+    function recordReferral(address user, address referrer) external onlyAuthorized {
         require(referrer != address(0), "Invalid referrer");
         require(referrer != user, "Cannot refer yourself");
         require(referralOf[user].referrer == address(0), "Referrer already recorded");

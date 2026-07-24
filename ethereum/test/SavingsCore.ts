@@ -199,7 +199,7 @@ describe("SavingsCore", function () {
       await savingsCore.connect(user1)["deposit(address,uint256)"](hre.ethers.ZeroAddress, depositAmount, { value: depositAmount });
 
       // Register user2 as an approved withdrawal address (direct add since dev mode allows it)
-      await savingsCore.connect(user1).addWithdrawalAddressDirect("user2", user2.address);
+      await approvalModule.connect(user1).addWithdrawalAddressDirect(user1.address, "user2", user2.address);
 
       const withdrawAmount = hre.ethers.parseEther("0.5");
       const initialUser2Balance = await hre.ethers.provider.getBalance(user2.address);

@@ -92,41 +92,6 @@ async function fetchSolanaWithdrawalRequests(params) {
 }
 
 /**
- * DEPRECATED: Fetches EVM withdrawal requests using direct contract access
- * Replaced with unified adapter pattern - use transactionManager.getPendingWithdrawalDestinationRequests() instead
- * Keeping for reference during transition period
- * @param {Object} params - EVM-specific parameters
- * @returns {Promise<Array>} - Array of formatted EVM withdrawal requests
- */
-// eslint-disable-next-line no-unused-vars
-async function fetchEvmWithdrawalRequests(params) {
-  const { savingsContract, userAddress } = params;
-
-  if (!savingsContract || !userAddress) {
-    console.log('⏭️ Skipping fetchPendingWithdrawalRequests for EVM - missing contract or user');
-    return [];
-  }
-
-  const requestData = await savingsContract.getUserPendingWithdrawalRequests();
-  const [requestIds, titles, destinations, executeAfters] = requestData;
-
-  const requests = [];
-  for (let i = 0; i < requestIds.length; i++) {
-    requests.push({
-      requestId: requestIds[i],
-      title: titles[i],
-      destination: destinations[i],
-      executeAfter: Number(executeAfters[i]),
-      submittedDate: new Date().toLocaleDateString(), // Approximate - EVM doesn't store submission date
-      networkType: 'evm'
-    });
-  }
-
-  console.log(`📋 Loaded ${requests.length} EVM pending withdrawal requests for ${userAddress}`);
-  return requests;
-}
-
-/**
  * Validates withdrawal requests data structure
  * @param {Array} requestsData - Array of withdrawal requests
  * @returns {boolean} - True if data structure is valid

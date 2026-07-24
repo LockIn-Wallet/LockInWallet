@@ -15,8 +15,24 @@ contract TimePeriodLimitsModule is Initializable, UUPSUpgradeable, OwnableUpgrad
     // Migration flag
     bool public migrationComplete;
 
+    // Appended for upgrades — lets addTimePeriodLimit refresh the committed
+    // total locked value without routing through the core
+    IProposalSystemModule public proposalSystemModule;
+
     modifier onlyAuthorized() {
         require(
+            msg.sender == address(savingsCore) ||
+            savingsCore.isAuthorizedModule(msg.sender),
+            "Not authorized"
+        );
+        _;
+    }
+
+    // Users act on their own data directly; the core and modules keep access
+    // for cross-module orchestration (Pattern B self-authentication)
+    modifier onlyAuthorizedOrSelf(address user) {
+        require(
+            msg.sender == user ||
             msg.sender == address(savingsCore) ||
             savingsCore.isAuthorizedModule(msg.sender),
             "Not authorized"
@@ -43,6 +59,11 @@ contract TimePeriodLimitsModule is Initializable, UUPSUpgradeable, OwnableUpgrad
 
     function _authorizeUpgrade(address) internal override onlyOwner {}
 
+    function setProposalSystemModule(address _proposalSystemModule) external onlyCore {
+        require(_proposalSystemModule != address(0), "Invalid module address");
+        proposalSystemModule = IProposalSystemModule(_proposalSystemModule);
+    }
+
     // ========== PERIOD MANAGEMENT ==========
 
     function addTimePeriodLimit(
@@ -50,7 +71,7 @@ contract TimePeriodLimitsModule is Initializable, UUPSUpgradeable, OwnableUpgrad
         string calldata periodName,
         uint256 limit,
         uint256 durationInSeconds
-    ) external onlyAuthorized {
+    ) external onlyAuthorizedOrSelf(user) {
         require(bytes(periodName).length > 0 && limit > 0 && durationInSeconds >= 3600, "Invalid input");
 
         UserSpendingLimits storage userLimits = userSpendingLimits[user];
@@ -90,6 +111,15 @@ contract TimePeriodLimitsModule is Initializable, UUPSUpgradeable, OwnableUpgrad
         }
 
         emit CategorySet(user, periodName, limit, durationInSeconds);
+
+        // Keep the committed total locked value in sync (moved here from the
+        // former SavingsCore.addTimePeriodLimit forwarder)
+        if (
+            address(proposalSystemModule) != address(0) &&
+            proposalSystemModule.isSetupCommitted(user)
+        ) {
+            proposalSystemModule.recalculateTotalLockedValue(user);
+        }
     }
 
     // Internal version of addTimePeriodLimit without external authorization check
@@ -393,7 +423,7 @@ contract TimePeriodLimitsModule is Initializable, UUPSUpgradeable, OwnableUpgrad
         uint256 dailyLimit,
         uint256 weeklyLimit,
         uint256 monthlyLimit
-    ) external onlyAuthorized {
+    ) external onlyAuthorizedOrSelf(user) {
         require(dailyLimit > 0 || weeklyLimit > 0 || monthlyLimit > 0, "At least one limit must be set");
 
         // Validate basic limit ordering - allow restrictive limits

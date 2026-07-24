@@ -22,8 +22,23 @@ contract ProposalSystemModule is Initializable, UUPSUpgradeable, OwnableUpgradea
     // Migration flag
     bool public migrationComplete;
 
+    // Appended for upgrades — records referrers as part of the setup commit
+    IReferralModule public referralModule;
+
     modifier onlyAuthorized() {
         require(
+            msg.sender == address(savingsCore) ||
+            savingsCore.isAuthorizedModule(msg.sender),
+            "Not authorized"
+        );
+        _;
+    }
+
+    // Users act on their own data directly; the core and modules keep access
+    // for cross-module orchestration (Pattern B self-authentication)
+    modifier onlyAuthorizedOrSelf(address user) {
+        require(
+            msg.sender == user ||
             msg.sender == address(savingsCore) ||
             savingsCore.isAuthorizedModule(msg.sender),
             "Not authorized"
@@ -55,13 +70,18 @@ contract ProposalSystemModule is Initializable, UUPSUpgradeable, OwnableUpgradea
         timePeriodLimitsModule = ITimePeriodLimitsModule(_timePeriodLimitsModule);
     }
 
+    function setReferralModule(address _referralModule) external onlyCore {
+        require(_referralModule != address(0), "Invalid module address");
+        referralModule = IReferralModule(_referralModule);
+    }
+
     // ========== PROPOSAL MANAGEMENT ==========
 
     function proposeLimitChange(
         address user,
         string calldata periodName,
         uint256 newLimit
-    ) external onlyAuthorized returns (bytes32 proposalId) {
+    ) external onlyAuthorizedOrSelf(user) returns (bytes32 proposalId) {
         require(bytes(periodName).length > 0 && newLimit > 0, "Invalid input");
 
         UserSetupData storage userData = userSetupData[user];
@@ -94,7 +114,7 @@ contract ProposalSystemModule is Initializable, UUPSUpgradeable, OwnableUpgradea
         return proposalId;
     }
 
-    function proposeLimitRemoval(address user, string calldata periodName) external onlyAuthorized returns (bytes32 proposalId) {
+    function proposeLimitRemoval(address user, string calldata periodName) external onlyAuthorizedOrSelf(user) returns (bytes32 proposalId) {
         require(bytes(periodName).length > 0, "Period name cannot be empty");
 
         UserSetupData storage userData = userSetupData[user];
@@ -120,7 +140,7 @@ contract ProposalSystemModule is Initializable, UUPSUpgradeable, OwnableUpgradea
         return proposalId;
     }
 
-    function executeLimitProposal(address user, bytes32 proposalId) external onlyAuthorized {
+    function executeLimitProposal(address user, bytes32 proposalId) external onlyAuthorizedOrSelf(user) {
         UserSetupData storage userData = userSetupData[user];
         CategoryUpdateProposal storage proposal = userProposals[user][proposalId];
 
@@ -142,14 +162,62 @@ contract ProposalSystemModule is Initializable, UUPSUpgradeable, OwnableUpgradea
         }
     }
 
-    function cancelLimitProposal(address user, bytes32 proposalId) external onlyAuthorized {
+    function cancelLimitProposal(address user, bytes32 proposalId) external onlyAuthorizedOrSelf(user) {
         require(userProposals[user][proposalId].exists && !userProposals[user][proposalId].executed, "Invalid proposal");
         delete userProposals[user][proposalId];
     }
 
     // ========== SETUP MANAGEMENT ==========
 
-    function commitInitialSetup(address user) external onlyAuthorized {
+    function commitInitialSetup(address user) external onlyAuthorizedOrSelf(user) {
+        _commitInitialSetup(user);
+    }
+
+    /**
+     * @dev One-transaction setup: sets the common spending limits, then
+     *      commits. Authenticated by msg.sender (Pattern B) — callable
+     *      directly by users, no core forwarder involved.
+     */
+    function commitSetup(
+        uint256 dailyLimit,
+        uint256 weeklyLimit,
+        uint256 monthlyLimit
+    ) external {
+        _commitSetupWithLimits(msg.sender, dailyLimit, weeklyLimit, monthlyLimit);
+    }
+
+    /**
+     * @dev Same as commitSetup but also records who referred the user.
+     *      Recording happens before _commitInitialSetup, whose "Already
+     *      committed" guard atomically rolls back the referral on any repeat
+     *      attempt — the referrer is therefore immutable once committed.
+     * @param referrer Address that referred the user (address(0) to skip)
+     */
+    function commitSetupWithReferrer(
+        uint256 dailyLimit,
+        uint256 weeklyLimit,
+        uint256 monthlyLimit,
+        address referrer
+    ) external {
+        if (referrer != address(0)) {
+            require(address(referralModule) != address(0), "ReferralModule not set");
+            referralModule.recordReferral(msg.sender, referrer);
+        }
+        _commitSetupWithLimits(msg.sender, dailyLimit, weeklyLimit, monthlyLimit);
+    }
+
+    function _commitSetupWithLimits(
+        address user,
+        uint256 dailyLimit,
+        uint256 weeklyLimit,
+        uint256 monthlyLimit
+    ) internal {
+        require(address(timePeriodLimitsModule) != address(0), "TimePeriodLimitsModule not set");
+        timePeriodLimitsModule.setCommonPeriodLimits(user, dailyLimit, weeklyLimit, monthlyLimit);
+        _commitInitialSetup(user);
+    }
+
+    function _commitInitialSetup(address user) internal {
         UserSetupData storage userData = userSetupData[user];
         require(!userData.hasCommittedSetup, "Already committed");
         require(address(timePeriodLimitsModule) != address(0), "TimePeriodLimitsModule not set");
@@ -173,7 +241,7 @@ contract ProposalSystemModule is Initializable, UUPSUpgradeable, OwnableUpgradea
         emit SetupCommitted(user, block.timestamp);
     }
 
-    function recalculateTotalLockedValue(address user) external onlyAuthorized {
+    function recalculateTotalLockedValue(address user) external onlyAuthorizedOrSelf(user) {
         UserSetupData storage userData = userSetupData[user];
         require(userData.hasCommittedSetup, "Setup not committed yet");
 

@@ -72,7 +72,7 @@ describe("ReferralModule", function () {
       const { savingsCore, proposalModule, referralModule, user1, referrer, dailyLimit, weeklyLimit, monthlyLimit } =
         await loadFixture(deployReferralFixture);
 
-      const tx = await savingsCore.connect(user1).commitSetupWithReferrer(dailyLimit, weeklyLimit, monthlyLimit, referrer.address);
+      const tx = await proposalModule.connect(user1).commitSetupWithReferrer(dailyLimit, weeklyLimit, monthlyLimit, referrer.address);
       const receipt = await tx.wait();
       const block = await hre.ethers.provider.getBlock(receipt!.blockNumber);
 
@@ -92,7 +92,7 @@ describe("ReferralModule", function () {
       const { savingsCore, proposalModule, referralModule, user1, dailyLimit, weeklyLimit, monthlyLimit } =
         await loadFixture(deployReferralFixture);
 
-      await savingsCore.connect(user1).commitSetup(dailyLimit, weeklyLimit, monthlyLimit);
+      await proposalModule.connect(user1).commitSetup(dailyLimit, weeklyLimit, monthlyLimit);
 
       expect(await proposalModule.isSetupCommitted(user1.address)).to.be.true;
       const [recordedReferrer] = await referralModule.getReferrer(user1.address);
@@ -103,7 +103,7 @@ describe("ReferralModule", function () {
       const { savingsCore, proposalModule, referralModule, user1, dailyLimit, weeklyLimit, monthlyLimit } =
         await loadFixture(deployReferralFixture);
 
-      await savingsCore.connect(user1).commitSetupWithReferrer(dailyLimit, weeklyLimit, monthlyLimit, hre.ethers.ZeroAddress);
+      await proposalModule.connect(user1).commitSetupWithReferrer(dailyLimit, weeklyLimit, monthlyLimit, hre.ethers.ZeroAddress);
 
       expect(await proposalModule.isSetupCommitted(user1.address)).to.be.true;
       const [recordedReferrer] = await referralModule.getReferrer(user1.address);
@@ -115,17 +115,17 @@ describe("ReferralModule", function () {
         await loadFixture(deployReferralFixture);
 
       await expect(
-        savingsCore.connect(user1).commitSetupWithReferrer(dailyLimit, weeklyLimit, monthlyLimit, user1.address)
+        proposalModule.connect(user1).commitSetupWithReferrer(dailyLimit, weeklyLimit, monthlyLimit, user1.address)
       ).to.be.revertedWith("Cannot refer yourself");
 
       expect(await proposalModule.isSetupCommitted(user1.address)).to.be.false;
     });
 
     it("Should allow a referrer who has not committed setup themselves", async function () {
-      const { savingsCore, referralModule, user1, referrer, dailyLimit, weeklyLimit, monthlyLimit } =
+      const { savingsCore, proposalModule, referralModule, user1, referrer, dailyLimit, weeklyLimit, monthlyLimit } =
         await loadFixture(deployReferralFixture);
 
-      await savingsCore.connect(user1).commitSetupWithReferrer(dailyLimit, weeklyLimit, monthlyLimit, referrer.address);
+      await proposalModule.connect(user1).commitSetupWithReferrer(dailyLimit, weeklyLimit, monthlyLimit, referrer.address);
 
       const [recordedReferrer] = await referralModule.getReferrer(user1.address);
       expect(recordedReferrer).to.equal(referrer.address);
@@ -134,13 +134,13 @@ describe("ReferralModule", function () {
 
   describe("Immutability", function () {
     it("Should reject a second commit with a different referrer and keep the original record", async function () {
-      const { savingsCore, referralModule, user1, user2, referrer, dailyLimit, weeklyLimit, monthlyLimit } =
+      const { savingsCore, proposalModule, referralModule, user1, user2, referrer, dailyLimit, weeklyLimit, monthlyLimit } =
         await loadFixture(deployReferralFixture);
 
-      await savingsCore.connect(user1).commitSetupWithReferrer(dailyLimit, weeklyLimit, monthlyLimit, referrer.address);
+      await proposalModule.connect(user1).commitSetupWithReferrer(dailyLimit, weeklyLimit, monthlyLimit, referrer.address);
 
       await expect(
-        savingsCore.connect(user1).commitSetupWithReferrer(dailyLimit, weeklyLimit, monthlyLimit, user2.address)
+        proposalModule.connect(user1).commitSetupWithReferrer(dailyLimit, weeklyLimit, monthlyLimit, user2.address)
       ).to.be.revertedWith("Referrer already recorded");
 
       const [recordedReferrer] = await referralModule.getReferrer(user1.address);
@@ -149,14 +149,14 @@ describe("ReferralModule", function () {
     });
 
     it("Should not allow adding a referrer after a plain commitSetup", async function () {
-      const { savingsCore, referralModule, user1, referrer, dailyLimit, weeklyLimit, monthlyLimit } =
+      const { savingsCore, proposalModule, referralModule, user1, referrer, dailyLimit, weeklyLimit, monthlyLimit } =
         await loadFixture(deployReferralFixture);
 
-      await savingsCore.connect(user1).commitSetup(dailyLimit, weeklyLimit, monthlyLimit);
+      await proposalModule.connect(user1).commitSetup(dailyLimit, weeklyLimit, monthlyLimit);
 
       // Referral write succeeds first but the whole tx reverts on "Already committed"
       await expect(
-        savingsCore.connect(user1).commitSetupWithReferrer(dailyLimit, weeklyLimit, monthlyLimit, referrer.address)
+        proposalModule.connect(user1).commitSetupWithReferrer(dailyLimit, weeklyLimit, monthlyLimit, referrer.address)
       ).to.be.revertedWith("Already committed");
 
       const [recordedReferrer] = await referralModule.getReferrer(user1.address);
@@ -169,17 +169,17 @@ describe("ReferralModule", function () {
 
       await expect(
         referralModule.connect(user1).recordReferral(user1.address, referrer.address)
-      ).to.be.revertedWith("Only core contract");
+      ).to.be.revertedWith("Not authorized");
     });
   });
 
   describe("Referral list views", function () {
     it("Should return referred users with join timestamps and support pagination", async function () {
-      const { savingsCore, referralModule, user1, user2, user3, referrer, dailyLimit, weeklyLimit, monthlyLimit } =
+      const { savingsCore, proposalModule, referralModule, user1, user2, user3, referrer, dailyLimit, weeklyLimit, monthlyLimit } =
         await loadFixture(deployReferralFixture);
 
       for (const user of [user1, user2, user3]) {
-        await savingsCore.connect(user).commitSetupWithReferrer(dailyLimit, weeklyLimit, monthlyLimit, referrer.address);
+        await proposalModule.connect(user).commitSetupWithReferrer(dailyLimit, weeklyLimit, monthlyLimit, referrer.address);
       }
 
       expect(await referralModule.getReferralCount(referrer.address)).to.equal(3);
@@ -212,10 +212,10 @@ describe("ReferralModule", function () {
 
   describe("Upgrade safety", function () {
     it("Should preserve referral records across an in-place module upgrade", async function () {
-      const { savingsCore, referralModule, user1, referrer, dailyLimit, weeklyLimit, monthlyLimit } =
+      const { savingsCore, proposalModule, referralModule, user1, referrer, dailyLimit, weeklyLimit, monthlyLimit } =
         await loadFixture(deployReferralFixture);
 
-      await savingsCore.connect(user1).commitSetupWithReferrer(dailyLimit, weeklyLimit, monthlyLimit, referrer.address);
+      await proposalModule.connect(user1).commitSetupWithReferrer(dailyLimit, weeklyLimit, monthlyLimit, referrer.address);
       const [referrerBefore, referredAtBefore] = await referralModule.getReferrer(user1.address);
 
       const ReferralModule = await hre.ethers.getContractFactory("ReferralModule");

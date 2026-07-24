@@ -4,6 +4,10 @@ import SavingsABI from "../SavingsABI.json";
 import MockUSDT_ABI from "../MockUSDT_ABI.json";
 import ProxyDeploymentModuleABI from "../ProxyDeploymentModuleABI.json";
 import TimePeriodLimitsModuleABI from "../TimePeriodLimitsModuleABI.json";
+import ProposalSystemModuleABI from "../ProposalSystemModuleABI.json";
+import BypassSystemModuleABI from "../BypassSystemModuleABI.json";
+import ApprovalSystemModuleABI from "../ApprovalSystemModuleABI.json";
+import PoolTogetherModuleABI from "../PoolTogetherModuleABI.json";
 import VaultSystemModuleABI from "../VaultSystemModuleABI.json";
 import ReferralModuleABI from "../ReferralModuleABI.json";
 import ERC20ABI from "../ERC20ABI.json";
@@ -12,6 +16,17 @@ import { getTokenMeta } from "../utils/tokenUtils.js";
 const VAULT_SYSTEM_MODULE_ID = ethers.keccak256(ethers.toUtf8Bytes("VAULT_SYSTEM"));
 const REFERRAL_MODULE_ID = ethers.keccak256(ethers.toUtf8Bytes("REFERRAL"));
 const REFERRAL_PAGE_SIZE = 100;
+
+// User-facing modules are called directly (Pattern B): each authenticates the
+// caller via msg.sender, so no calls route through SavingsCore forwarders
+const MODULE_DEFS = {
+  timePeriodLimits: { id: ethers.keccak256(ethers.toUtf8Bytes("TIME_PERIOD_LIMITS")), abi: TimePeriodLimitsModuleABI },
+  proposalSystem: { id: ethers.keccak256(ethers.toUtf8Bytes("PROPOSAL_SYSTEM")), abi: ProposalSystemModuleABI },
+  bypassSystem: { id: ethers.keccak256(ethers.toUtf8Bytes("BYPASS_SYSTEM")), abi: BypassSystemModuleABI },
+  approvalSystem: { id: ethers.keccak256(ethers.toUtf8Bytes("APPROVAL_SYSTEM")), abi: ApprovalSystemModuleABI },
+  proxyDeployment: { id: ethers.keccak256(ethers.toUtf8Bytes("PROXY_DEPLOYMENT")), abi: ProxyDeploymentModuleABI },
+  poolTogether: { id: ethers.keccak256(ethers.toUtf8Bytes("POOL_TOGETHER")), abi: PoolTogetherModuleABI },
+};
 const VAULT_TYPE_NAMES = ["Personal", "Community"];
 
 /**
@@ -130,9 +145,8 @@ export class EVMAdapter extends BlockchainAdapter {
     if (!this.savingsContract || !this.signer)
       throw new Error("Contract not initialized");
 
-    const proxyAddress = await this.savingsContract.getUserProxy(
-      await this.getAddress(),
-    );
+    const proxyModule = await this._getModuleContract("proxyDeployment");
+    const proxyAddress = await proxyModule.getUserProxy(await this.getAddress());
     if (!proxyAddress || proxyAddress === ethers.ZeroAddress) return null;
 
     const userProxyABI = ["function sweepERC20(address token) external"];
@@ -150,16 +164,15 @@ export class EVMAdapter extends BlockchainAdapter {
   async checkAndSweepProxy() {
     try {
       const userAddress = await this.getAddress();
-      const isDeployed = await this.savingsContract.isProxyDeployed(
-        userAddress,
-      );
+      const proxyModule = await this._getModuleContract("proxyDeployment");
+      const isDeployed = await proxyModule.isProxyDeployed(userAddress);
       console.log(
         "🚀 ~ EVMAdapter ~ checkAndSweepProxy ~ isDeployed:",
         isDeployed,
       );
       if (!isDeployed) return;
 
-      const proxyAddress = await this.savingsContract.getUserProxy(userAddress);
+      const proxyAddress = await proxyModule.getUserProxy(userAddress);
       if (!proxyAddress || proxyAddress === ethers.ZeroAddress) return;
       console.log(
         "🚀 ~ EVMAdapter ~ checkAndSweepProxy ~ proxyAddress:",
@@ -325,38 +338,31 @@ export class EVMAdapter extends BlockchainAdapter {
 
   // Proxy Management
   async isProxyDeployed(userAddress) {
-    if (!this.savingsContract) throw new Error("Contract not initialized");
-    return await this.savingsContract.isProxyDeployed(userAddress);
+    const proxyModule = await this._getModuleContract("proxyDeployment");
+    return await proxyModule.isProxyDeployed(userAddress);
   }
 
   async getDepositAddress(userAddress) {
-    if (!this.savingsContract) throw new Error("Contract not initialized");
-    return await this.savingsContract.getUserDepositAddress(userAddress);
+    const proxyModule = await this._getModuleContract("proxyDeployment");
+    return await proxyModule.getUserDepositAddress(userAddress);
   }
 
   async getProxyDeploymentFee() {
-    if (!this.savingsContract) throw new Error("Contract not initialized");
-    return await this.savingsContract.getProxyDeploymentFee();
+    const proxyModule = await this._getModuleContract("proxyDeployment");
+    return await proxyModule.getProxyDeploymentFee();
   }
 
   async deployProxy() {
-    if (!this.savingsContract) throw new Error("Contract not initialized");
+    const proxyModule = await this._getModuleContract("proxyDeployment");
 
     // Approve USDT fee before deploying
-    const fee = await this.savingsContract.getProxyDeploymentFee();
+    const fee = await proxyModule.getProxyDeploymentFee();
     if (fee > 0n) {
-      if (!this.proxyDeploymentModule)
-        throw new Error("ProxyDeploymentModule not initialized");
-      const paymentTokenAddress =
-        await this.proxyDeploymentModule.paymentToken();
-      await this.approveToken(
-        paymentTokenAddress,
-        this.proxyDeploymentModule.target,
-        fee,
-      );
+      const paymentTokenAddress = await proxyModule.paymentToken();
+      await this.approveToken(paymentTokenAddress, proxyModule.target, fee);
     }
 
-    const tx = await this.savingsContract.deployUserProxy();
+    const tx = await proxyModule.deployUserProxy(this.userAddress);
     const receipt = await tx.wait();
 
     return {
@@ -370,9 +376,8 @@ export class EVMAdapter extends BlockchainAdapter {
   async getSpendingLimits(userAddress) {
     if (!this.savingsContract) throw new Error("Contract not initialized");
 
-    const spendingData = await this.savingsContract.getUserSpendingLimits(
-      userAddress,
-    );
+    const limitsModule = await this._getModuleContract("timePeriodLimits");
+    const spendingData = await limitsModule.getUserSpendingLimits(userAddress);
     const [names, limits, spent, remaining, durations, active] = spendingData;
 
     const resetData = await this._fetchLimitResetTimes(userAddress, names, durations, active);
@@ -401,18 +406,7 @@ export class EVMAdapter extends BlockchainAdapter {
   async _fetchLimitResetTimes(userAddress, names, durations, active) {
     const resetData = [];
     try {
-      const TIME_PERIOD_LIMITS_ID = ethers.keccak256(
-        ethers.toUtf8Bytes("TIME_PERIOD_LIMITS"),
-      );
-      const moduleAddress = await this.savingsContract.getModule(TIME_PERIOD_LIMITS_ID);
-      if (!moduleAddress || moduleAddress === ethers.ZeroAddress) {
-        return names.map(() => 0);
-      }
-      const limitsModule = new ethers.Contract(
-        moduleAddress,
-        TimePeriodLimitsModuleABI,
-        this.signer,
-      );
+      const limitsModule = await this._getModuleContract("timePeriodLimits");
       for (let i = 0; i < names.length; i++) {
         if (!active[i]) {
           resetData.push(0);
@@ -438,7 +432,9 @@ export class EVMAdapter extends BlockchainAdapter {
     const monthlyLimitWei =
       monthly > 0 ? this.parseAmount(monthly.toString(), 6) : 0;
 
-    const tx = await this.savingsContract.setCommonPeriodLimits(
+    const limitsModule = await this._getModuleContract("timePeriodLimits");
+    const tx = await limitsModule.setCommonPeriodLimits(
+      this.userAddress,
       dailyLimitWei,
       weeklyLimitWei,
       monthlyLimitWei,
@@ -469,7 +465,9 @@ export class EVMAdapter extends BlockchainAdapter {
       throw new Error("Invalid period name. Must be Daily, Weekly, or Monthly");
     }
 
-    const tx = await this.savingsContract.addTimePeriodLimit(
+    const limitsModule = await this._getModuleContract("timePeriodLimits");
+    const tx = await limitsModule.addTimePeriodLimit(
+      this.userAddress,
       periodName,
       limitWei,
       duration,
@@ -486,7 +484,9 @@ export class EVMAdapter extends BlockchainAdapter {
     if (!this.userAddress) throw new Error("User not connected");
 
     const limitWei = ethers.parseUnits(newLimit.toString(), 6);
-    const tx = await this.savingsContract.proposeLimitChange(
+    const proposalModule = await this._getModuleContract("proposalSystem");
+    const tx = await proposalModule.proposeLimitChange(
+      this.userAddress,
       periodName,
       limitWei,
     );
@@ -522,7 +522,7 @@ export class EVMAdapter extends BlockchainAdapter {
         newLimits,
         executeAfters,
         isIncreaseFlags,
-      ] = await this.savingsContract.getUserPendingProposals();
+      ] = await (await this._getModuleContract("proposalSystem")).getUserPendingProposals(targetAddress);
 
       console.log(`✅ Found ${proposalIds.length} pending proposals for EVM`);
 
@@ -595,7 +595,8 @@ export class EVMAdapter extends BlockchainAdapter {
       console.log("🔄 Executing EVM proposal:", proposalId);
 
       // Call the contract method to execute the proposal
-      const tx = await this.savingsContract.executeLimitProposal(proposalId);
+      const proposalModule = await this._getModuleContract("proposalSystem");
+      const tx = await proposalModule.executeLimitProposal(this.userAddress, proposalId);
       await tx.wait();
 
       console.log("✅ EVM proposal executed successfully:", tx.hash);
@@ -619,7 +620,8 @@ export class EVMAdapter extends BlockchainAdapter {
       console.log("🔄 Cancelling EVM proposal:", proposalId);
 
       // Call the contract method to cancel the proposal
-      const tx = await this.savingsContract.cancelLimitProposal(proposalId);
+      const proposalModule = await this._getModuleContract("proposalSystem");
+      const tx = await proposalModule.cancelLimitProposal(this.userAddress, proposalId);
       await tx.wait();
 
       console.log("✅ EVM proposal cancelled successfully:", tx.hash);
@@ -685,14 +687,15 @@ export class EVMAdapter extends BlockchainAdapter {
         : null;
 
     try {
+      const proposalModule = await this._getModuleContract("proposalSystem");
       const tx = validReferrer
-        ? await this.savingsContract.commitSetupWithReferrer(
+        ? await proposalModule.commitSetupWithReferrer(
             dailyWei,
             weeklyWei,
             monthlyWei,
             validReferrer,
           )
-        : await this.savingsContract.commitSetup(dailyWei, weeklyWei, monthlyWei);
+        : await proposalModule.commitSetup(dailyWei, weeklyWei, monthlyWei);
       await tx.wait(); // Wait for transaction confirmation
 
       return tx.hash; // Return consistent format (transaction hash as string)
@@ -775,41 +778,45 @@ export class EVMAdapter extends BlockchainAdapter {
     // Drop caches tied to the previous network/signer
     this.vaultModule = null;
     this.referralModule = undefined;
+    this._moduleContracts = {};
     this._tokenMetaCache = null;
 
-    // Initialize savings contract
+    // Initialize savings contract (custody kernel + module registry)
     this.savingsContract = new ethers.Contract(
       this.networkConfig.savingsContract,
       SavingsABI,
       this.signer,
     );
 
-    // Initialize ProxyDeploymentModule by looking up its registered address
+    // Kept for backward compatibility with existing call sites
     try {
-      const PROXY_DEPLOYMENT_ID = ethers.keccak256(
-        ethers.toUtf8Bytes("PROXY_DEPLOYMENT"),
-      );
-      const proxyModuleAddress = await this.savingsContract.getModule(
-        PROXY_DEPLOYMENT_ID,
-      );
-      if (proxyModuleAddress && proxyModuleAddress !== ethers.ZeroAddress) {
-        this.proxyDeploymentModule = new ethers.Contract(
-          proxyModuleAddress,
-          ProxyDeploymentModuleABI,
-          this.signer,
-        );
-      }
+      this.proxyDeploymentModule = await this._getModuleContract("proxyDeployment");
     } catch (e) {
       console.warn("Could not initialize ProxyDeploymentModule:", e.message);
     }
   }
 
-  // Bypass Requests (unified adapter pattern)
-  async fetchPendingBypassRequests(userAddress = null) {
+  /** Resolve a user-facing module contract through the core registry (cached). */
+  async _getModuleContract(key) {
+    if (!this._moduleContracts) this._moduleContracts = {};
+    if (this._moduleContracts[key]) return this._moduleContracts[key];
     if (!this.savingsContract) throw new Error("Contract not initialized");
 
-    // Note: getUserActiveBypassRequests() uses msg.sender, so no user parameter needed
-    const bypassData = await this.savingsContract.getUserActiveBypassRequests();
+    const def = MODULE_DEFS[key];
+    if (!def) throw new Error(`Unknown module: ${key}`);
+    const moduleAddress = await this.savingsContract.getModule(def.id);
+    if (!moduleAddress || moduleAddress === ethers.ZeroAddress) {
+      throw new Error(`${key} module is not registered on this network`);
+    }
+    this._moduleContracts[key] = new ethers.Contract(moduleAddress, def.abi, this.signer);
+    return this._moduleContracts[key];
+  }
+
+  // Bypass Requests (unified adapter pattern)
+  async fetchPendingBypassRequests(userAddress = null) {
+    const bypassModule = await this._getModuleContract("bypassSystem");
+    const targetAddress = userAddress || this.userAddress;
+    const bypassData = await bypassModule.getUserActiveBypassRequests(targetAddress);
     const [requestIds, amounts, skipPeriods, tokens, executeAfters] =
       bypassData;
 
@@ -827,6 +834,32 @@ export class EVMAdapter extends BlockchainAdapter {
     return requests;
   }
 
+  async requestLimitBypass(amountRaw, skipPeriod, tokenAddress) {
+    const bypassModule = await this._getModuleContract("bypassSystem");
+    const tx = await bypassModule.requestLimitBypass(
+      this.userAddress,
+      amountRaw,
+      skipPeriod,
+      tokenAddress,
+    );
+    await tx.wait();
+    return tx.hash;
+  }
+
+  async executeBypassWithdrawal(requestId) {
+    const bypassModule = await this._getModuleContract("bypassSystem");
+    const tx = await bypassModule.executeBypassWithdrawal(this.userAddress, requestId);
+    await tx.wait();
+    return tx.hash;
+  }
+
+  async cancelBypassRequest(requestId) {
+    const bypassModule = await this._getModuleContract("bypassSystem");
+    const tx = await bypassModule.cancelBypassRequest(this.userAddress, requestId);
+    await tx.wait();
+    return tx.hash;
+  }
+
   // Withdrawal Destination Requests (unified adapter pattern)
   async getPendingWithdrawalDestinationRequests(userAddress = null) {
     if (!this.savingsContract) throw new Error("Contract not initialized");
@@ -838,8 +871,8 @@ export class EVMAdapter extends BlockchainAdapter {
         "🔍 EVMAdapter: Fetching withdrawal destination requests for",
         targetAddress,
       );
-      const result =
-        await this.savingsContract.getUserPendingWithdrawalRequests();
+      const approvalModule = await this._getModuleContract("approvalSystem");
+      const result = await approvalModule.getUserPendingWithdrawalRequests(targetAddress);
       return this.formatWithdrawalRequests(result);
     } catch (error) {
       console.error(
@@ -855,7 +888,10 @@ export class EVMAdapter extends BlockchainAdapter {
     if (!this.savingsContract) throw new Error("Contract not initialized");
 
     try {
-      const result = await this.savingsContract.getUserWithdrawalAddresses();
+      const approvalModule = await this._getModuleContract("approvalSystem");
+      const result = await approvalModule.getUserWithdrawalAddresses(
+        userAddress || this.userAddress,
+      );
       return this.formatWithdrawalAddresses(result);
     } catch (error) {
       console.error(
@@ -905,7 +941,9 @@ export class EVMAdapter extends BlockchainAdapter {
     if (!this.savingsContract) throw new Error("Contract not initialized");
 
     try {
-      const tx = await this.savingsContract.requestWithdrawalAddress(
+      const approvalModule = await this._getModuleContract("approvalSystem");
+      const tx = await approvalModule.requestWithdrawalAddress(
+        this.userAddress,
         title,
         address,
       );
@@ -930,7 +968,9 @@ export class EVMAdapter extends BlockchainAdapter {
       console.log(
         `🔧 EVMAdapter: Calling contract.addWithdrawalAddressDirect("${title}", "${address}")`,
       );
-      const tx = await this.savingsContract.addWithdrawalAddressDirect(
+      const approvalModule = await this._getModuleContract("approvalSystem");
+      const tx = await approvalModule.addWithdrawalAddressDirect(
+        this.userAddress,
         title,
         address,
       );
@@ -956,7 +996,9 @@ export class EVMAdapter extends BlockchainAdapter {
     if (!this.savingsContract) throw new Error("Contract not initialized");
 
     try {
-      const tx = await this.savingsContract.executeWithdrawalAddressRequest(
+      const approvalModule = await this._getModuleContract("approvalSystem");
+      const tx = await approvalModule.executeWithdrawalAddressRequest(
+        this.userAddress,
         requestId,
       );
       await tx.wait();
@@ -973,11 +1015,20 @@ export class EVMAdapter extends BlockchainAdapter {
     }
   }
 
+  async cancelWithdrawalAddressRequest(requestId) {
+    const approvalModule = await this._getModuleContract("approvalSystem");
+    const tx = await approvalModule.cancelWithdrawalAddressRequest(this.userAddress, requestId);
+    await tx.wait();
+    return tx.hash;
+  }
+
   async removeWithdrawalAddress(destination) {
     if (!this.savingsContract) throw new Error("Contract not initialized");
 
     try {
-      const tx = await this.savingsContract.removeWithdrawalAddress(
+      const approvalModule = await this._getModuleContract("approvalSystem");
+      const tx = await approvalModule.removeWithdrawalAddress(
+        this.userAddress,
         destination,
       );
       await tx.wait();
@@ -992,11 +1043,10 @@ export class EVMAdapter extends BlockchainAdapter {
   }
 
   async getIsSetupCommitted(userAddress = null) {
-    if (!this.savingsContract) throw new Error("Contract not initialized");
-
     try {
-      console.log("🔍 EVMAdapter: Calling contract.isSetupCommitted()...");
-      const result = await this.savingsContract.isSetupCommitted();
+      console.log("🔍 EVMAdapter: Calling isSetupCommitted()...");
+      const proposalModule = await this._getModuleContract("proposalSystem");
+      const result = await proposalModule.isSetupCommitted(userAddress || this.userAddress);
       console.log(
         `🔍 EVMAdapter: Contract returned isSetupCommitted: ${result}`,
       );
@@ -1052,41 +1102,39 @@ export class EVMAdapter extends BlockchainAdapter {
   // ========== POOL TOGETHER ==========
 
   async depositToPoolTogether(tokenAddress, amount) {
-    if (!this.savingsContract) throw new Error("Contract not initialized");
-    const tx = await this.savingsContract.depositToPoolTogether(tokenAddress, amount);
+    const poolModule = await this._getModuleContract("poolTogether");
+    const tx = await poolModule.depositToVault(this.userAddress, tokenAddress, amount);
     await tx.wait();
     return tx.hash;
   }
 
   async withdrawFromPoolTogether(tokenAddress, shares) {
-    if (!this.savingsContract) throw new Error("Contract not initialized");
-    const tx = await this.savingsContract.withdrawFromPoolTogether(tokenAddress, shares);
+    const poolModule = await this._getModuleContract("poolTogether");
+    const tx = await poolModule.withdrawFromVault(this.userAddress, tokenAddress, shares);
     await tx.wait();
     return tx.hash;
   }
 
   async getPoolTogetherBalance(tokenAddress) {
-    if (!this.savingsContract) throw new Error("Contract not initialized");
-    const [shares, assets] = await this.savingsContract.getPoolTogetherBalance(
-      this.userAddress,
-      tokenAddress
-    );
+    const poolModule = await this._getModuleContract("poolTogether");
+    const shares = await poolModule.getUserVaultShares(this.userAddress, tokenAddress);
+    const assets = await poolModule.getUserVaultBalance(this.userAddress, tokenAddress);
     return { shares, assets };
   }
 
   async getPoolTogetherGrandPrize() {
-    if (!this.savingsContract) throw new Error("Contract not initialized");
-    return await this.savingsContract.getPoolTogetherGrandPrize();
+    const poolModule = await this._getModuleContract("poolTogether");
+    return await poolModule.getGrandPrize();
   }
 
   async hasPoolTogetherVault(tokenAddress) {
-    if (!this.savingsContract) throw new Error("Contract not initialized");
-    return await this.savingsContract.hasPoolTogetherVault(tokenAddress);
+    const poolModule = await this._getModuleContract("poolTogether");
+    return await poolModule.hasVault(tokenAddress);
   }
 
   async claimPoolTogetherPrize(tokenAddress, tier = 3) {
-    if (!this.savingsContract) throw new Error("Contract not initialized");
-    const tx = await this.savingsContract.claimPoolTogetherPrize(tokenAddress, tier);
+    const poolModule = await this._getModuleContract("poolTogether");
+    const tx = await poolModule.claimPrize(this.userAddress, tokenAddress, tier);
     await tx.wait();
     return tx.hash;
   }
