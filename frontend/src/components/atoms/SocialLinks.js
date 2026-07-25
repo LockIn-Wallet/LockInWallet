@@ -1,4 +1,6 @@
 import React from "react";
+import { Link } from "react-router-dom";
+
 import { styles, colors, fontSize, fontWeight, spacing } from "../../styles";
 
 const textLinkStyle = {
@@ -12,7 +14,9 @@ const textLinkStyle = {
   whiteSpace: "nowrap",
 };
 
-// Text links shown before the icons
+// Text links shown before the icons. These are React routes, so they navigate
+// client-side — a plain <a> would reload the app and drop the wallet session.
+// Static pages in public/ (e.g. /how-it-works) would need `external: true`.
 const TEXT_LINKS = [
   {
     href: "/savings-visualiser",
@@ -38,24 +42,30 @@ const SocialLinks = () => {
 
   return (
     <div style={styles.socialLinks.container}>
-      {TEXT_LINKS.map((link) => (
-        <a
-          key={link.href}
-          href={link.href}
-          style={textLinkStyle}
-          title={link.title}
-          onMouseEnter={(e) => {
+      {TEXT_LINKS.map((link) => {
+        const linkProps = {
+          style: textLinkStyle,
+          title: link.title,
+          onMouseEnter: (e) => {
             e.target.style.color = colors.primary.main;
             e.target.style.backgroundColor = "rgba(255, 255, 255, 0.1)";
-          }}
-          onMouseLeave={(e) => {
+          },
+          onMouseLeave: (e) => {
             e.target.style.color = colors.text.muted;
             e.target.style.backgroundColor = "transparent";
-          }}
-        >
-          {link.label}
-        </a>
-      ))}
+          },
+        };
+
+        return link.external ? (
+          <a key={link.href} href={link.href} {...linkProps}>
+            {link.label}
+          </a>
+        ) : (
+          <Link key={link.href} to={link.href} {...linkProps}>
+            {link.label}
+          </Link>
+        );
+      })}
 
       {/* GitHub Link */}
       <a

@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 
 import VisualiserInputs from "../molecules/VisualiserInputs.js";
 import ScenarioComparison from "../molecules/ScenarioComparison.js";
@@ -132,12 +133,12 @@ const SavingsVisualiser = ({
 
       {compact && (
         <div className="mt-8 text-center">
-          <a
-            href="/savings-visualiser"
+          <Link
+            to="/savings-visualiser"
             className="inline-block px-6 py-3 rounded-lg font-bold text-white bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 transition-all duration-200 shadow-lg"
           >
             Open the full visualiser →
-          </a>
+          </Link>
           <p className="text-slate-400 text-sm mt-3">
             Goal progress, passive income and your future-self comparison
           </p>
