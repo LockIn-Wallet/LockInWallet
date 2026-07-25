@@ -1,0 +1,66 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  contracts:
+    name: Contracts (hardhat)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Compile
+        run: npx hardhat compile
+        working-directory: ethereum
+      - name: Contract sizes stay under EIP-170
+        run: |
+          node -e '
+          const fs = require("fs");
+          const dir = "artifacts/contracts";
+          let failed = false;
+          for (const sol of fs.readdirSync(dir)) {
+            const name = sol.replace(/\.sol$/, "");
+            const p = `${dir}/${sol}/${name}.json`;
+            if (!fs.existsSync(p)) continue;
+            const a = JSON.parse(fs.readFileSync(p));
+            if (!a.deployedBytecode || a.deployedBytecode.length <= 2) continue;
+            const size = (a.deployedBytecode.length - 2) / 2;
+            const over = size > 24576;
+            if (over) failed = true;
+            console.log(`${String(size).padStart(6)} ${name}${over ? "  <-- OVER 24576" : ""}`);
+          }
+          process.exit(failed ? 1 : 0);'
+        working-directory: ethereum
+      - name: Tests
+        run: npx hardhat test
+        working-directory: ethereum
+
+  frontend:
+    name: Frontend (jest + build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Unit tests
+        run: npx react-scripts test --watchAll=false --testPathPattern="ReferralService|TransactionManagerRestore|EVMAdapterRegression|WithdrawalAddressService|SavingsAbiSurface"
+        working-directory: frontend
+        env:
+          CI: "true"
+      - name: Production build
+        run: npx craco build
+        working-directory: frontend
+        env:
+          NODE_OPTIONS: --max-old-space-size=4096
+          GENERATE_SOURCEMAP: "false"
+          DISABLE_ESLINT_PLUGIN: "true"
