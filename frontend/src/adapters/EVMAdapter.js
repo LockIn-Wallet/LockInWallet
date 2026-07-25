@@ -9,6 +9,7 @@ import BypassSystemModuleABI from "../BypassSystemModuleABI.json";
 import ApprovalSystemModuleABI from "../ApprovalSystemModuleABI.json";
 import PoolTogetherModuleABI from "../PoolTogetherModuleABI.json";
 import VaultSystemModuleABI from "../VaultSystemModuleABI.json";
+import SavingsTimelockABI from "../SavingsTimelockABI.json";
 import ReferralModuleABI from "../ReferralModuleABI.json";
 import ERC20ABI from "../ERC20ABI.json";
 import { getTokenMeta } from "../utils/tokenUtils.js";
@@ -28,6 +29,24 @@ const MODULE_DEFS = {
   poolTogether: { id: ethers.keccak256(ethers.toUtf8Bytes("POOL_TOGETHER")), abi: PoolTogetherModuleABI },
 };
 const VAULT_TYPE_NAMES = ["Personal", "Community"];
+
+// Human-readable labels for calls wrapped inside timelock operations, so the
+// governance UI can show what a queued action actually does
+const GOVERNANCE_CALL_LABELS = {
+  "0x4f1ef286": "Contract upgrade (upgradeToAndCall)",
+  "0xa78e922b": "Register new module",
+  "0x3595945d": "Unregister module",
+  "0xf2fde38b": "Transfer ownership",
+  "0x2f2ff15d": "Grant governance role",
+  "0xd547741f": "Revoke governance role",
+  "0x64d62353": "Change timelock delay",
+};
+
+// Minimal Gnosis Safe surface — enough to display who controls the timelock
+const SAFE_ABI = [
+  "function getThreshold() view returns (uint256)",
+  "function getOwners() view returns (address[])",
+];
 
 /**
  * EVM Blockchain Adapter for MetaMask and ethers.js integration
@@ -728,6 +747,111 @@ export class EVMAdapter extends BlockchainAdapter {
       } else {
         throw new Error(`Setup failed: ${error.message}`);
       }
+    }
+  }
+
+  // ========== GOVERNANCE ==========
+
+  _governanceConfig() {
+    return this.networkConfig.governance || null;
+  }
+
+  _labelForTarget(address, moduleNames) {
+    if (!address) return "unknown";
+    if (address.toLowerCase() === this.networkConfig.savingsContract?.toLowerCase()) {
+      return "SavingsCore";
+    }
+    return moduleNames[address.toLowerCase()] || address;
+  }
+
+  /**
+   * Reads the upgrade timelock's operation queue and history.
+   * @returns {Promise<{enabled: boolean, timelock?: string, multisig?: string,
+   *   threshold?: number, signers?: string[], minDelay?: number,
+   *   operations: Array<{id: string, targetLabel: string, actionLabel: string,
+   *   scheduledAt: number, readyAt: number, status: string}>}>}
+   */
+  async getGovernanceStatus() {
+    const governance = this._governanceConfig();
+    if (!governance?.timelock || !this.provider) {
+      return { enabled: false, operations: [] };
+    }
+
+    try {
+      const timelock = new ethers.Contract(governance.timelock, SavingsTimelockABI, this.provider);
+      const fromBlock = governance.deployBlock || 0;
+
+      // Resolve module addresses once for target labelling
+      const moduleNames = {};
+      for (const [key, def] of Object.entries(MODULE_DEFS)) {
+        const address = await this.savingsContract.getModule(def.id).catch(() => null);
+        if (address && address !== ethers.ZeroAddress) moduleNames[address.toLowerCase()] = key;
+      }
+      const referralAddress = await this.savingsContract.getModule(REFERRAL_MODULE_ID).catch(() => null);
+      if (referralAddress && referralAddress !== ethers.ZeroAddress) moduleNames[referralAddress.toLowerCase()] = "referral";
+      const vaultAddress = await this.savingsContract.getModule(VAULT_SYSTEM_MODULE_ID).catch(() => null);
+      if (vaultAddress && vaultAddress !== ethers.ZeroAddress) moduleNames[vaultAddress.toLowerCase()] = "vaultSystem";
+
+      const [scheduled, executed, cancelled] = await Promise.all([
+        timelock.queryFilter(timelock.filters.CallScheduled(), fromBlock),
+        timelock.queryFilter(timelock.filters.CallExecuted(), fromBlock),
+        timelock.queryFilter(timelock.filters.Cancelled(), fromBlock),
+      ]);
+      const executedIds = new Set(executed.map((e) => e.args.id));
+      const cancelledIds = new Set(cancelled.map((e) => e.args.id));
+
+      const now = Math.floor(Date.now() / 1000);
+      const operations = [];
+      for (const event of scheduled) {
+        const { id, target, data, delay } = event.args;
+        const block = await event.getBlock();
+        const scheduledAt = block.timestamp;
+        const readyAt = scheduledAt + Number(delay);
+        const selector = (data || "0x").slice(0, 10);
+        const status = cancelledIds.has(id)
+          ? "cancelled"
+          : executedIds.has(id)
+            ? "executed"
+            : now >= readyAt
+              ? "ready"
+              : "pending";
+        operations.push({
+          id,
+          targetLabel: this._labelForTarget(target, moduleNames),
+          actionLabel: GOVERNANCE_CALL_LABELS[selector] || `call ${selector}`,
+          scheduledAt,
+          readyAt,
+          status,
+        });
+      }
+      operations.sort((a, b) => b.scheduledAt - a.scheduledAt);
+
+      // The proposer is expected to be a Gnosis Safe — read its live
+      // threshold/owner count for display; tolerate an EOA proposer (dev)
+      let threshold = null;
+      let signerCount = null;
+      if (governance.proposer) {
+        try {
+          const safeContract = new ethers.Contract(governance.proposer, SAFE_ABI, this.provider);
+          threshold = Number(await safeContract.getThreshold());
+          signerCount = (await safeContract.getOwners()).length;
+        } catch {
+          // Not a Safe (EOA proposer during rollout) — displayed as such
+        }
+      }
+
+      return {
+        enabled: true,
+        timelock: governance.timelock,
+        proposer: governance.proposer,
+        threshold,
+        signerCount,
+        minDelay: governance.minDelay,
+        operations,
+      };
+    } catch (error) {
+      console.error("Error reading governance status:", error);
+      return { enabled: false, operations: [] };
     }
   }
 

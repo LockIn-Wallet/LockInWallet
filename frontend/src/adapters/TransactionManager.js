@@ -224,6 +224,11 @@ export class TransactionManager {
     return result.signature;
   }
 
+  // ---- Governance ----
+  getGovernanceStatus() {
+    return this.getAdapter().getGovernanceStatus();
+  }
+
   // ---- Referrals ----
   getReferralInfo(userAddress) {
     return this.getAdapter().getReferralInfo(userAddress);

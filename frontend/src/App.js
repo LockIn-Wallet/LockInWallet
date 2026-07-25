@@ -71,6 +71,8 @@ import SetupCommitStep from "./components/organisms/SetupCommitStep.js";
 import WithdrawalAddressSetupStep from "./components/organisms/WithdrawalAddressSetupStep.js";
 import WithdrawalInterface from "./components/organisms/WithdrawalInterface.js";
 import ReferralSection from "./components/organisms/ReferralSection.js";
+import UpgradeBanner from "./components/molecules/UpgradeBanner.js";
+import GovernancePage from "./components/pages/GovernancePage.js";
 import VaultCard from "./components/molecules/VaultCard.js";
 
 import CreateVault from "./components/pages/CreateVault.js";
@@ -247,6 +249,13 @@ function MainFlow({
 
   return (
     <div>
+      {/* Queued contract changes — users get the timelock window to review/exit */}
+      <UpgradeBanner
+        transactionManager={transactionManager}
+        currentTime={currentTime}
+        navigate={navigate}
+      />
+
       {/* My Vaults Section (unlocked once the personal wallet setup is committed) */}
       {isSetupCommitted && (
         <div style={{ marginBottom: spacing.xl }}>
@@ -876,6 +885,15 @@ function AppContentInner({
             <Suspense fallback={<div />}>
               <SavingsVisualiser />
             </Suspense>
+          }
+        />
+        <Route
+          path="/governance"
+          element={
+            <GovernancePage
+              transactionManager={transactionManager}
+              navigate={navigate}
+            />
           }
         />
 

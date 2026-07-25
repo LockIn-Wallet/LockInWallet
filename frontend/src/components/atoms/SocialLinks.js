@@ -19,6 +19,11 @@ const TEXT_LINKS = [
     label: "Savings Visualiser",
     title: "Savings Visualiser — project your savings strategy",
   },
+  {
+    href: "/governance",
+    label: "Governance",
+    title: "Governance — queued contract changes, security mechanisms and change history",
+  },
 ];
 
 /**
