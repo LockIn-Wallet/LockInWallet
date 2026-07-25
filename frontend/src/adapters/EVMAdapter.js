@@ -248,7 +248,10 @@ export class EVMAdapter extends BlockchainAdapter {
               userAddress,
               token.address,
             );
-            balances[key] = this.formatAmount(tokenBalance, token.decimals);
+            // Trim trailing zeros ("200.0" -> "200") to match the vault path
+            balances[key] = parseFloat(
+              this.formatAmount(tokenBalance, token.decimals),
+            ).toString();
           } catch (error) {
             console.error(`Error fetching ${key} balance:`, error);
             balances[key] = "0";
