@@ -18,6 +18,9 @@ const SavingsVisualiser = lazy(() =>
   import("../pages/SavingsVisualiser.js")
 );
 
+// youtube.com/watch?v=6JwkaLt9pf8
+const YOUTUBE_VIDEO_ID = "6JwkaLt9pf8";
+
 const HERO_TYPEWRITER_WORDS = [
   "Hackers can't drain it.",
   "You can't impulse spend it.",
@@ -101,6 +104,19 @@ const WalletConnectionPrompt = ({
           alt="LockIn Wallet"
           style={homeStyles.mediaImage}
         />
+      </div>
+
+      <div style={homeStyles.mediaSection}>
+        <div style={homeStyles.mediaEmbed}>
+          <iframe
+            src={`https://www.youtube-nocookie.com/embed/${YOUTUBE_VIDEO_ID}`}
+            title="LockIn Wallet"
+            style={homeStyles.mediaEmbedFrame}
+            allow="accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+            referrerPolicy="strict-origin-when-cross-origin"
+            allowFullScreen
+          />
+        </div>
       </div>
 
       <div style={homeStyles.mediaSection}>

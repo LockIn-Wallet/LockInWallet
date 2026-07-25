@@ -80,7 +80,7 @@ const TimeLockExplainer = () => {
       {/* Beats 1 + 2: your limits, spent from all at once, refilling on their own clocks */}
       <p style={homeStyles.blockTitle}>
         You can instantly withdraw from the smallest limit & wait for it to
-        recharge.
+        reset.
       </p>
       {/* <p style={homeStyles.blockSubtitle}>
          Hourly, daily, weekly — your numbers, chosen by you.A withdrawal isn't

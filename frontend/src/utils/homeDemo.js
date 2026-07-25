@@ -81,7 +81,8 @@ export const secondsUntilBoundary = (boundary, date = new Date()) =>
 
 // Deterministic "live" pool value: grows through the period, resets at payout
 export const prizePoolValue = (tier, date = new Date()) =>
-  tier.baseAmount + secondsIntoPeriod(tier.boundary, date) * tier.growthPerSecond;
+  tier.baseAmount +
+  secondsIntoPeriod(tier.boundary, date) * tier.growthPerSecond;
 
 // Full pool value at the moment of payout (end of period)
 export const prizePayoutValue = (tier) =>
@@ -131,16 +132,16 @@ export const SUPPORTED_CHAINS = [
       "Ethereum mainnet support is in progress, for balances where paying more gas per withdrawal is worth settling directly on L1.",
     bestFor: "Built for bigger amounts",
   },
-  {
-    key: "solana",
-    name: "Solana",
-    live: false,
-    status: "Underway",
-    tagline: "Same vault, different chain",
-    detail:
-      "The Solana program mirrors the same limits and 24-hour timelocks. It's built and being hardened ahead of launch.",
-    bestFor: "Coming soon",
-  },
+  // {
+  //   key: "solana",
+  //   name: "Solana",
+  //   live: false,
+  //   status: "Underway",
+  //   tagline: "Same vault, different chain",
+  //   detail:
+  //     "The Solana program mirrors the same limits and 24-hour timelocks. It's built and being hardened ahead of launch.",
+  //   bestFor: "Coming soon",
+  // },
 ];
 
 // Bypassing a limit is gated by a flat on-chain delay, whatever period you
@@ -214,7 +215,7 @@ export const getLimitTimeline = (elapsed) => {
     if (elapsed < withdrawal.atMs) return;
 
     const accepted = DEMO_LIMIT_BUCKETS.every(
-      (bucket) => spent + withdrawal.amount <= bucket.limit
+      (bucket) => spent + withdrawal.amount <= bucket.limit,
     );
     if (accepted) spent += withdrawal.amount;
 
@@ -230,8 +231,8 @@ export const getLimitTimeline = (elapsed) => {
   const progress = refilled
     ? 1
     : waiting
-      ? (elapsed - refillStartMs) / (refillEndMs - refillStartMs)
-      : 0;
+    ? (elapsed - refillStartMs) / (refillEndMs - refillStartMs)
+    : 0;
 
   return {
     spent,
@@ -240,7 +241,7 @@ export const getLimitTimeline = (elapsed) => {
     refilled,
     // Countdown to the tightest bucket's own reset — one hour, not a timelock
     refillSecondsRemaining: Math.ceil(
-      PERIOD_SECONDS[tightest.boundary] * (1 - progress)
+      PERIOD_SECONDS[tightest.boundary] * (1 - progress),
     ),
   };
 };

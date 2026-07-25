@@ -693,6 +693,27 @@ export const homeStyles = {
     boxShadow: "0 4px 12px rgba(0, 0, 0, 0.2)",
   },
 
+  // Responsive 16:9 wrapper for embedded video
+  mediaEmbed: {
+    position: "relative",
+    width: "100%",
+    maxWidth: "700px",
+    margin: "0 auto",
+    paddingTop: "56.25%",
+    borderRadius: borderRadius.lg,
+    overflow: "hidden",
+    boxShadow: "0 4px 12px rgba(0, 0, 0, 0.2)",
+  },
+
+  mediaEmbedFrame: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    width: "100%",
+    height: "100%",
+    border: "none",
+  },
+
   mediaVideo: {
     maxWidth: "100%",
     height: "auto",
