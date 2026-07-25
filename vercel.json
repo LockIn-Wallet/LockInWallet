@@ -8,6 +8,10 @@
     "DISABLE_ESLINT_PLUGIN": "true"
   },
   "rewrites": [
-    { "source": "/savings-visualiser", "destination": "/index.html" }
-  ]
+    {
+      "source": "/(.*)",
+      "destination": "/"
+    }
+  ],
+  "cleanUrls": true
 }
