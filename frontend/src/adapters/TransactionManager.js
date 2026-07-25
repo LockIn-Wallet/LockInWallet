@@ -589,7 +589,11 @@ export class TransactionManager {
   // ---- Withdrawal destinations (personal vault compat) ----
 
   async addWithdrawalAddress(title, destinationAddress) {
-    if (this._usesLegacyAccount()) return this.getAdapter().addWithdrawalDestinationDirect(destinationAddress, title);
+    if (this._usesLegacyAccount()) {
+      // Routes to a direct add before lock-in and to the 24h timelock
+      // request after — the contract rejects direct adds once committed
+      return this.getAdapter().addWithdrawalDestination(destinationAddress, title);
+    }
     this._requireCapability("destinations");
     return this.getAdapter().addWithdrawalDestination(this._requireActiveVault(), destinationAddress, title);
   }

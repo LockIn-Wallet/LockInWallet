@@ -63,3 +63,26 @@ describe('TransactionManager active-vault restore', () => {
     expect(getVaultInfo).not.toHaveBeenCalled();
   });
 });
+
+describe('TransactionManager withdrawal address routing (legacy account)', () => {
+  test('routes adds through the commit-aware adapter method, never the direct add', async () => {
+    // The contract rejects direct adds after lock-in ("use timelock method"),
+    // so the manager must delegate to addWithdrawalDestination, which picks
+    // direct vs. timelock request based on commit status
+    const adapter = {
+      userAddress: WALLET,
+      addWithdrawalDestination: jest.fn().mockResolvedValue('0xhash'),
+      addWithdrawalDestinationDirect: jest.fn(),
+    };
+    const tm = makeTm(adapter);
+
+    const hash = await tm.addWithdrawalAddress('binance', '0xC0ffee254729296a45a3885639AC7E10F9d54979');
+
+    expect(hash).toBe('0xhash');
+    expect(adapter.addWithdrawalDestination).toHaveBeenCalledWith(
+      '0xC0ffee254729296a45a3885639AC7E10F9d54979',
+      'binance'
+    );
+    expect(adapter.addWithdrawalDestinationDirect).not.toHaveBeenCalled();
+  });
+});
