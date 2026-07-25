@@ -705,8 +705,9 @@ function AppContentInner({
     const address = await web3Signer.getAddress();
     setEvmUserAddress(address);
 
+    let txManager = null;
     try {
-      await initializeTransactionManager(networkType, selectedNetwork, {
+      txManager = await initializeTransactionManager(networkType, selectedNetwork, {
         provider: web3Provider,
         signer: web3Signer,
       });
@@ -715,11 +716,15 @@ function AppContentInner({
     }
 
     try {
-      const setupCommitted = await safeContractCall(
-        () => savings.isSetupCommitted(),
-        circuitBreakers.contracts
-      );
-      setIsSetupCommitted(setupCommitted);
+      if (txManager) {
+        // Setup status lives in the ProposalSystemModule — the adapter
+        // resolves it through the module registry
+        const setupCommitted = await safeContractCall(
+          () => txManager.getIsSetupCommitted(address),
+          circuitBreakers.contracts
+        );
+        setIsSetupCommitted(!!setupCommitted);
+      }
     } catch (error) {
       console.error("Error checking setup status:", error);
     }

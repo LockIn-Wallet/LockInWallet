@@ -38,7 +38,7 @@ export class TransactionManager {
       throw new Error(`Unsupported network type: ${networkType}`);
     }
 
-    this._restoreActiveVault();
+    await this._restoreActiveVault();
     return this;
   }
 
@@ -48,10 +48,22 @@ export class TransactionManager {
     return this.getAdapter().userAddress || null;
   }
 
-  _restoreActiveVault() {
+  async _restoreActiveVault() {
     const walletAddr = this._walletKey();
     if (!walletAddr) return;
-    this.activeVaultAddress = localStorage.getItem(`${ACTIVE_VAULT_KEY}_${walletAddr}`) || null;
+    const stored = localStorage.getItem(`${ACTIVE_VAULT_KEY}_${walletAddr}`);
+    if (!stored) return;
+
+    // A stored selection can outlive the chain it was made on (e.g. a local
+    // chain reset) — a stale vault would silently swallow every vault-scoped
+    // read, so validate it and fall back to the default account if it's gone
+    const info = await this.getAdapter().getVaultInfo(stored).catch(() => null);
+    if (info) {
+      this.activeVaultAddress = stored;
+    } else {
+      localStorage.removeItem(`${ACTIVE_VAULT_KEY}_${walletAddr}`);
+      this.activeVaultAddress = null;
+    }
   }
 
   /** Select which vault the main wallet UI operates on (null = personal). */
