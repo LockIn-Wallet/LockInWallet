@@ -611,6 +611,7 @@ export class EVMAdapter extends BlockchainAdapter {
 
       console.log("🔄 Executing EVM proposal:", proposalId);
 
+      await this._refreshDevChainClock();
       // Call the contract method to execute the proposal
       const proposalModule = await this._getModuleContract("proposalSystem");
       const tx = await proposalModule.executeLimitProposal(this.userAddress, proposalId);
@@ -813,6 +814,25 @@ export class EVMAdapter extends BlockchainAdapter {
     }
   }
 
+  /**
+   * Hardhat only mines blocks when transactions arrive, and gas estimation
+   * runs against the latest block's timestamp — so on an idle local chain a
+   * timelock that has elapsed in wall-clock time still fails estimation.
+   * Mine one block through a direct RPC connection (MetaMask rejects
+   * non-standard methods) to refresh the chain clock. No-op elsewhere.
+   */
+  async _refreshDevChainClock() {
+    if (this.networkConfig.chainId !== 31337) return;
+    try {
+      const rpcUrl = this.networkConfig.rpcUrls?.[0];
+      if (!rpcUrl) return;
+      const rpc = new ethers.JsonRpcProvider(rpcUrl);
+      await rpc.send("evm_mine", []);
+    } catch {
+      // Not a dev chain after all — estimation will report the real state
+    }
+  }
+
   /** Resolve a user-facing module contract through the core registry (cached). */
   async _getModuleContract(key) {
     if (!this._moduleContracts) this._moduleContracts = {};
@@ -864,6 +884,7 @@ export class EVMAdapter extends BlockchainAdapter {
   }
 
   async executeBypassWithdrawal(requestId) {
+    await this._refreshDevChainClock();
     const bypassModule = await this._getModuleContract("bypassSystem");
     const tx = await bypassModule.executeBypassWithdrawal(this.userAddress, requestId);
     await tx.wait();
@@ -1013,6 +1034,7 @@ export class EVMAdapter extends BlockchainAdapter {
     if (!this.savingsContract) throw new Error("Contract not initialized");
 
     try {
+      await this._refreshDevChainClock();
       const approvalModule = await this._getModuleContract("approvalSystem");
       const tx = await approvalModule.executeWithdrawalAddressRequest(
         this.userAddress,
