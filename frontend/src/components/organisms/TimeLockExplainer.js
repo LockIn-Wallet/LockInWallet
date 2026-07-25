@@ -4,8 +4,7 @@ import { homeStyles, getBarFillStyle, colors } from "../../styles";
 
 import {
   LIMIT_SIM,
-  TIMELOCK_HOURS,
-  ESCAPE_ROUTES,
+  timelockSeconds,
   getLimitTimeline,
   bucketState,
   tightestBucket,
@@ -16,6 +15,10 @@ const pad = (value) => String(value).padStart(2, "0");
 
 const formatClock = (totalSeconds) =>
   `${pad(Math.floor(totalSeconds / 60))}:${pad(totalSeconds % 60)}`;
+
+// hh:mm:ss for the 24-hour timelock
+const formatTimelock = (totalSeconds) =>
+  `${pad(Math.floor(totalSeconds / 3600))}:${formatClock(totalSeconds % 3600)}`;
 
 /**
  * TimeLockExplainer - the three-beat walkthrough of how limits behave:
@@ -40,6 +43,14 @@ const TimeLockExplainer = () => {
   const tightest = tightestBucket();
   const buckets = bucketState(spent, refilled ? [tightest.key] : []);
 
+  // The lock only starts once the rejected withdrawal is pushed through as a
+  // bypass request — before that there is nothing counting down
+  const rejectedAtMs = event && !event.accepted ? event.atMs : null;
+  const bypassRequested = rejectedAtMs !== null;
+  const timelockRemaining = bypassRequested
+    ? timelockSeconds() - Math.floor((elapsed - rejectedAtMs) / 1000)
+    : timelockSeconds();
+
   const ticketStyle = !event
     ? homeStyles.withdrawTicket
     : event.accepted
@@ -53,7 +64,7 @@ const TimeLockExplainer = () => {
     : !event
     ? "💸 Withdraw whatever you need…"
     : event.accepted
-    ? `✅ ${formatUSD(event.amount)} — gone in seconds, no approval needed`
+    ? `✅ ${formatUSD(event.amount)} — withdrawn instantly`
     : `🛑 ${formatUSD(
         event.amount,
       )} — over your own ${tightest.name.toLowerCase()} limit`;
@@ -140,7 +151,7 @@ const TimeLockExplainer = () => {
                   </span>
                 ) : (
                   <>
-                    <span>Refills in</span>
+                    <span>Limit resets in</span>
                     <span style={homeStyles.bucketClock}>
                       {formatClock(refillSecondsRemaining)}
                     </span>
@@ -158,87 +169,17 @@ const TimeLockExplainer = () => {
         clock, without you doing anything.
       </p>
 
-      <hr style={homeStyles.blockDivider} />
-
-      {/* Beat 3: forcing it is the slow lane */}
-      <p style={homeStyles.blockTitle}>
-        2️⃣ Want more, right now? Forcing it is the slow lane.
-      </p>
-      <p style={homeStyles.blockSubtitle}>
-        You can ask the contract to bypass a limit — but the request is frozen
-        for {TIMELOCK_HOURS} hours before it can move a cent. Compare that to
-        simply waiting for the limit to refill.
-      </p>
-
-      <div style={homeStyles.compareTableWrap}>
-        <table style={homeStyles.compareTable}>
-          <thead>
-            <tr>
-              <th
-                style={{
-                  ...homeStyles.compareHeadCell,
-                  ...homeStyles.compareHeadCellLeft,
-                }}
-              >
-                Limit you hit
-              </th>
-              <th style={homeStyles.compareHeadCell}>Just wait for it</th>
-              <th style={homeStyles.compareHeadCell}>Bypass it</th>
-            </tr>
-          </thead>
-          <tbody>
-            {ESCAPE_ROUTES.map((route) => (
-              <tr key={route.key}>
-                <td style={homeStyles.comparePeriodCell}>
-                  {route.emoji} {route.name}
-                </td>
-                <td
-                  style={{
-                    ...homeStyles.compareCell,
-                    ...(route.refillWins
-                      ? homeStyles.compareWinner
-                      : homeStyles.compareLoser),
-                  }}
-                >
-                  {route.refillWait}
-                  {route.refillWins && " ✅"}
-                </td>
-                <td
-                  style={{
-                    ...homeStyles.compareCell,
-                    ...(route.refillWins || route.tie
-                      ? homeStyles.compareLoser
-                      : homeStyles.compareWinner),
-                  }}
-                >
-                  {route.bypassWait}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      {/* <p style={homeStyles.compareVerdict}>
-        There is no fast lane. Beating your hourly limit costs you a whole day —
-        and the big ones cost you a day spent in plain sight.
-      </p> */}
-
-      <div style={homeStyles.lockActionRow}>
-        <span style={homeStyles.lockTag}>
-          🔔 You're alerted the second it opens
-        </span>
-        <span style={homeStyles.lockTag}>
-          👁️ Visible on-chain the whole time
-        </span>
-        <span style={homeStyles.lockTag}>✋ Cancel it instantly</span>
-      </div>
-
-      <p style={homeStyles.captionText}>
-        That's the whole product: limits you set, that only time can lift. It's
-        why an impulse at 2am doesn't cost you your savings — and why someone
-        holding your keys can't either.
-      </p>
+      {/* Beat 3: the lock only exists once someone tries to force a limit */}
+      {bypassRequested && (
+        <div style={homeStyles.bypassStrip} className="home-fade-up">
+          <span style={homeStyles.bypassLabel}>
+            🔓 Bypassing the limit requires the wait time
+          </span>
+          <span style={homeStyles.bypassClock}>
+            {formatTimelock(timelockRemaining)}
+          </span>
+        </div>
+      )}
     </div>
   );
 };

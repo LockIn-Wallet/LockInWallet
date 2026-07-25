@@ -1,4 +1,4 @@
-import React from "react";
+import React, { Suspense, lazy } from "react";
 
 import bobbyLeeVideo from "../../assets/video/bobby_lee.mp4";
 import lockinWalletImage from "../../assets/images/lockinwallet.jpg";
@@ -11,6 +11,12 @@ import ChainAvailability from "../organisms/ChainAvailability.js";
 import PrizeSavingsShowcase from "../organisms/PrizeSavingsShowcase.js";
 
 import { homeStyles } from "../../styles";
+
+// Shares the lazy chunk with the standalone page, so chart.js still only
+// downloads when this section is actually reached
+const SavingsVisualiser = lazy(() =>
+  import("../pages/SavingsVisualiser.js")
+);
 
 const HERO_TYPEWRITER_WORDS = [
   "Hackers can't drain it.",
@@ -75,6 +81,15 @@ const WalletConnectionPrompt = ({
 
       {/* Chain rollout: Optimism live, Ethereum and Solana underway */}
       <ChainAvailability />
+
+      {/* Savings Visualiser — compact embed, full dashboard one click away */}
+      <Suspense fallback={null}>
+        <SavingsVisualiser
+          compact
+          title="🔮 Where does this actually get me?"
+          subtitle="Set your split, and watch four decades play out."
+        />
+      </Suspense>
 
       {/* Feature demo: PoolTogether-style no-loss prize savings */}
       <PrizeSavingsShowcase />

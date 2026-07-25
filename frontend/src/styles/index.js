@@ -87,6 +87,13 @@ export const styles = {
       padding: theme.spacing.xxl,
       position: "relative", // Allow absolute positioning within container
     },
+    // Wider shell for dashboard-style pages (e.g. the Savings Visualiser)
+    containerWide: {
+      maxWidth: "1400px",
+      margin: "0 auto",
+      padding: theme.spacing.xxl,
+      position: "relative",
+    },
     title: {
       margin: `0 0 ${theme.spacing.xxl} 0`,
       fontSize: theme.fontSize.title,

@@ -498,83 +498,31 @@ export const homeStyles = {
     fontSize: fontSize.lg,
   },
 
-  // Wait-vs-bypass comparison table
-  compareTableWrap: {
-    overflowX: "auto",
-  },
-
-  compareTable: {
-    width: "100%",
-    borderCollapse: "collapse",
-    fontSize: fontSize.normal,
-    color: colors.text.secondary,
-  },
-
-  compareHeadCell: {
-    fontSize: fontSize.xs,
-    fontWeight: fontWeight.semibold,
-    color: colors.text.muted,
-    textTransform: "uppercase",
-    letterSpacing: "1px",
-    textAlign: "center",
-    padding: `${spacing.sm} ${spacing.md}`,
-    borderBottom: `1px solid ${colors.border.default}`,
-  },
-
-  compareHeadCellLeft: {
-    textAlign: "left",
-  },
-
-  compareCell: {
-    textAlign: "center",
-    padding: `${spacing.lg} ${spacing.md}`,
-    borderBottom: `1px solid ${colors.border.default}`,
-    whiteSpace: "nowrap",
-  },
-
-  comparePeriodCell: {
-    textAlign: "left",
-    fontWeight: fontWeight.semibold,
-    color: colors.text.primary,
-    padding: `${spacing.lg} ${spacing.md}`,
-    borderBottom: `1px solid ${colors.border.default}`,
-  },
-
-  compareWinner: {
-    color: colors.success.light,
-    fontWeight: fontWeight.bold,
-  },
-
-  compareLoser: {
-    color: colors.text.gray,
-  },
-
-  compareVerdict: {
-    fontSize: fontSize.lg,
-    fontWeight: fontWeight.semibold,
-    color: colors.text.primary,
-    textAlign: "center",
-    lineHeight: 1.6,
-    margin: `${spacing.xxl} auto 0 auto`,
-    maxWidth: "620px",
-  },
-
-  lockActionRow: {
+  // One-line bypass / limit-change strip with its 24h countdown
+  bypassStrip: {
     display: "flex",
-    gap: spacing.sm,
-    justifyContent: "center",
+    alignItems: "center",
+    justifyContent: "space-between",
     flexWrap: "wrap",
-    marginTop: spacing.md,
+    gap: spacing.lg,
+    backgroundColor: colors.background.dark,
+    border: `1px solid ${colors.warning.main}`,
+    borderRadius: borderRadius.lg,
+    padding: `${spacing.lg} ${spacing.xl}`,
   },
 
-  lockTag: {
-    fontSize: fontSize.xs,
+  bypassLabel: {
+    fontSize: fontSize.normal,
     fontWeight: fontWeight.semibold,
-    color: colors.text.light,
-    backgroundColor: colors.background.primary,
-    border: `1px solid ${colors.border.default}`,
-    borderRadius: borderRadius.sm,
-    padding: `${spacing.xs} ${spacing.sm}`,
+    color: colors.text.primary,
+  },
+
+  bypassClock: {
+    fontSize: fontSize.xxl,
+    fontWeight: fontWeight.bold,
+    fontFamily: "monospace",
+    color: colors.warning.light,
+    whiteSpace: "nowrap",
   },
 
   // Chain availability

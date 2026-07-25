@@ -1,5 +1,19 @@
-import React, { useState, useEffect, useCallback, useRef } from "react";
-import { BrowserRouter, Routes, Route, Navigate, useNavigate } from "react-router-dom";
+import React, {
+  useState,
+  useEffect,
+  useCallback,
+  useRef,
+  lazy,
+  Suspense,
+} from "react";
+import {
+  BrowserRouter,
+  Routes,
+  Route,
+  Navigate,
+  useNavigate,
+  useLocation,
+} from "react-router-dom";
 import { ethers } from "ethers";
 import SavingsABI from "./SavingsABI.json";
 import { useNetworkManager } from "./hooks/useNetworkManager.js";
@@ -60,6 +74,11 @@ import ReferralSection from "./components/organisms/ReferralSection.js";
 import VaultCard from "./components/molecules/VaultCard.js";
 
 import CreateVault from "./components/pages/CreateVault.js";
+
+// Split out so chart.js only downloads for visitors who open the visualiser
+const SavingsVisualiser = lazy(() =>
+  import("./components/pages/SavingsVisualiser.js")
+);
 
 function MainFlow({
   transactionManager,
@@ -529,6 +548,10 @@ function AppContentInner({
   const [isSetupCommitted, setIsSetupCommitted] = useState(false);
 
   const navigate = useNavigate();
+  const location = useLocation();
+
+  // The visualiser is a full dashboard — the 800px app column cramps it
+  const isWideRoute = location.pathname === "/savings-visualiser";
 
   // Capture a ?ref= referral link once on load, before any wallet connects
   useEffect(() => {
@@ -827,7 +850,7 @@ function AppContentInner({
   };
 
   return (
-    <div style={styles.app.container}>
+    <div style={isWideRoute ? styles.app.containerWide : styles.app.container}>
       <SocialLinks />
 
       <StatusHeader
@@ -845,35 +868,55 @@ function AppContentInner({
         switchNetwork={switchNetwork}
       />
 
-      {isWalletConnected && transactionManager ? (
-        <Routes>
-          <Route path="/" element={<MainFlow {...mainFlowProps} />} />
+      <Routes>
+        {/* Public — readable with or without a wallet */}
+        <Route
+          path="/savings-visualiser"
+          element={
+            <Suspense fallback={<div />}>
+              <SavingsVisualiser />
+            </Suspense>
+          }
+        />
+
+        {isWalletConnected && transactionManager ? (
+          <>
+            <Route path="/" element={<MainFlow {...mainFlowProps} />} />
+            <Route
+              path="/create"
+              element={
+                vaultsUnlocked ? (
+                  <CreateVault
+                    transactionManager={transactionManager}
+                    navigate={navigate}
+                    networkConfig={networkConfig}
+                  />
+                ) : (
+                  <Navigate to="/" replace />
+                )
+              }
+            />
+          </>
+        ) : (
           <Route
-            path="/create"
+            path="/"
             element={
-              vaultsUnlocked ? (
-                <CreateVault
-                  transactionManager={transactionManager}
-                  navigate={navigate}
-                  networkConfig={networkConfig}
-                />
-              ) : (
-                <Navigate to="/" replace />
-              )
+              <WalletConnectionPrompt
+                provider={provider}
+                networkType={networkType}
+                solanaConnected={solanaConnected}
+                solanaWallet={solanaWallet}
+                connectWallet={
+                  networkType === "solana" ? handleConnectMetaMask : connectWallet
+                }
+                onConnectPhantom={handleConnectPhantom}
+              />
             }
           />
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      ) : (
-        <WalletConnectionPrompt
-          provider={provider}
-          networkType={networkType}
-          solanaConnected={solanaConnected}
-          solanaWallet={solanaWallet}
-          connectWallet={networkType === "solana" ? handleConnectMetaMask : connectWallet}
-          onConnectPhantom={handleConnectPhantom}
-        />
-      )}
+        )}
+
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
 
       <Footer />
     </div>

@@ -1,4 +1,5 @@
 import React from "react";
+import { Link } from "react-router-dom";
 
 // Import styles
 import {
@@ -58,16 +59,18 @@ const StatusHeader = ({
     );
   return (
     <div style={layoutStyles.headerSection}>
-      {/* Main Logo */}
-      <img
-        src={require("../../assets/images/logo.png")}
-        alt="LockIn Wallet"
-        style={styles.app.logo}
-        onError={(e) => {
-          e.target.style.display = "none";
-          e.target.nextSibling.style.display = "block";
-        }}
-      />
+      {/* Main Logo — doubles as the link home */}
+      <Link to="/" aria-label="LockIn Wallet home">
+        <img
+          src={require("../../assets/images/logo.png")}
+          alt="LockIn Wallet"
+          style={styles.app.logo}
+          onError={(e) => {
+            e.target.style.display = "none";
+            e.target.parentElement.nextSibling.style.display = "block";
+          }}
+        />
+      </Link>
       <h1 style={{ ...styles.app.title, display: "none", textAlign: "center" }}>
         🔒 LockIn Wallet
       </h1>
