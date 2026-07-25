@@ -194,8 +194,10 @@ async function main() {
       }
     }
 
-    // Configure proxy deployment fee via module (3 USDT)
-    if (usdtAddress) {
+    // Configure proxy deployment fee via module (3 USDT).
+    // Fresh deployments only — upgrades must never overwrite the live fee
+    // model (production charges native ETH with its own treasury settings)
+    if (!isUpgrade && usdtAddress) {
       console.log("\n💰 Configuring proxy deployment fee...");
       tx = await proxyDeploymentModule.setPaymentToken(usdtAddress);
       await tx.wait();

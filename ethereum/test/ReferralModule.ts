@@ -219,11 +219,16 @@ describe("ReferralModule", function () {
       await proposalModule.connect(user1).commitSetupWithReferrer(dailyLimit, weeklyLimit, monthlyLimit, referrer.address);
       const [referrerBefore, referredAtBefore] = await referralModule.getReferrer(user1.address);
 
+      // Upgrade manually (new implementation + upgradeToAndCall) — the OZ
+      // plugin's manifest mis-associates reused snapshot addresses across
+      // test files; layout validation is exercised by the deploy scripts
       const ReferralModule = await hre.ethers.getContractFactory("ReferralModule");
-      const upgraded = await hre.upgrades.upgradeProxy(referralModule.target, ReferralModule);
-      await upgraded.waitForDeployment();
+      const newImpl = await ReferralModule.deploy();
+      await newImpl.waitForDeployment();
+      await referralModule.upgradeToAndCall(newImpl.target, "0x");
+      const upgraded = referralModule;
 
-      expect(upgraded.target).to.equal(referralModule.target);
+      expect(await hre.upgrades.erc1967.getImplementationAddress(referralModule.target as string)).to.equal(newImpl.target);
       const [referrerAfter, referredAtAfter] = await upgraded.getReferrer(user1.address);
       expect(referrerAfter).to.equal(referrerBefore);
       expect(referredAtAfter).to.equal(referredAtBefore);
