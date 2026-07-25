@@ -23,6 +23,7 @@ const MODULES = [
   { key: "POOL_TOGETHER", abiFile: "PoolTogetherModuleABI.json", probe: (c) => c.hasVault(ETH) },
   { key: "VAULT_SYSTEM", abiFile: "VaultSystemModuleABI.json", probe: (c) => c.getVaultCount() },
   { key: "REFERRAL", abiFile: "ReferralModuleABI.json", probe: (c) => c.getReferralCount(TEST_ADDRESS) },
+  { key: "RECOVERY_SYSTEM", abiFile: "RecoverySystemModuleABI.json", probe: (c) => c.isFrozen(TEST_ADDRESS) },
 ];
 
 async function validateDeployment() {

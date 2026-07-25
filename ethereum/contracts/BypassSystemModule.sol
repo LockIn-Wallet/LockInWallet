@@ -86,6 +86,7 @@ contract BypassSystemModule is Initializable, UUPSUpgradeable, OwnableUpgradeabl
         string calldata skipPeriod,
         address token
     ) external onlyAuthorizedOrSelf(user) returns (bytes32 requestId) {
+        enforceNotFrozen(savingsCore, user);
         require(amount > 0 && bytes(skipPeriod).length > 0, "Invalid input");
         require(amount <= savingsCore.getTokenBalance(user, token), "Insufficient balance");
 
@@ -115,6 +116,7 @@ contract BypassSystemModule is Initializable, UUPSUpgradeable, OwnableUpgradeabl
     }
 
     function executeBypassWithdrawal(address user, bytes32 requestId) external onlyAuthorizedOrSelf(user) nonReentrant {
+        enforceNotFrozen(savingsCore, user);
         BypassRequest storage request = userBypassRequests[user][requestId];
 
         require(request.exists && !request.executed, "Invalid request");

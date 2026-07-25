@@ -1,6 +1,6 @@
 {
   "name": "savings-wallet-ethereum",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Ethereum/EVM smart contracts for the savings wallet DApp",
   "main": "index.js",
   "scripts": {

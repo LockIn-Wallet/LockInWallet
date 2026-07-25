@@ -71,6 +71,7 @@ import SetupCommitStep from "./components/organisms/SetupCommitStep.js";
 import WithdrawalAddressSetupStep from "./components/organisms/WithdrawalAddressSetupStep.js";
 import WithdrawalInterface from "./components/organisms/WithdrawalInterface.js";
 import ReferralSection from "./components/organisms/ReferralSection.js";
+import RecoverySection from "./components/organisms/RecoverySection.js";
 import UpgradeBanner from "./components/molecules/UpgradeBanner.js";
 import GovernancePage from "./components/pages/GovernancePage.js";
 import VaultCard from "./components/molecules/VaultCard.js";
@@ -499,6 +500,18 @@ function MainFlow({
       {isSetupCommitted && transactionManager?.supportsReferrals?.() && (
         <CollapsibleSection title="Invite & Earn" icon="🤝" defaultExpanded={false}>
           <ReferralSection
+            transactionManager={transactionManager}
+            userAddress={getCurrentUserAddress()}
+          />
+        </CollapsibleSection>
+      )}
+
+      {/* Recovery Protection (shown whenever the chain supports it, so a
+          recovery key can be registered before OR after lock-in and a cold
+          key holder can manage a compromised account from here) */}
+      {transactionManager?.supportsRecovery?.() && (
+        <CollapsibleSection title="Recovery Protection" icon="🛟" defaultExpanded={false}>
+          <RecoverySection
             transactionManager={transactionManager}
             userAddress={getCurrentUserAddress()}
           />

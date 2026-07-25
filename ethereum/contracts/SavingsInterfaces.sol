@@ -308,6 +308,37 @@ interface IVaultSystemModule {
     event PenaltyRewardsClaimed(uint256 indexed vaultId, address indexed member, uint256 amount);
 }
 
+interface IRecoverySystemModule {
+    // Recovery key management
+    function setRecoveryAddress(address recovery) external;
+    function updateRecoveryAddress(address user, address newRecovery) external;
+    function requestRecoveryAddressChange(address newRecovery) external;
+    function executeRecoveryAddressChange() external;
+    function cancelRecoveryAddressChange(address user) external;
+
+    // Freeze management
+    function freeze(address user) external;
+    function unfreeze(address user) external;
+
+    // Ownership recovery
+    function recoverOwnership(address user, address newOwner, address[] calldata tokens) external;
+
+    // View functions
+    function getRecoveryConfig(address user) external view returns (address recoveryAddress, bool frozen, bool recovered);
+    function getPendingRecoveryAddressChange(address user) external view returns (address newRecovery, uint256 executeAfter, bool exists);
+    function isFrozen(address user) external view returns (bool);
+    function requireNotFrozen(address user) external view;
+
+    // Events
+    event RecoveryAddressSet(address indexed user, address indexed recovery, address setBy);
+    event RecoveryAddressChangeRequested(address indexed user, address indexed newRecovery, uint256 executeAfter);
+    event RecoveryAddressChangeExecuted(address indexed user, address indexed newRecovery);
+    event RecoveryAddressChangeCancelled(address indexed user, address cancelledBy);
+    event AccountFrozen(address indexed user, address frozenBy);
+    event AccountUnfrozen(address indexed user);
+    event OwnershipRecovered(address indexed oldOwner, address indexed newOwner, uint256 tokenCount);
+}
+
 interface IReferralModule {
     // Referral recording
     function recordReferral(address user, address referrer) external;
@@ -376,4 +407,17 @@ library ModuleIds {
     bytes32 public constant POOL_TOGETHER = keccak256("POOL_TOGETHER");
     bytes32 public constant VAULT_SYSTEM = keccak256("VAULT_SYSTEM");
     bytes32 public constant REFERRAL = keccak256("REFERRAL");
+    bytes32 public constant RECOVERY_SYSTEM = keccak256("RECOVERY_SYSTEM");
+}
+
+// ========== SHARED GUARDS ==========
+
+/// @notice Revert when `user`'s account is frozen or recovered. No-op while
+/// the recovery module is not registered, so existing deployments keep
+/// working before the module rollout.
+function enforceNotFrozen(ISavingsCore core, address user) view {
+    address recoveryModule = core.getModule(ModuleIds.RECOVERY_SYSTEM);
+    if (recoveryModule != address(0)) {
+        IRecoverySystemModule(recoveryModule).requireNotFrozen(user);
+    }
 }

@@ -23,6 +23,28 @@ these notes on the in-app **Governance** page before they execute.
 
 Nothing yet.
 
+## [0.3.0] - 2026-07-26
+
+### Added
+- **Seed-compromise recovery system** (EVM): users can register a cold
+  recovery key that can instantly freeze the account, veto recovery-key
+  changes, and move the whole account (core balances) to a fresh address via
+  the new `RecoverySystemModule`. The hot key can only replace the recovery
+  key through a 30-day cancellable timelock, so an attacker holding the seed
+  can never outrun the real owner's cold key. While frozen, all outgoing
+  paths are blocked — withdrawals, bypass requests/executions,
+  withdrawal-address requests/executions, and vault withdrawals — while
+  deposits keep working. *On-chain: new `RecoverySystemModule` proxy +
+  registration; in-place upgrades of `SavingsCore`, `BypassSystemModule`,
+  `ApprovalSystemModule`, and `VaultSystemModule` adding freeze checks; no
+  storage migration; accounts without a recovery key are unaffected.*
+- **Recovery Protection section** in the app: register a recovery key
+  (before or after lock-in), see frozen/pending-change status, freeze
+  instantly, veto or apply recovery-key changes — plus a recovery-key
+  console to freeze/unfreeze a protected account and move it to a fresh
+  address when this wallet is its cold key. Unified adapter interface with
+  graceful no-op on chains without the module (Solana parity later).
+
 ## [0.2.0] - 2026-07-25
 
 ### Added

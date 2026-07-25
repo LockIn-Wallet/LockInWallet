@@ -139,6 +139,7 @@ async function main() {
       poolTogether: await deployOrUpgradeModule("PoolTogetherModule", "POOL_TOGETHER", "🎰"),
       vaultSystem: await deployOrUpgradeModule("VaultSystemModule", "VAULT_SYSTEM", "🏦"),
       referral: await deployOrUpgradeModule("ReferralModule", "REFERRAL", "🤝"),
+      recoverySystem: await deployOrUpgradeModule("RecoverySystemModule", "RECOVERY_SYSTEM", "🛟"),
     };
     for (const [key, m] of Object.entries(modules)) moduleAddresses[key] = m.address;
     const proxyDeploymentModule = modules.proxyDeployment.contract;
@@ -365,6 +366,11 @@ async function main() {
       fs.writeFileSync(frontendReferralABIPath, JSON.stringify(referralArtifact.abi, null, 2));
       console.log("✅ ReferralModule ABI updated");
 
+      const recoverySystemArtifact = require("../artifacts/contracts/RecoverySystemModule.sol/RecoverySystemModule.json");
+      const frontendRecoverySystemABIPath = path.join(__dirname, "../../frontend/src/RecoverySystemModuleABI.json");
+      fs.writeFileSync(frontendRecoverySystemABIPath, JSON.stringify(recoverySystemArtifact.abi, null, 2));
+      console.log("✅ RecoverySystemModule ABI updated");
+
       // Copy MockUSDT ABI
       if (usdtAddress) {
         const usdtArtifact = require("../artifacts/contracts/MockUSDT.sol/MockUSDT.json");
@@ -397,6 +403,7 @@ async function main() {
     console.log(`  ProxyDeployment:     ${moduleAddresses.proxyDeployment}`);
     console.log(`  PoolTogether:        ${moduleAddresses.poolTogether}`);
     console.log(`  VaultSystem:         ${moduleAddresses.vaultSystem}`);
+    console.log(`  RecoverySystem:      ${moduleAddresses.recoverySystem}`);
     if (usdtAddress) {
       console.log(`MockUSDT Address:      ${usdtAddress}`);
     }

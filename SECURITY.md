@@ -19,10 +19,43 @@ vulnerability.
 | Emergency bypass (full withdrawal) | 24h request timelock | Guarantees *you* can always exit completely within a day |
 | Vault penalty withdrawal | instant (penalty applies) | Immediate exit from vaults at a known cost |
 | Referral record | written once at lock-in, immutable | Retroactive tampering with attribution |
+| Account freeze (recovery key or account key) | instant | Stops every outgoing path the moment a compromise is noticed |
+| Unfreeze / ownership recovery | instant, **recovery key only** | Moving the account to a fresh key that the attacker never held |
+| Recovery key change from the account key | 30-day cancellable timelock | An attacker with your seed rotating out your recovery key |
 
 The emergency bypass is the cornerstone: whatever happens — including a
 contract upgrade you disagree with — you can start a full exit immediately
 and have your funds out in 24 hours.
+
+## Seed-compromise recovery model
+
+Once a seed phrase leaks, signatures alone cannot distinguish the owner from
+the attacker. The recovery system introduces the missing asymmetry: an
+optional **cold recovery key** (hardware wallet or offline seed, registered
+in advance and never used day-to-day).
+
+The rules are ordered so that defensive actions always outrun offensive
+ones:
+
+- **Freeze is instant** and allowed from either key. Worst case an attacker
+  freezes the account — that locks funds until the recovery key unfreezes;
+  it never moves money.
+- **Unfreeze and ownership recovery are recovery-key only.** Recovery moves
+  the balances to a fresh address, permanently disables the old one, and
+  cancels everything the attacker had queued.
+- **The account key can only replace the recovery key through a 30-day
+  public timelock** that the recovery key can cancel at any moment — an
+  attacker can never outrun the cold key.
+
+Trust assumptions, stated honestly: the protection only exists if the
+recovery key was registered **before** the compromise, and it shifts trust
+to that cold key — if *both* keys leak, the recovery key wins every race and
+can take the account. Store it accordingly (hardware wallet or paper,
+offline, separate location). Accounts that never register a recovery key
+behave exactly as before. The recovery timelock (30 days) intentionally
+dwarfs the 24h bypass and 48h governance delays. Note that a frozen account
+deliberately blocks the emergency bypass too — while frozen, the exit path
+is ownership recovery via the cold key, not the bypass.
 
 ## Upgrade trust model — current state, honestly
 
@@ -75,4 +108,4 @@ above.
 - Contract addresses per network: `frontend/src/networkConfig.json`
 - Release history with on-chain effects: [CHANGELOG.md](CHANGELOG.md)
 - Deployment validation: `npm run validate-deployment --workspace=ethereum`
-  probes the core kernel and all 8 modules through the on-chain registry.
+  probes the core kernel and all 9 modules through the on-chain registry.

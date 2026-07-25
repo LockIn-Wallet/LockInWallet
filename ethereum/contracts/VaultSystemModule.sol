@@ -225,6 +225,7 @@ contract VaultSystemModule is Initializable, UUPSUpgradeable, OwnableUpgradeable
 
     /// @notice Withdraw within the vault's spending limits.
     function withdraw(uint256 vaultId, uint256 amount) external nonReentrant onlyMember(vaultId) {
+        enforceNotFrozen(savingsCore, msg.sender);
         VaultInfo storage vault = _activeVault(vaultId);
         VaultMemberInfo storage member = vaultMembers[vaultId][msg.sender];
         require(amount > 0 && amount <= member.balance, "Invalid amount");
@@ -243,6 +244,7 @@ contract VaultSystemModule is Initializable, UUPSUpgradeable, OwnableUpgradeable
 
     /// @notice Withdraw bypassing spending limits by paying the vault's penalty rate.
     function withdrawWithPenalty(uint256 vaultId, uint256 amount) external nonReentrant onlyMember(vaultId) {
+        enforceNotFrozen(savingsCore, msg.sender);
         VaultInfo storage vault = _activeVault(vaultId);
         VaultMemberInfo storage member = vaultMembers[vaultId][msg.sender];
         require(amount > 0 && amount <= member.balance, "Invalid amount");
@@ -273,6 +275,7 @@ contract VaultSystemModule is Initializable, UUPSUpgradeable, OwnableUpgradeable
     }
 
     function claimPenaltyRewards(uint256 vaultId) external nonReentrant onlyMember(vaultId) {
+        enforceNotFrozen(savingsCore, msg.sender);
         VaultInfo storage vault = _activeVault(vaultId);
         VaultMemberInfo storage member = vaultMembers[vaultId][msg.sender];
 

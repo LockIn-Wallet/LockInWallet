@@ -10,7 +10,8 @@ const MODULE_IDS = {
   'ApprovalSystemModule': ethers.keccak256(ethers.toUtf8Bytes("APPROVAL_SYSTEM")),
   'ProxyDeploymentModule': ethers.keccak256(ethers.toUtf8Bytes("PROXY_DEPLOYMENT")),
   'VaultSystemModule': ethers.keccak256(ethers.toUtf8Bytes("VAULT_SYSTEM")),
-  'ReferralModule': ethers.keccak256(ethers.toUtf8Bytes("REFERRAL"))
+  'ReferralModule': ethers.keccak256(ethers.toUtf8Bytes("REFERRAL")),
+  'RecoverySystemModule': ethers.keccak256(ethers.toUtf8Bytes("RECOVERY_SYSTEM"))
 };
 
 async function main() {

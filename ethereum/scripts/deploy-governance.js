@@ -32,6 +32,7 @@ const MODULE_IDS = [
   "POOL_TOGETHER",
   "VAULT_SYSTEM",
   "REFERRAL",
+  "RECOVERY_SYSTEM",
 ];
 
 async function main() {

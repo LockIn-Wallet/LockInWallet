@@ -44,6 +44,17 @@ contract SavingsCore is Initializable, UUPSUpgradeable, OwnableUpgradeable, ISav
         _;
     }
 
+    // Blocks outgoing funds movement for accounts frozen by the recovery
+    // system. Deposits and the recovery flow itself (updateTokenBalance)
+    // stay available while frozen.
+    modifier notFrozen(address user) {
+        address recoveryModule = modules[ModuleIds.RECOVERY_SYSTEM];
+        if (recoveryModule != address(0)) {
+            IRecoverySystemModule(recoveryModule).requireNotFrozen(user);
+        }
+        _;
+    }
+
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
         _disableInitializers();
@@ -133,7 +144,7 @@ contract SavingsCore is Initializable, UUPSUpgradeable, OwnableUpgradeable, ISav
         emit Deposited(recipient, token, amount);
     }
 
-    function withdraw(address user, uint256 amount, address token) external onlyAuthorizedModule {
+    function withdraw(address user, uint256 amount, address token) external onlyAuthorizedModule notFrozen(user) {
         require(amount > 0 && amount <= userTokenBalances[user][token], "Invalid amount");
 
         userTokenBalances[user][token] -= amount;
@@ -149,7 +160,7 @@ contract SavingsCore is Initializable, UUPSUpgradeable, OwnableUpgradeable, ISav
         emit Withdrawal(user, "Module", amount, token);
     }
 
-    function withdrawAll(address user) external onlyAuthorizedModule {
+    function withdrawAll(address user) external onlyAuthorizedModule notFrozen(user) {
         // Get approval module
         IApprovalSystemModule approvalModule = IApprovalSystemModule(modules[ModuleIds.APPROVAL_SYSTEM]);
         require(address(approvalModule) != address(0), "Approval module not found");
@@ -183,7 +194,7 @@ contract SavingsCore is Initializable, UUPSUpgradeable, OwnableUpgradeable, ISav
 
     /// @notice Transfer tokens held by SavingsCore to a destination on behalf of a user
     /// @dev Only callable by authorized modules. Decreases user balance and transfers tokens.
-    function transferTokensTo(address user, address token, uint256 amount, address destination) external onlyAuthorizedModule {
+    function transferTokensTo(address user, address token, uint256 amount, address destination) external onlyAuthorizedModule notFrozen(user) {
         require(amount > 0 && amount <= userTokenBalances[user][token], "Invalid amount");
         require(destination != address(0), "Invalid destination");
         require(token != address(0), "Only ERC20 tokens supported");
@@ -199,7 +210,7 @@ contract SavingsCore is Initializable, UUPSUpgradeable, OwnableUpgradeable, ISav
     // ========== USER WITHDRAWAL FLOWS ==========
 
     // Core withdraw function with time period limits check
-    function withdraw(uint256 amount, address token) external nonReentrant {
+    function withdraw(uint256 amount, address token) external nonReentrant notFrozen(msg.sender) {
         require(amount > 0 && amount <= userTokenBalances[msg.sender][token], "Invalid amount");
 
         // Check against all active time period limits
@@ -222,7 +233,7 @@ contract SavingsCore is Initializable, UUPSUpgradeable, OwnableUpgradeable, ISav
     }
 
     // Core withdrawTo function with approval check
-    function withdrawTo(uint256 amount, address token, address destination) external nonReentrant {
+    function withdrawTo(uint256 amount, address token, address destination) external nonReentrant notFrozen(msg.sender) {
         require(amount > 0 && amount <= userTokenBalances[msg.sender][token], "Invalid amount");
         require(destination != address(0), "Invalid destination address");
 
@@ -257,7 +268,7 @@ contract SavingsCore is Initializable, UUPSUpgradeable, OwnableUpgradeable, ISav
     }
 
     // Core withdrawAll function with approval check
-    function withdrawAll() external nonReentrant {
+    function withdrawAll() external nonReentrant notFrozen(msg.sender) {
         IApprovalSystemModule approvalModule = IApprovalSystemModule(modules[ModuleIds.APPROVAL_SYSTEM]);
         require(address(approvalModule) != address(0), "Approval module not found");
 

@@ -89,6 +89,40 @@ export class BlockchainAdapter {
     return { count: 0, users: [] };
   }
 
+  // Recovery protection — default for chains without the recovery module,
+  // so components never need network conditionals
+  async getRecoveryStatus(userAddress) {
+    return { supported: false };
+  }
+
+  async setRecoveryAddress(recoveryAddress) {
+    throw new Error("Recovery protection is not available on this network yet");
+  }
+
+  async freezeAccount(targetAddress) {
+    throw new Error("Recovery protection is not available on this network yet");
+  }
+
+  async unfreezeAccount(targetAddress) {
+    throw new Error("Recovery protection is not available on this network yet");
+  }
+
+  async requestRecoveryKeyChange(newRecoveryAddress) {
+    throw new Error("Recovery protection is not available on this network yet");
+  }
+
+  async executeRecoveryKeyChange() {
+    throw new Error("Recovery protection is not available on this network yet");
+  }
+
+  async cancelRecoveryKeyChange(targetAddress) {
+    throw new Error("Recovery protection is not available on this network yet");
+  }
+
+  async recoverAccount(targetAddress, newOwnerAddress) {
+    throw new Error("Recovery protection is not available on this network yet");
+  }
+
   // Utility Methods
   formatAmount(amount, decimals) {
     throw new Error('formatAmount must be implemented by subclass');

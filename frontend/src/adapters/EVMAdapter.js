@@ -11,11 +11,13 @@ import PoolTogetherModuleABI from "../PoolTogetherModuleABI.json";
 import VaultSystemModuleABI from "../VaultSystemModuleABI.json";
 import SavingsTimelockABI from "../SavingsTimelockABI.json";
 import ReferralModuleABI from "../ReferralModuleABI.json";
+import RecoverySystemModuleABI from "../RecoverySystemModuleABI.json";
 import ERC20ABI from "../ERC20ABI.json";
 import { getTokenMeta } from "../utils/tokenUtils.js";
 
 const VAULT_SYSTEM_MODULE_ID = ethers.keccak256(ethers.toUtf8Bytes("VAULT_SYSTEM"));
 const REFERRAL_MODULE_ID = ethers.keccak256(ethers.toUtf8Bytes("REFERRAL"));
+const RECOVERY_SYSTEM_MODULE_ID = ethers.keccak256(ethers.toUtf8Bytes("RECOVERY_SYSTEM"));
 const REFERRAL_PAGE_SIZE = 100;
 
 // User-facing modules are called directly (Pattern B): each authenticates the
@@ -791,6 +793,8 @@ export class EVMAdapter extends BlockchainAdapter {
       if (referralAddress && referralAddress !== ethers.ZeroAddress) moduleNames[referralAddress.toLowerCase()] = "referral";
       const vaultAddress = await this.savingsContract.getModule(VAULT_SYSTEM_MODULE_ID).catch(() => null);
       if (vaultAddress && vaultAddress !== ethers.ZeroAddress) moduleNames[vaultAddress.toLowerCase()] = "vaultSystem";
+      const recoveryAddress = await this.savingsContract.getModule(RECOVERY_SYSTEM_MODULE_ID).catch(() => null);
+      if (recoveryAddress && recoveryAddress !== ethers.ZeroAddress) moduleNames[recoveryAddress.toLowerCase()] = "recoverySystem";
 
       const [scheduled, executed, cancelled] = await Promise.all([
         timelock.queryFilter(timelock.filters.CallScheduled(), fromBlock),
@@ -913,6 +917,197 @@ export class EVMAdapter extends BlockchainAdapter {
     return { count, users };
   }
 
+  // ========== RECOVERY PROTECTION ==========
+
+  async _getRecoveryModule() {
+    if (this.recoveryModule !== undefined) return this.recoveryModule;
+    if (!this.savingsContract) throw new Error("Contract not initialized");
+    try {
+      const moduleAddress = await this.savingsContract.getModule(RECOVERY_SYSTEM_MODULE_ID);
+      this.recoveryModule =
+        moduleAddress && moduleAddress !== ethers.ZeroAddress
+          ? new ethers.Contract(moduleAddress, RecoverySystemModuleABI, this.signer)
+          : null;
+    } catch {
+      this.recoveryModule = null;
+    }
+    return this.recoveryModule;
+  }
+
+  async _requireRecoveryModule() {
+    const module = await this._getRecoveryModule();
+    if (!module) throw new Error("Recovery protection is not available on this network yet");
+    return module;
+  }
+
+  // Translate contract revert reasons into business-friendly messages
+  _translateRecoveryError(error, fallback) {
+    const message = error?.message || "";
+    if (error?.code === 4001 || error?.code === "ACTION_REJECTED") {
+      return new Error("Transaction cancelled by user");
+    }
+    if (message.includes("Only recovery key")) {
+      return new Error("Only the account's recovery key can do this");
+    }
+    if (message.includes("Account was recovered")) {
+      return new Error("This account was already recovered to a new address");
+    }
+    if (message.includes("Account is frozen")) {
+      return new Error("This account is frozen");
+    }
+    if (message.includes("Still in timelock")) {
+      return new Error("The waiting period is not over yet");
+    }
+    if (message.includes("Recovery key already set")) {
+      return new Error("A recovery key is already set — replacing it requires the 30-day change request");
+    }
+    if (message.includes("No recovery key set")) {
+      return new Error("Set a recovery key first");
+    }
+    if (message.includes("No pending change")) {
+      return new Error("There is no pending recovery key change");
+    }
+    return new Error(`${fallback}: ${message}`);
+  }
+
+  // All token addresses the savings account can hold on this network —
+  // recovery moves every one of them to the new owner
+  _recoveryTokenAddresses() {
+    const tokenAddresses = Object.values(this.networkConfig.tokens || {})
+      .map((token) => token.address)
+      .filter((address) => address && ethers.isAddress(address));
+    return [this.ETH_ADDRESS, ...tokenAddresses];
+  }
+
+  /**
+   * Recovery protection state of an account.
+   * @returns {Promise<{supported: boolean, recoveryAddress?: string|null,
+   *   isFrozen?: boolean, isRecovered?: boolean,
+   *   pendingChange?: {newRecovery: string|null, executeAfter: Date}|null,
+   *   isRecoveryKeyFor?: boolean}>}
+   */
+  async getRecoveryStatus(userAddress = null) {
+    const module = await this._getRecoveryModule();
+    if (!module) return { supported: false };
+
+    const targetAddress = userAddress || this.userAddress;
+    const [recoveryAddress, frozen, recovered] = await module.getRecoveryConfig(targetAddress);
+    const [newRecovery, executeAfter, exists] = await module.getPendingRecoveryAddressChange(targetAddress);
+
+    return {
+      supported: true,
+      recoveryAddress: recoveryAddress === ethers.ZeroAddress ? null : recoveryAddress,
+      isFrozen: frozen || recovered,
+      isRecovered: recovered,
+      pendingChange: exists
+        ? {
+            newRecovery: newRecovery === ethers.ZeroAddress ? null : newRecovery,
+            executeAfter: new Date(Number(executeAfter) * 1000),
+          }
+        : null,
+      isRecoveryKeyFor:
+        recoveryAddress !== ethers.ZeroAddress &&
+        recoveryAddress.toLowerCase() === this.userAddress?.toLowerCase(),
+    };
+  }
+
+  /** Register the connected account's recovery key (one-time, instant). */
+  async setRecoveryAddress(recoveryAddress) {
+    const module = await this._requireRecoveryModule();
+    if (!ethers.isAddress(recoveryAddress)) throw new Error("Invalid recovery address");
+    try {
+      const tx = await module.setRecoveryAddress(recoveryAddress);
+      await tx.wait();
+      return tx.hash;
+    } catch (error) {
+      throw this._translateRecoveryError(error, "Could not set recovery key");
+    }
+  }
+
+  /** Freeze an account (own account, or one this wallet is the recovery key for). */
+  async freezeAccount(targetAddress = null) {
+    const module = await this._requireRecoveryModule();
+    try {
+      const tx = await module.freeze(targetAddress || this.userAddress);
+      await tx.wait();
+      return tx.hash;
+    } catch (error) {
+      throw this._translateRecoveryError(error, "Could not freeze account");
+    }
+  }
+
+  /** Unfreeze an account — recovery key only. */
+  async unfreezeAccount(targetAddress = null) {
+    const module = await this._requireRecoveryModule();
+    try {
+      const tx = await module.unfreeze(targetAddress || this.userAddress);
+      await tx.wait();
+      return tx.hash;
+    } catch (error) {
+      throw this._translateRecoveryError(error, "Could not unfreeze account");
+    }
+  }
+
+  /** Start the 30-day recovery key change (null removes the key). */
+  async requestRecoveryKeyChange(newRecoveryAddress = null) {
+    const module = await this._requireRecoveryModule();
+    if (newRecoveryAddress && !ethers.isAddress(newRecoveryAddress)) {
+      throw new Error("Invalid recovery address");
+    }
+    try {
+      const tx = await module.requestRecoveryAddressChange(newRecoveryAddress || ethers.ZeroAddress);
+      await tx.wait();
+      return tx.hash;
+    } catch (error) {
+      throw this._translateRecoveryError(error, "Could not request recovery key change");
+    }
+  }
+
+  async executeRecoveryKeyChange() {
+    const module = await this._requireRecoveryModule();
+    try {
+      const tx = await module.executeRecoveryAddressChange();
+      await tx.wait();
+      return tx.hash;
+    } catch (error) {
+      throw this._translateRecoveryError(error, "Could not execute recovery key change");
+    }
+  }
+
+  /** Veto a pending recovery key change (own account or as recovery key). */
+  async cancelRecoveryKeyChange(targetAddress = null) {
+    const module = await this._requireRecoveryModule();
+    try {
+      const tx = await module.cancelRecoveryAddressChange(targetAddress || this.userAddress);
+      await tx.wait();
+      return tx.hash;
+    } catch (error) {
+      throw this._translateRecoveryError(error, "Could not cancel recovery key change");
+    }
+  }
+
+  /**
+   * Move a compromised account to a fresh address — recovery key only.
+   * Transfers every known token balance and permanently disables the old
+   * account.
+   */
+  async recoverAccount(targetAddress, newOwnerAddress) {
+    const module = await this._requireRecoveryModule();
+    if (!ethers.isAddress(targetAddress)) throw new Error("Invalid account address");
+    if (!ethers.isAddress(newOwnerAddress)) throw new Error("Invalid new owner address");
+    try {
+      const tx = await module.recoverOwnership(
+        targetAddress,
+        newOwnerAddress,
+        this._recoveryTokenAddresses(),
+      );
+      await tx.wait();
+      return tx.hash;
+    } catch (error) {
+      throw this._translateRecoveryError(error, "Could not recover account");
+    }
+  }
+
   // Private Methods
   async _initializeContracts() {
     if (!this.signer || !this.networkConfig.savingsContract) return;
@@ -920,6 +1115,7 @@ export class EVMAdapter extends BlockchainAdapter {
     // Drop caches tied to the previous network/signer
     this.vaultModule = null;
     this.referralModule = undefined;
+    this.recoveryModule = undefined;
     this._moduleContracts = {};
     this._tokenMetaCache = null;
 

@@ -9,6 +9,17 @@
 
 export const RELEASE_NOTES = [
   {
+    version: "0.3.0",
+    date: "2026-07-26",
+    title: "Recovery protection",
+    highlights: [
+      {
+        emoji: "🛟",
+        text: "New recovery protection: add a backup key (like a hardware wallet you keep offline) that can instantly freeze your account and move your savings to a new address if your main wallet is ever stolen. A thief with your seed phrase can't remove the backup key — trying starts a 30-day public countdown your backup key can always cancel.",
+      },
+    ],
+  },
+  {
     version: "0.2.0",
     date: "2026-07-25",
     title: "Referrals, stronger locks, and public governance",
@@ -44,4 +55,6 @@ export const RELEASE_NOTES = [
   },
 ];
 
-export const APP_VERSION = RELEASE_NOTES[0].version;
+// Latest shipped version — entries still in development (no numeric version
+// yet) don't define the app version
+export const APP_VERSION = RELEASE_NOTES.find((r) => /^\d/.test(r.version)).version;

@@ -35,6 +35,7 @@ const MODULE_ID_BY_CONTRACT = {
   PoolTogetherModule: "POOL_TOGETHER",
   VaultSystemModule: "VAULT_SYSTEM",
   ReferralModule: "REFERRAL",
+  RecoverySystemModule: "RECOVERY_SYSTEM",
 };
 
 const UUPS_ABI = ["function upgradeToAndCall(address newImplementation, bytes data) payable"];

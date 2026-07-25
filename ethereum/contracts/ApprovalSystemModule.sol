@@ -213,6 +213,7 @@ contract ApprovalSystemModule is Initializable, UUPSUpgradeable, OwnableUpgradea
         string calldata title,
         address destination
     ) external onlyAuthorizedOrSelf(user) returns (bytes32 requestId) {
+        enforceNotFrozen(savingsCore, user);
         require(destination != address(0), "Invalid destination address");
         require(destination != user, "Cannot set own address as destination");
         require(bytes(title).length > 0 && bytes(title).length <= 50, "Invalid title length");
@@ -249,6 +250,7 @@ contract ApprovalSystemModule is Initializable, UUPSUpgradeable, OwnableUpgradea
         string calldata title,
         address destination
     ) external onlyAuthorizedOrSelf(user) {
+        enforceNotFrozen(savingsCore, user);
         require(destination != address(0), "Invalid destination address");
         require(destination != user, "Cannot set own address as destination");
         require(bytes(title).length > 0 && bytes(title).length <= 50, "Invalid title length");
@@ -279,6 +281,7 @@ contract ApprovalSystemModule is Initializable, UUPSUpgradeable, OwnableUpgradea
         address user,
         bytes32 requestId
     ) external onlyAuthorizedOrSelf(user) {
+        enforceNotFrozen(savingsCore, user);
         WithdrawalRequest storage request = userWithdrawalRequests[user][requestId];
         require(request.exists, "Request does not exist");
         require(!request.executed, "Request already executed");

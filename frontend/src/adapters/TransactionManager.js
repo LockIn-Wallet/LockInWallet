@@ -237,6 +237,36 @@ export class TransactionManager {
     return this.getAdapter().getReferredUsers(userAddress);
   }
 
+  // ---- Recovery protection ----
+  supportsRecovery() {
+    // The recovery module lives on EVM; Solana parity later
+    return this.networkType === "evm";
+  }
+  getRecoveryStatus(userAddress) {
+    return this.getAdapter().getRecoveryStatus(userAddress);
+  }
+  setRecoveryAddress(recoveryAddress) {
+    return this.getAdapter().setRecoveryAddress(recoveryAddress);
+  }
+  freezeAccount(targetAddress) {
+    return this.getAdapter().freezeAccount(targetAddress);
+  }
+  unfreezeAccount(targetAddress) {
+    return this.getAdapter().unfreezeAccount(targetAddress);
+  }
+  requestRecoveryKeyChange(newRecoveryAddress) {
+    return this.getAdapter().requestRecoveryKeyChange(newRecoveryAddress);
+  }
+  executeRecoveryKeyChange() {
+    return this.getAdapter().executeRecoveryKeyChange();
+  }
+  cancelRecoveryKeyChange(targetAddress) {
+    return this.getAdapter().cancelRecoveryKeyChange(targetAddress);
+  }
+  recoverAccount(targetAddress, newOwnerAddress) {
+    return this.getAdapter().recoverAccount(targetAddress, newOwnerAddress);
+  }
+
   async getAllBalances(userAddress) {
     if (this._usesLegacyAccount()) {
       return this.getAdapter().getAllBalances(userAddress);

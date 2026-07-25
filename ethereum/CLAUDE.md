@@ -18,6 +18,7 @@ This directory contains the Ethereum/EVM smart contracts for the savings wallet 
   - `BypassSystemModule.sol` - Emergency bypass system for urgent withdrawals
   - `ApprovalSystemModule.sol` - Multi-signature approval system
   - `VaultSystemModule.sol` - Named savings vaults with per-member fixed or percentage withdrawal limits (mirrors the Solana vault program). **Custodies vault funds** — upgrade only in place via `upgrade-module-proxy.js`, never replace the proxy.
+  - `RecoverySystemModule.sol` - Seed-compromise protection: cold recovery key, instant account freeze, 30-day vetoable recovery-key changes, ownership recovery to a fresh address
 - **User Proxies**: `contracts/UserProxy.sol` - Deterministic deposit addresses for users
 - **Test Token**: `contracts/MockUSDT.sol` - Mock USDT token for testing (6 decimals)
 - **Deployment**: Uses modular deployment with module registration and automated ABI sync
