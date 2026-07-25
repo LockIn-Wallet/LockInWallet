@@ -1,6 +1,6 @@
 {
   "name": "savings-wallet",
-  "version": "1.0.0",
+  "version": "0.2.0",
   "description": "Multi-blockchain savings wallet DApp with EVM and Solana support",
   "main": "index.js",
   "workspaces": [
