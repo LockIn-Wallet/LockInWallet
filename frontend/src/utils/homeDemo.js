@@ -109,6 +109,180 @@ export const randomPrizeEvent = () => {
   };
 };
 
+// Chain rollout shown on the homepage. `live` chains can be used today.
+export const SUPPORTED_CHAINS = [
+  {
+    key: "optimism",
+    name: "Optimism",
+    live: true,
+    status: "Live now",
+    tagline: "Fast, cheap, Ethereum-secured",
+    detail:
+      "Optimism settles back to Ethereum, so your funds inherit Ethereum's security while transactions cost cents and confirm in seconds. That's what makes daily and weekly withdrawals practical.",
+    bestFor: "Ideal for your first $10K of savings",
+  },
+  {
+    key: "ethereum",
+    name: "Ethereum",
+    live: false,
+    status: "Underway",
+    tagline: "For larger balances",
+    detail:
+      "Ethereum mainnet support is in progress, for balances where paying more gas per withdrawal is worth settling directly on L1.",
+    bestFor: "Built for bigger amounts",
+  },
+  {
+    key: "solana",
+    name: "Solana",
+    live: false,
+    status: "Underway",
+    tagline: "Same vault, different chain",
+    detail:
+      "The Solana program mirrors the same limits and 24-hour timelocks. It's built and being hardened ahead of launch.",
+    bestFor: "Coming soon",
+  },
+];
+
+// Bypassing a limit is gated by a flat on-chain delay, whatever period you
+// are bypassing (BypassSystemModule) — as is changing a limit
+// (ProposalSystemModule). Waiting for a bucket to refill is the other route,
+// and for the short periods it is the faster one.
+export const TIMELOCK_HOURS = 24;
+
+export const timelockSeconds = () => TIMELOCK_HOURS * PERIOD_SECONDS.hour;
+
+// Illustrative limit buckets. Every withdrawal is checked against — and
+// debited from — every active period at the same time, so the tightest
+// bucket is what you actually feel.
+export const DEMO_LIMIT_BUCKETS = [
+  {
+    key: "hourly",
+    name: "Hourly",
+    emoji: "⏱️",
+    limit: 50,
+    boundary: "hour",
+    refillWait: "1 hour",
+  },
+  {
+    key: "daily",
+    name: "Daily",
+    emoji: "🌗",
+    limit: 150,
+    boundary: "day",
+    refillWait: "24 hours",
+  },
+  {
+    key: "weekly",
+    name: "Weekly",
+    emoji: "📅",
+    limit: 1000,
+    boundary: "week",
+    refillWait: "7 days",
+  },
+];
+
+// Withdrawal attempts replayed in the explainer loop: two that fit, then one
+// that busts the tightest bucket and gets rejected on-chain.
+export const DEMO_WITHDRAWALS = [
+  { atMs: 1500, amount: 30 },
+  { atMs: 4000, amount: 20 },
+  { atMs: 6500, amount: 20 },
+];
+
+// Explainer simulation timings (ms within one loop)
+export const LIMIT_SIM = {
+  loopMs: 22000,
+  tickMs: 100,
+  // The period clock starts on the first withdrawal, not when the bucket runs
+  // out — on-chain the reset is `lastReset + duration`.
+  refillStartMs: DEMO_WITHDRAWALS[0].atMs,
+  refillEndMs: 17000, // bucket refills, allowance is back
+  flashMs: 1000, // how long a withdrawal stays highlighted
+};
+
+// The tightest bucket is the one the user actually bumps into
+export const tightestBucket = () => DEMO_LIMIT_BUCKETS[0];
+
+export const getLimitTimeline = (elapsed) => {
+  const { refillStartMs, refillEndMs, flashMs } = LIMIT_SIM;
+  const tightest = tightestBucket();
+
+  let spent = 0;
+  let event = null;
+
+  DEMO_WITHDRAWALS.forEach((withdrawal) => {
+    if (elapsed < withdrawal.atMs) return;
+
+    const accepted = DEMO_LIMIT_BUCKETS.every(
+      (bucket) => spent + withdrawal.amount <= bucket.limit
+    );
+    if (accepted) spent += withdrawal.amount;
+
+    event = {
+      ...withdrawal,
+      accepted,
+      isFresh: elapsed - withdrawal.atMs < flashMs,
+    };
+  });
+
+  const waiting = elapsed >= refillStartMs && elapsed < refillEndMs;
+  const refilled = elapsed >= refillEndMs;
+  const progress = refilled
+    ? 1
+    : waiting
+      ? (elapsed - refillStartMs) / (refillEndMs - refillStartMs)
+      : 0;
+
+  return {
+    spent,
+    event,
+    waiting,
+    refilled,
+    // Countdown to the tightest bucket's own reset — one hour, not a timelock
+    refillSecondsRemaining: Math.ceil(
+      PERIOD_SECONDS[tightest.boundary] * (1 - progress)
+    ),
+  };
+};
+
+// Per-bucket usage. Buckets in `refilledKeys` have hit their own reset and
+// start from zero again, while the slower buckets keep the spend on record.
+export const bucketState = (spent, refilledKeys = []) =>
+  DEMO_LIMIT_BUCKETS.map((bucket) => {
+    const used = refilledKeys.includes(bucket.key)
+      ? 0
+      : Math.min(spent, bucket.limit);
+
+    const remaining = bucket.limit - used;
+
+    return {
+      ...bucket,
+      used,
+      remaining,
+      // The bar shows headroom: full when untouched, draining as you spend
+      percentRemaining: (remaining / bucket.limit) * 100,
+      percentUsed: (used / bucket.limit) * 100,
+      isEmpty: remaining <= 0,
+    };
+  });
+
+// Beat 3: the two ways past a limit, side by side. Waiting wins on the short
+// periods; the bypass only pays off on the long ones — and costs you a full
+// day in the open either way.
+export const ESCAPE_ROUTES = DEMO_LIMIT_BUCKETS.map((bucket) => {
+  const refillHours = PERIOD_SECONDS[bucket.boundary] / PERIOD_SECONDS.hour;
+
+  return {
+    key: bucket.key,
+    name: bucket.name,
+    emoji: bucket.emoji,
+    refillWait: bucket.refillWait,
+    bypassWait: `${TIMELOCK_HOURS} hours`,
+    refillWins: refillHours < TIMELOCK_HOURS,
+    tie: refillHours === TIMELOCK_HOURS,
+  };
+});
+
 export const formatUSD = (amount, withCents = false) =>
   amount.toLocaleString("en-US", {
     style: "currency",

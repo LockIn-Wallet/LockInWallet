@@ -1,7 +1,7 @@
 {
   "short_name": "LockIn Wallet",
   "name": "LockIn Wallet — Commitment Savings Account",
-  "description": "A forced savings app with blockchain-enforced spending limits. The commitment savings account designed to protect you from impulse spending.",
+  "description": "Protect your savings from everyone, even yourself. A commitment savings account with blockchain-enforced withdrawal limits and 24-hour time locks.",
   "icons": [
     {
       "src": "favicon.png",

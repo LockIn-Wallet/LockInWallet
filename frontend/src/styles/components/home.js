@@ -377,6 +377,287 @@ export const homeStyles = {
     margin: 0,
   },
 
+  // Time-lock explainer — shared block heading
+  blockTitle: {
+    fontSize: fontSize.xl,
+    fontWeight: fontWeight.semibold,
+    color: colors.text.primary,
+    textAlign: "center",
+    margin: `0 0 ${spacing.xs} 0`,
+  },
+
+  blockSubtitle: {
+    fontSize: fontSize.sm,
+    color: colors.text.muted,
+    textAlign: "center",
+    lineHeight: 1.6,
+    margin: `0 auto ${spacing.xl} auto`,
+    maxWidth: "560px",
+  },
+
+  blockDivider: {
+    border: "none",
+    borderTop: `1px solid ${colors.border.default}`,
+    margin: `${spacing.xxl} 0`,
+  },
+
+  // Withdrawal ticket + limit buckets
+  withdrawTicket: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.md,
+    fontSize: fontSize.lg,
+    fontWeight: fontWeight.semibold,
+    color: colors.text.primary,
+    backgroundColor: colors.background.dark,
+    border: `1px solid ${colors.border.default}`,
+    borderRadius: borderRadius.lg,
+    padding: spacing.lg,
+    marginBottom: spacing.xl,
+    transition: transitions.normal,
+  },
+
+  withdrawTicketAccepted: {
+    borderColor: colors.success.border,
+    color: colors.success.light,
+  },
+
+  withdrawTicketRejected: {
+    borderColor: colors.error.main,
+    color: colors.error.light,
+  },
+
+  bucketList: {
+    display: "flex",
+    flexDirection: "column",
+    gap: spacing.lg,
+  },
+
+  bucketRow: {
+    backgroundColor: colors.background.dark,
+    border: `1px solid ${colors.border.default}`,
+    borderRadius: borderRadius.lg,
+    padding: spacing.lg,
+    transition: transitions.normal,
+  },
+
+  bucketRowEmpty: {
+    borderColor: colors.error.main,
+  },
+
+  bucketHeader: {
+    display: "flex",
+    alignItems: "baseline",
+    justifyContent: "space-between",
+    gap: spacing.sm,
+    marginBottom: spacing.sm,
+  },
+
+  bucketName: {
+    fontSize: fontSize.normal,
+    fontWeight: fontWeight.semibold,
+    color: colors.text.primary,
+  },
+
+  bucketNote: {
+    fontSize: fontSize.xs,
+    color: colors.text.muted,
+    marginLeft: spacing.sm,
+    fontWeight: fontWeight.normal,
+  },
+
+  bucketNumbers: {
+    fontSize: fontSize.sm,
+    fontFamily: "monospace",
+    color: colors.text.light,
+    whiteSpace: "nowrap",
+  },
+
+  bucketNumbersEmpty: {
+    color: colors.error.light,
+  },
+
+  bucketRefill: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.sm,
+    fontSize: fontSize.sm,
+    color: colors.warning.light,
+    marginTop: spacing.sm,
+  },
+
+  bucketRefillDone: {
+    color: colors.success.light,
+  },
+
+  bucketClock: {
+    fontFamily: "monospace",
+    fontWeight: fontWeight.bold,
+    fontSize: fontSize.lg,
+  },
+
+  // Wait-vs-bypass comparison table
+  compareTableWrap: {
+    overflowX: "auto",
+  },
+
+  compareTable: {
+    width: "100%",
+    borderCollapse: "collapse",
+    fontSize: fontSize.normal,
+    color: colors.text.secondary,
+  },
+
+  compareHeadCell: {
+    fontSize: fontSize.xs,
+    fontWeight: fontWeight.semibold,
+    color: colors.text.muted,
+    textTransform: "uppercase",
+    letterSpacing: "1px",
+    textAlign: "center",
+    padding: `${spacing.sm} ${spacing.md}`,
+    borderBottom: `1px solid ${colors.border.default}`,
+  },
+
+  compareHeadCellLeft: {
+    textAlign: "left",
+  },
+
+  compareCell: {
+    textAlign: "center",
+    padding: `${spacing.lg} ${spacing.md}`,
+    borderBottom: `1px solid ${colors.border.default}`,
+    whiteSpace: "nowrap",
+  },
+
+  comparePeriodCell: {
+    textAlign: "left",
+    fontWeight: fontWeight.semibold,
+    color: colors.text.primary,
+    padding: `${spacing.lg} ${spacing.md}`,
+    borderBottom: `1px solid ${colors.border.default}`,
+  },
+
+  compareWinner: {
+    color: colors.success.light,
+    fontWeight: fontWeight.bold,
+  },
+
+  compareLoser: {
+    color: colors.text.gray,
+  },
+
+  compareVerdict: {
+    fontSize: fontSize.lg,
+    fontWeight: fontWeight.semibold,
+    color: colors.text.primary,
+    textAlign: "center",
+    lineHeight: 1.6,
+    margin: `${spacing.xxl} auto 0 auto`,
+    maxWidth: "620px",
+  },
+
+  lockActionRow: {
+    display: "flex",
+    gap: spacing.sm,
+    justifyContent: "center",
+    flexWrap: "wrap",
+    marginTop: spacing.md,
+  },
+
+  lockTag: {
+    fontSize: fontSize.xs,
+    fontWeight: fontWeight.semibold,
+    color: colors.text.light,
+    backgroundColor: colors.background.primary,
+    border: `1px solid ${colors.border.default}`,
+    borderRadius: borderRadius.sm,
+    padding: `${spacing.xs} ${spacing.sm}`,
+  },
+
+  // Chain availability
+  chainGrid: {
+    display: "flex",
+    gap: spacing.xl,
+    flexWrap: "wrap",
+    justifyContent: "center",
+  },
+
+  chainCard: {
+    flex: "1 1 260px",
+    backgroundColor: colors.background.dark,
+    border: `1px solid ${colors.border.default}`,
+    borderRadius: borderRadius.xl,
+    padding: spacing.xl,
+  },
+
+  chainCardLive: {
+    borderColor: colors.success.border,
+  },
+
+  chainHeader: {
+    display: "flex",
+    alignItems: "center",
+    gap: spacing.lg,
+    marginBottom: spacing.md,
+  },
+
+  chainLogoWrap: {
+    display: "flex",
+    alignItems: "center",
+    flexShrink: 0,
+  },
+
+  chainLogoMuted: {
+    opacity: 0.45,
+    filter: "grayscale(1)",
+  },
+
+  chainName: {
+    fontSize: fontSize.xl,
+    fontWeight: fontWeight.bold,
+    color: colors.text.primary,
+    lineHeight: 1.2,
+  },
+
+  chainTagline: {
+    fontSize: fontSize.xs,
+    color: colors.text.muted,
+  },
+
+  chainBadge: {
+    display: "inline-block",
+    fontSize: fontSize.xs,
+    fontWeight: fontWeight.semibold,
+    color: colors.text.muted,
+    backgroundColor: colors.background.primary,
+    border: `1px solid ${colors.border.default}`,
+    borderRadius: borderRadius.sm,
+    padding: `2px ${spacing.sm}`,
+    marginBottom: spacing.md,
+  },
+
+  chainBadgeLive: {
+    color: colors.success.light,
+    borderColor: colors.success.border,
+  },
+
+  chainDetail: {
+    fontSize: fontSize.sm,
+    color: colors.text.light,
+    lineHeight: 1.6,
+    margin: `0 0 ${spacing.md} 0`,
+  },
+
+  chainBestFor: {
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.semibold,
+    color: colors.text.secondary,
+    margin: 0,
+  },
+
   // Deposit slider
   sliderBox: {
     backgroundColor: colors.background.dark,

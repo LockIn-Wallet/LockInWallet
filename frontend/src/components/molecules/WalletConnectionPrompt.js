@@ -6,6 +6,8 @@ import lockinWalletImage from "../../assets/images/lockinwallet.jpg";
 import TypewriterText from "../atoms/TypewriterText.js";
 import WalletConnectButtons from "./WalletConnectButtons.js";
 import TimeLockShowcase from "../organisms/TimeLockShowcase.js";
+import TimeLockExplainer from "../organisms/TimeLockExplainer.js";
+import ChainAvailability from "../organisms/ChainAvailability.js";
 import PrizeSavingsShowcase from "../organisms/PrizeSavingsShowcase.js";
 
 import { homeStyles } from "../../styles";
@@ -67,6 +69,12 @@ const WalletConnectionPrompt = ({
 
       {/* Feature demo: time-locked funds vs a stolen key */}
       <TimeLockShowcase />
+
+      {/* Mechanics: withdrawal limits and the 24-hour bypass timelock */}
+      <TimeLockExplainer />
+
+      {/* Chain rollout: Optimism live, Ethereum and Solana underway */}
+      <ChainAvailability />
 
       {/* Feature demo: PoolTogether-style no-loss prize savings */}
       <PrizeSavingsShowcase />
