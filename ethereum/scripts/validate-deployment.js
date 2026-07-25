@@ -4,26 +4,42 @@ const path = require("path");
 
 /**
  * Validates that deployed contracts match frontend configuration
- * and that all functions are accessible
+ * and that all functions are accessible.
+ *
+ * The core is a custody kernel; user-facing features live in
+ * self-authenticating modules resolved through the registry, so this
+ * validates both the kernel surface and each module's registration.
  */
+
+const TEST_ADDRESS = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"; // Default hardhat account
+const ETH = "0x0000000000000000000000000000000000000000";
+
+const MODULES = [
+  { key: "TIME_PERIOD_LIMITS", abiFile: "TimePeriodLimitsModuleABI.json", probe: (c) => c.getActivePeriodCount(TEST_ADDRESS) },
+  { key: "PROPOSAL_SYSTEM", abiFile: "ProposalSystemModuleABI.json", probe: (c) => c.isSetupCommitted(TEST_ADDRESS) },
+  { key: "BYPASS_SYSTEM", abiFile: "BypassSystemModuleABI.json", probe: (c) => c.getUserActiveBypassRequests(TEST_ADDRESS) },
+  { key: "APPROVAL_SYSTEM", abiFile: "ApprovalSystemModuleABI.json", probe: (c) => c.getUserWithdrawalAddresses(TEST_ADDRESS) },
+  { key: "PROXY_DEPLOYMENT", abiFile: "ProxyDeploymentModuleABI.json", probe: (c) => c.isProxyDeployed(TEST_ADDRESS) },
+  { key: "POOL_TOGETHER", abiFile: "PoolTogetherModuleABI.json", probe: (c) => c.hasVault(ETH) },
+  { key: "VAULT_SYSTEM", abiFile: "VaultSystemModuleABI.json", probe: (c) => c.getVaultCount() },
+  { key: "REFERRAL", abiFile: "ReferralModuleABI.json", probe: (c) => c.getReferralCount(TEST_ADDRESS) },
+];
+
 async function validateDeployment() {
   console.log("🔍 Validating deployment integrity...\n");
 
   try {
-    // Read frontend configuration
-    const frontendPath = path.join(__dirname, "../../frontend/src/App.js");
-    const frontendContent = fs.readFileSync(frontendPath, "utf8");
+    // Read the deployed core address from the frontend network config
+    const networkConfigPath = path.join(__dirname, "../../frontend/src/networkConfig.json");
+    const networkConfig = JSON.parse(fs.readFileSync(networkConfigPath, "utf8"));
+    const networkName = process.env.HARDHAT_NETWORK || "localhost";
+    const savingsAddress = networkConfig.evm?.[networkName]?.savingsContract;
 
-    // Extract contract addresses from frontend
-    const savingsMatch = frontendContent.match(/savingsContract: "([^"]+)"/);
-    const usdtMatch = frontendContent.match(/(USDT: {[^}]*address: ")[^"]*(",)/);
-
-    if (!savingsMatch) {
-      throw new Error("Could not find Savings contract address in frontend");
+    if (!savingsAddress) {
+      throw new Error(`No savingsContract for evm.${networkName} in networkConfig.json`);
     }
 
-    const savingsAddress = savingsMatch[1];
-    console.log(`📋 Frontend Savings Address: ${savingsAddress}`);
+    console.log(`📋 Configured SavingsCore address: ${savingsAddress}`);
 
     // Test contract connectivity
     const provider = ethers.provider;
@@ -35,42 +51,18 @@ async function validateDeployment() {
 
     console.log("✅ Contract exists at address");
 
-    // Load the ABI and test key functions
-    const savingsABI = JSON.parse(fs.readFileSync(
-      path.join(__dirname, "../../frontend/src/SavingsABI.json"),
-      "utf8"
-    ));
-
+    const abiDir = path.join(__dirname, "../../frontend/src");
+    const savingsABI = JSON.parse(fs.readFileSync(path.join(abiDir, "SavingsABI.json"), "utf8"));
     const contract = new ethers.Contract(savingsAddress, savingsABI, provider);
 
-    // Test critical functions
+    // Test the kernel surface
     const tests = [
-      {
-        name: "owner()",
-        call: () => contract.owner()
-      },
-      {
-        name: "isSetupCommitted()",
-        call: () => contract.isSetupCommitted()
-      },
-      {
-        name: "getTokenBalance()",
-        call: () => contract.getTokenBalance(
-          "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266", // Default test address
-          "0x0000000000000000000000000000000000000000"  // ETH
-        )
-      },
-      {
-        name: "getUserWithdrawalAddresses()",
-        call: () => contract.getUserWithdrawalAddresses()
-      },
-      {
-        name: "getUserPendingWithdrawalRequests()",
-        call: () => contract.getUserPendingWithdrawalRequests()
-      }
+      { name: "owner()", call: () => contract.owner() },
+      { name: "getDevelopmentMode()", call: () => contract.getDevelopmentMode() },
+      { name: "getTokenBalance()", call: () => contract.getTokenBalance(TEST_ADDRESS, ETH) },
     ];
 
-    console.log("\n🧪 Testing contract functions:");
+    console.log("\n🧪 Testing core kernel functions:");
     let passedTests = 0;
 
     for (const test of tests) {
@@ -83,22 +75,21 @@ async function validateDeployment() {
       }
     }
 
-    // Check ABI compatibility for optimized contract
-    console.log("\n📋 Checking ABI compatibility:");
+    // Kernel ABI surface
+    console.log("\n📋 Checking core ABI surface:");
     const expectedFunctions = [
-      "isSetupCommitted",
-      "getTokenBalance",
-      "getUserSpendingLimits",
-      "getSetupInfo",
-      "isApprovalAddress",
-      "getActivePeriodNames",
-      "getActivePeriodCount",
+      "registerModule",
+      "getModule",
+      "isAuthorizedModule",
+      "deposit",
+      "depositTo",
       "withdraw",
       "withdrawTo",
       "withdrawAll",
-      "getUserWithdrawalAddresses",
-      "getUserPendingWithdrawalRequests",
-      "requestWithdrawalAddress"
+      "getTokenBalance",
+      "updateTokenBalance",
+      "transferTokensTo",
+      "setupModuleCrossReferences",
     ];
 
     let foundFunctions = 0;
@@ -112,16 +103,42 @@ async function validateDeployment() {
       }
     }
 
+    // Each module: registered in the registry and answering a direct call
+    console.log("\n🧩 Testing module registry and direct module calls:");
+    let passedModules = 0;
+
+    for (const mod of MODULES) {
+      try {
+        const moduleId = ethers.keccak256(ethers.toUtf8Bytes(mod.key));
+        const moduleAddress = await contract.getModule(moduleId);
+        if (moduleAddress === ethers.ZeroAddress) {
+          console.log(`  ❌ ${mod.key} - Not registered`);
+          continue;
+        }
+        const moduleABI = JSON.parse(fs.readFileSync(path.join(abiDir, mod.abiFile), "utf8"));
+        const moduleContract = new ethers.Contract(moduleAddress, moduleABI, provider);
+        const result = await mod.probe(moduleContract);
+        console.log(`  ✅ ${mod.key} @ ${moduleAddress} - OK (probe returned: ${result})`);
+        passedModules++;
+      } catch (error) {
+        console.log(`  ❌ ${mod.key} - FAILED: ${error.message}`);
+      }
+    }
+
     // Summary
     console.log("\n" + "=".repeat(50));
     console.log("📊 VALIDATION SUMMARY");
     console.log("=".repeat(50));
     console.log(`Contract Address: ${savingsAddress}`);
     console.log(`Contract Code: ${code === "0x" ? "❌ MISSING" : "✅ PRESENT"}`);
-    console.log(`Function Tests: ${passedTests}/${tests.length} passed`);
-    console.log(`ABI Functions: ${foundFunctions}/${expectedFunctions.length} found`);
+    console.log(`Kernel Tests: ${passedTests}/${tests.length} passed`);
+    console.log(`Kernel ABI: ${foundFunctions}/${expectedFunctions.length} found`);
+    console.log(`Modules: ${passedModules}/${MODULES.length} registered & responding`);
 
-    const isValid = passedTests === tests.length && foundFunctions === expectedFunctions.length;
+    const isValid =
+      passedTests === tests.length &&
+      foundFunctions === expectedFunctions.length &&
+      passedModules === MODULES.length;
 
     if (isValid) {
       console.log("\n🎉 DEPLOYMENT VALIDATION PASSED");

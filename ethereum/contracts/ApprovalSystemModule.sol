@@ -51,6 +51,18 @@ contract ApprovalSystemModule is Initializable, UUPSUpgradeable, OwnableUpgradea
         _;
     }
 
+    // Users act on their own data directly; the core and modules keep access
+    // for cross-module orchestration (Pattern B self-authentication)
+    modifier onlyAuthorizedOrSelf(address user) {
+        require(
+            msg.sender == user ||
+            msg.sender == address(savingsCore) ||
+            savingsCore.isAuthorizedModule(msg.sender),
+            "Not authorized"
+        );
+        _;
+    }
+
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
         _disableInitializers();
@@ -200,7 +212,7 @@ contract ApprovalSystemModule is Initializable, UUPSUpgradeable, OwnableUpgradea
         address user,
         string calldata title,
         address destination
-    ) external onlyAuthorized returns (bytes32 requestId) {
+    ) external onlyAuthorizedOrSelf(user) returns (bytes32 requestId) {
         require(destination != address(0), "Invalid destination address");
         require(destination != user, "Cannot set own address as destination");
         require(bytes(title).length > 0 && bytes(title).length <= 50, "Invalid title length");
@@ -236,7 +248,7 @@ contract ApprovalSystemModule is Initializable, UUPSUpgradeable, OwnableUpgradea
         address user,
         string calldata title,
         address destination
-    ) external onlyAuthorized {
+    ) external onlyAuthorizedOrSelf(user) {
         require(destination != address(0), "Invalid destination address");
         require(destination != user, "Cannot set own address as destination");
         require(bytes(title).length > 0 && bytes(title).length <= 50, "Invalid title length");
@@ -266,7 +278,7 @@ contract ApprovalSystemModule is Initializable, UUPSUpgradeable, OwnableUpgradea
     function executeWithdrawalAddressRequest(
         address user,
         bytes32 requestId
-    ) external onlyAuthorized {
+    ) external onlyAuthorizedOrSelf(user) {
         WithdrawalRequest storage request = userWithdrawalRequests[user][requestId];
         require(request.exists, "Request does not exist");
         require(!request.executed, "Request already executed");
@@ -292,7 +304,7 @@ contract ApprovalSystemModule is Initializable, UUPSUpgradeable, OwnableUpgradea
     function cancelWithdrawalAddressRequest(
         address user,
         bytes32 requestId
-    ) external onlyAuthorized {
+    ) external onlyAuthorizedOrSelf(user) {
         WithdrawalRequest storage request = userWithdrawalRequests[user][requestId];
         require(request.exists, "Request does not exist");
         require(!request.executed, "Request already executed");
@@ -309,7 +321,7 @@ contract ApprovalSystemModule is Initializable, UUPSUpgradeable, OwnableUpgradea
     function removeWithdrawalAddress(
         address user,
         address destination
-    ) external onlyAuthorized {
+    ) external onlyAuthorizedOrSelf(user) {
         WithdrawalAddress[] storage addresses = userWithdrawalAddresses[user];
 
         for (uint256 i = 0; i < addresses.length; i++) {

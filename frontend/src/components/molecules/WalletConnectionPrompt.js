@@ -1,4 +1,4 @@
-import React from "react";
+import React, { Suspense, lazy } from "react";
 
 import bobbyLeeVideo from "../../assets/video/bobby_lee.mp4";
 import lockinWalletImage from "../../assets/images/lockinwallet.jpg";
@@ -6,13 +6,25 @@ import lockinWalletImage from "../../assets/images/lockinwallet.jpg";
 import TypewriterText from "../atoms/TypewriterText.js";
 import WalletConnectButtons from "./WalletConnectButtons.js";
 import TimeLockShowcase from "../organisms/TimeLockShowcase.js";
+import TimeLockExplainer from "../organisms/TimeLockExplainer.js";
+import ChainAvailability from "../organisms/ChainAvailability.js";
 import PrizeSavingsShowcase from "../organisms/PrizeSavingsShowcase.js";
 
 import { homeStyles } from "../../styles";
 
+// Shares the lazy chunk with the standalone page, so chart.js still only
+// downloads when this section is actually reached
+const SavingsVisualiser = lazy(() =>
+  import("../pages/SavingsVisualiser.js")
+);
+
+// youtube.com/watch?v=6JwkaLt9pf8
+const YOUTUBE_VIDEO_ID = "6JwkaLt9pf8";
+
 const HERO_TYPEWRITER_WORDS = [
   "Hackers can't drain it.",
-  "Stealers hit a wall.",
+  "You can't impulse spend it.",
+  "Devs can't steal it.",
   "Your savings stay yours.",
   "And it can win prizes.",
 ];
@@ -67,6 +79,21 @@ const WalletConnectionPrompt = ({
       {/* Feature demo: time-locked funds vs a stolen key */}
       <TimeLockShowcase />
 
+      {/* Mechanics: withdrawal limits and the 24-hour bypass timelock */}
+      <TimeLockExplainer />
+
+      {/* Chain rollout: Optimism live, Ethereum and Solana underway */}
+      <ChainAvailability />
+
+      {/* Savings Visualiser — compact embed, full dashboard one click away */}
+      <Suspense fallback={null}>
+        <SavingsVisualiser
+          compact
+          title="🔮 Where does this actually get me?"
+          subtitle="Set your split, and watch four decades play out."
+        />
+      </Suspense>
+
       {/* Feature demo: PoolTogether-style no-loss prize savings */}
       <PrizeSavingsShowcase />
 
@@ -77,6 +104,19 @@ const WalletConnectionPrompt = ({
           alt="LockIn Wallet"
           style={homeStyles.mediaImage}
         />
+      </div>
+
+      <div style={homeStyles.mediaSection}>
+        <div style={homeStyles.mediaEmbed}>
+          <iframe
+            src={`https://www.youtube-nocookie.com/embed/${YOUTUBE_VIDEO_ID}`}
+            title="LockIn Wallet"
+            style={homeStyles.mediaEmbedFrame}
+            allow="accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+            referrerPolicy="strict-origin-when-cross-origin"
+            allowFullScreen
+          />
+        </div>
       </div>
 
       <div style={homeStyles.mediaSection}>

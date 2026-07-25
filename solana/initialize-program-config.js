@@ -84,37 +84,33 @@ async function initializeProgramConfig() {
     const treasuryAddress = new PublicKey(DEPLOYER_ADDRESS);
     console.log('🏦 Treasury Address:', treasuryAddress.toString());
 
-    // Fee amount in lamports
-    const feeInLamports = ACTIVATION_FEE_SOL * LAMPORTS_PER_SOL;
-    console.log('💰 Activation Fee:', `${ACTIVATION_FEE_SOL} SOL (${feeInLamports} lamports)`);
+    // Default penalty rate in basis points (20% = 2000 bps)
+    const defaultPenaltyRateBps = 2000;
+    console.log('💰 Default Penalty Rate:', `${defaultPenaltyRateBps / 100}%`);
 
     // Check if program config already exists
     try {
       const existingAccount = await connection.getAccountInfo(programConfigPDA);
       if (existingAccount && existingAccount.data.length > 0) {
         console.log('⚠️  Program config already initialized');
-        console.log('✅ Program configuration ready for user payments');
+        console.log('✅ Program configuration ready');
         return;
       }
     } catch (error) {
       // Account doesn't exist yet, continue with initialization
     }
 
-    // Build initialization instruction
-    const discriminator = Buffer.from([6, 131, 61, 237, 40, 110, 83, 124]); // InitializeProgramConfig
-
-    // Serialize fee amount as little-endian u64
-    const feeBuffer = Buffer.allocUnsafe(8);
-    feeBuffer.writeBigUInt64LE(BigInt(feeInLamports), 0);
-
-    const instructionData = Buffer.concat([discriminator, feeBuffer]);
+    // Build initialization instruction: discriminator + default_penalty_rate_bps (u16)
+    const discriminator = Buffer.from([6, 131, 61, 237, 40, 110, 83, 124]);
+    const penaltyBuffer = Buffer.allocUnsafe(2);
+    penaltyBuffer.writeUInt16LE(defaultPenaltyRateBps, 0);
+    const instructionData = Buffer.concat([discriminator, penaltyBuffer]);
 
     const instruction = new TransactionInstruction({
       keys: [
-        { pubkey: programConfigPDA, isSigner: false, isWritable: true },      // program_config
-        { pubkey: adminKeypair.publicKey, isSigner: true, isWritable: true }, // admin (payer)
-        { pubkey: treasuryAddress, isSigner: false, isWritable: false },      // treasury_address
-        { pubkey: SystemProgram.programId, isSigner: false, isWritable: false } // system_program
+        { pubkey: programConfigPDA, isSigner: false, isWritable: true },
+        { pubkey: adminKeypair.publicKey, isSigner: true, isWritable: true },
+        { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
       ],
       programId: programId,
       data: instructionData
@@ -133,15 +129,46 @@ async function initializeProgramConfig() {
 
     console.log('✅ Program configuration initialized successfully!');
     console.log('🔗 Transaction Hash:', txHash);
+
+    // Update treasury to the configured address (admin was set as treasury during init)
+    if (treasuryAddress.toString() !== adminKeypair.publicKey.toString()) {
+      console.log(`\n📝 Updating treasury from admin to ${treasuryAddress.toString()}...`);
+
+      const updateDisc = Buffer.from([214, 3, 187, 98, 170, 106, 33, 45]);
+      // Option<Pubkey>: 1 (Some) + 32 bytes pubkey
+      const newTreasuryData = Buffer.concat([
+        Buffer.from([1]),
+        treasuryAddress.toBuffer(),
+      ]);
+      // Option<u16>: 0 (None)
+      const noPenaltyUpdate = Buffer.from([0]);
+      const updateData = Buffer.concat([updateDisc, newTreasuryData, noPenaltyUpdate]);
+
+      const updateIx = new TransactionInstruction({
+        keys: [
+          { pubkey: programConfigPDA, isSigner: false, isWritable: true },
+          { pubkey: adminKeypair.publicKey, isSigner: true, isWritable: false },
+        ],
+        programId: programId,
+        data: updateData,
+      });
+
+      const updateTx = new Transaction().add(updateIx);
+      const updateTxHash = await sendAndConfirmTransaction(
+        connection, updateTx, [adminKeypair], { commitment: 'confirmed' }
+      );
+      console.log('✅ Treasury updated:', updateTxHash);
+    }
+
     console.log('');
     console.log('📋 Configuration Summary:');
     console.log(`   Program ID: ${programId.toString()}`);
     console.log(`   Config PDA: ${programConfigPDA.toString()}`);
     console.log(`   Treasury: ${treasuryAddress.toString()}`);
     console.log(`   Admin: ${adminKeypair.publicKey.toString()}`);
-    console.log(`   Activation Fee: ${ACTIVATION_FEE_SOL} SOL`);
+    console.log(`   Penalty Rate: ${defaultPenaltyRateBps / 100}%`);
     console.log('');
-    console.log('🎉 Users can now pay activation fees and generate permanent addresses!');
+    console.log('🎉 Program config ready!');
 
   } catch (error) {
     console.error('❌ Error initializing program config:', error.message);

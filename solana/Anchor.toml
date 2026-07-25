@@ -7,15 +7,12 @@ anchor_version = "0.31.1"
 
 [programs.localnet]
 savings_core = "9j511uJuYwoFRFiU1h5wy2oi1Xc8n1FdoK91QxoXHRh2"
-deposit_proxy = "EyfA57i8PgyJBDmyLYFmdYMjPonZcY7BbnH98UmP8Rqp"
 
 [programs.devnet]
 savings_core = "9j511uJuYwoFRFiU1h5wy2oi1Xc8n1FdoK91QxoXHRh2"
-deposit_proxy = "EyfA57i8PgyJBDmyLYFmdYMjPonZcY7BbnH98UmP8Rqp"
 
 [programs.mainnet]
 savings_core = "9j511uJuYwoFRFiU1h5wy2oi1Xc8n1FdoK91QxoXHRh2"
-deposit_proxy = "EyfA57i8PgyJBDmyLYFmdYMjPonZcY7BbnH98UmP8Rqp"
 
 [registry]
 url = "https://api.apr.dev"

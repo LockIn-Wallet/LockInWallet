@@ -123,12 +123,22 @@ async function fetchEvmBalances(params) {
     return {};
   }
 
-  try {
-    // Auto-sweep any ERC20 tokens sitting in the user's proxy before fetching balances
-    if (transactionManager?.getCurrentAdapter()?.checkAndSweepProxy) {
-      await transactionManager.getCurrentAdapter().checkAndSweepProxy();
+  // The transaction manager routes balances to the legacy account or the
+  // selected vault (and auto-sweeps deposit addresses) — always prefer it
+  // over querying the contract directly
+  if (transactionManager) {
+    try {
+      const currentUserAddress = userAddress || (await transactionManager.getAddress());
+      const balances = await transactionManager.getAllBalances(currentUserAddress);
+      console.log("✅ EVM balances fetched via transaction manager:", balances);
+      return balances;
+    } catch (error) {
+      console.error("❌ Error fetching EVM balances via transaction manager:", error);
+      return {};
     }
+  }
 
+  try {
     const currentUserAddress = userAddress || (await signer.getAddress());
     const currentNetwork = getCurrentNetwork('evm', selectedNetwork);
     const newBalances = {};

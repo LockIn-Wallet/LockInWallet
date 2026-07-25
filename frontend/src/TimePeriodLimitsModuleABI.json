@@ -512,6 +512,19 @@
   },
   {
     "inputs": [],
+    "name": "proposalSystemModule",
+    "outputs": [
+      {
+        "internalType": "contract IProposalSystemModule",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
     "name": "proxiableUUID",
     "outputs": [
       {
@@ -585,6 +598,19 @@
       }
     ],
     "name": "setCommonPeriodLimits",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "_proposalSystemModule",
+        "type": "address"
+      }
+    ],
+    "name": "setProposalSystemModule",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"

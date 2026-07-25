@@ -377,6 +377,235 @@ export const homeStyles = {
     margin: 0,
   },
 
+  // Time-lock explainer — shared block heading
+  blockTitle: {
+    fontSize: fontSize.xl,
+    fontWeight: fontWeight.semibold,
+    color: colors.text.primary,
+    textAlign: "center",
+    margin: `0 0 ${spacing.xs} 0`,
+  },
+
+  blockSubtitle: {
+    fontSize: fontSize.sm,
+    color: colors.text.muted,
+    textAlign: "center",
+    lineHeight: 1.6,
+    margin: `0 auto ${spacing.xl} auto`,
+    maxWidth: "560px",
+  },
+
+  blockDivider: {
+    border: "none",
+    borderTop: `1px solid ${colors.border.default}`,
+    margin: `${spacing.xxl} 0`,
+  },
+
+  // Withdrawal ticket + limit buckets
+  withdrawTicket: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.md,
+    fontSize: fontSize.lg,
+    fontWeight: fontWeight.semibold,
+    color: colors.text.primary,
+    backgroundColor: colors.background.dark,
+    border: `1px solid ${colors.border.default}`,
+    borderRadius: borderRadius.lg,
+    padding: spacing.lg,
+    marginBottom: spacing.xl,
+    transition: transitions.normal,
+  },
+
+  withdrawTicketAccepted: {
+    borderColor: colors.success.border,
+    color: colors.success.light,
+  },
+
+  withdrawTicketRejected: {
+    borderColor: colors.error.main,
+    color: colors.error.light,
+  },
+
+  bucketList: {
+    display: "flex",
+    flexDirection: "column",
+    gap: spacing.lg,
+  },
+
+  bucketRow: {
+    backgroundColor: colors.background.dark,
+    border: `1px solid ${colors.border.default}`,
+    borderRadius: borderRadius.lg,
+    padding: spacing.lg,
+    transition: transitions.normal,
+  },
+
+  bucketRowEmpty: {
+    borderColor: colors.error.main,
+  },
+
+  bucketHeader: {
+    display: "flex",
+    alignItems: "baseline",
+    justifyContent: "space-between",
+    gap: spacing.sm,
+    marginBottom: spacing.sm,
+  },
+
+  bucketName: {
+    fontSize: fontSize.normal,
+    fontWeight: fontWeight.semibold,
+    color: colors.text.primary,
+  },
+
+  bucketNote: {
+    fontSize: fontSize.xs,
+    color: colors.text.muted,
+    marginLeft: spacing.sm,
+    fontWeight: fontWeight.normal,
+  },
+
+  bucketNumbers: {
+    fontSize: fontSize.sm,
+    fontFamily: "monospace",
+    color: colors.text.light,
+    whiteSpace: "nowrap",
+  },
+
+  bucketNumbersEmpty: {
+    color: colors.error.light,
+  },
+
+  bucketRefill: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.sm,
+    fontSize: fontSize.sm,
+    color: colors.warning.light,
+    marginTop: spacing.sm,
+  },
+
+  bucketRefillDone: {
+    color: colors.success.light,
+  },
+
+  bucketClock: {
+    fontFamily: "monospace",
+    fontWeight: fontWeight.bold,
+    fontSize: fontSize.lg,
+  },
+
+  // One-line bypass / limit-change strip with its 24h countdown
+  bypassStrip: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    flexWrap: "wrap",
+    gap: spacing.lg,
+    backgroundColor: colors.background.dark,
+    border: `1px solid ${colors.warning.main}`,
+    borderRadius: borderRadius.lg,
+    padding: `${spacing.lg} ${spacing.xl}`,
+  },
+
+  bypassLabel: {
+    fontSize: fontSize.normal,
+    fontWeight: fontWeight.semibold,
+    color: colors.text.primary,
+  },
+
+  bypassClock: {
+    fontSize: fontSize.xxl,
+    fontWeight: fontWeight.bold,
+    fontFamily: "monospace",
+    color: colors.warning.light,
+    whiteSpace: "nowrap",
+  },
+
+  // Chain availability
+  chainGrid: {
+    display: "flex",
+    gap: spacing.xl,
+    flexWrap: "wrap",
+    justifyContent: "center",
+  },
+
+  chainCard: {
+    flex: "1 1 260px",
+    backgroundColor: colors.background.dark,
+    border: `1px solid ${colors.border.default}`,
+    borderRadius: borderRadius.xl,
+    padding: spacing.xl,
+  },
+
+  chainCardLive: {
+    borderColor: colors.success.border,
+  },
+
+  chainHeader: {
+    display: "flex",
+    alignItems: "center",
+    gap: spacing.lg,
+    marginBottom: spacing.md,
+  },
+
+  chainLogoWrap: {
+    display: "flex",
+    alignItems: "center",
+    flexShrink: 0,
+  },
+
+  chainLogoMuted: {
+    opacity: 0.45,
+    filter: "grayscale(1)",
+  },
+
+  chainName: {
+    fontSize: fontSize.xl,
+    fontWeight: fontWeight.bold,
+    color: colors.text.primary,
+    lineHeight: 1.2,
+  },
+
+  chainTagline: {
+    fontSize: fontSize.xs,
+    color: colors.text.muted,
+  },
+
+  chainBadge: {
+    display: "inline-block",
+    fontSize: fontSize.xs,
+    fontWeight: fontWeight.semibold,
+    color: colors.text.muted,
+    backgroundColor: colors.background.primary,
+    border: `1px solid ${colors.border.default}`,
+    borderRadius: borderRadius.sm,
+    padding: `2px ${spacing.sm}`,
+    marginBottom: spacing.md,
+  },
+
+  chainBadgeLive: {
+    color: colors.success.light,
+    borderColor: colors.success.border,
+  },
+
+  chainDetail: {
+    fontSize: fontSize.sm,
+    color: colors.text.light,
+    lineHeight: 1.6,
+    margin: `0 0 ${spacing.md} 0`,
+  },
+
+  chainBestFor: {
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.semibold,
+    color: colors.text.secondary,
+    margin: 0,
+  },
+
   // Deposit slider
   sliderBox: {
     backgroundColor: colors.background.dark,
@@ -462,6 +691,27 @@ export const homeStyles = {
     maxHeight: "300px",
     borderRadius: borderRadius.lg,
     boxShadow: "0 4px 12px rgba(0, 0, 0, 0.2)",
+  },
+
+  // Responsive 16:9 wrapper for embedded video
+  mediaEmbed: {
+    position: "relative",
+    width: "100%",
+    maxWidth: "700px",
+    margin: "0 auto",
+    paddingTop: "56.25%",
+    borderRadius: borderRadius.lg,
+    overflow: "hidden",
+    boxShadow: "0 4px 12px rgba(0, 0, 0, 0.2)",
+  },
+
+  mediaEmbedFrame: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    width: "100%",
+    height: "100%",
+    border: "none",
   },
 
   mediaVideo: {

@@ -7,6 +7,7 @@ import {
   formatTxAmount,
   formatTxTimestamp,
 } from "../../services";
+import { getCurrentNetwork } from "../../utils/walletUtils.js";
 
 const historyStyles = {
   container: {
@@ -112,7 +113,6 @@ const TransactionHistory = ({
   userAddress,
   networkType,
   selectedNetwork,
-  getCurrentNetwork,
   transactionManager,
 }) => {
   const [transactions, setTransactions] = useState([]);
@@ -120,14 +120,13 @@ const TransactionHistory = ({
   const [loaded, setLoaded] = useState(false);
 
   const getTokens = useCallback(() => {
-    if (!getCurrentNetwork) return {};
     try {
       const network = getCurrentNetwork(networkType, selectedNetwork);
       return network?.tokens || {};
     } catch {
       return {};
     }
-  }, [getCurrentNetwork, networkType, selectedNetwork]);
+  }, [networkType, selectedNetwork]);
 
   const loadHistory = useCallback(async () => {
     if (networkType === "solana" && !transactionManager) return;
@@ -138,6 +137,10 @@ const TransactionHistory = ({
       let history = [];
       if (networkType === "solana") {
         history = await fetchSolanaTransactionHistory({ transactionManager });
+      } else if (transactionManager?.isVaultSelected?.()) {
+        // EVM vault events live on the vault module, not the savings contract;
+        // per-vault history is not implemented yet
+        history = [];
       } else {
         const tokens = getTokens();
         history = await fetchTransactionHistory({
@@ -257,7 +260,6 @@ TransactionHistory.propTypes = {
   userAddress: PropTypes.string,
   networkType: PropTypes.string.isRequired,
   selectedNetwork: PropTypes.string,
-  getCurrentNetwork: PropTypes.func,
   transactionManager: PropTypes.object,
 };
 

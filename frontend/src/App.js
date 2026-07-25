@@ -1,167 +1,515 @@
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, {
+  useState,
+  useEffect,
+  useCallback,
+  useRef,
+  lazy,
+  Suspense,
+} from "react";
+import {
+  BrowserRouter,
+  Routes,
+  Route,
+  Navigate,
+  useNavigate,
+  useLocation,
+} from "react-router-dom";
 import { ethers } from "ethers";
 import SavingsABI from "./SavingsABI.json";
-import MockUSDT_ABI from "./MockUSDT_ABI.json";
-
-// Import custom hooks
 import { useNetworkManager } from "./hooks/useNetworkManager.js";
-
-// Solana imports
-import { Connection, PublicKey, clusterApiUrl } from "@solana/web3.js";
 import { useWallet, useConnection } from "@solana/wallet-adapter-react";
-// Import Solana wallet adapter CSS
 import "@solana/wallet-adapter-react-ui/styles.css";
 
-// Import extracted styles
 import {
   styles,
   buttonStyles,
-  cardStyles,
-  formStyles,
-  spacingUtilities,
-  borderRadius,
+  colors,
+  spacing,
   fontSize,
 } from "./styles";
-
-// Import network configuration
-import networkConfig from "./networkConfig.json";
-
-// Import utility functions
 import {
   NETWORKS,
-  getNetworkByChainId,
   getCurrentNetwork,
-  isSolanaNetwork,
-  formatCountdown,
   calculateInstantWithdrawableAmount,
 } from "./utils/walletUtils.js";
-
-// Import network filtering utilities
 import {
   getDefaultNetwork,
   getAvailableNetworks,
-  hasProductionNetworks,
 } from "./utils/networkFilter.js";
-
-// Import feature flags
 import { isSolanaEnabled } from "./utils/featureFlags.js";
-
-
-// Import provider management utilities
 import {
   ensureCorrectNetwork,
   createProviderAndSigner,
 } from "./utils/providerManager.js";
-
-// Import circuit breaker utilities
 import {
   createCircuitBreakers,
   safeContractCall,
   debounce,
 } from "./utils/circuitBreaker.js";
-
-// Import error handling utilities
 import {
   createErrorHandler,
-  retryWithErrorHandling,
   getNetworkErrorMessage,
   getDevErrorDetails,
 } from "./utils/errorHandling.js";
-
-// Import services
+import { TransactionManager } from "./adapters/TransactionManager.js";
 import {
   fetchSpendingLimits as fetchSpendingLimitsService,
-  fetchPendingLimitProposals as fetchPendingLimitProposalsService,
-  fetchUserBalances as fetchUserBalancesService,
+  captureReferrerFromUrl,
 } from "./services";
 
-// Import components
 import SolanaWalletProvider from "./components/SolanaWalletProvider.js";
 import SocialLinks from "./components/atoms/SocialLinks.js";
-import StatusHeader from "./components/molecules/StatusHeader.js";
-import BalanceDisplay from "./components/molecules/BalanceDisplay.js";
-import WalletConnectionPrompt from "./components/molecules/WalletConnectionPrompt.js";
-import DepositInterface from "./components/molecules/DepositInterface.js";
-import SpendingLimitsSetup from "./components/organisms/SpendingLimitsSetup.js";
-import WithdrawalInterface from "./components/organisms/WithdrawalInterface.js";
-import SetupCommitStep from "./components/organisms/SetupCommitStep.js";
-import WithdrawalAddressSetupStep from "./components/organisms/WithdrawalAddressSetupStep.js";
 import Footer from "./components/atoms/Footer.js";
 import CollapsibleSection from "./components/atoms/CollapsibleSection.js";
+import StatusHeader from "./components/molecules/StatusHeader.js";
+import WalletConnectionPrompt from "./components/molecules/WalletConnectionPrompt.js";
+import BalanceDisplay from "./components/molecules/BalanceDisplay.js";
+import DepositInterface from "./components/molecules/DepositInterface.js";
 import TransactionHistory from "./components/molecules/TransactionHistory.js";
+import SpendingLimitsSetup from "./components/organisms/SpendingLimitsSetup.js";
+import SetupCommitStep from "./components/organisms/SetupCommitStep.js";
+import WithdrawalAddressSetupStep from "./components/organisms/WithdrawalAddressSetupStep.js";
+import WithdrawalInterface from "./components/organisms/WithdrawalInterface.js";
+import ReferralSection from "./components/organisms/ReferralSection.js";
+import UpgradeBanner from "./components/molecules/UpgradeBanner.js";
+import GovernancePage from "./components/pages/GovernancePage.js";
+import VaultCard from "./components/molecules/VaultCard.js";
 
-// Note: Step validation utilities removed - using simplified setup logic
+import CreateVault from "./components/pages/CreateVault.js";
 
-const ETH_ADDRESS = networkConfig.constants.ETH_ADDRESS; // ETH address (native token)
-const SOL_ADDRESS = networkConfig.constants.SOL_ADDRESS; // SOL address (native token)
+// Split out so chart.js only downloads for visitors who open the visualiser
+const SavingsVisualiser = lazy(() =>
+  import("./components/pages/SavingsVisualiser.js")
+);
 
-// For backward compatibility
-const USDT_ADDRESS = "0x610178dA211FEF7D417bC0e6FeD39F05609AD788"; // Updated: 0x610178dA211FEF7D417bC0e6FeD39F05609AD788
+function MainFlow({
+  transactionManager,
+  navigate,
+  networkConfig,
+  networkType,
+  selectedNetwork,
+  onSetupCommitted,
+  // Solana props
+  wallet,
+  connection,
+  // EVM props
+  provider,
+  signer,
+  savingsContract,
+  evmUserAddress,
+}) {
+  const solanaConnected = networkType === "solana" ? (wallet?.connected || false) : false;
+  const solanaPublicKey = networkType === "solana" ? (wallet?.publicKey || null) : null;
+  const userAddress = networkType === "solana"
+    ? wallet?.publicKey?.toString() || null
+    : evmUserAddress || null;
 
-// Main App Component with state management
-function AppContent() {
-  // Network state management - try to restore from localStorage
-  const [networkType, setNetworkType] = useState(() => {
-    // Solana login is feature-flagged off until its programs are deployed
-    if (!isSolanaEnabled()) {
-      return "evm";
+  const [isSetupCommitted, setIsSetupCommitted] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [currentTime, setCurrentTime] = useState(Date.now());
+
+  const [spendingLimits, setSpendingLimits] = useState([]);
+  const [limitEdits, setLimitEdits] = useState({
+    Daily: { value: "", isActive: false, isEditing: false },
+    Weekly: { value: "", isActive: false, isEditing: false },
+    Monthly: { value: "", isActive: false, isEditing: false },
+  });
+  const [balances, setBalances] = useState({});
+  const [selectedToken, setSelectedToken] = useState("USDT");
+  const [instantWithdrawableAmount, setInstantWithdrawableAmount] = useState(0);
+  const [limitingPeriod, setLimitingPeriod] = useState("");
+
+  const [userVaults, setUserVaults] = useState([]);
+  const [balanceRefreshTrigger, setBalanceRefreshTrigger] = useState(0);
+  const [limitsMode, setLimitsMode] = useState("fixed");
+
+  useEffect(() => {
+    const timer = setInterval(() => setCurrentTime(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const fetchSpendingLimits = useCallback(async () => {
+    try {
+      const spendingData = await fetchSpendingLimitsService({
+        transactionManager,
+        networkType,
+      });
+      setSpendingLimits(spendingData.limits || []);
+      setIsSetupCommitted(spendingData.isSetupCommitted || false);
+    } catch (err) {
+      console.error("Error fetching spending limits:", err);
     }
+  }, [transactionManager, networkType]);
 
-    // Check localStorage first
-    const saved = localStorage.getItem("preferredNetworkType");
-    if (saved === "solana" || saved === "evm") {
-      return saved;
-    }
+  useEffect(() => {
+    const init = async () => {
+      try {
+        setLoading(true);
+        if (networkType === "solana") {
+          const committed = transactionManager.isSetupCommitted();
+          setIsSetupCommitted(committed);
+          if (committed) {
+            await fetchSpendingLimits();
+            await loadUserVaults();
+          }
+        } else {
+          const committed = await transactionManager.getIsSetupCommitted(userAddress);
+          setIsSetupCommitted(committed);
+          if (committed) {
+            await fetchSpendingLimits();
+          }
+          await loadUserVaults();
+        }
+      } catch (err) {
+        console.error("Setup check failed:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    init();
+  }, [transactionManager, fetchSpendingLimits, networkType, userAddress]);
 
-    // Default to Solana if we detect a Solana wallet connection
-    return localStorage.getItem("walletName") ? "solana" : "evm";
-  }); // "evm" or "solana"
-
-  // Smart network selection based on environment and deployment status
-  const [selectedNetwork, setSelectedNetwork] = useState(() => {
-    // Try to restore from localStorage first
-    const savedNetwork = localStorage.getItem(`preferred_${networkType}_network`);
-    if (savedNetwork) {
-      const availableNetworks = getAvailableNetworks(networkType);
-      const isAvailable = availableNetworks.some(network => network.key === savedNetwork);
-      if (isAvailable) {
-        return savedNetwork;
+  useEffect(() => {
+    if (spendingLimits.length > 0) {
+      const result = calculateInstantWithdrawableAmount(spendingLimits);
+      if (result) {
+        setInstantWithdrawableAmount(result.amount || 0);
+        setLimitingPeriod(result.limitingPeriod || "");
       }
     }
+  }, [spendingLimits]);
 
-    // Get appropriate default based on environment and deployment status
-    return getDefaultNetwork(networkType);
-  });
+  const loadUserVaults = async () => {
+    const vaults = await transactionManager.getUserVaults().catch(() => []);
+    setUserVaults(vaults);
+  };
 
-  // Conditionally render SolanaWalletProvider only for Solana network
-  if (networkType === "solana") {
+  // The main wallet flow operates on the currently selected ("active") vault —
+  // the personal vault by default. Selecting a card switches the whole flow
+  // (balances, deposits, withdrawals, limits) to that vault. On EVM the initial
+  // setup lives in the legacy savings account rather than a vault, so it is
+  // represented by a synthetic "Savings" card.
+  const personalVaultAddress = transactionManager?.getPersonalVaultAddress?.() || null;
+  const currentVaultAddress = transactionManager?.getActiveVaultAddress?.() || null;
+  const hasPersonalVault = userVaults.some(({ vault }) => vault.address === personalVaultAddress);
+
+  const handleSelectVault = async (vaultAddress) => {
+    // null selects the default: personal vault / legacy account
+    transactionManager.setActiveVault(
+      vaultAddress === personalVaultAddress ? null : vaultAddress
+    );
+    await fetchSpendingLimits();
+    setBalanceRefreshTrigger((prev) => prev + 1);
+  };
+
+  const displayVaults = [
+    ...(hasPersonalVault
+      ? []
+      : [{
+          vault: {
+            address: null,
+            vaultType: "Personal",
+            name: "Savings",
+            tokenSymbol: "All tokens",
+            dailyLimit: 0,
+            weeklyLimit: 0,
+            monthlyLimit: 0,
+            penaltyRateBps: 0,
+            memberCount: 1,
+          },
+          membership: null,
+          isCurrent: currentVaultAddress === null,
+        }]),
+    ...userVaults
+      .map((entry) => ({ ...entry, isCurrent: entry.vault.address === currentVaultAddress }))
+      .sort((a, b) => Number(b.isCurrent) - Number(a.isCurrent)),
+  ];
+
+  const refreshBalances = useCallback(async () => {
+    await fetchSpendingLimits();
+    setBalanceRefreshTrigger((prev) => prev + 1);
+  }, [fetchSpendingLimits]);
+
+  const handleSpendingLimitsUpdate = useCallback((limits, edits) => {
+    setSpendingLimits(limits);
+    if (edits) setLimitEdits(edits);
+  }, []);
+
+  const getCurrentUserAddress = useCallback(() => {
+    return userAddress;
+  }, [userAddress]);
+
+  if (loading) {
     return (
-      <SolanaWalletProvider
-        networkType={networkType}
-        selectedNetwork={selectedNetwork}
-      >
-        <AppContentInner
-          networkType={networkType}
-          setNetworkType={setNetworkType}
-          selectedNetwork={selectedNetwork}
-          setSelectedNetwork={setSelectedNetwork}
-        />
-      </SolanaWalletProvider>
+      <div style={{ textAlign: "center", padding: "60px", color: colors.text.secondary }}>
+        Loading your wallet...
+      </div>
     );
   }
 
-  // EVM mode - no Solana provider needed
   return (
-    <AppContentInner
-      networkType={networkType}
-      setNetworkType={setNetworkType}
-      selectedNetwork={selectedNetwork}
-      setSelectedNetwork={setSelectedNetwork}
-    />
+    <div>
+      {/* Queued contract changes — users get the timelock window to review/exit */}
+      <UpgradeBanner
+        transactionManager={transactionManager}
+        currentTime={currentTime}
+        navigate={navigate}
+      />
+
+      {/* My Vaults Section (unlocked once the personal wallet setup is committed) */}
+      {isSetupCommitted && (
+        <div style={{ marginBottom: spacing.xl }}>
+          <div style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            marginBottom: spacing.lg,
+          }}>
+            <h3 style={{ color: "white", margin: 0 }}>My Vaults</h3>
+            <div style={{ display: "flex", gap: spacing.sm }}>
+              <button style={buttonStyles.primary} onClick={() => navigate("/create")}>
+                + Create Vault
+              </button>
+              <button
+                style={{ ...buttonStyles.secondary, fontSize: fontSize.xs }}
+                onClick={loadUserVaults}
+              >
+                Refresh
+              </button>
+            </div>
+          </div>
+
+          <div style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))",
+            gap: spacing.lg,
+          }}>
+            {displayVaults.map(({ vault, isCurrent }) => (
+              <VaultCard
+                key={vault.address || "default"}
+                vault={vault}
+                isSelected={isCurrent}
+                onClick={isCurrent ? undefined : () => handleSelectVault(vault.address)}
+              />
+            ))}
+          </div>
+          <p style={{
+            fontSize: fontSize.xs,
+            color: colors.text.secondary,
+            marginTop: spacing.sm,
+            marginBottom: 0,
+          }}>
+            Everything below — balances, deposits, withdrawals and limits — belongs to the
+            selected vault. Click a vault to switch, or create one for a separate purpose.
+          </p>
+        </div>
+      )}
+
+      {/* Everything below operates on the selected vault. The key remounts
+          these sections on vault switch so each one refetches its data
+          (balances, deposit address, limits, history) for the new vault. */}
+      <div key={currentVaultAddress || "default"}>
+
+      {/* Balance Display (only when setup committed) */}
+      {isSetupCommitted && (
+        <BalanceDisplay
+          transactionManager={transactionManager}
+          savingsContract={savingsContract}
+          signer={signer}
+          connection={connection}
+          networkType={networkType}
+          selectedNetwork={selectedNetwork}
+          userAddress={userAddress}
+          solanaPublicKey={solanaPublicKey}
+          solanaConnected={solanaConnected}
+          isSetupCommitted={isSetupCommitted}
+          provider={provider}
+          solanaWallet={wallet}
+          balances={balances}
+          onBalanceUpdate={(newBalances) => setBalances(newBalances)}
+          connectWallet={() => {}}
+          refreshTrigger={balanceRefreshTrigger}
+        />
+      )}
+
+      {/* Tutorial section during setup */}
+      {!isSetupCommitted && (
+        <div style={{
+          marginBottom: "20px",
+          padding: "16px",
+          backgroundColor: "#1a365d",
+          border: "2px solid #48bb78",
+          borderRadius: "8px",
+          color: "white",
+        }}>
+          <div style={{ display: "flex", alignItems: "center", marginBottom: "12px", gap: "8px" }}>
+            <span style={{ fontSize: "1.25rem" }}>🛡️</span>
+            <h4 style={{ margin: 0, color: "#9ae6b4", fontSize: "1.1em", fontWeight: "600" }}>
+              Protect your Bankroll/Savings/Profits even from yourself
+            </h4>
+          </div>
+          <div style={{ fontSize: "0.9em", lineHeight: "1.6", color: "#e2e8f0" }}>
+            <p style={{ margin: "0 0 8px 0" }}>
+              <strong>🏦 No-trading wallet:</strong> Designed for storing stablecoins for your peace of mind.
+            </p>
+            <p style={{ margin: "0 0 8px 0" }}>
+              <strong>🔐 Set up withdrawal allowance:</strong> Changes to allowance or bypassing withdrawal limits are timelocked to combat spending/risking impulses.
+            </p>
+            <p style={{ margin: "0 0 8px 0" }}>
+              <strong>🛡️ Compromise-Resistant:</strong> Funds are safe even when your private key is compromised (coming soon)
+            </p>
+            <p style={{ margin: "0" }}>
+              <strong>⛓️ Fully On-Chain:</strong> No intermediaries
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Deposit Interface (only when committed) */}
+      {isSetupCommitted && (
+        <CollapsibleSection title="Deposit Funds" icon="📥" defaultExpanded={true}>
+          <DepositInterface
+            transactionManager={transactionManager}
+            savingsContract={savingsContract}
+            signer={signer}
+            connection={connection}
+            networkType={networkType}
+            selectedNetwork={selectedNetwork}
+            userAddress={userAddress}
+            solanaPublicKey={solanaPublicKey}
+            solanaConnected={solanaConnected}
+            selectedToken={selectedToken}
+            setSelectedToken={setSelectedToken}
+            onBalanceUpdate={refreshBalances}
+          />
+        </CollapsibleSection>
+      )}
+
+      {/* Spending Limits Setup / Management */}
+      {isSetupCommitted ? (
+        <CollapsibleSection title="Spending Limits" icon="⏱️" defaultExpanded={true}>
+          <SpendingLimitsSetup
+            isSetupCommitted={isSetupCommitted}
+            currentTime={currentTime}
+            networkType={networkType}
+            transactionManager={transactionManager}
+            solanaConnected={solanaConnected}
+            savingsContract={savingsContract}
+            getCurrentUserAddress={getCurrentUserAddress}
+            spendingLimits={spendingLimits}
+            onSpendingLimitsUpdate={handleSpendingLimitsUpdate}
+            activeVaultAddress={currentVaultAddress}
+          />
+        </CollapsibleSection>
+      ) : (
+        <SpendingLimitsSetup
+          isSetupCommitted={isSetupCommitted}
+          currentTime={currentTime}
+          networkType={networkType}
+          transactionManager={transactionManager}
+          solanaConnected={solanaConnected}
+          savingsContract={savingsContract}
+          getCurrentUserAddress={getCurrentUserAddress}
+          spendingLimits={spendingLimits}
+          onSpendingLimitsUpdate={handleSpendingLimitsUpdate}
+          limitsMode={limitsMode}
+          onLimitsModeChange={setLimitsMode}
+          showModeToggle={transactionManager?.supportsPercentSetupLimits?.() || false}
+        />
+      )}
+
+      {/* Withdrawal Addresses Setup (only during setup) */}
+      {!isSetupCommitted && (
+        <WithdrawalAddressSetupStep
+          isSetupCommitted={isSetupCommitted}
+          spendingLimits={spendingLimits}
+          transactionManager={transactionManager}
+          savingsContract={savingsContract}
+          networkType={networkType}
+          solanaConnected={solanaConnected}
+          solanaPublicKey={solanaPublicKey}
+          userAddress={userAddress}
+        />
+      )}
+
+      {/* Setup Commit Step (only during setup) */}
+      {!isSetupCommitted && (
+        <SetupCommitStep
+          isSetupCommitted={isSetupCommitted}
+          spendingLimits={spendingLimits}
+          limitEdits={limitEdits}
+          transactionManager={transactionManager}
+          savingsContract={savingsContract}
+          networkType={networkType}
+          solanaConnected={solanaConnected}
+          userAddress={userAddress}
+          onSetupCommitted={(committed) => {
+            setIsSetupCommitted(committed);
+            onSetupCommitted?.(committed);
+            if (committed) {
+              loadUserVaults();
+            }
+          }}
+          onSpendingLimitsRefresh={fetchSpendingLimits}
+          limitsMode={limitsMode}
+        />
+      )}
+
+      {/* Withdrawal Interface (only when committed) */}
+      {isSetupCommitted && (
+        <CollapsibleSection title="Withdraw Funds" icon="💸" defaultExpanded={true}>
+          <WithdrawalInterface
+            transactionManager={transactionManager}
+            activeVaultAddress={currentVaultAddress}
+            savingsContract={savingsContract}
+            signer={signer}
+            connection={connection}
+            networkType={networkType}
+            selectedNetwork={selectedNetwork}
+            getCurrentUserAddress={getCurrentUserAddress}
+            solanaConnected={solanaConnected}
+            solanaPublicKey={solanaPublicKey}
+            userAddress={userAddress}
+            selectedToken={selectedToken}
+            setSelectedToken={setSelectedToken}
+            instantWithdrawableAmount={instantWithdrawableAmount}
+            limitingPeriod={limitingPeriod}
+            spendingLimits={spendingLimits}
+            onBalanceUpdate={refreshBalances}
+            onSpendingLimitsUpdate={fetchSpendingLimits}
+            currentTime={currentTime}
+          />
+        </CollapsibleSection>
+      )}
+
+      {/* Transaction History (only when committed) */}
+      {isSetupCommitted && (
+        <CollapsibleSection title="Transaction History" icon="📜" defaultExpanded={true}>
+          <TransactionHistory
+            savingsContract={savingsContract}
+            userAddress={userAddress}
+            networkType={networkType}
+            selectedNetwork={selectedNetwork}
+            transactionManager={transactionManager}
+          />
+        </CollapsibleSection>
+      )}
+
+      {/* Referral Program (only when committed) */}
+      {isSetupCommitted && transactionManager?.supportsReferrals?.() && (
+        <CollapsibleSection title="Invite & Earn" icon="🤝" defaultExpanded={false}>
+          <ReferralSection
+            transactionManager={transactionManager}
+            userAddress={getCurrentUserAddress()}
+          />
+        </CollapsibleSection>
+      )}
+
+      </div>
+    </div>
   );
 }
 
-// Inner component that uses wallet hooks
 function AppContentInner({
   networkType,
   setNetworkType,
@@ -172,9 +520,11 @@ function AppContentInner({
   const [provider, setProvider] = useState(null);
   const [signer, setSigner] = useState(null);
   const [savingsContract, setSavingsContract] = useState(null);
-  const [balances, setBalances] = useState({}); // Multi-token balances
+  const [evmUserAddress, setEvmUserAddress] = useState("");
+  const [currentChainId, setCurrentChainId] = useState(null);
+  const [isNetworkSwitching, setIsNetworkSwitching] = useState(false);
 
-  // Solana wallet state - only use hooks when in Solana mode
+  // Solana wallet state
   let solanaConnected = false;
   let solanaPublicKey = null;
   let solanaDisconnect = () => {};
@@ -184,12 +534,10 @@ function AppContentInner({
   let solanaSignAllTransactions = () => {};
   let connection = null;
 
-  // Only use Solana hooks when networkType is 'solana' and provider is available
   if (networkType === "solana") {
     try {
       const walletState = useWallet();
       const connectionState = useConnection();
-
       solanaConnected = walletState.connected;
       solanaPublicKey = walletState.publicKey;
       solanaDisconnect = walletState.disconnect;
@@ -202,84 +550,38 @@ function AppContentInner({
       console.warn("Solana wallet hooks not available:", error);
     }
   }
-  const [currentChainId, setCurrentChainId] = useState(null); // MetaMask's current chain ID
-  const [isNetworkSwitching, setIsNetworkSwitching] = useState(false);
 
-  // Multi-blockchain transaction manager
   const [transactionManager, setTransactionManager] = useState(null);
-
-  // Circuit breaker protection
   const [circuitBreakers] = useState(() => createCircuitBreakers());
-
-  // Prevent multiple simultaneous wallet operations (ref for synchronous check)
   const walletOperationInProgress = useRef(false);
-
-  // Error handling
-  const [lastError, setLastError] = useState(null);
-  const contractErrorHandler = createErrorHandler(
-    "contract_interaction",
-    (error) => {
-      setLastError(error);
-      // Display user-friendly error message
-      if (error.severity === "error") {
-        console.error(
-          "Contract Error:",
-          error.userMessage + getDevErrorDetails(error)
-        );
-      }
-    }
-  );
-
-  // Time-based spending limits state - unified interface
-  const [spendingLimits, setSpendingLimits] = useState([]); // Array of all time periods
-  const [pendingLimitProposals, setPendingLimitProposals] = useState([]); // Pending limit change proposals
-  const [limitsLoaded, setLimitsLoaded] = useState(false); // Track if limits have been fetched
-  const [limitEdits, setLimitEdits] = useState({}); // Track unsaved limit edits from SpendingLimitsSetup
-  // const [saveSpendingLimitsCallback, setSaveSpendingLimitsCallback] = useState(null); // Temporarily disabled
-
-  // Unified limit editing state - moved to SpendingLimitsSetup component
-
-  const [selectedToken, setSelectedToken] = useState("USDT"); // Default to USDT
-  const [userAddress, setUserAddress] = useState(""); // Store user address
-
-  // Proxy deployment state (still used by setup components)
-  const [isProxyDeployed, setIsProxyDeployed] = useState(false);
-  const [proxyAddress, setProxyAddress] = useState("");
-
-  // Two-phase system state
   const [isSetupCommitted, setIsSetupCommitted] = useState(false);
-  const [setupInfo, setSetupInfo] = useState(null);
 
-  // Bypass system state
-  const [currentTime, setCurrentTime] = useState(Math.floor(Date.now() / 1000));
+  const navigate = useNavigate();
+  const location = useLocation();
 
-  // Note: Bypass system state now managed by WithdrawalInterface component
+  // The visualiser is a full dashboard — the 800px app column cramps it
+  const isWideRoute = location.pathname === "/savings-visualiser";
 
-  // Enhanced withdrawal system state
-  const [instantWithdrawableAmount, setInstantWithdrawableAmount] = useState(0);
-  const [limitingPeriod, setLimitingPeriod] = useState(null); // Which period is limiting
+  // Capture a ?ref= referral link once on load, before any wallet connects
+  useEffect(() => {
+    captureReferrerFromUrl();
+  }, []);
 
-  // Note: Simplified setup - removed step validation and wizard navigation
-
-  // State clearing function for network switches
-  const clearAllState = () => {
-    setIsProxyDeployed(false);
-    setProxyAddress("");
-    setPendingLimitProposals([]);
-    setSpendingLimits([]);
+  const clearAllState = useCallback(() => {
+    setProvider(null);
+    setSigner(null);
+    setSavingsContract(null);
+    setEvmUserAddress("");
     setIsSetupCommitted(false);
-    setBalances({});
-    // Note: Bypass requests now cleared by WithdrawalInterface component
-  };
+    setTransactionManager(null);
+  }, []);
 
-  // Network management hook
   const {
     detectCurrentNetwork,
     initializeTransactionManager,
     switchNetworkType,
     switchNetwork,
   } = useNetworkManager({
-    // Solana wallet context
     solanaConnected,
     solanaPublicKey,
     solanaSendTransaction,
@@ -287,19 +589,13 @@ function AppContentInner({
     solanaSignAllTransactions,
     solanaDisconnect,
     connection,
-
-    // State setters
     setNetworkType,
     setSelectedNetwork,
     setCurrentChainId,
     setTransactionManager,
     setIsNetworkSwitching,
-
-    // State clearing function
     clearAllState,
   });
-
-  // Network functions are now provided by useNetworkManager hook
 
   // Auto-initialize TransactionManager when wallet connects
   useEffect(() => {
@@ -307,94 +603,55 @@ function AppContentInner({
       if (transactionManager) return;
 
       if (networkType === "evm" && provider && signer && savingsContract) {
-        console.log("🔄 Auto-initializing TransactionManager for connected EVM wallet...");
         try {
-          const txManager = await initializeTransactionManager(networkType, selectedNetwork, { provider, signer });
-          if (txManager) {
-            console.log("✅ TransactionManager auto-initialized for EVM");
-          }
+          await initializeTransactionManager(networkType, selectedNetwork, { provider, signer });
         } catch (error) {
-          console.error("❌ Error auto-initializing TransactionManager for EVM:", error);
+          console.error("Error auto-initializing TransactionManager for EVM:", error);
         }
       } else if (networkType === "solana" && solanaConnected && solanaPublicKey && connection) {
-        console.log("🔄 Auto-initializing TransactionManager for connected Solana wallet...");
         try {
-          const txManager = await initializeTransactionManager(networkType, selectedNetwork);
-          if (txManager) {
-            console.log("✅ TransactionManager auto-initialized for Solana");
-            await fetchSpendingLimitsWithTxManager(txManager);
-          }
+          await initializeTransactionManager(networkType, selectedNetwork);
         } catch (error) {
-          console.error("❌ Error auto-initializing TransactionManager for Solana:", error);
+          console.error("Error auto-initializing TransactionManager for Solana:", error);
         }
       }
     };
-
     initIfNeeded();
-  }, [networkType, provider, signer, savingsContract, transactionManager, initializeTransactionManager, selectedNetwork, solanaConnected, solanaPublicKey, connection]);
-
-  // Memoized callback for spending limits update to prevent infinite loops
-  const handleSpendingLimitsUpdate = useCallback((updatedLimits, updatedLimitEdits) => {
-    setSpendingLimits(updatedLimits);
-    setLimitEdits(updatedLimitEdits || {});
-  }, []);
-
-  const isCorrectNetwork = () => {
-    if (networkType === "solana") {
-      // For Solana, consider connected if wallet is connected
-      return solanaConnected;
-    }
-
-    // For EVM networks
-    const expectedNetwork = getCurrentNetwork(networkType, selectedNetwork);
-    return currentChainId === expectedNetwork.chainId;
-  };
+  }, [networkType, provider, signer, savingsContract, transactionManager,
+      initializeTransactionManager, selectedNetwork, solanaConnected, solanaPublicKey, connection]);
 
   // Timer for countdown updates
   useEffect(() => {
-    const timer = setInterval(() => {
-      setCurrentTime(Math.floor(Date.now() / 1000));
-    }, 1000);
-
+    const timer = setInterval(() => {}, 1000);
     return () => clearInterval(timer);
   }, []);
 
-  // Set up event listeners and auto-connect (run once)
+  // MetaMask event listeners (EVM only)
   useEffect(() => {
     if (!window.ethereum) return;
 
     const handleChainChanged = (chainId) => {
       const numericChainId = parseInt(chainId, 16);
       setCurrentChainId(numericChainId);
-
       if (networkType !== "evm") return;
-
-      const network = getNetworkByChainId(numericChainId);
-      if (network) {
-        const networkKey = Object.keys(NETWORKS.evm).find(
-          (key) => NETWORKS.evm[key].chainId === numericChainId
-        );
-        if (networkKey) {
-          setSelectedNetwork(networkKey);
-          autoConnectWallet();
-        }
+      const networkKey = Object.keys(NETWORKS.evm || {}).find(
+        (key) => NETWORKS.evm[key].chainId === numericChainId
+      );
+      if (networkKey) {
+        setSelectedNetwork(networkKey);
+        autoConnectWallet();
       }
     };
 
     const handleAccountsChanged = (accounts) => {
       if (networkType !== "evm") return;
-
       if (accounts.length === 0) {
         setProvider(null);
         setSigner(null);
         setSavingsContract(null);
-        setBalances({});
-        setUserAddress("");
+        setEvmUserAddress("");
         setIsSetupCommitted(false);
-        setSetupInfo(null);
-        setPendingLimitProposals([]);
-        setIsProxyDeployed(false);
-        setProxyAddress("");
+        setTransactionManager(null);
         walletOperationInProgress.current = false;
       } else {
         autoConnectWallet();
@@ -415,31 +672,9 @@ function AppContentInner({
         window.ethereum.removeListener("accountsChanged", handleAccountsChanged);
       }
     };
-  }, [networkType]); // Re-run when networkType changes
+  }, [networkType]);
 
-  // Balance loading when network changes now handled by BalanceDisplay component
-
-  // Detect existing Solana connection on page load
-  useEffect(() => {
-    const detectSolanaConnection = async () => {
-      // Only run if user preferred Solana or if we need to auto-detect
-      const savedNetworkType = localStorage.getItem("preferredNetworkType");
-      if (isSolanaEnabled() && savedNetworkType === "solana" && !solanaConnected) {
-        // Try to auto-connect to existing Solana wallet
-        if (solanaWallet && !solanaConnected) {
-          try {
-            await solanaWallet.connect();
-          } catch (error) {
-            console.log("No existing Solana connection to restore");
-          }
-        }
-      }
-    };
-
-    detectSolanaConnection();
-  }, []); // Run once on mount
-
-  // Auto-connect when only one wallet type is supported
+  // Auto-detect available wallet type on mount
   useEffect(() => {
     const hasMetaMask = !!window.ethereum;
     const hasPhantom = !!(window.phantom?.solana || window.solana?.isPhantom);
@@ -447,148 +682,83 @@ function AppContentInner({
     const solanaAvailable = hasPhantom && getAvailableNetworks("solana").some((n) => n.deployed || n.isLocal);
 
     if (solanaAvailable && !evmAvailable && networkType !== "solana") {
-      const defaultSolana = getDefaultNetwork("solana");
-      switchNetworkType("solana", defaultSolana);
+      switchNetworkType("solana", getDefaultNetwork("solana"));
     } else if (evmAvailable && !solanaAvailable && networkType !== "evm") {
-      const defaultEvm = getDefaultNetwork("evm");
-      switchNetworkType("evm", defaultEvm);
+      switchNetworkType("evm", getDefaultNetwork("evm"));
     }
-  }, []); // Run once on mount
+  }, []);
 
-  // Calculate instant withdrawal amount whenever spending limits change
-  useEffect(() => {
-    const result = calculateInstantWithdrawableAmount(spendingLimits);
-    setInstantWithdrawableAmount(result.amount);
-    setLimitingPeriod(result.limitingPeriod);
-  }, [spendingLimits]);
+  const connectWalletInternal = async () => {
+    if (networkType === "evm") {
+      const chainIdHex = await window.ethereum.request({ method: "eth_chainId" });
+      const currentChain = parseInt(chainIdHex, 16);
+      const expectedNetwork = getCurrentNetwork(networkType, selectedNetwork);
+      if (currentChain !== expectedNetwork.chainId) {
+        setCurrentChainId(currentChain);
+        return;
+      }
+    }
 
-
-  // Balance refresh function for deposit callbacks and manual refresh
-  const refreshBalances = async () => {
+    let web3Provider, web3Signer;
     try {
-      console.log("🔄 App.js: Refreshing balances after deposit...");
+      const result = await createProviderAndSigner();
+      web3Provider = result.provider;
+      web3Signer = result.signer;
+    } catch (error) {
+      console.error("Failed to create provider:", error.message);
+      alert(error.message);
+      return;
+    }
 
-      // Fetch balances using the same service as BalanceDisplay
-      const fetchedBalances = await fetchUserBalancesService({
-        transactionManager,
-        savingsContract,
-        signer,
-        connection,
-        networkType,
-        selectedNetwork,
-        getCurrentNetwork,
-        userAddress,
-        solanaPublicKey
+    const currentNetwork = getCurrentNetwork(networkType, selectedNetwork);
+    const contractAddress = currentNetwork.savingsContract;
+
+    if (contractAddress === "0x0000000000000000000000000000000000000000") {
+      console.log(`Savings contract not deployed on ${currentNetwork.name} yet.`);
+      return;
+    }
+
+    try {
+      const code = await web3Provider.getCode(contractAddress);
+      if (code === "0x" || code === "0x0" || code.length <= 2) {
+        alert(`Contract not deployed at ${contractAddress}`);
+        return;
+      }
+    } catch (error) {
+      console.error("Contract verification failed:", error.message);
+      return;
+    }
+
+    const savings = new ethers.Contract(contractAddress, SavingsABI, web3Signer);
+    setProvider(web3Provider);
+    setSigner(web3Signer);
+    setSavingsContract(savings);
+
+    const address = await web3Signer.getAddress();
+    setEvmUserAddress(address);
+
+    let txManager = null;
+    try {
+      txManager = await initializeTransactionManager(networkType, selectedNetwork, {
+        provider: web3Provider,
+        signer: web3Signer,
       });
-
-      console.log("✅ App.js: Balances refreshed:", fetchedBalances);
-
-      // Update the state, which will trigger BalanceDisplay re-render
-      setBalances(fetchedBalances);
     } catch (error) {
-      console.error("❌ App.js: Error refreshing balances:", error);
-      // Set empty balances on error
-      setBalances({});
-    }
-  };
-
-  // TransactionManager initialization now handled by useNetworkManager hook
-
-  // Note: Solana data loading now handled by individual components
-  // (SpendingLimitsSetup, WithdrawalInterface, BalanceDisplay, etc.)
-
-  // Note: TransactionManager initialization now handled by useNetworkManager hook
-  // Data loading is handled by individual components (BalanceDisplay, WithdrawalInterface, etc.)
-
-  // Note: Balance loading now handled by BalanceDisplay component
-
-  // Set default balances immediately when switching to Solana to avoid empty state
-
-  // Note: Step validation logic removed - using simplified setup
-
-  // Note: Balance loading when switching networks is now handled directly in switchNetworkType()
-
-  // Balance fetching function moved to BalanceDisplay component
-
-  const checkProxyStatusWithSigner = async (
-    contract,
-    signerParam,
-    userAddr
-  ) => {
-    console.log("🔍 checkProxyStatusWithSigner called with:", {
-      contract: !!contract,
-      signer: !!signerParam,
-      userAddr,
-    });
-
-    if (!contract) {
-      console.log("❌ No contract provided to checkProxyStatusWithSigner");
-      return;
-    }
-    if (!signerParam) {
-      console.log("❌ No signer available for checkProxyStatusWithSigner");
-      return;
+      console.error("Error initializing TransactionManager for EVM:", error);
     }
 
     try {
-      const userAddress = userAddr || (await signerParam.getAddress());
-      console.log(`🔍 Checking proxy status for user: ${userAddress}`);
-
-      // Check if proxy is already deployed (with circuit breaker protection)
-      console.log("🔍 Calling contract.isProxyDeployed...");
-      const proxyDeployed = await safeContractCall(
-        () => contract.isProxyDeployed(userAddress),
-        circuitBreakers.contracts
-      );
-      console.log(`🔍 isProxyDeployed result: ${proxyDeployed}`);
-
-      // Get the calculated deposit address (whether deployed or not)
-      console.log("🔍 Calling contract.getUserDepositAddress...");
-      const depositAddress = await safeContractCall(
-        () => contract.getUserDepositAddress(userAddress),
-        circuitBreakers.contracts
-      );
-      console.log(`🔍 getUserDepositAddress result: ${depositAddress}`);
-
-      console.log(`✅ Proxy status for ${userAddress}:`);
-      console.log(`- Deployed: ${proxyDeployed}`);
-      console.log(`- Deposit Address: ${depositAddress}`);
-
-      // Update UI state - only set proxy address if actually deployed
-      setIsProxyDeployed(proxyDeployed);
-      setProxyAddress(proxyDeployed ? depositAddress : "");
-
-      console.log(
-        `✅ State updated: isProxyDeployed=${proxyDeployed}, proxyAddress=${depositAddress}`
-      );
-    } catch (error) {
-      const formattedError = contractErrorHandler(error);
-
-      // If there's an error checking proxy status, try a fallback approach
-      // The error might be because the function doesn't exist or the proxy is in an unexpected state
-      try {
-        const userAddress = userAddr || (await signerParam.getAddress());
-        const depositAddress = await safeContractCall(
-          () => contract.getUserDepositAddress(userAddress),
+      if (txManager) {
+        // Setup status lives in the ProposalSystemModule — the adapter
+        // resolves it through the module registry
+        const setupCommitted = await safeContractCall(
+          () => txManager.getIsSetupCommitted(address),
           circuitBreakers.contracts
         );
-
-        // If we can get a deposit address, assume proxy exists if it's not the zero address
-        const hasValidAddress =
-          depositAddress &&
-          depositAddress !== "0x0000000000000000000000000000000000000000";
-
-        console.log(
-          `Fallback check: depositAddress=${depositAddress}, hasValidAddress=${hasValidAddress}`
-        );
-
-        setIsProxyDeployed(hasValidAddress);
-        setProxyAddress(hasValidAddress ? depositAddress : "");
-      } catch (fallbackError) {
-        contractErrorHandler(fallbackError);
-        setIsProxyDeployed(false);
-        setProxyAddress("");
+        setIsSetupCommitted(!!setupCommitted);
       }
+    } catch (error) {
+      console.error("Error checking setup status:", error);
     }
   };
 
@@ -596,69 +766,42 @@ function AppContentInner({
     if (!window.ethereum || walletOperationInProgress.current) return;
     walletOperationInProgress.current = true;
     try {
-      // Check if already connected
-      const accounts = await window.ethereum.request({
-        method: "eth_accounts",
-      });
+      const accounts = await window.ethereum.request({ method: "eth_accounts" });
       if (accounts.length === 0) return;
 
-      console.log(`🔗 Auto-connecting wallet to ${networkType}:${selectedNetwork}...`);
-
-      // Auto-connect should NOT force network switch - just connect if already correct
       if (networkType === "evm") {
         const chainIdHex = await window.ethereum.request({ method: "eth_chainId" });
         const currentChain = parseInt(chainIdHex, 16);
         const expectedNetwork = getCurrentNetwork(networkType, selectedNetwork);
         if (currentChain !== expectedNetwork.chainId) {
-          console.log(`⏭️ Auto-connect skipped: MetaMask on chain ${currentChain}, expected ${expectedNetwork.chainId}. User can switch manually.`);
           setCurrentChainId(currentChain);
           return;
         }
-
       }
-
       await connectWalletInternal();
     } catch (error) {
-      console.log(
-        "Auto-connect failed (expected on first visit):",
-        error.message
-      );
+      console.log("Auto-connect failed:", error.message);
     } finally {
       walletOperationInProgress.current = false;
     }
-  }, 2000); // 2 second debounce to prevent rapid reconnection
+  }, 2000);
 
   const connectWallet = debounce(async () => {
     if (window.ethereum && !walletOperationInProgress.current) {
       walletOperationInProgress.current = true;
       try {
-        console.log(`🔗 Connecting wallet to ${networkType}:${selectedNetwork}...`);
-
-        // Step 1: Switch network FIRST (doesn't require account authorization)
         if (networkType === "evm") {
-          console.log(`🔄 Ensuring MetaMask is on ${selectedNetwork} network...`);
           const networkSwitched = await ensureCorrectNetwork(selectedNetwork);
           if (!networkSwitched) {
-            throw new Error(`Failed to switch to ${selectedNetwork} network. Please switch manually.`);
+            throw new Error(`Failed to switch to ${selectedNetwork} network.`);
           }
-          console.log(`✅ MetaMask on ${selectedNetwork} network`);
         }
-
-        // Step 2: Request account access (after network is correct)
         await window.ethereum.request({ method: "eth_requestAccounts" });
-
-        // Step 3: Complete the connection
         await connectWalletInternal();
       } catch (error) {
-        console.error('❌ Wallet connection failed:', error.message);
-
-        // Provide user-friendly error messages
+        console.error("Wallet connection failed:", error.message);
         if (error.message.includes("User rejected")) {
-          alert("Connection cancelled. Please try again and approve the connection.");
-        } else if (error.message.includes("Unauthorized") || error.message.includes("-32006")) {
-          alert("MetaMask RPC error: Your wallet's RPC endpoint is returning Unauthorized.\n\nPlease check MetaMask → Settings → Networks → Polygon and verify the RPC URL is working.");
-        } else if (error.message.includes("network")) {
-          alert(`Network switch required. Please switch MetaMask to ${selectedNetwork} and try again.`);
+          alert("Connection cancelled. Please try again.");
         } else {
           const walletErrorHandler = createErrorHandler("wallet_connection");
           const formattedError = walletErrorHandler(error);
@@ -667,10 +810,10 @@ function AppContentInner({
       } finally {
         walletOperationInProgress.current = false;
       }
-    } else {
+    } else if (!window.ethereum) {
       alert("Please install MetaMask!");
     }
-  }, 1000); // 1 second debounce for manual connections
+  }, 1000);
 
   const handleConnectPhantom = useCallback(async () => {
     const defaultSolana = getDefaultNetwork("solana");
@@ -687,307 +830,45 @@ function AppContentInner({
     }
   }, [networkType, switchNetworkType, connectWallet]);
 
-  const connectWalletInternal = async () => {
-    // Verify MetaMask is on the correct chain before proceeding
-    if (networkType === "evm") {
-      const chainIdHex = await window.ethereum.request({ method: "eth_chainId" });
-      const currentChain = parseInt(chainIdHex, 16);
-      const expectedNetwork = getCurrentNetwork(networkType, selectedNetwork);
-      if (currentChain !== expectedNetwork.chainId) {
-        console.log(`❌ connectWalletInternal aborted: MetaMask on chain ${currentChain}, expected ${expectedNetwork.chainId}`);
-        setCurrentChainId(currentChain);
-        return;
-      }
-    }
+  const isWalletConnected = networkType === "solana"
+    ? (solanaConnected && solanaWallet)
+    : !!provider;
 
-    // Create provider and signer from connected wallet
-    let web3Provider, web3Signer;
-    try {
-      const result = await createProviderAndSigner();
-      web3Provider = result.provider;
-      web3Signer = result.signer;
-    } catch (error) {
-      console.error("❌ Failed to create provider:", error.message);
-      alert(error.message);
-      return;
-    }
+  const networkConfig = networkType === "solana"
+    ? (NETWORKS.solana?.[selectedNetwork] || NETWORKS.solana?.localhost)
+    : (NETWORKS.evm?.[selectedNetwork] || {});
 
-    // Get current network and use its contract address
-    const currentNetwork = getCurrentNetwork(networkType, selectedNetwork);
-    const contractAddress = currentNetwork.savingsContract;
+  // Additional vaults unlock only after the personal wallet setup is committed.
+  // TM answers synchronously on Solana (personal vault presence); on EVM it
+  // returns null and we fall back to the on-chain setup check done at connect.
+  const vaultsUnlocked = transactionManager?.isSetupCommitted() ?? isSetupCommitted;
 
-    if (contractAddress === "0x0000000000000000000000000000000000000000") {
-      console.log(
-        `Savings contract not deployed on ${currentNetwork.name} yet.`
-      );
-      return;
-    }
-
-    // Verify contract is deployed using the provider (works with both MetaMask and fallback RPC)
-    try {
-      const code = await web3Provider.getCode(contractAddress);
-      const isContractDeployed = code !== '0x' && code !== '0x0' && code.length > 2;
-      if (!isContractDeployed) {
-        const deploymentError = getNetworkErrorMessage(
-          "CONTRACT_NOT_DEPLOYED",
-          networkType
-        );
-        console.error("Contract not deployed:", deploymentError);
-        alert(
-          `⚠️ Contract Not Deployed\n\n${deploymentError}\n\nCurrent contract address: ${contractAddress}`
-        );
-        return;
-      }
-      console.log(`✅ Contract verified at ${contractAddress}`);
-    } catch (error) {
-      console.error("❌ Contract verification failed:", error.message);
-      return;
-    }
-
-    const savings = new ethers.Contract(
-      contractAddress,
-      SavingsABI,
-      web3Signer
-    );
-
-    setProvider(web3Provider);
-    setSigner(web3Signer);
-    setSavingsContract(savings);
-
-    // Store user address
-    const address = await web3Signer.getAddress();
-    setUserAddress(address);
-
-    // Initialize TransactionManager for EVM network
-    console.log("🔄 Initializing TransactionManager for EVM network...");
-    try {
-      const txManager = await initializeTransactionManager(networkType, selectedNetwork, { provider: web3Provider, signer: web3Signer });
-      if (txManager) {
-        console.log("✅ TransactionManager successfully initialized for EVM");
-      } else {
-        console.error("❌ TransactionManager initialization failed for EVM");
-      }
-    } catch (error) {
-      console.error("❌ Error initializing TransactionManager for EVM:", error);
-    }
-
-    // Automatically fetch balances and proxy status after connecting
-    try {
-      const userAddress = await web3Signer.getAddress();
-      console.log(`Connecting wallet for user: ${userAddress}`);
-      // Balance loading now handled by BalanceDisplay component
-      console.log(`About to check proxy status...`);
-      if (networkType === "evm") {
-        await checkProxyStatusWithSigner(savings, web3Signer, userAddress);
-        console.log(`Proxy status check completed`);
-      }
-      await fetchSpendingLimits(savings, web3Signer);
-      await fetchPendingLimitProposals(userAddress);
-      // Note: Withdrawal data now handled by components
-
-      // Check setup status (with circuit breaker protection)
-      const setupCommitted = await safeContractCall(
-        () => savings.isSetupCommitted(),
-        circuitBreakers.contracts
-      );
-      setIsSetupCommitted(setupCommitted);
-
-      if (setupCommitted) {
-        const info = await safeContractCall(
-          () => savings.getSetupInfo(),
-          circuitBreakers.contracts
-        );
-        setSetupInfo({
-          committed: info.committed,
-          totalLockedValue: ethers.formatUnits(info.totalLockedValue, 6),
-          commitTimestamp: new Date(
-            Number(info.commitTimestamp) * 1000
-          ).toLocaleDateString(),
-          increasesInPeriod: ethers.formatUnits(info.increasesInPeriod, 6),
-          lastIncreaseTimestamp: new Date(
-            Number(info.lastIncreaseTimestamp) * 1000
-          ).toLocaleDateString(),
-        });
-      }
-    } catch (error) {
-      const dataErrorHandler = createErrorHandler("initial_data_fetch");
-      const formattedError = dataErrorHandler(error);
-
-      // Still set empty balances to show the balance section
-      setBalances({});
-
-      // Set error state for user feedback
-      setLastError(formattedError);
-    }
+  const mainFlowProps = {
+    transactionManager,
+    navigate,
+    networkConfig,
+    networkType,
+    selectedNetwork,
+    onSetupCommitted: setIsSetupCommitted,
+    wallet: networkType === "solana" ? { connected: solanaConnected, publicKey: solanaPublicKey } : null,
+    connection,
+    provider,
+    signer,
+    savingsContract,
+    evmUserAddress,
   };
-
-  // Unified spending limits functions - functions moved to SpendingLimitsSetup component
-
-  const fetchPendingLimitProposals = async (txManager = transactionManager) => {
-    const currentUserAddress = getCurrentUserAddress();
-
-    // Only proceed if transactionManager is available
-    if (!txManager) {
-      console.log(`⏭️ Skipping pending proposals fetch - TransactionManager not yet initialized`);
-      return;
-    }
-
-    try {
-      const proposals = await fetchPendingLimitProposalsService({
-        transactionManager: txManager,
-        savingsContract,
-        networkType,
-        userAddress: currentUserAddress,
-        getCurrentUserAddress,
-      });
-
-      setPendingLimitProposals(proposals);
-      console.log(`✅ Loaded ${proposals.length} pending proposals`);
-    } catch (error) {
-      console.error("Error fetching pending proposals:", error);
-      setPendingLimitProposals([]);
-    }
-  };
-
-  // Note: Setup commit logic moved to SetupCommitStep component
-
-  // Helper function that accepts TransactionManager directly (for initialization)
-  // Helper function to get current user address based on network (DRY)
-  const getCurrentUserAddress = (forNetworkType = null) => {
-    const targetNetwork = forNetworkType || networkType;
-    if (targetNetwork === "solana") {
-      return solanaPublicKey?.toString();
-    } else {
-      return userAddress;
-    }
-  };
-
-  // Helper function to update limitEdits state - removed since state moved to SpendingLimitsSetup component
-
-  const fetchSpendingLimitsWithTxManager = async (txManager) => {
-    console.log(
-      "🚀 fetchSpendingLimitsWithTxManager called for network:",
-      networkType
-    );
-
-    // Only proceed if transactionManager is available
-    if (!txManager) {
-      console.log(`⏭️ Skipping spending limits fetch with TxManager - TransactionManager not yet initialized`);
-      return;
-    }
-
-    if (networkType === "solana") {
-      try {
-        // Fetch spending limits using service
-        const spendingData = await fetchSpendingLimitsService({
-          transactionManager: txManager,
-          networkType,
-        });
-
-        setSpendingLimits(spendingData.limits);
-        setIsSetupCommitted(spendingData.isSetupCommitted);
-        setLimitsLoaded(true);
-
-        // Note: Bypass requests now handled by WithdrawalInterface component
-
-        console.log("✅ Solana spending limits and bypass requests loaded!");
-      } catch (error) {
-        console.error("Error fetching Solana spending limits:", error);
-        setSpendingLimits([]);
-        setLimitsLoaded(true);
-      }
-    }
-  };
-
-  const fetchSpendingLimits = async (
-    contract = savingsContract,
-    userSigner = signer
-  ) => {
-    console.log("🚀 fetchSpendingLimits called for network:", networkType);
-
-    if (networkType === "solana") {
-      console.log(
-        "🔵 Delegating Solana spending limits to dedicated function..."
-      );
-      // Delegate to the dedicated Solana function to avoid duplication and race conditions
-      await fetchSpendingLimitsWithTxManager(transactionManager);
-      return;
-    }
-
-    // Only proceed if transactionManager is available
-    if (!transactionManager) {
-      console.log(`⏭️ Skipping spending limits fetch - TransactionManager not yet initialized`);
-      return;
-    }
-
-    try {
-      const spendingData = await fetchSpendingLimitsService({
-        transactionManager,
-        savingsContract: contract,
-        signer: userSigner,
-        networkType,
-      });
-
-      setSpendingLimits(spendingData.limits);
-      setIsSetupCommitted(spendingData.isSetupCommitted);
-      setLimitsLoaded(true);
-
-      console.log(`✅ Loaded ${spendingData.limits.length} spending limits`);
-    } catch (error) {
-      console.error("Error fetching spending limits:", error);
-      setSpendingLimits([]);
-      setLimitsLoaded(true);
-    }
-  };
-
-  // Note: Withdrawal address management moved to WithdrawalInterface and WithdrawalAddressSetupStep components
 
   return (
-    <div style={styles.app.container}>
-      {/* Social Media Links - Top Right Corner */}
+    <div style={isWideRoute ? styles.app.containerWide : styles.app.container}>
       <SocialLinks />
 
-      {/* Error Display */}
-      {lastError && lastError.severity === "error" && (
-        <div
-          style={{
-            backgroundColor: "#fed7d7",
-            border: "1px solid #fc8181",
-            borderRadius: "6px",
-            padding: "12px",
-            margin: "10px 0",
-            color: "#9b2c2c",
-          }}
-        >
-          <div style={{ fontWeight: "bold", marginBottom: "4px" }}>
-            ❌ Error
-          </div>
-          <div style={{ marginBottom: "8px" }}>{lastError.userMessage}</div>
-          <button
-            onClick={() => setLastError(null)}
-            style={{
-              backgroundColor: "#fc8181",
-              color: "white",
-              border: "none",
-              borderRadius: "4px",
-              padding: "4px 8px",
-              fontSize: "12px",
-              cursor: "pointer",
-            }}
-          >
-            Dismiss
-          </button>
-        </div>
-      )}
-
-      {/* Status Header Component */}
       <StatusHeader
         provider={provider}
         networkType={networkType}
         selectedNetwork={selectedNetwork}
         isNetworkSwitching={isNetworkSwitching}
         currentChainId={currentChainId}
-        userAddress={userAddress}
+        userAddress={evmUserAddress}
         solanaWallet={solanaWallet}
         solanaPublicKey={solanaPublicKey}
         solanaConnected={solanaConnected}
@@ -996,234 +877,117 @@ function AppContentInner({
         switchNetwork={switchNetwork}
       />
 
-      {/* Wallet Connection Prompt Component */}
-      <WalletConnectionPrompt
-        provider={provider}
-        networkType={networkType}
-        solanaConnected={solanaConnected}
-        solanaWallet={solanaWallet}
-        connectWallet={networkType === "solana" ? handleConnectMetaMask : connectWallet}
-        onConnectPhantom={handleConnectPhantom}
-      />
-
-      {provider ||
-      (networkType === "solana" && solanaConnected && solanaWallet) ? (
-        <div>
-          {/* Balance Display Component */}
-          {isSetupCommitted && (
-            <BalanceDisplay
+      <Routes>
+        {/* Public — readable with or without a wallet */}
+        <Route
+          path="/savings-visualiser"
+          element={
+            <Suspense fallback={<div />}>
+              <SavingsVisualiser />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/governance"
+          element={
+            <GovernancePage
               transactionManager={transactionManager}
-              savingsContract={savingsContract}
-              signer={signer}
-              connection={connection}
-              networkType={networkType}
-              selectedNetwork={selectedNetwork}
-              userAddress={userAddress}
-              solanaPublicKey={solanaPublicKey}
-              solanaConnected={solanaConnected}
-              isSetupCommitted={isSetupCommitted}
-              provider={provider}
-              solanaWallet={solanaWallet}
-              balances={balances}
-              onBalanceUpdate={(newBalances) => {
-                setBalances(newBalances);
-              }}
-              connectWallet={connectWallet}
+              navigate={navigate}
             />
-          )}
+          }
+        />
 
-          {/* Tutorial section — shown during wallet setup */}
-          {!isSetupCommitted && (
-            <div
-              style={{
-                marginBottom: "20px",
-                padding: "16px",
-                backgroundColor: "#1a365d",
-                border: "2px solid #48bb78",
-                borderRadius: "8px",
-                color: "white",
-              }}
-            >
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  marginBottom: "12px",
-                  gap: "8px",
-                }}
-              >
-                <span style={{ fontSize: "1.25rem" }}>🛡️</span>
-                <h4
-                  style={{
-                    margin: 0,
-                    color: "#9ae6b4",
-                    fontSize: "1.1em",
-                    fontWeight: "600",
-                  }}
-                >
-                  Protect your Bankroll/Savings/Profits even from yourself
-                </h4>
-              </div>
-              <div
-                style={{ fontSize: "0.9em", lineHeight: "1.6", color: "#e2e8f0" }}
-              >
-                <p style={{ margin: "0 0 8px 0" }}>
-                  <strong>🏦 No-trading wallet:</strong> Designed for
-                  storing stablecoins for your peace of mind.
-                </p>
-                <p style={{ margin: "0 0 8px 0" }}>
-                  <strong>🔐 Set up withdrawal allowance:</strong> Changes to
-                  allowance or bypassing withdrawal limits are timelocked to combat spending/risking impulses.
-                </p>
-                <p style={{ margin: "0 0 8px 0" }}>
-                  <strong>🛡️ Compromise-Resistant:</strong> Funds are safe even
-                  when your private key is compromised (coming soon)
-                </p>
-                <p style={{ margin: "0" }}>
-                  <strong>⛓️ Fully On-Chain:</strong> No intermediaries
-                </p>
-              </div>
-            </div>
-          )}
-
-          {/* Deposit Interface Component */}
-          {isSetupCommitted && (
-            <CollapsibleSection title="Deposit Funds" icon="📥" defaultExpanded={true}>
-              <DepositInterface
-                transactionManager={transactionManager}
-                savingsContract={savingsContract}
-                signer={signer}
-                connection={connection}
-                networkType={networkType}
-                selectedNetwork={selectedNetwork}
-                userAddress={userAddress}
-                solanaPublicKey={solanaPublicKey}
-                solanaConnected={solanaConnected}
-                selectedToken={selectedToken}
-                setSelectedToken={setSelectedToken}
-                onBalanceUpdate={refreshBalances}
-              />
-            </CollapsibleSection>
-          )}
-
-          {/* Spending Limits Setup / Management */}
-          {isSetupCommitted ? (
-            <CollapsibleSection title="Spending Limits" icon="⏱️" defaultExpanded={true}>
-              {transactionManager ? (
-                <SpendingLimitsSetup
-                  isSetupCommitted={isSetupCommitted}
-                  currentTime={currentTime}
-                  networkType={networkType}
-                  transactionManager={transactionManager}
-                  solanaConnected={solanaConnected}
-                  savingsContract={savingsContract}
-                  getCurrentUserAddress={getCurrentUserAddress}
-                  spendingLimits={spendingLimits}
-                  onSpendingLimitsUpdate={handleSpendingLimitsUpdate}
-                />
-              ) : (
-                <div style={{ padding: "20px", textAlign: "center", color: "#666" }}>
-                  Initializing spending limits...
-                </div>
-              )}
-            </CollapsibleSection>
-          ) : (
-            transactionManager ? (
-              <SpendingLimitsSetup
-                isSetupCommitted={isSetupCommitted}
-                currentTime={currentTime}
-                networkType={networkType}
-                transactionManager={transactionManager}
-                solanaConnected={solanaConnected}
-                savingsContract={savingsContract}
-                getCurrentUserAddress={getCurrentUserAddress}
-                spendingLimits={spendingLimits}
-                onSpendingLimitsUpdate={handleSpendingLimitsUpdate}
-              />
-            ) : (
-              <div style={{ padding: "20px", textAlign: "center", color: "#666" }}>
-                Initializing spending limits...
-              </div>
-            )
-          )}
-
-          {/* Withdrawal Addresses Setup Component */}
-          {!isSetupCommitted && (
-            <WithdrawalAddressSetupStep
-              isSetupCommitted={isSetupCommitted}
-              spendingLimits={spendingLimits}
-              transactionManager={transactionManager}
-              savingsContract={savingsContract}
-              networkType={networkType}
-              solanaConnected={solanaConnected}
-              solanaPublicKey={solanaPublicKey}
-              userAddress={userAddress}
+        {isWalletConnected && transactionManager ? (
+          <>
+            <Route path="/" element={<MainFlow {...mainFlowProps} />} />
+            <Route
+              path="/create"
+              element={
+                vaultsUnlocked ? (
+                  <CreateVault
+                    transactionManager={transactionManager}
+                    navigate={navigate}
+                    networkConfig={networkConfig}
+                  />
+                ) : (
+                  <Navigate to="/" replace />
+                )
+              }
             />
-          )}
-          {/* Setup Commit Step Component */}
-          {!isSetupCommitted && (
-            <SetupCommitStep
-              isSetupCommitted={isSetupCommitted}
-              spendingLimits={spendingLimits}
-              limitEdits={limitEdits}
-              transactionManager={transactionManager}
-              savingsContract={savingsContract}
-              networkType={networkType}
-              solanaConnected={solanaConnected}
-              onSetupCommitted={setIsSetupCommitted}
-              onSetupInfoUpdate={setSetupInfo}
-              onSpendingLimitsRefresh={fetchSpendingLimits}
-            />
-          )}
-          {/* Withdrawal Interface Component */}
-          {isSetupCommitted && (
-            <CollapsibleSection title="Withdraw Funds" icon="💸" defaultExpanded={true}>
-              <WithdrawalInterface
-                transactionManager={transactionManager}
-                savingsContract={savingsContract}
-                signer={signer}
-                connection={connection}
+          </>
+        ) : (
+          <Route
+            path="/"
+            element={
+              <WalletConnectionPrompt
+                provider={provider}
                 networkType={networkType}
-                selectedNetwork={selectedNetwork}
-                getCurrentUserAddress={getCurrentUserAddress}
-                getCurrentNetwork={getCurrentNetwork}
                 solanaConnected={solanaConnected}
-                solanaPublicKey={solanaPublicKey}
-                userAddress={userAddress}
-                selectedToken={selectedToken}
-                setSelectedToken={setSelectedToken}
-                instantWithdrawableAmount={instantWithdrawableAmount}
-                limitingPeriod={limitingPeriod}
-                spendingLimits={spendingLimits}
-                onBalanceUpdate={refreshBalances}
-                onSpendingLimitsUpdate={fetchSpendingLimits}
-                currentTime={currentTime}
+                solanaWallet={solanaWallet}
+                connectWallet={
+                  networkType === "solana" ? handleConnectMetaMask : connectWallet
+                }
+                onConnectPhantom={handleConnectPhantom}
               />
-            </CollapsibleSection>
-          )}
-          {/* Transaction History */}
-          {isSetupCommitted && (
-            <CollapsibleSection title="Transaction History" icon="📜" defaultExpanded={true}>
-              <TransactionHistory
-                savingsContract={savingsContract}
-                userAddress={userAddress}
-                networkType={networkType}
-                selectedNetwork={selectedNetwork}
-                getCurrentNetwork={getCurrentNetwork}
-                transactionManager={transactionManager}
-              />
-            </CollapsibleSection>
-          )}
-        </div>
-      ) : null}
+            }
+          />
+        )}
+
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+
       <Footer />
     </div>
   );
 }
 
-// Wrapped App component with Solana wallet provider
+function AppContent() {
+  const [networkType, setNetworkType] = useState(() => {
+    // Solana login is feature-flagged off until its programs are deployed
+    if (!isSolanaEnabled()) return "evm";
+    const saved = localStorage.getItem("preferredNetworkType");
+    if (saved === "solana" || saved === "evm") return saved;
+    return localStorage.getItem("walletName") ? "solana" : "evm";
+  });
+
+  const [selectedNetwork, setSelectedNetwork] = useState(() => {
+    const saved = localStorage.getItem(`preferred_${networkType}_network`);
+    if (saved) {
+      const available = getAvailableNetworks(networkType);
+      if (available.some((n) => n.key === saved)) return saved;
+    }
+    return getDefaultNetwork(networkType);
+  });
+
+  if (networkType === "solana") {
+    return (
+      <SolanaWalletProvider networkType={networkType} selectedNetwork={selectedNetwork}>
+        <AppContentInner
+          networkType={networkType}
+          setNetworkType={setNetworkType}
+          selectedNetwork={selectedNetwork}
+          setSelectedNetwork={setSelectedNetwork}
+        />
+      </SolanaWalletProvider>
+    );
+  }
+
+  return (
+    <AppContentInner
+      networkType={networkType}
+      setNetworkType={setNetworkType}
+      selectedNetwork={selectedNetwork}
+      setSelectedNetwork={setSelectedNetwork}
+    />
+  );
+}
+
 function App() {
-  return <AppContent />;
+  return (
+    <BrowserRouter>
+      <AppContent />
+    </BrowserRouter>
+  );
 }
 
 export default App;

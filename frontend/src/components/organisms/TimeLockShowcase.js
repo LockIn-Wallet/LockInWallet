@@ -23,7 +23,10 @@ const getTimeline = (elapsed) => {
     ? Math.min((elapsed - COMPROMISE_MS) / DRAIN_MS, 1)
     : 0;
   const hoursElapsed = compromised
-    ? Math.min(Math.floor((elapsed - COMPROMISE_MS) / HOUR_TICK_MS), HOURS_UNTIL_RESCUE)
+    ? Math.min(
+        Math.floor((elapsed - COMPROMISE_MS) / HOUR_TICK_MS),
+        HOURS_UNTIL_RESCUE,
+      )
     : 0;
 
   return {
@@ -48,7 +51,7 @@ const TimeLockShowcase = () => {
   useEffect(() => {
     const interval = setInterval(
       () => setElapsed((value) => (value + TICK_MS) % LOOP_MS),
-      TICK_MS
+      TICK_MS,
     );
     return () => clearInterval(interval);
   }, []);
@@ -66,8 +69,7 @@ const TimeLockShowcase = () => {
   const vaultBalance = DEMO_VAULT_BALANCE - stolenFromVault;
   const stolenPercent = (stolenFromVault / DEMO_VAULT_BALANCE) * 100;
   const savedPercent = 100 - stolenPercent;
-  const justCompromised =
-    compromised && elapsed < COMPROMISE_MS + 600;
+  const justCompromised = compromised && elapsed < COMPROMISE_MS + 600;
 
   const bannerStyle = compromised
     ? { ...homeStyles.attackBanner, ...homeStyles.attackBannerDanger }
@@ -76,20 +78,23 @@ const TimeLockShowcase = () => {
   const regularStatus = drained
     ? "☠️ Drained in seconds. Everything is gone."
     : compromised
-      ? "Attacker is withdrawing everything…"
-      : "Protected only by the private key.";
+    ? "Attacker is withdrawing everything…"
+    : "Protected only by the private key.";
 
   const vaultStatus = !compromised
     ? "Protected by on-chain time locks + hourly withdrawal limit."
     : rescued
-      ? `🚨 You saw the alert and moved funds to safety. The thief got only ${formatUSD(stolenFromVault)}.`
-      : `⏳ Hour ${hoursElapsed + 1}: attacker can only take ${formatUSD(DEMO_HOURLY_LIMIT)} — the hourly limit. Everything else is time-locked.`;
+    ? `🚨 You saw the alert and moved funds to safety. The thief got only ${formatUSD(
+        stolenFromVault,
+      )}.`
+    : `⏳ Hour ${hoursElapsed + 1}: attacker can only take ${formatUSD(
+        DEMO_HOURLY_LIMIT,
+      )} — the hourly limit. Everything else is time-locked.`;
 
   return (
     <div style={homeStyles.section}>
       <h2 style={homeStyles.sectionTitle}>
         🔐 A stolen key can't empty your wallet
-        <span style={homeStyles.demoBadge}>live demo</span>
       </h2>
       <p style={homeStyles.sectionSubtitle}>
         Watch the same attack hit two wallets holding{" "}
@@ -98,7 +103,10 @@ const TimeLockShowcase = () => {
         notice and react.
       </p>
 
-      <div style={bannerStyle} className={justCompromised ? "home-shake" : undefined}>
+      <div
+        style={bannerStyle}
+        className={justCompromised ? "home-shake" : undefined}
+      >
         {compromised
           ? "🚨 Private key stolen by malware!"
           : "🔑 Two wallets, one secret about to leak…"}
@@ -122,23 +130,30 @@ const TimeLockShowcase = () => {
             <div
               style={getBarFillStyle(
                 (regularBalance / DEMO_VAULT_BALANCE) * 100,
-                colors.error.main
+                colors.error.main,
               )}
             />
           </div>
           <p style={homeStyles.panelStatus}>{regularStatus}</p>
         </div>
 
-        <div style={{ ...homeStyles.walletPanel, ...homeStyles.walletPanelSafe }}>
+        <div
+          style={{ ...homeStyles.walletPanel, ...homeStyles.walletPanelSafe }}
+        >
           <p style={homeStyles.panelTitle}>🔒 LockInWallet</p>
-          <p style={{ ...homeStyles.panelBalance, ...homeStyles.panelBalanceSafe }}>
+          <p
+            style={{
+              ...homeStyles.panelBalance,
+              ...homeStyles.panelBalanceSafe,
+            }}
+          >
             {formatUSD(vaultBalance)}
           </p>
           <div style={homeStyles.barTrack}>
             <div
               style={getBarFillStyle(
                 (vaultBalance / DEMO_VAULT_BALANCE) * 100,
-                colors.success.main
+                colors.success.main,
               )}
             />
           </div>

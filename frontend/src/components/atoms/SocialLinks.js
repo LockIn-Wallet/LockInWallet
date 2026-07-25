@@ -1,7 +1,7 @@
 import React from "react";
 import { styles, colors, fontSize, fontWeight, spacing } from "../../styles";
 
-const howItWorksLinkStyle = {
+const textLinkStyle = {
   color: colors.text.muted,
   textDecoration: "none",
   fontSize: fontSize.md,
@@ -12,8 +12,22 @@ const howItWorksLinkStyle = {
   whiteSpace: "nowrap",
 };
 
+// Text links shown before the icons
+const TEXT_LINKS = [
+  {
+    href: "/savings-visualiser",
+    label: "Savings Visualiser",
+    title: "Savings Visualiser — project your savings strategy",
+  },
+  {
+    href: "/governance",
+    label: "Governance",
+    title: "Governance — queued contract changes, security mechanisms and change history",
+  },
+];
+
 /**
- * SocialLinks component - How It Works link + GitHub and Discord links in top right corner
+ * SocialLinks component - text links + GitHub and Discord links in top right corner
  * Simple, lightweight component with SVG icons for optimal performance
  */
 const SocialLinks = () => {
@@ -24,22 +38,24 @@ const SocialLinks = () => {
 
   return (
     <div style={styles.socialLinks.container}>
-      {/* How It Works Link */}
-      <a
-        href="/how-it-works"
-        style={howItWorksLinkStyle}
-        title="How It Works — Beginner's Guide"
-        onMouseEnter={(e) => {
-          e.target.style.color = colors.primary.main;
-          e.target.style.backgroundColor = "rgba(255, 255, 255, 0.1)";
-        }}
-        onMouseLeave={(e) => {
-          e.target.style.color = colors.text.muted;
-          e.target.style.backgroundColor = "transparent";
-        }}
-      >
-        How It Works
-      </a>
+      {TEXT_LINKS.map((link) => (
+        <a
+          key={link.href}
+          href={link.href}
+          style={textLinkStyle}
+          title={link.title}
+          onMouseEnter={(e) => {
+            e.target.style.color = colors.primary.main;
+            e.target.style.backgroundColor = "rgba(255, 255, 255, 0.1)";
+          }}
+          onMouseLeave={(e) => {
+            e.target.style.color = colors.text.muted;
+            e.target.style.backgroundColor = "transparent";
+          }}
+        >
+          {link.label}
+        </a>
+      ))}
 
       {/* GitHub Link */}
       <a

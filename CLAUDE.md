@@ -505,6 +505,17 @@ cd frontend && npm run *   # Work directly in frontend folder
 - **solana/CLAUDE.md**: Detailed Solana development guide (programs, deployment, Anchor)
 - **frontend/**: React app documentation for multi-blockchain UI
 
+### Release documentation rules
+
+- Every user-facing or contract change MUST add a `[Unreleased]` entry in
+  **CHANGELOG.md** (contract entries state the on-chain effect) AND a
+  plain-language entry in **frontend/src/releaseNotes.js** (shown in-app on
+  the Governance page)
+- Update **SECURITY.md**/**GOVERNANCE.md** when timelocks, governance phases,
+  or trust assumptions change; the governance delay must stay ≥ 2× the 24h
+  emergency bypass delay
+- Release process: see **RELEASING.md**
+
 ## Migration Notes
 
 This project has been refactored into a workspace structure:

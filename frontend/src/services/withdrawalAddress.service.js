@@ -37,6 +37,7 @@ export async function fetchWithdrawalAddresses(params) {
         });
       } else {
         return await fetchEvmWithdrawalAddresses({
+          transactionManager,
           savingsContract,
           userAddress
         });
@@ -102,29 +103,28 @@ async function fetchSolanaWithdrawalAddresses(params) {
  * @returns {Promise<Array>} - Array of formatted EVM withdrawal addresses
  */
 async function fetchEvmWithdrawalAddresses(params) {
-  const { savingsContract, userAddress } = params;
+  const { savingsContract, userAddress, transactionManager } = params;
 
-  if (!savingsContract || !userAddress) {
-    console.log('⏭️ Skipping fetchWithdrawalAddresses for EVM - missing contract or user');
-    return [];
-  }
-
-  const addressData = await savingsContract.getUserWithdrawalAddresses();
-  const [titles, destinations, timestamps] = addressData;
-
-  const addresses = [];
-  for (let i = 0; i < titles.length; i++) {
-    addresses.push({
-      title: titles[i],
-      destination: destinations[i],
-      addedTimestamp: Number(timestamps[i]),
-      addedDate: new Date(Number(timestamps[i]) * 1000).toLocaleDateString(),
-      networkType: 'evm'
+  // The transaction manager routes to the legacy account or the selected
+  // vault (which has no destination whitelist on EVM yet, so it returns [])
+  if (transactionManager) {
+    const addresses = await transactionManager.getWithdrawalAddresses();
+    return (addresses || []).map((a) => {
+      const timestamp = a.addedTimestamp ?? a.addedAt ?? 0;
+      return {
+        title: a.title,
+        destination: a.destination,
+        addedTimestamp: timestamp,
+        addedDate: new Date(timestamp * 1000).toLocaleDateString(),
+        networkType: 'evm',
+      };
     });
   }
 
-  console.log(`📋 Loaded ${addresses.length} EVM withdrawal addresses for ${userAddress}`);
-  return addresses;
+  // Without a transaction manager there is no adapter to resolve the
+  // ApprovalSystemModule, so there is nothing to fetch
+  console.log('⏭️ Skipping fetchWithdrawalAddresses for EVM - transaction manager not available');
+  return [];
 }
 
 /**

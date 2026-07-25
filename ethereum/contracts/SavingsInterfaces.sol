@@ -36,6 +36,51 @@ struct BypassRequest {
     bool exists;              // Track if request exists
 }
 
+struct VaultParams {
+    string name;
+    string description;
+    uint8 vaultType;              // 0 = Personal, 1 = Community
+    address token;                // address(0) = native coin (ETH)
+    uint256 dailyLimit;
+    uint256 weeklyLimit;
+    uint256 monthlyLimit;
+    bool limitsArePercentage;
+    uint256 penaltyRateBps;
+}
+
+struct VaultInfo {
+    address creator;
+    uint8 vaultType;              // 0 = Personal, 1 = Community
+    address token;                // address(0) = native coin (ETH)
+    string name;
+    string description;
+    uint256 dailyLimit;           // fixed token amount, or bps of member balance
+    uint256 weeklyLimit;
+    uint256 monthlyLimit;
+    bool limitsArePercentage;     // true => limits are basis points of member balance
+    uint256 penaltyRateBps;
+    uint256 memberCount;
+    uint256 totalBalance;
+    uint256 accPenaltyPerShare;   // scaled by PENALTY_PRECISION
+    bool isActive;
+    uint256 createdAt;
+    uint256 updatedAt;
+}
+
+struct VaultMemberInfo {
+    uint256 balance;
+    uint256 dailySpent;
+    uint256 dailyLastReset;
+    uint256 weeklySpent;
+    uint256 weeklyLastReset;
+    uint256 monthlySpent;
+    uint256 monthlyLastReset;
+    uint256 penaltyDebt;          // scaled by PENALTY_PRECISION
+    uint256 unclaimedPenalties;
+    uint256 joinedAt;
+    bool exists;
+}
+
 struct UserSetupData {
     bool hasCommittedSetup;          // Track if user committed initial setup
     uint256 totalLockedValue;        // Total value across all periods
@@ -52,6 +97,7 @@ interface ITimePeriodLimitsModule {
     function removeTimePeriodLimit(address user, string calldata periodName) external;
     function updateTimePeriodLimit(address user, string calldata periodName, uint256 newLimit) external;
     function setCommonPeriodLimits(address user, uint256 dailyLimit, uint256 weeklyLimit, uint256 monthlyLimit) external;
+    function setProposalSystemModule(address _proposalSystemModule) external;
 
     // Limit checking and spending
     function checkAllTimePeriodLimits(address user, uint256 amount) external;
@@ -94,8 +140,11 @@ interface IProposalSystemModule {
 
     // Setup management
     function commitInitialSetup(address user) external;
+    function commitSetup(uint256 dailyLimit, uint256 weeklyLimit, uint256 monthlyLimit) external;
+    function commitSetupWithReferrer(uint256 dailyLimit, uint256 weeklyLimit, uint256 monthlyLimit, address referrer) external;
     function recalculateTotalLockedValue(address user) external;
     function setTimePeriodLimitsModule(address _timePeriodLimitsModule) external;
+    function setReferralModule(address _referralModule) external;
 
     // View functions
     function getProposal(address user, bytes32 proposalId) external view returns (
@@ -215,6 +264,64 @@ interface IPoolTogetherModule {
     event PrizeClaimed(address indexed user, address indexed token, uint256 amount, uint8 tier);
 }
 
+interface IVaultSystemModule {
+    // Vault lifecycle
+    function createVault(VaultParams calldata params) external returns (uint256 vaultId);
+    function joinVault(uint256 vaultId) external;
+    function leaveVault(uint256 vaultId) external;
+    function updateVaultRules(
+        uint256 vaultId,
+        uint256 dailyLimit,
+        uint256 weeklyLimit,
+        uint256 monthlyLimit,
+        bool limitsArePercentage,
+        uint256 penaltyRateBps
+    ) external;
+
+    // Funds
+    function deposit(uint256 vaultId, uint256 amount) external payable;
+    function depositFor(uint256 vaultId, uint256 amount, address beneficiary) external payable;
+    function withdraw(uint256 vaultId, uint256 amount) external;
+    function withdrawWithPenalty(uint256 vaultId, uint256 amount) external;
+    function claimPenaltyRewards(uint256 vaultId) external;
+
+    // Permanent deposit addresses
+    function deployVaultDepositAddress(uint256 vaultId) external returns (address proxy);
+    function getVaultDepositAddress(uint256 vaultId) external view returns (address);
+
+    // Views
+    function getVault(uint256 vaultId) external view returns (VaultInfo memory);
+    function getVaultMember(uint256 vaultId, address member) external view returns (VaultMemberInfo memory);
+    function getUserVaultIds(address user) external view returns (uint256[] memory);
+    function getVaultMembers(uint256 vaultId) external view returns (address[] memory);
+    function getVaultCount() external view returns (uint256);
+    function pendingPenaltyRewards(uint256 vaultId, address member) external view returns (uint256);
+
+    // Events
+    event VaultCreated(uint256 indexed vaultId, address indexed creator, address indexed token, string name, uint8 vaultType);
+    event VaultJoined(uint256 indexed vaultId, address indexed member);
+    event VaultLeft(uint256 indexed vaultId, address indexed member);
+    event VaultRulesUpdated(uint256 indexed vaultId);
+    event VaultDeposit(uint256 indexed vaultId, address indexed member, uint256 amount);
+    event VaultDepositAddressDeployed(uint256 indexed vaultId, address indexed proxy);
+    event VaultWithdrawal(uint256 indexed vaultId, address indexed member, uint256 amount, uint256 penalty);
+    event PenaltyRewardsClaimed(uint256 indexed vaultId, address indexed member, uint256 amount);
+}
+
+interface IReferralModule {
+    // Referral recording
+    function recordReferral(address user, address referrer) external;
+
+    // View functions
+    function getReferrer(address user) external view returns (address referrer, uint256 referredAt);
+    function getReferralCount(address referrer) external view returns (uint256);
+    function getReferredUsers(address referrer, uint256 offset, uint256 limit)
+        external view returns (address[] memory users, uint256[] memory joinedAt);
+
+    // Events
+    event ReferralRecorded(address indexed user, address indexed referrer, uint256 timestamp);
+}
+
 interface IProxyDeploymentModule {
     function deployUserProxy(address user) external payable returns (address proxy);
     function isProxyDeployed(address user) external view returns (bool);
@@ -267,4 +374,6 @@ library ModuleIds {
     bytes32 public constant APPROVAL_SYSTEM = keccak256("APPROVAL_SYSTEM");
     bytes32 public constant PROXY_DEPLOYMENT = keccak256("PROXY_DEPLOYMENT");
     bytes32 public constant POOL_TOGETHER = keccak256("POOL_TOGETHER");
+    bytes32 public constant VAULT_SYSTEM = keccak256("VAULT_SYSTEM");
+    bytes32 public constant REFERRAL = keccak256("REFERRAL");
 }

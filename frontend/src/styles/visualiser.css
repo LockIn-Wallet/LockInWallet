@@ -1,0 +1,150 @@
+/* Styles for the Savings Visualiser page.
+
+   The page is fully isolated from the app's global CSS:
+
+   - Tailwind's own `@tailwind base` is NOT used. Its preflight targets `*`,
+     `html` and `body`, so it would restyle every other page in the app.
+   - Instead the scoped reset below does preflight's job for this page only.
+     Each rule is `.fm-page :where(element)`, which is specificity 0-1-0: high
+     enough to beat the app's global element rules in src/index.css (`button`,
+     `input`, `p`, `li`, `a`… at 0-0-1), while `:where()` keeps the element
+     part at zero so Tailwind's own utilities still win.
+   - Order matters: the reset is declared BEFORE `@tailwind utilities`, so on
+     an equal-specificity tie the utility class wins on source order. */
+
+/* ---- Scoped reset: nothing from the app's global CSS reaches inside ---- */
+
+.fm-page,
+.fm-page :where(*),
+.fm-page :where(*)::before,
+.fm-page :where(*)::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  border: 0 solid transparent;
+  background: transparent;
+  font: inherit;
+  color: inherit;
+  text-align: inherit;
+  text-decoration: none;
+  letter-spacing: normal;
+  box-shadow: none;
+  list-style: none;
+  vertical-align: baseline;
+}
+
+.fm-page :where(h1, h2, h3, h4, h5, h6, p, ul, ol, li, div, span, label) {
+  font-size: inherit;
+  font-weight: inherit;
+  line-height: inherit;
+  width: auto;
+  max-width: none;
+}
+
+.fm-page :where(button) {
+  display: inline-block;
+  width: auto;
+  max-width: none;
+  cursor: pointer;
+  background-color: transparent;
+  background-image: none;
+  -webkit-appearance: button;
+  appearance: button;
+}
+
+.fm-page :where(input, select, textarea) {
+  display: block;
+  width: 100%;
+  max-width: none;
+  background-color: transparent;
+  border-radius: 0;
+  outline: none;
+}
+
+.fm-page :where(input[type="number"])::-webkit-outer-spin-button,
+.fm-page :where(input[type="number"])::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.fm-page :where(img, svg, canvas) {
+  display: block;
+  max-width: 100%;
+  vertical-align: middle;
+}
+
+@tailwind components;
+@tailwind utilities;
+
+/* ---- Page shell ---- */
+
+.fm-page {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen,
+    Ubuntu, Cantarell, "Helvetica Neue", sans-serif;
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 1.5;
+  text-align: left;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%);
+  color: #f1f5f9;
+  padding: 2rem 1rem;
+  border-radius: 12px;
+  /* Own stacking context, so nothing bleeds either way */
+  isolation: isolate;
+}
+
+.fm-chart {
+  position: relative;
+  height: 320px;
+  width: 100%;
+}
+
+/* ---- Range sliders, carried over from the FutureMirror project ---- */
+
+.fm-page .fm-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 8px;
+  border-radius: 4px;
+  background: #475569;
+  cursor: pointer;
+}
+
+.fm-page .fm-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 20px;
+  width: 20px;
+  border-radius: 50%;
+  background: #14b8a6;
+  border: 2px solid #0d9488;
+  cursor: pointer;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  transition: all 0.2s ease;
+}
+
+.fm-page .fm-slider::-webkit-slider-thumb:hover {
+  background: #0d9488;
+  transform: scale(1.1);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+}
+
+.fm-page .fm-slider::-moz-range-thumb {
+  height: 20px;
+  width: 20px;
+  border-radius: 50%;
+  background: #14b8a6;
+  border: 2px solid #0d9488;
+  cursor: pointer;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  transition: all 0.2s ease;
+}
+
+.fm-page .fm-slider::-moz-range-thumb:hover {
+  background: #0d9488;
+  transform: scale(1.1);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+}

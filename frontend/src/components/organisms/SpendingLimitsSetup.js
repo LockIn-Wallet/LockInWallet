@@ -18,6 +18,9 @@ import {
   fetchPendingLimitProposals as fetchPendingLimitProposalsService,
 } from "../../services";
 
+import LimitModeToggle from "../molecules/LimitModeToggle.js";
+import LimitPeriodCards from "../molecules/LimitPeriodCards.js";
+
 /**
  * SpendingLimitsSetup - Spending limits configuration component
  * Complete spending limits configuration component preserving all original styling
@@ -38,11 +41,26 @@ const SpendingLimitsSetup = ({
   getCurrentUserAddress: getUserAddress,
   onSpendingLimitsUpdate,
   onSetSaveCallback, // New callback to set save function
+
+  // Limit mode (fixed vs % of balance) during initial setup
+  limitsMode = "fixed",
+  onLimitsModeChange,
+  showModeToggle = false,
+
+  // Refetch when the selected vault changes
+  activeVaultAddress,
 }) => {
   // Use parent spending limits when available, otherwise internal state for loading
   const [spendingLimits, setSpendingLimits] = useState(parentSpendingLimits || []);
   const [pendingLimitProposals, setPendingLimitProposals] = useState([]);
   const [limitsLoaded, setLimitsLoaded] = useState(false);
+  const [tokenSymbol, setTokenSymbol] = useState("USD");
+
+  const formatAmount = (value) => {
+    const num = typeof value === "string" ? parseFloat(value) : value;
+    if (isNaN(num)) return "0";
+    return num % 1 === 0 ? num.toFixed(0) : parseFloat(num.toFixed(4)).toString();
+  };
 
   // Update local state when parent spending limits change
   useEffect(() => {
@@ -82,6 +100,7 @@ const SpendingLimitsSetup = ({
       });
 
       setSpendingLimits(spendingData.limits);
+      if (spendingData.tokenSymbol) setTokenSymbol(spendingData.tokenSymbol);
       setLimitsLoaded(true);
 
       console.log(`✅ SpendingLimitsSetup: Loaded ${spendingData.limits.length} spending limits`);
@@ -151,7 +170,7 @@ const SpendingLimitsSetup = ({
     };
 
     loadData();
-  }, [transactionManager, savingsContract, solanaConnected, networkType]);
+  }, [transactionManager, savingsContract, solanaConnected, networkType, activeVaultAddress]);
 
   // Notify parent whenever limit edits change (for unsaved changes)
   useEffect(() => {
@@ -178,9 +197,6 @@ const SpendingLimitsSetup = ({
       fetchSpendingLimits();
     }
   }, [currentTime, spendingLimits]);
-
-  // Import ethers for EVM operations
-  const ethers = window.ethers || require('ethers');
 
   // Internal proposal and limit management functions
   const saveLimitChanges = useCallback(async (isUserInitiated = false) => {
@@ -229,37 +245,7 @@ const SpendingLimitsSetup = ({
         return;
       }
 
-      // For setup mode only - bulk changes
       if (!isSetupCommitted) {
-        if (networkType === "solana") {
-          // Solana implementation
-          const dailyLimit = daily > 0 ? daily : null;
-          const weeklyLimit = weekly > 0 ? weekly : null;
-          const monthlyLimit = monthly > 0 ? monthly : null;
-
-          const txHash = await transactionManager.setCommonPeriodLimits(
-            dailyLimit,
-            weeklyLimit,
-            monthlyLimit
-          );
-          console.log("Solana spending limits transaction:", txHash);
-          alert("Spending limits set successfully!");
-        } else {
-          // EVM implementation (existing logic)
-          const dailyLimitWei = daily > 0 ? ethers.parseUnits(daily.toString(), 6) : 0;
-          const weeklyLimitWei = weekly > 0 ? ethers.parseUnits(weekly.toString(), 6) : 0;
-          const monthlyLimitWei = monthly > 0 ? ethers.parseUnits(monthly.toString(), 6) : 0;
-
-          const tx = await savingsContract.setCommonPeriodLimits(
-            dailyLimitWei,
-            weeklyLimitWei,
-            monthlyLimitWei
-          );
-          await tx.wait();
-          alert("Spending limits set successfully!");
-        }
-
-        // Reset edit modes
         setLimitEdits((prev) => {
           const updated = { ...prev };
           Object.keys(updated).forEach((key) => {
@@ -268,13 +254,10 @@ const SpendingLimitsSetup = ({
           return updated;
         });
 
-        // Refresh spending limits
-        await refreshData();
-
-        // Notify parent component of spending limits update
         if (onSpendingLimitsUpdate) {
           onSpendingLimitsUpdate(spendingLimits, limitEdits);
         }
+        alert("Spending limits saved. Click 'Lock In My Wallet' to activate.");
       } else {
         if (networkType === "solana") {
           alert("After setup lock, you can still add individual limits or remove existing ones on Solana");
@@ -322,8 +305,20 @@ const SpendingLimitsSetup = ({
     try {
       const newLimit = parseFloat(edit.value);
 
-      // Use unified adapter interface for both EVM and Solana
-      const txHash = await transactionManager.proposeLimitChange(periodName, newLimit);
+      const vault = await transactionManager.getActiveVault();
+      const currentRules = {
+        dailyLimit: vault?.dailyLimit || 0,
+        weeklyLimit: vault?.weeklyLimit || 0,
+        monthlyLimit: vault?.monthlyLimit || 0,
+        penaltyRateBps: vault?.penaltyRateBps || 2000,
+        limitsArePercentage: vault?.limitsArePercentage || false,
+      };
+      const decimals = vault?.tokenDecimals ?? (vault?.isSolVault ? 9 : 6);
+      const factor = 10 ** decimals;
+      const periodKey = periodName.toLowerCase() + "Limit";
+      currentRules[periodKey] = Math.round(newLimit * factor);
+
+      const txHash = await transactionManager.proposeRuleChange(currentRules);
       console.log("Proposal transaction:", txHash);
 
       alert(`✅ ${periodName} limit change proposal submitted! It will be executable after the timelock period.`);
@@ -354,19 +349,9 @@ const SpendingLimitsSetup = ({
     }
 
     try {
-      if (proposal.networkType === "solana") {
-        // For Solana: Execute proposal through adapter
-        console.log("🔄 Executing Solana proposal:", proposal);
-        const adapter = transactionManager.getCurrentAdapter();
-        await adapter.executeLimitProposal(proposal.proposalId);
-        alert(`✅ Executed ${proposal.action} proposal for ${proposal.periodName}!`);
-      } else {
-        // For EVM: Execute proposal through adapter
-        console.log("🔄 Executing EVM proposal:", proposal);
-        const adapter = transactionManager.getCurrentAdapter();
-        await adapter.executeLimitProposal(proposal.proposalId);
-        alert(`✅ Executed ${proposal.action} proposal for ${proposal.periodName}!`);
-      }
+      console.log("🔄 Executing proposal:", proposal);
+      await transactionManager.executeRuleChange();
+      alert(`✅ Executed ${proposal.action} proposal for ${proposal.periodName}!`);
 
       // Refresh data
       await refreshData();
@@ -380,15 +365,7 @@ const SpendingLimitsSetup = ({
 
   const cancelProposal = async (proposal) => {
     try {
-      // For Solana: Use adapter to cancel proposal
-      if (networkType === "solana" && transactionManager) {
-        const adapter = transactionManager.getCurrentAdapter();
-        await adapter.cancelLimitProposal(proposal.proposalId);
-      } else if (networkType === "evm") {
-        // For EVM: Use adapter to cancel proposal
-        const adapter = transactionManager.getCurrentAdapter();
-        await adapter.cancelLimitProposal(proposal.proposalId);
-      }
+      await transactionManager.cancelRuleChange();
 
       // Refresh proposals
       await refreshData();
@@ -412,35 +389,25 @@ const SpendingLimitsSetup = ({
     }
 
     try {
-      if (networkType === "solana") {
-        // Solana removal logic
-        console.log("🗑️ Solana: Removing limit for", periodName);
-
-        if (isSetupCommitted) {
-          // After setup is committed, removal requires a proposal
-          // For now, we'll inform the user that this feature is coming soon
-          alert("🚧 Solana limit removal proposals are coming soon!\n\nFor now, you can:\n• Edit limits (proposals work)\n• Remove limits only before setup is committed\n\nRemoval proposals will be implemented in the next update.");
-          return;
-        } else {
-          // Direct removal before setup is committed
-          const adapter = transactionManager.getCurrentAdapter();
-          const txHash = await adapter.removeTimePeriodLimit(periodName);
-          console.log("Solana limit removed:", txHash);
-          alert(`✅ ${periodName} limit removed successfully!`);
-        }
+      if (isSetupCommitted) {
+        const vault = await transactionManager.getActiveVault();
+        const currentRules = {
+          dailyLimit: vault?.dailyLimit || 0,
+          weeklyLimit: vault?.weeklyLimit || 0,
+          monthlyLimit: vault?.monthlyLimit || 0,
+          penaltyRateBps: vault?.penaltyRateBps || 2000,
+          limitsArePercentage: vault?.limitsArePercentage || false,
+        };
+        const periodKey = periodName.toLowerCase() + "Limit";
+        currentRules[periodKey] = 0;
+        await transactionManager.proposeRuleChange(currentRules);
+        alert(`✅ Removal proposal submitted for ${periodName}! It will be executable after the timelock period.`);
       } else {
-        // EVM removal logic (existing)
-        console.log("🗑️ EVM: Removing limit for", periodName);
-
-        if (isSetupCommitted) {
-          const tx = await savingsContract.proposeLimitRemoval(periodName);
-          await tx.wait();
-          alert(`✅ Removal proposal submitted for ${periodName}! It will be executable after review.`);
-        } else {
-          const tx = await savingsContract.removeTimePeriodLimit(periodName);
-          await tx.wait();
-          alert(`✅ ${periodName} limit removed successfully!`);
-        }
+        setLimitEdits((prev) => ({
+          ...prev,
+          [periodName]: { value: "", isActive: false, isEditing: false },
+        }));
+        alert(`✅ ${periodName} limit removed.`);
       }
 
       // Refresh data for both networks
@@ -488,7 +455,7 @@ const SpendingLimitsSetup = ({
       >
         {isSetupCommitted
           ? "⚠️ Account locked: Changes require 24-hour timelock proposals. Edit individual limits or add new ones."
-          : "Configure daily, weekly, or monthly spending limits to control your withdrawals. After wallet lock-in, updates will require 24 hours - 7 days approval for security and impulse control reasons."}
+          : "Configure daily, weekly, or monthly spending limits to control your withdrawals. After wallet lock-in, updates will require a timelock for security."}
       </p>
 
       {/* Progress Tips for Setup Mode */}
@@ -515,6 +482,22 @@ const SpendingLimitsSetup = ({
         <h4 style={{ color: "#9ae6b4", margin: "0 0 15px 0" }}>
           🎯 Standard Time Periods
         </h4>
+        {!isSetupCommitted ? (
+          <>
+            {showModeToggle && onLimitsModeChange && (
+              <LimitModeToggle mode={limitsMode} onChange={onLimitsModeChange} />
+            )}
+            <LimitPeriodCards
+              values={{
+                Daily: limitEdits.Daily?.value || "",
+                Weekly: limitEdits.Weekly?.value || "",
+                Monthly: limitEdits.Monthly?.value || "",
+              }}
+              onChange={updateLimitEdit}
+              unit={limitsMode === "percent" ? "%" : tokenSymbol}
+            />
+          </>
+        ) : (
         <div
           style={{
             display: "grid",
@@ -690,7 +673,7 @@ const SpendingLimitsSetup = ({
                       type="text"
                       placeholder={
                         isActive
-                          ? "Update limit (USDT)"
+                          ? `Update limit (${tokenSymbol})`
                           : "Enter amount to activate"
                       }
                       value={edit?.value || ""}
@@ -731,7 +714,7 @@ const SpendingLimitsSetup = ({
                           fontSize: "1.1em",
                         }}
                       >
-                        {existingLimit.remaining} USDT
+                        {formatAmount(existingLimit.remaining)} {tokenSymbol}
                       </span>
                     </div>
                     <div
@@ -743,8 +726,8 @@ const SpendingLimitsSetup = ({
                         marginBottom: "8px",
                       }}
                     >
-                      <span>Spent: {existingLimit.spent} USDT</span>
-                      <span>Limit: {existingLimit.limit} USDT</span>
+                      <span>Spent: {formatAmount(existingLimit.spent)} {tokenSymbol}</span>
+                      <span>Limit: {formatAmount(existingLimit.limit)} {tokenSymbol}</span>
                     </div>
                     {/* Progress bar */}
                     <div
@@ -1049,6 +1032,7 @@ const SpendingLimitsSetup = ({
             );
           })}
         </div>
+        )}
 
         <div
           style={{
@@ -1152,7 +1136,7 @@ const SpendingLimitsSetup = ({
                               fontWeight: "bold",
                             }}
                           >
-                            {limit.remaining} USDT remaining
+                            {formatAmount(limit.remaining)} {tokenSymbol} remaining
                           </span>
                         </div>
                         <div
@@ -1162,8 +1146,8 @@ const SpendingLimitsSetup = ({
                           {limit.durationDays > 0
                             ? `${limit.durationDays} days`
                             : `${limit.durationHours} hours`}{" "}
-                          • Limit: {limit.limit} USDT • Spent:{" "}
-                          {limit.spent} USDT
+                          • Limit: {formatAmount(limit.limit)} {tokenSymbol} • Spent:{" "}
+                          {formatAmount(limit.spent)} {tokenSymbol}
                         </div>
                       </div>
                       <button
@@ -1419,7 +1403,7 @@ const SpendingLimitsSetup = ({
                     </div>
                     <div style={{ fontSize: "0.8em", color: "#a0aec0" }}>
                       {proposal.action === "change" ? (
-                        <>New Limit: {proposal.newLimit} USDT</>
+                        <>New Limit: {proposal.newLimit} {tokenSymbol}</>
                       ) : (
                         <>Action: Remove limit entirely</>
                       )}

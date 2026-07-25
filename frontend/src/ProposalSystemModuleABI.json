@@ -381,6 +381,57 @@
   {
     "inputs": [
       {
+        "internalType": "uint256",
+        "name": "dailyLimit",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "weeklyLimit",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "monthlyLimit",
+        "type": "uint256"
+      }
+    ],
+    "name": "commitSetup",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "dailyLimit",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "weeklyLimit",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "monthlyLimit",
+        "type": "uint256"
+      },
+      {
+        "internalType": "address",
+        "name": "referrer",
+        "type": "address"
+      }
+    ],
+    "name": "commitSetupWithReferrer",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
         "internalType": "address",
         "name": "user",
         "type": "address"
@@ -731,6 +782,19 @@
   },
   {
     "inputs": [],
+    "name": "referralModule",
+    "outputs": [
+      {
+        "internalType": "contract IReferralModule",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
     "name": "renounceOwnership",
     "outputs": [],
     "stateMutability": "nonpayable",
@@ -747,6 +811,19 @@
       }
     ],
     "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "_referralModule",
+        "type": "address"
+      }
+    ],
+    "name": "setReferralModule",
+    "outputs": [],
+    "stateMutability": "nonpayable",
     "type": "function"
   },
   {

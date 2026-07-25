@@ -70,15 +70,49 @@ async function fetchSolanaProposals(params) {
   }
 
   const adapter = transactionManager.getCurrentAdapter();
-  const proposals = await adapter.fetchPendingProposals(userAddress);
+  const rawProposals = await adapter.fetchPendingProposals(userAddress);
 
-  console.log(`✅ Found ${proposals.length} pending proposals for Solana`);
+  console.log(`✅ Found ${rawProposals.length} pending proposals for Solana`);
 
-  // Format proposals for consistent structure
-  return proposals.map(proposal => ({
-    ...proposal,
-    networkType: 'solana'
-  }));
+  const vault = await transactionManager.getActiveVault().catch(() => null);
+  const decimals = vault?.tokenDecimals ?? (vault?.isSolVault ? 9 : 6);
+  const factor = 10 ** decimals;
+
+  return rawProposals.map(proposal => {
+    const periods = [
+      { name: "Daily", proposed: proposal.newDailyLimit, current: vault?.dailyLimit },
+      { name: "Weekly", proposed: proposal.newWeeklyLimit, current: vault?.weeklyLimit },
+      { name: "Monthly", proposed: proposal.newMonthlyLimit, current: vault?.monthlyLimit },
+    ];
+
+    const changed = periods.find(p => p.proposed !== null && p.proposed !== p.current);
+
+    const executeAfterMs = proposal.executeAfter * 1000;
+    const submittedAtMs = proposal.createdAt * 1000;
+
+    if (changed) {
+      const isRemoval = changed.proposed === 0;
+      return {
+        ...proposal,
+        networkType: 'solana',
+        periodName: changed.name,
+        action: isRemoval ? 'remove' : 'change',
+        newLimit: isRemoval ? null : parseFloat((changed.proposed / factor).toFixed(2)),
+        executeAfter: executeAfterMs,
+        submittedAt: submittedAtMs,
+      };
+    }
+
+    return {
+      ...proposal,
+      networkType: 'solana',
+      periodName: 'Rules',
+      action: 'change',
+      newLimit: null,
+      executeAfter: executeAfterMs,
+      submittedAt: submittedAtMs,
+    };
+  });
 }
 
 /**
@@ -93,6 +127,12 @@ async function fetchEvmProposals(params) {
 
   if (!savingsContract) {
     console.log("❌ Savings contract not available, skipping proposal fetch");
+    return [];
+  }
+
+  // Vaults on EVM have no timelocked proposals yet — rule changes are immediate
+  if (transactionManager?.getActiveVaultCapabilities &&
+      !transactionManager.getActiveVaultCapabilities().proposals) {
     return [];
   }
 

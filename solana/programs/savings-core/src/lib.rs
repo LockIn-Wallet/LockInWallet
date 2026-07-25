@@ -1,9 +1,5 @@
 use anchor_lang::prelude::*;
-use anchor_spl::token::{self, Mint, Token, TokenAccount, Transfer};
-use anchor_spl::associated_token::AssociatedToken;
 
-// This is your program's public key and it will update
-// automatically when you build the project.
 declare_id!("9j511uJuYwoFRFiU1h5wy2oi1Xc8n1FdoK91QxoXHRh2");
 
 pub mod state;
@@ -13,302 +9,199 @@ pub mod constants;
 
 pub use state::*;
 pub use instructions::*;
-pub use error::*;
 
 #[program]
 pub mod savings_core {
     use super::*;
 
-    /// Initialize a savings account for a user
-    pub fn initialize(ctx: Context<Initialize>) -> Result<()> {
-        instructions::initialize(ctx)
+    // ========== PROGRAM CONFIG ==========
+
+    pub fn initialize_program_config(
+        ctx: Context<InitializeProgramConfig>,
+        default_penalty_rate_bps: u16,
+    ) -> Result<()> {
+        instructions::initialize_program_config(ctx, default_penalty_rate_bps)
     }
 
-    /// Deposit SOL to the savings account (supports CPI)
+    pub fn update_program_config(
+        ctx: Context<UpdateProgramConfig>,
+        new_treasury: Option<Pubkey>,
+        new_penalty_rate_bps: Option<u16>,
+    ) -> Result<()> {
+        instructions::update_program_config(ctx, new_treasury, new_penalty_rate_bps)
+    }
+
+    // ========== VAULT CREATION ==========
+
+    pub fn create_vault(
+        ctx: Context<CreateVault>,
+        name: String,
+        vault_nonce: u64,
+        description: String,
+        vault_type: VaultType,
+        daily_limit: u64,
+        weekly_limit: u64,
+        monthly_limit: u64,
+        penalty_rate_bps: u16,
+        limits_are_percentage: bool,
+    ) -> Result<()> {
+        instructions::create_vault(
+            ctx, name, vault_nonce, description, vault_type,
+            daily_limit, weekly_limit, monthly_limit,
+            penalty_rate_bps, limits_are_percentage,
+        )
+    }
+
+    pub fn create_spl_vault(
+        ctx: Context<CreateSplVault>,
+        name: String,
+        vault_nonce: u64,
+        description: String,
+        vault_type: VaultType,
+        daily_limit: u64,
+        weekly_limit: u64,
+        monthly_limit: u64,
+        penalty_rate_bps: u16,
+        limits_are_percentage: bool,
+    ) -> Result<()> {
+        instructions::create_spl_vault(
+            ctx, name, vault_nonce, description, vault_type,
+            daily_limit, weekly_limit, monthly_limit,
+            penalty_rate_bps, limits_are_percentage,
+        )
+    }
+
+    // ========== MEMBERSHIP ==========
+
+    pub fn join_vault(ctx: Context<JoinVault>) -> Result<()> {
+        instructions::join_vault(ctx)
+    }
+
+    pub fn leave_vault(ctx: Context<LeaveVault>) -> Result<()> {
+        instructions::leave_vault(ctx)
+    }
+
+    // ========== DEPOSITS ==========
+
     pub fn deposit_sol(ctx: Context<DepositSol>, amount: u64) -> Result<()> {
         instructions::deposit_sol(ctx, amount)
     }
 
-    /// Deposit SPL tokens to the savings account (supports CPI)
     pub fn deposit_spl(ctx: Context<DepositSpl>, amount: u64) -> Result<()> {
         instructions::deposit_spl(ctx, amount)
     }
 
-    /// Deposit SOL for self (backward compatibility)
-    pub fn deposit_sol_self(ctx: Context<DepositSolSelf>, amount: u64) -> Result<()> {
-        instructions::deposit_sol_self(ctx, amount)
-    }
+    // ========== WITHDRAWALS (within limits) ==========
 
-    /// Deposit SPL tokens for self (backward compatibility)
-    pub fn deposit_spl_self(ctx: Context<DepositSplSelf>, amount: u64) -> Result<()> {
-        instructions::deposit_spl_self(ctx, amount)
-    }
-
-    /// Withdraw SOL from the savings account
     pub fn withdraw_sol(ctx: Context<WithdrawSol>, amount: u64) -> Result<()> {
         instructions::withdraw_sol(ctx, amount)
     }
 
-    /// Withdraw SPL tokens from the savings account
     pub fn withdraw_spl(ctx: Context<WithdrawSpl>, amount: u64) -> Result<()> {
         instructions::withdraw_spl(ctx, amount)
     }
 
-    /// Get user's total SOL balance
-    pub fn get_sol_balance(ctx: Context<GetBalance>) -> Result<u64> {
-        Ok(ctx.accounts.savings_account.sol_balance)
-    }
+    // ========== PENALTY WITHDRAWALS (bypass limits) ==========
 
-    /// Get user's SPL token balance for a specific mint
-    pub fn get_spl_balance(ctx: Context<GetBalance>, mint: Pubkey) -> Result<u64> {
-        let savings_account = &ctx.accounts.savings_account;
-
-        for token_balance in &savings_account.spl_balances {
-            if token_balance.mint == mint {
-                return Ok(token_balance.amount);
-            }
-        }
-
-        Ok(0) // Return 0 if token not found
-    }
-
-    // ========== SPENDING LIMITS INSTRUCTIONS ==========
-
-    /// Initialize a spending limits account for a user
-    pub fn initialize_spending_limits(ctx: Context<InitializeSpendingLimits>) -> Result<()> {
-        instructions::initialize_spending_limits(ctx)
-    }
-
-    /// Add or update a time period limit
-    pub fn add_time_period_limit(
-        ctx: Context<AddTimePeriodLimit>,
-        name: String,
-        limit: u64,
-        duration: u64,
-    ) -> Result<()> {
-        instructions::add_time_period_limit(ctx, name, limit, duration)
-    }
-
-    /// Remove a time period limit
-    pub fn remove_time_period_limit(
-        ctx: Context<RemoveTimePeriodLimit>,
-        name: String,
-    ) -> Result<()> {
-        instructions::remove_time_period_limit(ctx, name)
-    }
-
-    /// Set common period limits (Daily, Weekly, Monthly)
-    pub fn set_common_period_limits(
-        ctx: Context<SetCommonPeriodLimits>,
-        daily_limit: Option<u64>,
-        weekly_limit: Option<u64>,
-        monthly_limit: Option<u64>,
-    ) -> Result<()> {
-        instructions::set_common_period_limits(ctx, daily_limit, weekly_limit, monthly_limit)
-    }
-
-    /// Commit initial setup
-    pub fn commit_initial_setup(ctx: Context<CommitInitialSetup>) -> Result<()> {
-        instructions::commit_initial_setup(ctx)
-    }
-
-    /// Get spending limits information
-    pub fn get_spending_limits(ctx: Context<GetSpendingLimits>) -> Result<()> {
-        instructions::get_spending_limits(ctx)
-    }
-
-    /// Withdraw SOL with spending limits validation
-    pub fn withdraw_sol_with_limits(ctx: Context<WithdrawSolWithLimits>, amount: u64) -> Result<()> {
-        instructions::withdraw_sol_with_limits(ctx, amount)
-    }
-
-    /// Withdraw SPL tokens with spending limits validation
-    pub fn withdraw_spl_with_limits(ctx: Context<WithdrawSplWithLimits>, amount: u64) -> Result<()> {
-        instructions::withdraw_spl_with_limits(ctx, amount)
-    }
-
-    // ========== PROPOSAL MANAGEMENT INSTRUCTIONS ==========
-
-    /// Propose a spending limit change
-    pub fn propose_limit_change(
-        ctx: Context<ProposeLimitChange>,
-        period_name: String,
-        new_limit: u64,
-    ) -> Result<()> {
-        instructions::propose_limit_change(ctx, period_name, new_limit)
-    }
-
-    /// Execute a pending proposal
-    pub fn execute_limit_proposal(
-        ctx: Context<ExecuteLimitProposal>,
-        proposal_id: [u8; 32],
-    ) -> Result<()> {
-        instructions::execute_limit_proposal(ctx, proposal_id)
-    }
-
-    /// Cancel a pending proposal
-    pub fn cancel_limit_proposal(
-        ctx: Context<CancelLimitProposal>,
-        proposal_id: [u8; 32],
-    ) -> Result<()> {
-        instructions::cancel_limit_proposal(ctx, proposal_id)
-    }
-
-    // ========== WITHDRAWAL DESTINATION INSTRUCTIONS ==========
-
-    /// Add a withdrawal destination
-    pub fn add_withdrawal_destination(
-        ctx: Context<AddWithdrawalDestination>,
-        address: Pubkey,
-        title: String,
-    ) -> Result<()> {
-        instructions::add_withdrawal_destination(ctx, address, title)
-    }
-
-    /// Remove a withdrawal destination
-    pub fn remove_withdrawal_destination(
-        ctx: Context<RemoveWithdrawalDestination>,
-        address: Pubkey,
-    ) -> Result<()> {
-        instructions::remove_withdrawal_destination(ctx, address)
-    }
-
-    /// Request withdrawal destination addition (with timelock)
-    pub fn request_withdrawal_destination_addition(
-        ctx: Context<RequestWithdrawalDestinationAddition>,
-        address: Pubkey,
-        title: String,
-    ) -> Result<()> {
-        instructions::request_withdrawal_destination_addition(ctx, address, title)
-    }
-
-    /// Execute a pending withdrawal destination request
-    pub fn execute_withdrawal_destination_request(
-        ctx: Context<ExecuteWithdrawalDestinationRequest>,
-        request_id: [u8; 32],
-    ) -> Result<()> {
-        instructions::execute_withdrawal_destination_request(ctx, request_id)
-    }
-
-    /// Cancel a pending withdrawal destination request
-    pub fn cancel_withdrawal_destination_request(
-        ctx: Context<CancelWithdrawalDestinationRequest>,
-        request_id: [u8; 32],
-    ) -> Result<()> {
-        instructions::cancel_withdrawal_destination_request(ctx, request_id)
-    }
-
-    /// Withdraw SOL to destination
-    pub fn withdraw_sol_to_destination(
-        ctx: Context<WithdrawToDestination>,
-        amount: u64,
-    ) -> Result<()> {
-        instructions::withdraw_sol_to_destination(ctx, amount)
-    }
-
-    /// Withdraw SPL tokens to destination
-    pub fn withdraw_spl_to_destination(
-        ctx: Context<WithdrawSplToDestination>,
-        amount: u64,
-    ) -> Result<()> {
-        instructions::withdraw_spl_to_destination(ctx, amount)
-    }
-
-    // ========== WITHDRAWAL BYPASS INSTRUCTIONS ==========
-
-    /// Request withdrawal bypass for amounts exceeding spending limits
-    pub fn request_withdrawal_bypass(
-        ctx: Context<RequestWithdrawalBypass>,
-        amount: u64,
-        token_mint: Pubkey,
-        bypassing_period: String,
-        destination: Pubkey,
-    ) -> Result<()> {
-        instructions::request_withdrawal_bypass(ctx, amount, token_mint, bypassing_period, destination)
-    }
-
-    /// Execute withdrawal bypass (SOL)
-    pub fn execute_withdrawal_bypass(
-        ctx: Context<ExecuteWithdrawalBypass>,
-        request_id: [u8; 32],
-    ) -> Result<()> {
-        instructions::execute_withdrawal_bypass(ctx, request_id)
-    }
-
-    /// Execute SPL withdrawal bypass
-    pub fn execute_spl_withdrawal_bypass(
-        ctx: Context<ExecuteSplWithdrawalBypass>,
-        request_id: [u8; 32],
-    ) -> Result<()> {
-        instructions::execute_spl_withdrawal_bypass(ctx, request_id)
-    }
-
-    /// Cancel withdrawal bypass request
-    pub fn cancel_withdrawal_bypass(
-        ctx: Context<CancelWithdrawalBypass>,
-        request_id: [u8; 32],
-    ) -> Result<()> {
-        instructions::cancel_withdrawal_bypass(ctx, request_id)
-    }
-
-    // ========== PENALTY WITHDRAWAL INSTRUCTIONS ==========
-
-    /// Withdraw SOL with penalty (instant bypass, penalty goes to treasury)
     pub fn withdraw_sol_with_penalty(ctx: Context<WithdrawSolWithPenalty>, amount: u64) -> Result<()> {
         instructions::withdraw_sol_with_penalty(ctx, amount)
     }
 
-    /// Withdraw SPL tokens with penalty (instant bypass, penalty goes to treasury)
     pub fn withdraw_spl_with_penalty(ctx: Context<WithdrawSplWithPenalty>, amount: u64) -> Result<()> {
         instructions::withdraw_spl_with_penalty(ctx, amount)
     }
 
-    // ========== DEPOSIT PROXY INSTRUCTIONS ==========
+    // ========== PENALTY REWARDS ==========
 
-    /// Initialize a deposit proxy for a user
-    pub fn initialize_proxy(ctx: Context<InitializeProxy>) -> Result<()> {
-        instructions::initialize_proxy(ctx)
+    pub fn claim_penalty_rewards(ctx: Context<ClaimPenaltyRewards>) -> Result<()> {
+        instructions::claim_penalty_rewards(ctx)
     }
 
-    /// Forward SOL deposit to savings program
-    pub fn forward_sol_deposit(ctx: Context<ForwardSolDeposit>, amount: u64) -> Result<()> {
-        instructions::forward_sol_deposit(ctx, amount)
+    pub fn claim_spl_penalty_rewards(ctx: Context<ClaimSplPenaltyRewards>) -> Result<()> {
+        instructions::claim_spl_penalty_rewards(ctx)
     }
 
-    /// Forward SPL token deposit to savings program
-    pub fn forward_spl_deposit(ctx: Context<ForwardSplDeposit>, amount: u64) -> Result<()> {
-        instructions::forward_spl_deposit(ctx, amount)
-    }
+    // ========== VAULT MANAGEMENT ==========
 
-    /// Get the proxy address for a user (view function)
-    pub fn get_proxy_address(ctx: Context<GetProxyAddress>) -> Result<Pubkey> {
-        Ok(ctx.accounts.deposit_proxy.key())
-    }
-
-    // ========== MONETIZATION INSTRUCTIONS ==========
-
-    /// Initialize program configuration (admin only)
-    pub fn initialize_program_config(
-        ctx: Context<InitializeProgramConfig>,
-        permanent_address_fee_lamports: u64,
+    pub fn update_vault_rules(
+        ctx: Context<UpdateVaultRules>,
+        daily_limit: Option<u64>,
+        weekly_limit: Option<u64>,
+        monthly_limit: Option<u64>,
+        penalty_rate_bps: Option<u16>,
+        limits_are_percentage: Option<bool>,
     ) -> Result<()> {
-        instructions::initialize_program_config(ctx, permanent_address_fee_lamports)
+        instructions::update_vault_rules(ctx, daily_limit, weekly_limit, monthly_limit, penalty_rate_bps, limits_are_percentage)
     }
 
-    /// Update program configuration (admin only)
-    pub fn update_program_config(
-        ctx: Context<UpdateProgramConfig>,
-        new_treasury_address: Option<Pubkey>,
-        new_fee_lamports: Option<u64>,
+    // ========== WITHDRAWAL DESTINATIONS ==========
+
+    pub fn add_withdrawal_destination(
+        ctx: Context<AddWithdrawalDestination>,
+        title: String,
+    ) -> Result<()> {
+        instructions::add_withdrawal_destination(ctx, title)
+    }
+
+    pub fn request_withdrawal_destination(
+        ctx: Context<RequestWithdrawalDestination>,
+        title: String,
+    ) -> Result<()> {
+        instructions::request_withdrawal_destination(ctx, title)
+    }
+
+    pub fn execute_destination_request(ctx: Context<ExecuteDestinationRequest>) -> Result<()> {
+        instructions::execute_destination_request(ctx)
+    }
+
+    pub fn cancel_destination_request(ctx: Context<CancelDestinationRequest>) -> Result<()> {
+        instructions::cancel_destination_request(ctx)
+    }
+
+    pub fn remove_withdrawal_destination(ctx: Context<RemoveWithdrawalDestination>) -> Result<()> {
+        instructions::remove_withdrawal_destination(ctx)
+    }
+
+    // ========== RULE CHANGE PROPOSALS ==========
+
+    pub fn propose_rule_change(
+        ctx: Context<ProposeRuleChange>,
+        new_daily_limit: Option<u64>,
+        new_weekly_limit: Option<u64>,
+        new_monthly_limit: Option<u64>,
         new_penalty_rate_bps: Option<u16>,
+        new_limits_are_percentage: Option<bool>,
     ) -> Result<()> {
-        instructions::update_program_config(ctx, new_treasury_address, new_fee_lamports, new_penalty_rate_bps)
+        instructions::propose_rule_change(ctx, new_daily_limit, new_weekly_limit, new_monthly_limit, new_penalty_rate_bps, new_limits_are_percentage)
     }
 
-    /// Activate permanent address with $5 USD equivalent SOL payment
-    pub fn activate_permanent_address_with_payment(
-        ctx: Context<ActivatePermanentAddressWithPayment>,
+    pub fn execute_rule_change(ctx: Context<ExecuteRuleChange>) -> Result<()> {
+        instructions::execute_rule_change(ctx)
+    }
+
+    pub fn cancel_rule_change(ctx: Context<CancelRuleChange>) -> Result<()> {
+        instructions::cancel_rule_change(ctx)
+    }
+
+    // ========== BYPASS REQUESTS ==========
+
+    pub fn request_bypass(
+        ctx: Context<RequestBypass>,
+        amount: u64,
+        is_sol: bool,
     ) -> Result<()> {
-        instructions::activate_permanent_address_with_payment(ctx)
+        instructions::request_bypass(ctx, amount, is_sol)
+    }
+
+    pub fn execute_bypass_sol(ctx: Context<ExecuteBypassSol>) -> Result<()> {
+        instructions::execute_bypass_sol(ctx)
+    }
+
+    pub fn execute_bypass_spl(ctx: Context<ExecuteBypassSpl>) -> Result<()> {
+        instructions::execute_bypass_spl(ctx)
+    }
+
+    pub fn cancel_bypass(ctx: Context<CancelBypass>) -> Result<()> {
+        instructions::cancel_bypass(ctx)
     }
 }

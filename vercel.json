@@ -6,5 +6,8 @@
     "NODE_OPTIONS": "--max-old-space-size=4096",
     "GENERATE_SOURCEMAP": "false",
     "DISABLE_ESLINT_PLUGIN": "true"
-  }
+  },
+  "rewrites": [
+    { "source": "/savings-visualiser", "destination": "/index.html" }
+  ]
 }

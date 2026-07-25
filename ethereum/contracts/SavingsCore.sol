@@ -7,6 +7,17 @@ import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "./SavingsInterfaces.sol";
 
+/**
+ * @title SavingsCore
+ * @dev Custody kernel of the modular savings system. Holds user balances,
+ *      the module registry, and the withdrawal flows that spend them.
+ *
+ *      Everything else — spending limits, proposals, bypass, approvals,
+ *      referrals, deposit proxies, PoolTogether — lives in self-authenticating
+ *      modules that users call directly (Pattern B): user-facing module
+ *      functions authenticate via msg.sender, so the core carries no
+ *      per-feature forwarders.
+ */
 contract SavingsCore is Initializable, UUPSUpgradeable, OwnableUpgradeable, ISavingsCore {
     // User data storage
     mapping(address => mapping(address => uint256)) private userTokenBalances; // user => token => balance
@@ -185,7 +196,7 @@ contract SavingsCore is Initializable, UUPSUpgradeable, OwnableUpgradeable, ISav
         return userTokenBalances[msg.sender][address(0)];
     }
 
-    // ========== ESSENTIAL CORE FUNCTIONS ==========
+    // ========== USER WITHDRAWAL FLOWS ==========
 
     // Core withdraw function with time period limits check
     function withdraw(uint256 amount, address token) external nonReentrant {
@@ -262,318 +273,13 @@ contract SavingsCore is Initializable, UUPSUpgradeable, OwnableUpgradeable, ISav
         emit Withdrawal(msg.sender, "ALL", amount, address(0));
     }
 
-    // ========== ESSENTIAL DELEGATED FUNCTIONS ==========
-
-    // Essential withdrawal address functions (needed for frontend)
-    function getUserWithdrawalAddresses() external view returns (
-        string[] memory titles,
-        address[] memory destinations,
-        uint256[] memory timestamps
-    ) {
-        IApprovalSystemModule approvalModule = IApprovalSystemModule(modules[ModuleIds.APPROVAL_SYSTEM]);
-        if (address(approvalModule) == address(0)) {
-            return (new string[](0), new address[](0), new uint256[](0));
-        }
-        return approvalModule.getUserWithdrawalAddresses(msg.sender);
-    }
-
-    function getUserPendingWithdrawalRequests() external view returns (
-        bytes32[] memory requestIds,
-        string[] memory titles,
-        address[] memory destinations,
-        uint256[] memory executeAfters
-    ) {
-        IApprovalSystemModule approvalModule = IApprovalSystemModule(modules[ModuleIds.APPROVAL_SYSTEM]);
-        if (address(approvalModule) == address(0)) {
-            return (new bytes32[](0), new string[](0), new address[](0), new uint256[](0));
-        }
-        return approvalModule.getUserPendingWithdrawalRequests(msg.sender);
-    }
-
-    function requestWithdrawalAddress(
-        string calldata title,
-        address destination
-    ) external returns (bytes32 requestId) {
-        IApprovalSystemModule approvalModule = IApprovalSystemModule(modules[ModuleIds.APPROVAL_SYSTEM]);
-        require(address(approvalModule) != address(0), "Approval module not found");
-        return approvalModule.requestWithdrawalAddress(msg.sender, title, destination);
-    }
-
-    function addWithdrawalAddressDirect(
-        string calldata title,
-        address destination
-    ) external {
-        IApprovalSystemModule approvalModule = IApprovalSystemModule(modules[ModuleIds.APPROVAL_SYSTEM]);
-        require(address(approvalModule) != address(0), "ApprovalSystemModule not registered");
-        approvalModule.addWithdrawalAddressDirect(msg.sender, title, destination);
-    }
-
-    function executeWithdrawalAddressRequest(bytes32 requestId) external {
-        IApprovalSystemModule approvalModule = IApprovalSystemModule(modules[ModuleIds.APPROVAL_SYSTEM]);
-        require(address(approvalModule) != address(0), "ApprovalSystemModule not registered");
-        approvalModule.executeWithdrawalAddressRequest(msg.sender, requestId);
-    }
-
-    function removeWithdrawalAddress(address destination) external {
-        IApprovalSystemModule approvalModule = IApprovalSystemModule(modules[ModuleIds.APPROVAL_SYSTEM]);
-        require(address(approvalModule) != address(0), "ApprovalSystemModule not registered");
-        approvalModule.removeWithdrawalAddress(msg.sender, destination);
-    }
-
-    function cancelWithdrawalAddressRequest(bytes32 requestId) external {
-        IApprovalSystemModule approvalModule = IApprovalSystemModule(modules[ModuleIds.APPROVAL_SYSTEM]);
-        require(address(approvalModule) != address(0), "ApprovalSystemModule not registered");
-        approvalModule.cancelWithdrawalAddressRequest(msg.sender, requestId);
-    }
-
-    // Essential view functions
-    function getUserSpendingLimits(address user)
-        external
-        view
-        returns (
-            string[] memory names,
-            uint256[] memory limits,
-            uint256[] memory spent,
-            uint256[] memory remaining,
-            uint256[] memory durations,
-            bool[] memory active
-        )
-    {
-        ITimePeriodLimitsModule limitsModule = ITimePeriodLimitsModule(modules[ModuleIds.TIME_PERIOD_LIMITS]);
-        if (address(limitsModule) == address(0)) {
-            return (new string[](0), new uint256[](0), new uint256[](0), new uint256[](0), new uint256[](0), new bool[](0));
-        }
-
-        // Check authorization
-        IApprovalSystemModule approvalModule = IApprovalSystemModule(modules[ModuleIds.APPROVAL_SYSTEM]);
-        require(
-            msg.sender == user ||
-            (address(approvalModule) != address(0) && approvalModule.isApprovalAddress(user, msg.sender)),
-            "Not authorized"
-        );
-
-        return limitsModule.getUserSpendingLimits(user);
-    }
-
-    function isSetupCommitted() external view returns (bool) {
-        IProposalSystemModule proposalModule = IProposalSystemModule(modules[ModuleIds.PROPOSAL_SYSTEM]);
-        if (address(proposalModule) == address(0)) return false;
-        return proposalModule.isSetupCommitted(msg.sender);
-    }
-
-    function getSetupInfo() external view returns (
-        bool committed,
-        uint256 totalLockedValue,
-        uint256 commitTimestamp,
-        uint256 increasesInPeriod,
-        uint256 lastIncreaseTimestamp
-    ) {
-        IProposalSystemModule proposalModule = IProposalSystemModule(modules[ModuleIds.PROPOSAL_SYSTEM]);
-        if (address(proposalModule) == address(0)) {
-            return (false, 0, 0, 0, 0);
-        }
-        return proposalModule.getSetupInfo(msg.sender);
-    }
-
-    function isApprovalAddress(address user, address _approval) external view returns (bool) {
-        IApprovalSystemModule approvalModule = IApprovalSystemModule(modules[ModuleIds.APPROVAL_SYSTEM]);
-        if (address(approvalModule) == address(0)) return false;
-        return approvalModule.isApprovalAddress(user, _approval);
-    }
-
-    function getActivePeriodNames(address user) external view returns (string[] memory) {
-        ITimePeriodLimitsModule limitsModule = ITimePeriodLimitsModule(modules[ModuleIds.TIME_PERIOD_LIMITS]);
-        if (address(limitsModule) == address(0)) {
-            return new string[](0);
-        }
-        return limitsModule.getActivePeriodNames(user);
-    }
-
-    function getActivePeriodCount(address user) external view returns (uint256) {
-        ITimePeriodLimitsModule limitsModule = ITimePeriodLimitsModule(modules[ModuleIds.TIME_PERIOD_LIMITS]);
-        if (address(limitsModule) == address(0)) {
-            return 0;
-        }
-        return limitsModule.getActivePeriodCount(user);
-    }
-
-    // ========== SPENDING LIMITS SETUP FUNCTIONS ==========
-
-    function setCommonPeriodLimits(
-        uint256 dailyLimit,
-        uint256 weeklyLimit,
-        uint256 monthlyLimit
-    ) external {
-        ITimePeriodLimitsModule limitsModule = ITimePeriodLimitsModule(modules[ModuleIds.TIME_PERIOD_LIMITS]);
-        require(address(limitsModule) != address(0), "TimePeriodLimitsModule not registered");
-        limitsModule.setCommonPeriodLimits(msg.sender, dailyLimit, weeklyLimit, monthlyLimit);
-    }
-
-    function commitInitialSetup() external {
-        IProposalSystemModule proposalModule = IProposalSystemModule(modules[ModuleIds.PROPOSAL_SYSTEM]);
-        require(address(proposalModule) != address(0), "ProposalSystemModule not registered");
-        proposalModule.commitInitialSetup(msg.sender);
-    }
-
-    /**
-     * @dev Unified method that sets spending limits and commits setup in a single transaction
-     * @param dailyLimit Daily spending limit (0 to disable)
-     * @param weeklyLimit Weekly spending limit (0 to disable)
-     * @param monthlyLimit Monthly spending limit (0 to disable)
-     */
-    function commitSetup(
-        uint256 dailyLimit,
-        uint256 weeklyLimit,
-        uint256 monthlyLimit
-    ) external {
-        address user = msg.sender; // Store the original caller
-
-        // First set the spending limits - use internal calls to preserve user context
-        ITimePeriodLimitsModule limitsModule = ITimePeriodLimitsModule(modules[ModuleIds.TIME_PERIOD_LIMITS]);
-        require(address(limitsModule) != address(0), "TimePeriodLimitsModule not registered");
-        limitsModule.setCommonPeriodLimits(user, dailyLimit, weeklyLimit, monthlyLimit);
-
-        // Then commit the setup
-        IProposalSystemModule proposalModule = IProposalSystemModule(modules[ModuleIds.PROPOSAL_SYSTEM]);
-        require(address(proposalModule) != address(0), "ProposalSystemModule not registered");
-        proposalModule.commitInitialSetup(user);
-    }
-
-    function recalculateTotalLockedValue() external {
-        IProposalSystemModule proposalModule = IProposalSystemModule(modules[ModuleIds.PROPOSAL_SYSTEM]);
-        require(address(proposalModule) != address(0), "ProposalSystemModule not registered");
-        proposalModule.recalculateTotalLockedValue(msg.sender);
-    }
-
-    function addTimePeriodLimit(
-        string calldata periodName,
-        uint256 limit,
-        uint256 durationInSeconds
-    ) external {
-        ITimePeriodLimitsModule limitsModule = ITimePeriodLimitsModule(modules[ModuleIds.TIME_PERIOD_LIMITS]);
-        require(address(limitsModule) != address(0), "TimePeriodLimitsModule not registered");
-        limitsModule.addTimePeriodLimit(msg.sender, periodName, limit, durationInSeconds);
-
-        // After adding a new limit, recalculate total locked value if setup is committed
-        IProposalSystemModule proposalModule = IProposalSystemModule(modules[ModuleIds.PROPOSAL_SYSTEM]);
-        if (address(proposalModule) != address(0) && proposalModule.isSetupCommitted(msg.sender)) {
-            proposalModule.recalculateTotalLockedValue(msg.sender);
-        }
-    }
-
-    // ========== PROPOSAL SYSTEM FUNCTIONS ==========
-
-    function proposeLimitChange(
-        string calldata periodName,
-        uint256 newLimit
-    ) external returns (bytes32 proposalId) {
-        IProposalSystemModule proposalModule = IProposalSystemModule(modules[ModuleIds.PROPOSAL_SYSTEM]);
-        require(address(proposalModule) != address(0), "ProposalSystemModule not registered");
-        return proposalModule.proposeLimitChange(msg.sender, periodName, newLimit);
-    }
-
-    function proposeLimitRemoval(string calldata periodName) external returns (bytes32 proposalId) {
-        IProposalSystemModule proposalModule = IProposalSystemModule(modules[ModuleIds.PROPOSAL_SYSTEM]);
-        require(address(proposalModule) != address(0), "ProposalSystemModule not registered");
-        return proposalModule.proposeLimitRemoval(msg.sender, periodName);
-    }
-
-    function executeLimitProposal(bytes32 proposalId) external {
-        IProposalSystemModule proposalModule = IProposalSystemModule(modules[ModuleIds.PROPOSAL_SYSTEM]);
-        require(address(proposalModule) != address(0), "ProposalSystemModule not registered");
-        proposalModule.executeLimitProposal(msg.sender, proposalId);
-    }
-
-    function cancelLimitProposal(bytes32 proposalId) external {
-        IProposalSystemModule proposalModule = IProposalSystemModule(modules[ModuleIds.PROPOSAL_SYSTEM]);
-        require(address(proposalModule) != address(0), "ProposalSystemModule not registered");
-        proposalModule.cancelLimitProposal(msg.sender, proposalId);
-    }
-
-    function getProposal(bytes32 proposalId) external view returns (
-        string memory category,
-        uint256 newLimit,
-        uint256 executeAfter,
-        bool executed,
-        bool isIncrease,
-        bool exists
-    ) {
-        IProposalSystemModule proposalModule = IProposalSystemModule(modules[ModuleIds.PROPOSAL_SYSTEM]);
-        require(address(proposalModule) != address(0), "ProposalSystemModule not registered");
-        return proposalModule.getProposal(msg.sender, proposalId);
-    }
-
-    function getUserPendingProposals() external view returns (
-        bytes32[] memory proposalIds,
-        string[] memory categories,
-        uint256[] memory newLimits,
-        uint256[] memory executeAfters,
-        bool[] memory isIncreaseFlags
-    ) {
-        IProposalSystemModule proposalModule = IProposalSystemModule(modules[ModuleIds.PROPOSAL_SYSTEM]);
-        if (address(proposalModule) == address(0)) {
-            return (new bytes32[](0), new string[](0), new uint256[](0), new uint256[](0), new bool[](0));
-        }
-        return proposalModule.getUserPendingProposals(msg.sender);
-    }
-
-    // ========== BYPASS SYSTEM FUNCTIONS ==========
-
-    function requestLimitBypass(
-        uint256 amount,
-        string calldata skipPeriod,
-        address token
-    ) external returns (bytes32 requestId) {
-        IBypassSystemModule bypassModule = IBypassSystemModule(modules[ModuleIds.BYPASS_SYSTEM]);
-        require(address(bypassModule) != address(0), "BypassSystemModule not registered");
-        return bypassModule.requestLimitBypass(msg.sender, amount, skipPeriod, token);
-    }
-
-    function executeBypassWithdrawal(bytes32 requestId) external {
-        IBypassSystemModule bypassModule = IBypassSystemModule(modules[ModuleIds.BYPASS_SYSTEM]);
-        require(address(bypassModule) != address(0), "BypassSystemModule not registered");
-        bypassModule.executeBypassWithdrawal(msg.sender, requestId);
-    }
-
-    function getUserActiveBypassRequests() external view returns (
-        bytes32[] memory requestIds,
-        uint256[] memory amounts,
-        string[] memory skipPeriods,
-        address[] memory tokens,
-        uint256[] memory executeAfters
-    ) {
-        IBypassSystemModule bypassModule = IBypassSystemModule(modules[ModuleIds.BYPASS_SYSTEM]);
-        if (address(bypassModule) == address(0)) {
-            return (new bytes32[](0), new uint256[](0), new string[](0), new address[](0), new uint256[](0));
-        }
-        return bypassModule.getUserActiveBypassRequests(msg.sender);
-    }
-
-    function getBypassRequest(bytes32 requestId) external view returns (
-        uint256 amount,
-        string memory skipPeriod,
-        address token,
-        uint256 executeAfter,
-        bool executed,
-        bool exists
-    ) {
-        IBypassSystemModule bypassModule = IBypassSystemModule(modules[ModuleIds.BYPASS_SYSTEM]);
-        require(address(bypassModule) != address(0), "BypassSystemModule not registered");
-        return bypassModule.getBypassRequest(msg.sender, requestId);
-    }
-
-    function cancelBypassRequest(bytes32 requestId) external {
-        IBypassSystemModule bypassModule = IBypassSystemModule(modules[ModuleIds.BYPASS_SYSTEM]);
-        require(address(bypassModule) != address(0), "BypassSystemModule not registered");
-        bypassModule.cancelBypassRequest(msg.sender, requestId);
-    }
-
     // ========== MODULE SETUP FUNCTIONS (OWNER ONLY) ==========
 
     function setupModuleCrossReferences() external onlyOwner {
         address timePeriodLimitsAddr = modules[ModuleIds.TIME_PERIOD_LIMITS];
         address proposalSystemAddr = modules[ModuleIds.PROPOSAL_SYSTEM];
         address bypassSystemAddr = modules[ModuleIds.BYPASS_SYSTEM];
+        address referralAddr = modules[ModuleIds.REFERRAL];
 
         require(timePeriodLimitsAddr != address(0), "TimePeriodLimitsModule not registered");
         require(proposalSystemAddr != address(0), "ProposalSystemModule not registered");
@@ -584,96 +290,15 @@ contract SavingsCore is Initializable, UUPSUpgradeable, OwnableUpgradeable, ISav
 
         // Set TimePeriodLimitsModule reference in BypassSystemModule
         IBypassSystemModule(bypassSystemAddr).setTimePeriodLimitsModule(timePeriodLimitsAddr);
+
+        // Set ProposalSystemModule reference in TimePeriodLimitsModule
+        ITimePeriodLimitsModule(timePeriodLimitsAddr).setProposalSystemModule(proposalSystemAddr);
+
+        // Set ReferralModule reference in ProposalSystemModule (optional module)
+        if (referralAddr != address(0)) {
+            IProposalSystemModule(proposalSystemAddr).setReferralModule(referralAddr);
+        }
     }
-
-    // ========== PROXY DEPLOYMENT FEE CONFIGURATION (delegates to module) ==========
-
-    function setTreasuryAddress(address _treasuryAddress) external onlyOwner {
-        IProxyDeploymentModule(modules[ModuleIds.PROXY_DEPLOYMENT]).setTreasuryAddress(_treasuryAddress);
-    }
-
-    function setPaymentToken(address _paymentToken) external onlyOwner {
-        IProxyDeploymentModule(modules[ModuleIds.PROXY_DEPLOYMENT]).setPaymentToken(_paymentToken);
-    }
-
-    function setProxyDeploymentFee(uint256 _fee) external onlyOwner {
-        IProxyDeploymentModule(modules[ModuleIds.PROXY_DEPLOYMENT]).setProxyDeploymentFee(_fee);
-    }
-
-    function getProxyDeploymentFee() external view returns (uint256) {
-        IProxyDeploymentModule m = IProxyDeploymentModule(modules[ModuleIds.PROXY_DEPLOYMENT]);
-        if (address(m) == address(0)) return 0;
-        return m.getProxyDeploymentFee();
-    }
-
-    // ========== USER PROXY FUNCTIONS (delegates to module) ==========
-
-    function deployUserProxy() external payable returns (address) {
-        IProxyDeploymentModule m = IProxyDeploymentModule(modules[ModuleIds.PROXY_DEPLOYMENT]);
-        require(address(m) != address(0), "ProxyDeploymentModule not registered");
-        return m.deployUserProxy{value: msg.value}(msg.sender);
-    }
-
-    function isProxyDeployed(address user) external view returns (bool) {
-        IProxyDeploymentModule m = IProxyDeploymentModule(modules[ModuleIds.PROXY_DEPLOYMENT]);
-        if (address(m) == address(0)) return false;
-        return m.isProxyDeployed(user);
-    }
-
-    function getUserProxy(address user) external view returns (address) {
-        IProxyDeploymentModule m = IProxyDeploymentModule(modules[ModuleIds.PROXY_DEPLOYMENT]);
-        if (address(m) == address(0)) return address(0);
-        return m.getUserProxy(user);
-    }
-
-    function getUserDepositAddress(address user) external view returns (address) {
-        IProxyDeploymentModule m = IProxyDeploymentModule(modules[ModuleIds.PROXY_DEPLOYMENT]);
-        if (address(m) == address(0)) return address(0);
-        return m.getUserDepositAddress(user);
-    }
-
-
-    // ========== POOL TOGETHER FUNCTIONS ==========
-
-    function depositToPoolTogether(address token, uint256 amount) external {
-        IPoolTogetherModule m = IPoolTogetherModule(modules[ModuleIds.POOL_TOGETHER]);
-        require(address(m) != address(0), "PoolTogetherModule not registered");
-        m.depositToVault(msg.sender, token, amount);
-    }
-
-    function withdrawFromPoolTogether(address token, uint256 shares) external {
-        IPoolTogetherModule m = IPoolTogetherModule(modules[ModuleIds.POOL_TOGETHER]);
-        require(address(m) != address(0), "PoolTogetherModule not registered");
-        m.withdrawFromVault(msg.sender, token, shares);
-    }
-
-    function getPoolTogetherBalance(address user, address token) external view returns (uint256 shares, uint256 assets) {
-        IPoolTogetherModule m = IPoolTogetherModule(modules[ModuleIds.POOL_TOGETHER]);
-        if (address(m) == address(0)) return (0, 0);
-        shares = m.getUserVaultShares(user, token);
-        assets = m.getUserVaultBalance(user, token);
-    }
-
-    function getPoolTogetherGrandPrize() external view returns (uint256) {
-        IPoolTogetherModule m = IPoolTogetherModule(modules[ModuleIds.POOL_TOGETHER]);
-        if (address(m) == address(0)) return 0;
-        return m.getGrandPrize();
-    }
-
-    function hasPoolTogetherVault(address token) external view returns (bool) {
-        IPoolTogetherModule m = IPoolTogetherModule(modules[ModuleIds.POOL_TOGETHER]);
-        if (address(m) == address(0)) return false;
-        return m.hasVault(token);
-    }
-
-    function claimPoolTogetherPrize(address token, uint8 tier) external {
-        IPoolTogetherModule m = IPoolTogetherModule(modules[ModuleIds.POOL_TOGETHER]);
-        require(address(m) != address(0), "PoolTogetherModule not registered");
-        uint256 prizeAmount = m.claimPrize(msg.sender, token, tier);
-        emit PrizeClaimed(msg.sender, token, prizeAmount, tier);
-    }
-
-    event PrizeClaimed(address indexed user, address indexed token, uint256 amount, uint8 tier);
 
     // Allow contract to receive ETH for withdrawals
     receive() external payable {

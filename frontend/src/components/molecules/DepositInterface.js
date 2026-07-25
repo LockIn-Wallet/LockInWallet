@@ -58,54 +58,29 @@ const DepositInterface = ({
   const [depositAddress, setDepositAddress] = useState("");
   const [isProxyDeployed, setIsProxyDeployed] = useState(false);
 
-  // Proxy status checking function (moved from App.js)
+  // Proxy status checking — the transaction manager resolves the deposit
+  // address for the legacy account or the currently selected vault
   const checkProxyStatus = async () => {
-    if (networkType === "evm") {
-      // EVM proxy status check
-      if (!savingsContract || !signer) {
-        console.log("❌ No contract or signer available for EVM proxy check");
-        return;
-      }
+    if (!transactionManager) {
+      console.log("❌ No transaction manager available for proxy check");
+      return;
+    }
 
-      try {
-        const userAddress = await signer.getAddress();
-        console.log(`🔍 Checking EVM proxy status for user: ${userAddress}`);
+    try {
+      const userAddress = await transactionManager.getAddress();
+      console.log(`🔍 Checking deposit address status for user: ${userAddress}`);
 
-        const proxyDeployed = await savingsContract.isProxyDeployed(userAddress);
-        const depositAddress = await savingsContract.getUserDepositAddress(userAddress);
+      const proxyDeployed = await transactionManager.isProxyDeployed(userAddress);
+      const depositAddress = await transactionManager.getDepositAddress(userAddress);
 
-        console.log(`✅ EVM proxy status: deployed=${proxyDeployed}, address=${depositAddress}`);
+      console.log(`✅ Deposit address status: deployed=${proxyDeployed}, address=${depositAddress}`);
 
-        setIsProxyDeployed(proxyDeployed);
-        setDepositAddress(proxyDeployed ? depositAddress : "");
-      } catch (error) {
-        console.error("❌ Error checking EVM proxy status:", error);
-        setIsProxyDeployed(false);
-        setDepositAddress("");
-      }
-    } else if (networkType === "solana") {
-      // Solana proxy status check
-      if (!transactionManager) {
-        console.log("❌ No transaction manager available for Solana proxy check");
-        return;
-      }
-
-      try {
-        const userAddress = await transactionManager.getAddress();
-        console.log(`🔍 Checking Solana proxy status for user: ${userAddress}`);
-
-        const proxyDeployed = await transactionManager.isProxyDeployed(userAddress);
-        const depositAddress = await transactionManager.getDepositAddress(userAddress);
-
-        console.log(`✅ Solana proxy status: deployed=${proxyDeployed}, address=${depositAddress}`);
-
-        setIsProxyDeployed(proxyDeployed);
-        setDepositAddress(proxyDeployed ? depositAddress : "");
-      } catch (error) {
-        console.error("❌ Error checking Solana proxy status:", error);
-        setIsProxyDeployed(false);
-        setDepositAddress("");
-      }
+      setIsProxyDeployed(proxyDeployed);
+      setDepositAddress(proxyDeployed ? depositAddress : "");
+    } catch (error) {
+      console.error("❌ Error checking deposit address status:", error);
+      setIsProxyDeployed(false);
+      setDepositAddress("");
     }
   };
 
@@ -296,73 +271,21 @@ const DepositInterface = ({
         setIsDeploying(false);
       }
     } else if (networkType === "solana") {
-      // Solana proxy deployment with payment activation
       if (!transactionManager || !solanaConnected) {
         alert("Please connect your Solana wallet first");
         return;
       }
 
       if (isProxyDeployed) {
-        alert("Permanent deposit address already deployed!");
+        alert("Deposit address already active!");
         return;
       }
 
       try {
         setIsDeploying(true);
-
-        // Since no permanent address exists, user needs to pay first
-        console.log("Processing activation payment for permanent address...");
-        const fee = await transactionManager.currentAdapter.getActivationFee();
-        const sufficientBalance =
-          await transactionManager.currentAdapter.hasSufficientBalanceForActivation();
-
-        if (!sufficientBalance) {
-          alert(
-            `💳 Insufficient Balance\n\nTo generate your permanent deposit address, you need to pay a one-time activation fee of ${(
-              fee / 1000000000
-            ).toFixed(
-              3
-            )} SOL (~$5 USD).\n\nPlease add more SOL to your wallet and try again.`
-          );
-          setIsDeploying(false);
-          return;
-        }
-
-        // Initialize savings account if it doesn't exist (separate from spending limits account)
-        console.log("Ensuring savings account exists...");
-        const savingsAccountExists =
-          await transactionManager.currentAdapter.isProxyDeployed(
-            solanaConnected ? solanaPublicKey?.toString() : userAddress
-          );
-
-        if (!savingsAccountExists) {
-          console.log("Creating savings account...");
-          await transactionManager.currentAdapter.initializeSavingsAccount();
-          console.log("✅ Savings account created");
-        } else {
-          console.log("✅ Savings account already exists");
-        }
-
-        console.log("Processing activation payment...");
-        const paymentTxHash =
-          await transactionManager.currentAdapter.activatePermanentAddressWithPayment();
-        console.log("✅ Payment completed:", paymentTxHash);
-
-        console.log("Deploying Solana permanent deposit address...");
-        // Deploy proxy using transaction manager
-        const result = await transactionManager.deployProxy();
-        console.log("Solana proxy deployment result:", result);
-
-        // Refresh proxy status
-        await checkProxyStatus();
-
-        alert(
-          "🎉 Payment completed & permanent deposit address generated successfully! This address is permanently tied to your wallet and you can use it for all future deposits from exchanges."
-        );
+        alert("Your vault address is your deposit address. Complete setup to activate.");
       } catch (error) {
-        console.error("Error deploying Solana proxy:", error);
-
-        // Handle specific error cases
+        console.error("Error with Solana deposit setup:", error);
         if (
           error.message.includes("already exists") ||
           error.message.includes("already deployed")

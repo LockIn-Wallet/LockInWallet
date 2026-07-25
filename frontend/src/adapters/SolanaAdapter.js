@@ -4,4573 +4,1515 @@ import {
   SystemProgram,
   LAMPORTS_PER_SOL,
   Transaction,
-  TransactionInstruction
-} from '@solana/web3.js';
+  TransactionInstruction,
+} from "@solana/web3.js";
 import {
-  getOrCreateAssociatedTokenAccount,
   getAssociatedTokenAddress,
   createAssociatedTokenAccountInstruction,
   TOKEN_PROGRAM_ID,
-  ASSOCIATED_TOKEN_PROGRAM_ID
-} from '@solana/spl-token';
-import bs58 from 'bs58';
-import { BlockchainAdapter } from './BlockchainAdapter.js';
+  ASSOCIATED_TOKEN_PROGRAM_ID,
+} from "@solana/spl-token";
+import { Buffer } from "buffer";
+import bs58 from "bs58";
+import { BlockchainAdapter } from "./BlockchainAdapter.js";
+import { getTokenMeta } from "../utils/tokenUtils.js";
 
-const ProgramConfig_DEFAULT_PENALTY_BPS = 2000; // 20%
+const PROGRAM_ID = new PublicKey(
+  "9j511uJuYwoFRFiU1h5wy2oi1Xc8n1FdoK91QxoXHRh2"
+);
 
-// Treasury configuration for different environments
 const TREASURY_CONFIG = {
-  localhost: {
-    treasuryAddress: 'Aa1wdTb1h3NyRKVBZTahZhWBWMWKCS1bZgLJ7amVAzLd',
-    description: 'Random treasury address for localhost testing'
-  },
-  devnet: {
-    treasuryAddress: '4xo6a3qHYgtsDkKUAy1wMQhyN1zoXo3tKPR5foxa3hV4',
-    description: 'Production treasury address for devnet'
-  },
-  mainnet: {
-    treasuryAddress: '4xo6a3qHYgtsDkKUAy1wMQhyN1zoXo3tKPR5foxa3hV4',
-    description: 'Production treasury address for mainnet'
+  localhost: "Aa1wdTb1h3NyRKVBZTahZhWBWMWKCS1bZgLJ7amVAzLd",
+  devnet: "4xo6a3qHYgtsDkKUAy1wMQhyN1zoXo3tKPR5foxa3hV4",
+  mainnet: "4xo6a3qHYgtsDkKUAy1wMQhyN1zoXo3tKPR5foxa3hV4",
+};
+
+// Instruction discriminators from the program IDL
+const DISC = {
+      'AddWithdrawalDestination': [22, 253, 18, 184, 234, 85, 147, 84],
+      'CancelBypass': [232, 67, 164, 11, 244, 194, 195, 237],
+      'CancelDestinationRequest': [255, 245, 78, 237, 53, 195, 7, 238],
+      'CancelRuleChange': [91, 241, 197, 38, 185, 169, 36, 92],
+      'ClaimPenaltyRewards': [51, 113, 194, 34, 228, 128, 172, 219],
+      'ClaimSplPenaltyRewards': [11, 61, 48, 49, 152, 57, 163, 239],
+      'CreateSplVault': [70, 237, 30, 3, 24, 231, 70, 67],
+      'CreateVault': [29, 237, 247, 208, 193, 82, 54, 135],
+      'DepositSol': [108, 81, 78, 117, 125, 155, 56, 200],
+      'DepositSpl': [224, 0, 198, 175, 198, 47, 105, 204],
+      'ExecuteBypassSol': [230, 35, 193, 232, 98, 192, 95, 77],
+      'ExecuteBypassSpl': [66, 221, 128, 233, 134, 52, 197, 195],
+      'ExecuteDestinationRequest': [95, 211, 0, 122, 188, 41, 61, 46],
+      'ExecuteRuleChange': [84, 93, 44, 13, 64, 43, 176, 238],
+      'InitializeProgramConfig': [6, 131, 61, 237, 40, 110, 83, 124],
+      'JoinVault': [73, 225, 253, 176, 198, 180, 207, 152],
+      'LeaveVault': [89, 198, 97, 6, 231, 152, 118, 242],
+      'ProposeRuleChange': [242, 244, 60, 185, 100, 231, 68, 220],
+      'RemoveWithdrawalDestination': [60, 84, 70, 83, 98, 9, 151, 106],
+      'RequestBypass': [250, 5, 48, 228, 66, 2, 188, 184],
+      'RequestWithdrawalDestination': [214, 192, 95, 236, 194, 244, 22, 196],
+      'UpdateProgramConfig': [214, 3, 187, 98, 170, 106, 33, 45],
+      'UpdateVaultRules': [195, 219, 47, 10, 219, 203, 75, 154],
+      'WithdrawSol': [145, 131, 74, 136, 65, 137, 42, 38],
+      'WithdrawSolWithPenalty': [240, 110, 162, 147, 195, 128, 43, 135],
+      'WithdrawSpl': [181, 154, 94, 86, 62, 115, 6, 186],
+      'WithdrawSplWithPenalty': [21, 196, 114, 73, 196, 90, 228, 178]
+};
+
+// Account discriminators for deserialization
+const ACCOUNT_DISC = {
+  Vault: [211, 8, 232, 43, 2, 152, 117, 119],
+  VaultMember: [26, 195, 159, 142, 38, 12, 117, 218],
+  ProgramConfig: [196, 210, 90, 231, 144, 149, 140, 63],
+  WithdrawalDestination: [62, 214, 109, 21, 186, 251, 166, 109],
+  PendingDestinationRequest: [86, 251, 149, 176, 60, 244, 117, 141],
+  RuleChangeProposal: [68, 220, 255, 196, 232, 2, 46, 148],
+  BypassRequest: [118, 86, 48, 68, 69, 64, 180, 78],
+};
+
+const VAULT_TYPE = { Personal: 0, Community: 1 };
+
+// ========================================
+// Borsh serialization helpers
+// ========================================
+
+function encodeString(str) {
+  const encoded = new TextEncoder().encode(str);
+  const buf = Buffer.alloc(4 + encoded.length);
+  buf.writeUInt32LE(encoded.length, 0);
+  Buffer.from(encoded).copy(buf, 4);
+  return buf;
+}
+
+function encodeU64(value) {
+  const buf = Buffer.alloc(8);
+  buf.writeBigUInt64LE(BigInt(value));
+  return buf;
+}
+
+function encodeU16(value) {
+  const buf = Buffer.alloc(2);
+  buf.writeUInt16LE(value);
+  return buf;
+}
+
+function encodeU8(value) {
+  return Buffer.from([value]);
+}
+
+function encodeOptionU16(value) {
+  if (value === null || value === undefined) {
+    return Buffer.from([0]);
   }
-};
+  const buf = Buffer.alloc(3);
+  buf[0] = 1;
+  buf.writeUInt16LE(value, 1);
+  return buf;
+}
 
-// Instruction discriminators from the IDL
-const INSTRUCTION_DISCRIMINATORS = {
-  // Savings Core Program
-  Initialize: [175, 175, 109, 31, 13, 152, 155, 237],
-  DepositSol: [108, 81, 78, 117, 125, 155, 56, 200],
-  DepositSpl: [224, 0, 198, 175, 198, 47, 105, 204],
-  DepositSolSelf: [253, 113, 121, 194, 75, 233, 114, 223],
-  DepositSplSelf: [177, 32, 212, 139, 117, 61, 41, 95],
-  WithdrawSol: [145, 131, 74, 136, 65, 137, 42, 38],
-  WithdrawSpl: [181, 154, 94, 86, 62, 115, 6, 186],
+function encodeOptionU64(value) {
+  if (value === null || value === undefined) {
+    return Buffer.from([0]);
+  }
+  const buf = Buffer.alloc(9);
+  buf[0] = 1;
+  buf.writeBigUInt64LE(BigInt(value), 1);
+  return buf;
+}
 
-  // Deposit Proxy Program (auto-generated on 2026-04-27)
-  InitializeProxy: [245, 74, 175, 136, 0, 146, 100, 224],
-  ForwardSolDeposit: [29, 156, 48, 213, 90, 128, 229, 58],
-  ForwardSplDeposit: [131, 71, 27, 250, 233, 24, 75, 240]
-};
+function encodeOptionBool(value) {
+  if (value === null || value === undefined) {
+    return Buffer.from([0]);
+  }
+  return Buffer.from([1, value ? 1 : 0]);
+}
 
-/**
- * Solana Blockchain Adapter using pure @solana/web3.js
- */
+function readPublicKey(data, offset) {
+  return new PublicKey(data.slice(offset, offset + 32));
+}
+
+function readU8(data, offset) {
+  return data[offset];
+}
+
+function readU16(data, offset) {
+  return data.readUInt16LE(offset);
+}
+
+function readU32(data, offset) {
+  return data.readUInt32LE(offset);
+}
+
+function readU64(data, offset) {
+  return Number(data.readBigUInt64LE(offset));
+}
+
+function readI64(data, offset) {
+  return Number(data.readBigInt64LE(offset));
+}
+
+function readU128(data, offset) {
+  const lo = data.readBigUInt64LE(offset);
+  const hi = data.readBigUInt64LE(offset + 8);
+  return hi * BigInt(2 ** 64) + lo;
+}
+
+function readBool(data, offset) {
+  return data[offset] !== 0;
+}
+
+function readString(data, offset) {
+  const len = data.readUInt32LE(offset);
+  return data.slice(offset + 4, offset + 4 + len).toString("utf8");
+}
+
+// ========================================
+// Account deserialization
+// ========================================
+
+function deserializeVault(data) {
+  let offset = 8; // skip discriminator
+  const creator = readPublicKey(data, offset);       offset += 32;
+  const vaultTypeVal = readU8(data, offset);          offset += 1;
+  const tokenMint = readPublicKey(data, offset);      offset += 32;
+  const name = readString(data, offset);              offset += 4 + new TextEncoder().encode(name).length;
+  const description = readString(data, offset);       offset += 4 + new TextEncoder().encode(description).length;
+  const dailyLimit = readU64(data, offset);            offset += 8;
+  const weeklyLimit = readU64(data, offset);           offset += 8;
+  const monthlyLimit = readU64(data, offset);          offset += 8;
+  const limitsArePercentage = readBool(data, offset);  offset += 1;
+  const penaltyRateBps = readU16(data, offset);       offset += 2;
+  const vaultNonce = readU64(data, offset);           offset += 8;
+  const memberCount = readU32(data, offset);          offset += 4;
+  const totalBalance = readU64(data, offset);         offset += 8;
+  const accumulatedPenalty = readU128(data, offset);  offset += 16;
+  const isActive = readBool(data, offset);            offset += 1;
+  const createdAt = readI64(data, offset);            offset += 8;
+  const updatedAt = readI64(data, offset);            offset += 8;
+  const bump = readU8(data, offset);
+
+  return {
+    creator: creator.toString(),
+    vaultType: vaultTypeVal === 0 ? "Personal" : "Community",
+    tokenMint: tokenMint.toString(),
+    isSolVault: tokenMint.equals(PublicKey.default),
+    name,
+    description,
+    dailyLimit,
+    weeklyLimit,
+    monthlyLimit,
+    limitsArePercentage,
+    penaltyRateBps,
+    vaultNonce,
+    memberCount,
+    totalBalance,
+    accumulatedPenalty,
+    isActive,
+    createdAt,
+    updatedAt,
+    bump,
+  };
+}
+
+function deserializeVaultMember(data) {
+  let offset = 8; // skip discriminator
+  const vault = readPublicKey(data, offset);           offset += 32;
+  const member = readPublicKey(data, offset);          offset += 32;
+  const balance = readU64(data, offset);               offset += 8;
+  const dailySpent = readU64(data, offset);            offset += 8;
+  const dailyLastReset = readI64(data, offset);        offset += 8;
+  const weeklySpent = readU64(data, offset);           offset += 8;
+  const weeklyLastReset = readI64(data, offset);       offset += 8;
+  const monthlySpent = readU64(data, offset);          offset += 8;
+  const monthlyLastReset = readI64(data, offset);      offset += 8;
+  const penaltyDebt = readU128(data, offset);          offset += 16;
+  const unclaimedPenalties = readU64(data, offset);    offset += 8;
+  const joinedAt = readI64(data, offset);              offset += 8;
+  const bump = readU8(data, offset);
+
+  return {
+    vault: vault.toString(),
+    member: member.toString(),
+    balance,
+    dailySpent,
+    dailyLastReset,
+    weeklySpent,
+    weeklyLastReset,
+    monthlySpent,
+    monthlyLastReset,
+    penaltyDebt,
+    unclaimedPenalties,
+    joinedAt,
+    bump,
+  };
+}
+
+function deserializeWithdrawalDestination(data) {
+  let offset = 8;
+  const vault = readPublicKey(data, offset);          offset += 32;
+  const member = readPublicKey(data, offset);         offset += 32;
+  const destination = readPublicKey(data, offset);    offset += 32;
+  const title = readString(data, offset);             offset += 4 + new TextEncoder().encode(title).length;
+  const addedAt = readI64(data, offset);              offset += 8;
+  const bump = readU8(data, offset);
+
+  return {
+    vault: vault.toString(),
+    member: member.toString(),
+    destination: destination.toString(),
+    title,
+    addedAt,
+    bump,
+  };
+}
+
+function deserializePendingDestinationRequest(data) {
+  let offset = 8;
+  const vault = readPublicKey(data, offset);          offset += 32;
+  const member = readPublicKey(data, offset);         offset += 32;
+  const destination = readPublicKey(data, offset);    offset += 32;
+  const title = readString(data, offset);             offset += 4 + new TextEncoder().encode(title).length;
+  const executeAfter = readI64(data, offset);         offset += 8;
+  const createdAt = readI64(data, offset);            offset += 8;
+  const bump = readU8(data, offset);
+
+  return {
+    vault: vault.toString(),
+    member: member.toString(),
+    destination: destination.toString(),
+    title,
+    executeAfter,
+    createdAt,
+    bump,
+  };
+}
+
+function deserializeRuleChangeProposal(data) {
+  let offset = 8;
+  const vault = readPublicKey(data, offset);          offset += 32;
+  const proposer = readPublicKey(data, offset);       offset += 32;
+
+  function readOptionU64(d, o) {
+    if (d[o] === 0) return { value: null, size: 1 };
+    return { value: Number(d.readBigUInt64LE(o + 1)), size: 9 };
+  }
+
+  function readOptionBool(d, o) {
+    if (d[o] === 0) return { value: null, size: 1 };
+    return { value: d[o + 1] !== 0, size: 2 };
+  }
+
+  function readOptionU16(d, o) {
+    if (d[o] === 0) return { value: null, size: 1 };
+    return { value: d.readUInt16LE(o + 1), size: 3 };
+  }
+
+  const daily = readOptionU64(data, offset);          offset += daily.size;
+  const weekly = readOptionU64(data, offset);         offset += weekly.size;
+  const monthly = readOptionU64(data, offset);        offset += monthly.size;
+  const pctMode = readOptionBool(data, offset);       offset += pctMode.size;
+  const penalty = readOptionU16(data, offset);        offset += penalty.size;
+  const executeAfter = readI64(data, offset);         offset += 8;
+  const createdAt = readI64(data, offset);            offset += 8;
+  const bump = readU8(data, offset);
+
+  return {
+    vault: vault.toString(),
+    proposer: proposer.toString(),
+    newDailyLimit: daily.value,
+    newWeeklyLimit: weekly.value,
+    newMonthlyLimit: monthly.value,
+    newLimitsArePercentage: pctMode.value,
+    newPenaltyRateBps: penalty.value,
+    executeAfter,
+    createdAt,
+    bump,
+  };
+}
+
+function deserializeBypassRequest(data) {
+  let offset = 8;
+  const vault = readPublicKey(data, offset);          offset += 32;
+  const member = readPublicKey(data, offset);         offset += 32;
+  const amount = readU64(data, offset);               offset += 8;
+  const isSol = readBool(data, offset);               offset += 1;
+  const tokenMint = readPublicKey(data, offset);      offset += 32;
+  const executeAfter = readI64(data, offset);         offset += 8;
+  const createdAt = readI64(data, offset);            offset += 8;
+  const bump = readU8(data, offset);
+
+  return {
+    vault: vault.toString(),
+    member: member.toString(),
+    amount,
+    isSol,
+    tokenMint: tokenMint.toString(),
+    executeAfter,
+    createdAt,
+    bump,
+  };
+}
+
+function encodeBool(value) {
+  return Buffer.from([value ? 1 : 0]);
+}
+
+// ========================================
+// SolanaAdapter
+// ========================================
+
 export class SolanaAdapter extends BlockchainAdapter {
   constructor(networkConfig, wallet, connection) {
     super(networkConfig);
     this.wallet = wallet;
     this.connection = connection;
     this.userAddress = null;
-    this.PROGRAM_ID = new PublicKey("9j511uJuYwoFRFiU1h5wy2oi1Xc8n1FdoK91QxoXHRh2"); // Updated 2026-04-27
 
     if (this.wallet?.connected && this.wallet?.publicKey) {
       this.userAddress = this.wallet.publicKey.toString();
     }
   }
 
-  /**
-   * Get treasury address based on current environment
-   * Detects environment from RPC URL (localhost vs devnet/mainnet)
-   * @returns {PublicKey} Treasury address for current environment
-   */
-  getTreasuryAddress() {
-    // Auto-detect environment based on RPC URL
-    const rpcUrl = this.connection?.rpcEndpoint || 'http://127.0.0.1:8899';
+  // ---- Wallet management ----
 
-    let environment = 'localhost';
-    if (rpcUrl.includes('devnet')) {
-      environment = 'devnet';
-    } else if (rpcUrl.includes('mainnet')) {
-      environment = 'mainnet';
-    }
-
-    const config = TREASURY_CONFIG[environment];
-    if (!config) {
-      console.warn(`Unknown environment for RPC ${rpcUrl}, defaulting to localhost treasury`);
-      return new PublicKey(TREASURY_CONFIG.localhost.treasuryAddress);
-    }
-
-    console.log(`🏦 Using ${environment} treasury: ${config.treasuryAddress} (${config.description})`);
-    return new PublicKey(config.treasuryAddress);
-  }
-
-  /**
-   * Get the Program Derived Address (PDA) for a user's savings account
-   * @param {PublicKey} userPubkey - User's public key
-   * @returns {Promise<[PublicKey, number]>} PDA and bump seed
-   */
-  async getSavingsAccountPDA(userPubkey) {
-    return await PublicKey.findProgramAddress(
-      [Buffer.from("savings"), userPubkey.toBuffer()],
-      this.PROGRAM_ID
-    );
-  }
-
-  // Wallet Management
-  async isConnected() {
-    console.log('SolanaAdapter isConnected check:', {
-      wallet: this.wallet,
-      connected: this.wallet?.connected
-    });
+  isConnected() {
     return this.wallet?.connected || false;
   }
 
   async connect() {
-    try {
-      if (!this.wallet.connected) {
-        await this.wallet.connect();
-      }
-
-      this.userAddress = this.wallet.publicKey?.toString();
-
-      return {
-        address: this.userAddress,
-        wallet: this.wallet,
-        connection: this.connection
-      };
-    } catch (error) {
-      console.error('Failed to connect to Solana wallet:', error);
-      throw error;
-    }
+    if (!this.wallet) throw new Error("No Solana wallet available");
+    await this.wallet.connect();
+    this.userAddress = this.wallet.publicKey.toString();
+    return this.userAddress;
   }
 
   async disconnect() {
-    if (this.wallet.connected) {
-      await this.wallet.disconnect();
-    }
+    if (this.wallet?.disconnect) await this.wallet.disconnect();
     this.userAddress = null;
   }
 
-  async getAddress() {
-    return this.wallet?.publicKey?.toString() || null;
+  getAddress() {
+    return this.userAddress || this.wallet?.publicKey?.toString() || null;
   }
 
-  async switchNetwork(networkConfig) {
-    // Solana wallets and ConnectionProvider handle network switching internally
-    // The connection is managed by the parent component's ConnectionProvider
-    // We just update our network configuration
-    this.networkConfig = networkConfig;
+  // ---- PDA derivation ----
 
-    // Note: We don't create a new connection here because it should come from
-    // the ConnectionProvider which is already configured for the selected network
-    console.log(`SolanaAdapter switched to network: ${networkConfig.name} (${networkConfig.rpcUrl})`);
-
-    // Validate the connection after switching
-    await this.validateNetworkConnection();
+  getVaultPDA(creatorPubkey, vaultNonce) {
+    const nonceBuf = Buffer.alloc(8);
+    nonceBuf.writeBigUInt64LE(BigInt(vaultNonce));
+    return PublicKey.findProgramAddressSync(
+      [Buffer.from("vault"), creatorPubkey.toBuffer(), nonceBuf],
+      PROGRAM_ID
+    );
   }
 
-  async validateNetworkConnection() {
-    try {
-      console.log('🔍 Validating network connection...');
-
-      // Check if connection is working
-      const version = await this.connection.getVersion();
-      console.log('✅ Connection active, Solana version:', version['solana-core']);
-
-      // Check which cluster we're connected to
-      const genesisHash = await this.connection.getGenesisHash();
-      console.log('🌐 Genesis hash:', genesisHash);
-
-      // For devnet, also try to verify we can find our custom token mint
-      if (this.networkConfig?.name?.includes('Devnet') || this.networkConfig?.rpcUrl?.includes('devnet')) {
-        console.log('🧪 Devnet detected, validating custom token mint...');
-
-        // Check if our custom USDT mint exists
-        const customUSDTMint = 'BXGxW72iHDuaF4mCeNk4P7N18iBXz5e3XKVDQ3rsd1wJ';
-        try {
-          const mintInfo = await this.connection.getAccountInfo(new PublicKey(customUSDTMint));
-          if (mintInfo) {
-            console.log('✅ Custom devnet USDT mint found and accessible');
-          } else {
-            console.log('⚠️ Custom devnet USDT mint not found');
-          }
-        } catch (mintError) {
-          console.log('⚠️ Error checking custom USDT mint:', mintError.message);
-        }
-      }
-
-      return true;
-    } catch (error) {
-      console.error('❌ Network validation failed:', error);
-      return false;
-    }
+  getVaultMemberPDA(vaultPubkey, memberPubkey) {
+    return PublicKey.findProgramAddressSync(
+      [Buffer.from("vault_member"), vaultPubkey.toBuffer(), memberPubkey.toBuffer()],
+      PROGRAM_ID
+    );
   }
 
-  // ========== TOKEN-AWARE DECIMAL SYSTEM ==========
+  getProgramConfigPDA() {
+    return PublicKey.findProgramAddressSync(
+      [Buffer.from("program_config")],
+      PROGRAM_ID
+    );
+  }
 
-  /**
-   * Get the decimal precision for a given token
-   * @param {string} tokenMint - Token mint address or 'SOL'/'native'
-   * @returns {number} Number of decimal places
-   */
-  getTokenDecimals(tokenMint) {
-    // Handle SOL/native tokens
-    if (tokenMint === 'SOL' || tokenMint === 'native' || tokenMint === SystemProgram.programId.toString()) {
-      return 9; // SOL has 9 decimals
-    }
+  getWithdrawalDestPDA(vaultPubkey, memberPubkey, destinationPubkey) {
+    return PublicKey.findProgramAddressSync(
+      [Buffer.from("withdrawal_dest"), vaultPubkey.toBuffer(), memberPubkey.toBuffer(), destinationPubkey.toBuffer()],
+      PROGRAM_ID
+    );
+  }
 
-    // Common SPL tokens with known decimals
-    const knownTokens = {
-      'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v': 6, // USDT
-      'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB': 6, // USDT (alternative)
-      'A9mUU4qviSctJVPJdBJWkb28deg915LYJKrzQ19ji3FM': 6, // USDCet (USDC Ethereum)
-      'Gh9ZwEmdLJ8DscKNTkTqPbNwLNNBjuSzaG9Vp2KGtKJr': 6, // USDC
-      '4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R': 6, // RAY
-      'So11111111111111111111111111111111111111112': 9,  // Wrapped SOL
+  getPendingDestPDA(vaultPubkey, memberPubkey, destinationPubkey) {
+    return PublicKey.findProgramAddressSync(
+      [Buffer.from("pending_dest"), vaultPubkey.toBuffer(), memberPubkey.toBuffer(), destinationPubkey.toBuffer()],
+      PROGRAM_ID
+    );
+  }
+
+  getRuleProposalPDA(vaultPubkey) {
+    return PublicKey.findProgramAddressSync(
+      [Buffer.from("rule_proposal"), vaultPubkey.toBuffer()],
+      PROGRAM_ID
+    );
+  }
+
+  getBypassRequestPDA(vaultPubkey, memberPubkey) {
+    return PublicKey.findProgramAddressSync(
+      [Buffer.from("bypass_request"), vaultPubkey.toBuffer(), memberPubkey.toBuffer()],
+      PROGRAM_ID
+    );
+  }
+
+  getTreasuryAddress() {
+    const rpcUrl = this.connection?.rpcEndpoint || "http://127.0.0.1:8899";
+    let env = "localhost";
+    if (rpcUrl.includes("devnet")) env = "devnet";
+    else if (rpcUrl.includes("mainnet")) env = "mainnet";
+    return new PublicKey(TREASURY_CONFIG[env]);
+  }
+
+  // ---- Transaction helpers ----
+
+  async sendTransaction(transaction) {
+    if (!this.wallet?.publicKey) throw new Error("Wallet not connected");
+    const { blockhash, lastValidBlockHeight } =
+      await this.connection.getLatestBlockhash();
+    transaction.recentBlockhash = blockhash;
+    transaction.feePayer = this.wallet.publicKey;
+
+    const signed = await this.wallet.signTransaction(transaction);
+    const sig = await this.connection.sendRawTransaction(signed.serialize());
+    await this.connection.confirmTransaction(
+      { signature: sig, blockhash, lastValidBlockHeight },
+      "confirmed"
+    );
+    return sig;
+  }
+
+  // ---- Vault CRUD ----
+
+  async createVault({
+    name,
+    description = "",
+    vaultType = "Personal",
+    tokenMint = null,
+    dailyLimit,
+    weeklyLimit = 0,
+    monthlyLimit = 0,
+    penaltyRateBps = 2000,
+    limitsArePercentage = false,
+  }) {
+    const creator = this.wallet.publicKey;
+    const vaultNonce = Date.now();
+    const isSpl = tokenMint !== null;
+
+    const [vaultPDA] = this.getVaultPDA(creator, vaultNonce);
+    const [memberPDA] = this.getVaultMemberPDA(vaultPDA, creator);
+
+    const typeIndex = vaultType === "Community" ? VAULT_TYPE.Community : VAULT_TYPE.Personal;
+
+    // Limits arrive in business units (percent or token amounts) and are
+    // converted to raw units (bps or base units) here.
+    const meta = getTokenMeta(this.networkConfig, tokenMint);
+    const decimals =
+      tokenMint && meta.symbol === "TOKEN"
+        ? await this._resolveMintDecimals(tokenMint)
+        : meta.decimals;
+    const toRawLimit = (value) => {
+      if (!value || value <= 0) return 0;
+      return limitsArePercentage ? Math.round(value * 100) : Math.round(value * 10 ** decimals);
     };
 
-    // Return known decimal count or default to 6 for most SPL tokens
-    return knownTokens[tokenMint] || 6;
-  }
+    const dataBuffers = [
+      Buffer.from(isSpl ? DISC.CreateSplVault : DISC.CreateVault),
+      encodeString(name),
+      encodeU64(vaultNonce),
+      encodeString(description),
+      encodeU8(typeIndex),
+      encodeU64(toRawLimit(dailyLimit)),
+      encodeU64(toRawLimit(weeklyLimit)),
+      encodeU64(toRawLimit(monthlyLimit)),
+      encodeU16(penaltyRateBps),
+      encodeBool(limitsArePercentage),
+    ];
+    const instructionData = Buffer.concat(dataBuffers);
 
-  /**
-   * Convert human-readable amount to smallest unit (lamports/token units)
-   * @param {number|string} amount - Human-readable amount
-   * @param {string} tokenMint - Token mint address
-   * @returns {BigInt} Amount in smallest units
-   */
-  toSmallestUnit(amount, tokenMint) {
-    const decimals = this.getTokenDecimals(tokenMint);
-    const multiplier = Math.pow(10, decimals);
-    return BigInt(Math.floor(parseFloat(amount) * multiplier));
-  }
-
-  /**
-   * Convert smallest unit amount to human-readable amount
-   * @param {BigInt|number|string} amount - Amount in smallest units
-   * @param {string} tokenMint - Token mint address
-   * @returns {number} Human-readable amount
-   */
-  fromSmallestUnit(amount, tokenMint) {
-    const decimals = this.getTokenDecimals(tokenMint);
-    const divisor = Math.pow(10, decimals);
-    return Number(amount) / divisor;
-  }
-
-  /**
-   * Format amount for display with appropriate decimal places
-   * @param {BigInt|number|string} amount - Amount in smallest units
-   * @param {string} tokenMint - Token mint address
-   * @param {number} displayDecimals - Number of decimal places to show (default: 2)
-   * @returns {string} Formatted amount string
-   */
-  formatAmount(amount, tokenMint, displayDecimals = 2) {
-    const humanAmount = this.fromSmallestUnit(amount, tokenMint);
-    return humanAmount.toFixed(displayDecimals);
-  }
-
-  // Helper to parse custom program errors from simulation results
-  _parseCustomProgramError(simulationError, programLogs = []) {
-    try {
-      // First, check for detailed Anchor error information in program logs
-      if (programLogs && programLogs.length > 0) {
-        for (const log of programLogs) {
-          // Look for Anchor error pattern: "AnchorError thrown in src/instructions.rs:1579. Error Code: InvalidParameters. Error Number: 6011. Error Message: Invalid parameters provided."
-          const anchorErrorRegex = /AnchorError thrown in (.+?)\. Error Code: (.+?)\. Error Number: (\d+)\. Error Message: (.+?)\./;
-          const match = log.match(anchorErrorRegex);
-
-          if (match) {
-            const [, sourceLocation, errorCode, errorNumber, errorMessage] = match;
-            return `${errorMessage} (${errorCode} #${errorNumber} at ${sourceLocation})`;
-          }
-
-          // Also look for simpler error patterns
-          if (log.includes('Error Message:')) {
-            const simpleErrorRegex = /Error Message: (.+?)(\.|$)/;
-            const simpleMatch = log.match(simpleErrorRegex);
-            if (simpleMatch) {
-              return simpleMatch[1];
-            }
-          }
-        }
-      }
-
-      // Check for custom program error
-      if (simulationError.InstructionError && simulationError.InstructionError[1].Custom) {
-        const errorCode = simulationError.InstructionError[1].Custom;
-
-        // Map common Anchor/custom error codes to readable messages
-        const errorMessages = {
-          // Common Anchor errors
-          0x0: "Instruction did not deserialize",
-          0x1: "Instruction did not serialize",
-          0x2: "Account did not deserialize",
-          0x3: "Account did not serialize",
-          0x64: "Constraint was violated",
-          0x65: "Insufficient funds",
-          0x66: "State is invalid",
-
-          // Custom program errors (these would be defined in your Rust program)
-          0x1770: "Request not found or already executed",
-          0x1771: "Timelock period has not elapsed",
-          0x1772: "Invalid destination address",
-          0x1773: "Request has been cancelled",
-          0x1774: "Request has expired",
-          0x1775: "Insufficient balance for withdrawal",
-          0x1776: "Spending limit exceeded",
-          0x1777: "Invalid request ID",
-          0x1778: "Request execution time not reached",
-          0x1779: "Account not initialized",
-          0x177A: "Invalid authority",
-          0x177B: "Too many pending requests",
-          0x177C: "Invalid amount",
-          0x177D: "Token mint mismatch"
-        };
-
-        if (errorMessages[errorCode]) {
-          return errorMessages[errorCode];
-        } else {
-          return `Custom program error ${errorCode} (0x${errorCode.toString(16)})`;
-        }
-      }
-
-      // Check for other error types
-      if (simulationError.InstructionError && simulationError.InstructionError[1].InsufficientFunds) {
-        return "Insufficient funds for transaction";
-      }
-
-      if (simulationError.InstructionError && simulationError.InstructionError[1].InvalidAccountData) {
-        return "Invalid account data or account not properly initialized";
-      }
-
-      if (simulationError.InstructionError && simulationError.InstructionError[1].AccountNotFound) {
-        return "Required account not found - ensure account is initialized";
-      }
-
-      // Parse program logs for additional context
-      if (programLogs && programLogs.length > 0) {
-        for (const log of programLogs) {
-          if (log.includes('Error:') || log.includes('panicked')) {
-            return `Program error: ${log}`;
-          }
-        }
-      }
-
-      return `Transaction simulation failed: ${JSON.stringify(simulationError)}`;
-    } catch (parseError) {
-      return `Failed to parse program error: ${simulationError}`;
-    }
-  }
-
-  // Helper to get method name from transaction discriminator
-  _getMethodNameFromTransaction(transaction) {
-    try {
-      if (transaction.instructions && transaction.instructions.length > 0) {
-        const instruction = transaction.instructions[0];
-        if (instruction.data && instruction.data.length >= 8) {
-          const discriminator = Array.from(instruction.data.slice(0, 8));
-
-          // Reverse lookup from discriminator to method name
-          const discriminators = {
-            'AddTimePeriodLimit': [241, 217, 123, 93, 14, 188, 236, 51],
-            'AddWithdrawalDestination': [22, 253, 18, 184, 234, 85, 147, 84],
-            'CancelLimitProposal': [201, 126, 142, 5, 126, 97, 232, 133],
-            'CancelWithdrawalBypass': [67, 241, 187, 146, 79, 62, 136, 181],
-            'CancelWithdrawalDestinationRequest': [233, 183, 160, 123, 7, 15, 61, 197],
-            'CommitInitialSetup': [248, 193, 240, 26, 1, 132, 74, 226],
-            'DepositSol': [108, 81, 78, 117, 125, 155, 56, 200],
-            'DepositSolSelf': [253, 113, 121, 194, 75, 233, 114, 223],
-            'DepositSpl': [224, 0, 198, 175, 198, 47, 105, 204],
-            'DepositSplSelf': [177, 32, 212, 139, 117, 61, 41, 95],
-            'ExecuteLimitProposal': [77, 88, 235, 59, 216, 111, 1, 133],
-            'ExecuteSplWithdrawalBypass': [241, 42, 36, 134, 236, 241, 142, 40],
-            'ExecuteWithdrawalBypass': [179, 43, 138, 230, 25, 62, 50, 189],
-            'ExecuteWithdrawalDestinationRequest': [117, 222, 85, 202, 28, 30, 24, 66],
-            'ProposeLimitChange': [240, 134, 56, 167, 156, 63, 133, 138],
-            'RemoveTimePeriodLimit': [228, 71, 179, 28, 246, 39, 126, 179],
-            'RequestWithdrawalBypass': [169, 181, 15, 31, 30, 209, 180, 40],
-            'RequestWithdrawalDestinationAddition': [54, 218, 102, 157, 3, 140, 19, 151],
-            'SetCommonPeriodLimits': [254, 2, 48, 72, 183, 81, 218, 100],
-            'WithdrawSolToDestination': [59, 82, 37, 12, 148, 66, 139, 94],
-            'WithdrawSolWithLimits': [110, 152, 129, 179, 210, 78, 140, 98],
-            'WithdrawSplToDestination': [129, 219, 175, 220, 63, 101, 157, 224],
-            'WithdrawSplWithLimits': [252, 241, 84, 159, 224, 212, 124, 95]
-          };
-
-          // Find matching discriminator
-          for (const [methodName, methodDiscriminator] of Object.entries(discriminators)) {
-            if (JSON.stringify(discriminator) === JSON.stringify(methodDiscriminator)) {
-              return methodName;
-            }
-          }
-        }
-      }
-    } catch (error) {
-      // If we can't derive the method name, fall back to generic
-    }
-
-    return 'transaction';
-  }
-
-  // Enhanced transaction sender with detailed error handling
-  async _sendTransaction(transaction, context = {}) {
-    // Auto-derive method name from transaction discriminator
-    const methodName = this._getMethodNameFromTransaction(transaction);
-
-    if (!this.wallet?.publicKey) {
-      throw new Error(`${methodName}: Wallet not connected`);
-    }
-
-    try {
-      // Check user account balance before sending transaction
-      const userBalance = await this.connection.getBalance(this.wallet.publicKey);
-      const estimatedFee = 5000; // Typical transaction fee in lamports
-
-      if (userBalance < estimatedFee) {
-        throw new Error(`${methodName}: Insufficient SOL balance for transaction fees. Required: ${estimatedFee / 1e9} SOL, Available: ${userBalance / 1e9} SOL`);
-      }
-
-      console.log(`🚀 Sending ${methodName} transaction...`);
-      console.log(`📍 User: ${this.wallet.publicKey.toString()}`);
-      console.log(`💰 Balance: ${userBalance / 1e9} SOL`);
-
-      if (context.requestId) {
-        console.log(`🆔 Request ID: [${context.requestId}]`);
-      }
-
-      // Prepare transaction with required fields for simulation and sending
-      console.log(`🔧 Preparing ${methodName} transaction...`);
-      transaction.feePayer = this.wallet.publicKey;
-      const { blockhash } = await this.connection.getLatestBlockhash();
-      transaction.recentBlockhash = blockhash;
-
-      // Simulate transaction first to get detailed program errors
-      console.log(`🔍 Simulating ${methodName} transaction...`);
-      try {
-        const simulation = await this.connection.simulateTransaction(transaction);
-
-        if (simulation.value.err) {
-          const programLogs = simulation.value.logs || [];
-          console.log(`📜 Program logs:`, programLogs);
-
-          const logText = programLogs.join(' ');
-          const isSignerError = logText.includes('did not sign') || logText.includes('ConstraintSigner');
-          if (isSignerError) {
-            console.log(`⚠️ ${methodName} simulation: signer error expected for unsigned tx, proceeding...`);
-          } else {
-            const detailedError = this._parseCustomProgramError(simulation.value.err, programLogs);
-            throw new Error(`${methodName}: ${detailedError}`);
-          }
-        } else {
-          console.log(`✅ ${methodName} simulation successful`);
-          if (simulation.value.logs && simulation.value.logs.length > 0) {
-            console.log(`📋 Simulation logs:`, simulation.value.logs);
-          }
-        }
-      } catch (simulationError) {
-        if (simulationError.message.includes(`${methodName}:`)) {
-          throw simulationError;
-        }
-        console.warn(`⚠️ Transaction simulation failed (proceeding anyway): ${simulationError.message}`);
-      }
-
-      // Send the transaction
-      const txHash = await this.wallet.sendTransaction(transaction, this.connection);
-      console.log(`✅ ${methodName} transaction sent: ${txHash}`);
-
-      // Wait for confirmation so subsequent reads see updated on-chain state
-      await this.connection.confirmTransaction(txHash, 'confirmed');
-      console.log(`✅ ${methodName} transaction confirmed: ${txHash}`);
-
-      return txHash;
-
-    } catch (error) {
-      console.error(`❌ ${methodName} transaction failed:`, error);
-
-      // Parse common Solana error types for better user experience
-      let errorMessage = error.message || 'Unknown error';
-
-      if (errorMessage.includes('User rejected')) {
-        throw new Error(`${methodName}: Transaction was rejected by user`);
-      }
-
-      if (errorMessage.includes('insufficient')) {
-        throw new Error(`${methodName}: Insufficient funds for transaction`);
-      }
-
-      if (errorMessage.includes('blockhash')) {
-        throw new Error(`${methodName}: Transaction expired, please try again`);
-      }
-
-      if (errorMessage.includes('signature verification')) {
-        throw new Error(`${methodName}: Invalid transaction signature`);
-      }
-
-      if (errorMessage.includes('Account not found')) {
-        throw new Error(`${methodName}: Required account not found. Ensure account is properly initialized.`);
-      }
-
-      if (errorMessage.includes('custom program error')) {
-        // Extract program error code if available
-        const match = errorMessage.match(/custom program error: 0x([a-fA-F0-9]+)/);
-        if (match) {
-          const errorCode = parseInt(match[1], 16);
-          throw new Error(`${methodName}: Program error ${errorCode}. Check program logs for details.`);
-        }
-      }
-
-      // For any other error, provide the context
-      throw new Error(`${methodName}: ${errorMessage}${context.requestId ? ` (Request: [${context.requestId}])` : ''}`);
-    }
-  }
-
-  // Balance Management
-  async getTokenBalance(userAddress, tokenAddress) {
-    const pubkey = new PublicKey(userAddress);
-
-    if (tokenAddress === 'SOL' || tokenAddress === 'native') {
-      // Get SOL balance
-      const balance = await this.connection.getBalance(pubkey);
-      return BigInt(balance);
-    } else {
-      // Get SPL token balance
-      try {
-        const tokenPubkey = new PublicKey(tokenAddress);
-        const tokenAccount = await getOrCreateAssociatedTokenAccount(
-          this.connection,
-          this.wallet,
-          tokenPubkey,
-          pubkey
-        );
-        return BigInt(tokenAccount.amount.toString());
-      } catch (error) {
-        console.error('Error getting SPL token balance:', error);
-        return BigInt(0);
-      }
-    }
-  }
-
-  async getAllBalances(userAddress) {
-    const balances = {};
-
-    console.log('🏦 Getting savings balances from program account...');
-
-    try {
-      // Get savings account data from program
-      const savingsData = await this.getSavingsAccountData(userAddress);
-
-      if (!savingsData) {
-        console.log('No savings account found - returning zero balances');
-        // Return zero balances for all configured tokens
-        if (this.networkConfig.tokens) {
-          for (const [key] of Object.entries(this.networkConfig.tokens)) {
-            balances[key] = "0";
-          }
-        }
-        return balances;
-      }
-
-      console.log('📊 Savings account data:', savingsData.data);
-
-      // Process SOL balance
-      const solBalance = savingsData.data.solBalance;
-      if (solBalance && solBalance.toString() !== '0') {
-        balances['SOL'] = this.formatAmount(BigInt(solBalance.toString()), 9);
-        console.log(`✅ SOL savings balance: ${balances['SOL']}`);
-      }
-
-      // Process SPL token balances from program account
-      if (this.networkConfig.tokens) {
-        for (const [key, token] of Object.entries(this.networkConfig.tokens)) {
-          const tokenAddress = token.mint || token.address;
-          if (tokenAddress && tokenAddress !== 'native') {
-            try {
-              // Find this token in the savings account's SPL balances
-              console.log(`🔍 Looking for ${key} with tokenAddress: ${tokenAddress}`);
-              const splBalance = savingsData.data.splBalances.find(
-                balance => balance.mint.toString() === tokenAddress
-              );
-
-              if (splBalance && splBalance.amount.toString() !== '0') {
-                balances[key] = this.formatAmount(BigInt(splBalance.amount.toString()), token.decimals);
-                console.log(`✅ ${key} savings balance: ${balances[key]} (from entry with mint: ${splBalance.mint}, amount: ${splBalance.amount})`);
-              } else {
-                balances[key] = "0";
-                console.log(`📍 ${key} savings balance: 0 (no deposits yet)${splBalance ? ' - found entry but amount is 0' : ' - no matching mint found'}`);
-              }
-            } catch (error) {
-              console.error(`❌ Error processing ${key} savings balance:`, error);
-              balances[key] = "0";
-            }
-          }
-        }
-      }
-
-    } catch (error) {
-      console.error('❌ Error fetching savings balances:', error);
-      // Return zero balances on error
-      if (this.networkConfig.tokens) {
-        for (const [key] of Object.entries(this.networkConfig.tokens)) {
-          balances[key] = "0";
-        }
-      }
-    }
-
-    console.log('🎯 Final savings balances:', balances);
-    return balances;
-  }
-
-  // Instruction creation helpers
-  createInstruction(instructionType, accounts, data = null) {
-    const discriminator = Buffer.from(INSTRUCTION_DISCRIMINATORS[instructionType]);
-    let instructionData = discriminator;
-
-    if (data) {
-      // Manual serialization for u64 amount
-      if (data.amount !== undefined) {
-        const amountBuffer = Buffer.alloc(8);
-        // Convert BigInt to little-endian u64
-        const amount = BigInt(data.amount);
-        amountBuffer.writeBigUInt64LE(amount, 0);
-        instructionData = Buffer.concat([discriminator, amountBuffer]);
-      }
-    }
-
-    return new TransactionInstruction({
-      keys: accounts,
-      programId: this.PROGRAM_ID,
-      data: instructionData
-    });
-  }
-
-  async createInitializeInstruction(userPubkey) {
-    const [savingsAccount] = await PublicKey.findProgramAddress(
-      [Buffer.from("savings"), userPubkey.toBuffer()],
-      this.PROGRAM_ID
-    );
-
-    const accounts = [
-      { pubkey: savingsAccount, isSigner: false, isWritable: true },
-      { pubkey: userPubkey, isSigner: true, isWritable: true },
-      { pubkey: SystemProgram.programId, isSigner: false, isWritable: false }
+    const keys = [
+      { pubkey: vaultPDA, isSigner: false, isWritable: true },
+      { pubkey: memberPDA, isSigner: false, isWritable: true },
     ];
 
-    return this.createInstruction('Initialize', accounts);
-  }
+    if (isSpl) {
+      const mint = new PublicKey(tokenMint);
+      const vaultATA = await getAssociatedTokenAddress(mint, vaultPDA, true);
+      keys.push(
+        { pubkey: vaultATA, isSigner: false, isWritable: true },
+        { pubkey: mint, isSigner: false, isWritable: false }
+      );
+    }
 
-  async createDepositSolInstruction(userPubkey, amount) {
-    const [savingsAccount] = await PublicKey.findProgramAddress(
-      [Buffer.from("savings"), userPubkey.toBuffer()],
-      this.PROGRAM_ID
-    );
-
-    const accounts = [
-      { pubkey: savingsAccount, isSigner: false, isWritable: true },
-      { pubkey: userPubkey, isSigner: true, isWritable: true },
+    keys.push(
+      { pubkey: creator, isSigner: true, isWritable: true },
       { pubkey: SystemProgram.programId, isSigner: false, isWritable: false }
-    ];
-
-    return this.createInstruction('DepositSolSelf', accounts, { amount });
-  }
-
-  async createDepositSplInstruction(userPubkey, amount, mintPubkey, userTokenAccount, savingsTokenAccount) {
-    const [savingsAccount] = await PublicKey.findProgramAddress(
-      [Buffer.from("savings"), userPubkey.toBuffer()],
-      this.PROGRAM_ID
     );
 
-    const accounts = [
-      { pubkey: savingsAccount, isSigner: false, isWritable: true },
-      { pubkey: userPubkey, isSigner: true, isWritable: true },
-      { pubkey: userTokenAccount, isSigner: false, isWritable: true },
-      { pubkey: savingsTokenAccount, isSigner: false, isWritable: true },
-      { pubkey: mintPubkey, isSigner: false, isWritable: false },
-      { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
-      { pubkey: ASSOCIATED_TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
-      { pubkey: SystemProgram.programId, isSigner: false, isWritable: false }
-    ];
-
-    return this.createInstruction('DepositSplSelf', accounts, { amount });
-  }
-
-  // Deposit Operations
-  async deposit(tokenAddress, amount, tokenDecimals) {
-    console.log('SolanaAdapter deposit called with pure web3.js approach:', {
-      tokenAddress,
-      amount,
-      tokenDecimals,
-      wallet: !!this.wallet,
-      publicKey: !!this.wallet?.publicKey,
-      connected: this.wallet?.connected
-    });
-
-    if (!this.wallet.publicKey) {
-      throw new Error('Wallet not connected');
-    }
-
-    const userPubkey = this.wallet.publicKey;
-    const amountBigInt = this.parseAmount(amount, tokenDecimals);
-
-    console.log('Processing deposit:', {
-      userPubkey: userPubkey.toString(),
-      amount: amount,
-      amountBigInt: amountBigInt.toString(),
-      tokenAddress
-    });
-
-    try {
-      if (tokenAddress === 'SOL' || tokenAddress === 'native') {
-        // SOL deposit
-        console.log('Creating SOL deposit transaction...');
-
-        // Calculate the savings account PDA
-        let savingsAccount;
-
-        // JEST WORKAROUND: Use pre-computed PDAs for deterministic test wallets
-        // Jest has issues with PDA derivation, so we use known mappings for test scenarios
-        if (process.env.NODE_ENV === 'test') {
-          const deterministicPdaMapping = {
-            'FPmimJJvU7Taas4HwJs7ZmwQCq6LbjqNghr4A7BXwx5J': '5V5pnaXVNhtQxYHDd3t8yGT82aBQYedffopAnZgTi61x', // default
-            'HmczAAiKQ2AQR6Rt81cPnjvT47w4B6TPUxE2HJYPqjcS': 'FeyjX1VaNTXAfy6T23oYraYAWVutGPbhwi7AmpTi6839', // richUser
-            'DLD1WmXAyH5UABY9UoVaQfHM17iDPKaiyqxHq6xwgFCG': '3WrDHFUjHAXNETfACv9Xt4jbvorDyRu6NF9YAbu2sobn', // restrictedUser
-            'FNKgXdanygU8YG8CtxPDTBi5Z6PF1GsLUCvCc5wHSZEh': '2H1c3h4pWSyVwd9jVKx88ShtA1yjVpdAZ45Hbsjvx6rw', // failedConnection
-            '77psZ9xKMp3X7tWkRyuTfE7aT7cq2nX7K859NptALAQd': 'BqCiMBS7RCQJFqTkghQNuVf1qnfzmgga7i6Ji99Z8yvV'  // failedSigning
-          };
-
-          const userPubkeyString = userPubkey.toString();
-          const precomputedPda = deterministicPdaMapping[userPubkeyString];
-
-          if (precomputedPda) {
-            savingsAccount = new PublicKey(precomputedPda);
-            console.log('🧪 Using Jest PDA workaround for test wallet:', userPubkeyString);
-          } else {
-            console.log('⚠️ Test wallet not in PDA mapping, attempting derivation:', userPubkeyString);
-            const [derivedPda] = await PublicKey.findProgramAddress(
-              [Buffer.from("savings"), userPubkey.toBuffer()],
-              this.PROGRAM_ID
-            );
-            savingsAccount = derivedPda;
-          }
-        } else {
-          // Production: Use normal PDA derivation
-          const [derivedPda] = await PublicKey.findProgramAddress(
-            [Buffer.from("savings"), userPubkey.toBuffer()],
-            this.PROGRAM_ID
-          );
-          savingsAccount = derivedPda;
-        }
-
-        console.log('Savings account PDA:', savingsAccount.toString());
-
-        // Check if savings account exists, if not initialize it first
-        const savingsAccountInfo = await this.connection.getAccountInfo(savingsAccount);
-        const transaction = new Transaction();
-
-        if (!savingsAccountInfo) {
-          console.log('Savings account not found, adding initialize instruction...');
-          const initInstruction = await this.createInitializeInstruction(userPubkey);
-          transaction.add(initInstruction);
-        }
-
-        // Add deposit instruction
-        const depositInstruction = await this.createDepositSolInstruction(userPubkey, amountBigInt);
-        transaction.add(depositInstruction);
-
-        // Send transaction
-        const { blockhash } = await this.connection.getRecentBlockhash();
-        transaction.recentBlockhash = blockhash;
-        transaction.feePayer = userPubkey;
-
-        console.log('Sending transaction with', transaction.instructions.length, 'instructions');
-        const txHash = await this._sendTransaction(transaction);
-        console.log('SOL deposit transaction:', txHash);
-
-        return {
-          hash: txHash,
-          success: true,
-          signature: txHash
-        };
-      } else {
-        // SPL token deposit
-        console.log('Creating SPL token deposit transaction...');
-
-        const mintPubkey = new PublicKey(tokenAddress);
-
-        // Calculate the savings account PDA
-        const [savingsAccount] = await PublicKey.findProgramAddress(
-          [Buffer.from("savings"), userPubkey.toBuffer()],
-          this.PROGRAM_ID
-        );
-
-        console.log('🔍 DEBUGGING: Checking if user has tokens for mint:', mintPubkey.toString());
-
-        // First, let's validate our connection and network
-        try {
-          const version = await this.connection.getVersion();
-          console.log('🌐 DEBUGGING: Connected to Solana, version:', version['solana-core']);
-
-          const genesisHash = await this.connection.getGenesisHash();
-          console.log('🌐 DEBUGGING: Genesis hash:', genesisHash);
-
-          // Check RPC endpoint
-          console.log('🌐 DEBUGGING: Connection RPC endpoint:', this.connection.rpcEndpoint);
-
-          // Validate we're on the expected network
-          if (this.connection.rpcEndpoint === "http://127.0.0.1:8899") {
-            console.log('📍 NETWORK: Using localhost validator');
-          } else if (this.connection.rpcEndpoint.includes('devnet.solana.com')) {
-            console.log('📍 NETWORK: Using Solana devnet');
-          } else {
-            console.log('📍 NETWORK: Using other network:', this.connection.rpcEndpoint);
-          }
-        } catch (connError) {
-          console.error('❌ DEBUGGING: Connection validation failed:', connError);
-        }
-
-        // Get user's associated token account address
-        const userTokenAccountAddress = await getAssociatedTokenAddress(
-          mintPubkey,
-          userPubkey
-        );
-        console.log('🔍 DEBUGGING: Computed ATA:', userTokenAccountAddress.toString());
-
-        // From setup script, we expect: Byg4GJUG1bix61sgbcPuPPDupNao68SHWbT3RVtpWtdF
-        console.log('🔍 DEBUGGING: Expected from setup script: Byg4GJUG1bix61sgbcPuPPDupNao68SHWbT3RVtpWtdF');
-        console.log('🔍 DEBUGGING: Addresses match:', userTokenAccountAddress.toString() === 'Byg4GJUG1bix61sgbcPuPPDupNao68SHWbT3RVtpWtdF');
-
-        // Check if user token account exists and has balance
-        console.log('🔍 DEBUGGING: Calling getAccountInfo for:', userTokenAccountAddress.toString());
-        const userTokenAccountInfo = await this.connection.getAccountInfo(userTokenAccountAddress);
-        console.log('🔍 DEBUGGING: getAccountInfo result:', userTokenAccountInfo ? 'Account found' : 'Account NOT found');
-
-        if (userTokenAccountInfo) {
-          console.log('🔍 DEBUGGING: Account data length:', userTokenAccountInfo.data.length);
-          console.log('🔍 DEBUGGING: Account owner:', userTokenAccountInfo.owner.toString());
-        }
-
-        // Also try getting all token accounts for this user to see what exists
-        try {
-          console.log('🔍 DEBUGGING: Getting all token accounts by owner...');
-          const allTokenAccounts = await this.connection.getTokenAccountsByOwner(
-            userPubkey,
-            { programId: TOKEN_PROGRAM_ID }
-          );
-          console.log('🔍 DEBUGGING: User has', allTokenAccounts.value.length, 'total token accounts');
-
-          // Look specifically for this mint
-          const thisMintAccounts = await this.connection.getTokenAccountsByOwner(
-            userPubkey,
-            { mint: mintPubkey }
-          );
-          console.log('🔍 DEBUGGING: User has', thisMintAccounts.value.length, 'accounts for this mint');
-
-          if (thisMintAccounts.value.length > 0) {
-            console.log('🔍 DEBUGGING: Found accounts for this mint:');
-            thisMintAccounts.value.forEach((account, i) => {
-              console.log(`🔍 DEBUGGING: Account ${i}:`, account.pubkey.toString());
-            });
-          }
-        } catch (ownerError) {
-          console.error('❌ DEBUGGING: Error getting accounts by owner:', ownerError);
-        }
-
-        if (!userTokenAccountInfo) {
-          console.error('❌ DEBUGGING: No token account found. Summary:');
-          console.error('  - Mint:', mintPubkey.toString());
-          console.error('  - User:', userPubkey.toString());
-          console.error('  - Computed ATA:', userTokenAccountAddress.toString());
-          console.error('  - Expected ATA:', 'Byg4GJUG1bix61sgbcPuPPDupNao68SHWbT3RVtpWtdF');
-          console.error('  - Network endpoint:', this.connection.rpcEndpoint);
-
-          throw new Error(`No ${tokenAddress.slice(0,8)}... token account found. Please get some tokens first to deposit.`);
-        }
-
-        // Parse token account data to check balance
-        const tokenBalance = await this.connection.getTokenAccountBalance(userTokenAccountAddress);
-        if (tokenBalance.value.uiAmount === 0) {
-          throw new Error(`No ${tokenAddress.slice(0,8)}... tokens in wallet. Please get some tokens first to deposit.`);
-        }
-
-        console.log('User token account found with balance:', tokenBalance.value.uiAmount);
-
-        // Create userTokenAccount object to match expected interface
-        const userTokenAccount = {
-          address: userTokenAccountAddress,
-          amount: BigInt(tokenBalance.value.amount)
-        };
-
-        // Get savings token account address
-        const savingsTokenAccount = await getAssociatedTokenAddress(
-          mintPubkey,
-          savingsAccount,
-          true // allowOwnerOffCurve for PDA
-        );
-
-        console.log('Token accounts:', {
-          userTokenAccount: userTokenAccount.address.toString(),
-          savingsTokenAccount: savingsTokenAccount.toString(),
-          mint: mintPubkey.toString()
-        });
-
-        // Create single transaction with batched instructions for better UX (single approval)
-        const transaction = new Transaction();
-        const savingsAccountInfo = await this.connection.getAccountInfo(savingsAccount);
-
-        if (!savingsAccountInfo) {
-          console.log('Savings account not found, adding initialize instruction...');
-          const initInstruction = await this.createInitializeInstruction(userPubkey);
-          transaction.add(initInstruction);
-        }
-
-        // Add the main deposit instruction to the same transaction
-        const depositInstruction = await this.createDepositSplInstruction(
-          userPubkey,
-          amountBigInt,
-          mintPubkey,
-          userTokenAccount.address,
-          savingsTokenAccount
-        );
-        transaction.add(depositInstruction);
-
-        // Send the single transaction with batched instructions
-        const { blockhash } = await this.connection.getRecentBlockhash();
-        transaction.recentBlockhash = blockhash;
-        transaction.feePayer = userPubkey;
-
-        console.log('Sending transaction with', transaction.instructions.length, 'instructions');
-        const txHash = await this._sendTransaction(transaction);
-        console.log('SPL token deposit transaction:', txHash);
-
-        return {
-          hash: txHash,
-          success: true,
-          signature: txHash
-        };
-      }
-    } catch (error) {
-      console.error('Solana deposit error:', error);
-      throw error;
-    }
-  }
-
-
-  async approveToken(tokenAddress, spenderAddress, amount) {
-    // SPL tokens don't require explicit approval like ERC20
-    // The transfer is done directly during deposit
-    return { success: true, message: 'SPL tokens do not require separate approval' };
-  }
-
-  // Withdrawal Operations
-  async withdraw(amount, tokenAddress, destination = null) {
-    if (!this.program || !this.wallet.publicKey) {
-      throw new Error('Program not initialized or wallet not connected');
-    }
-
-    const userPubkey = this.wallet.publicKey;
-    const amountBN = this.parseAmount(amount, tokenAddress === 'SOL' ? 9 : 6); // Assume 6 decimals for SPL tokens
-
-    try {
-      // Calculate the savings account PDA
-      const [savingsAccount] = await PublicKey.findProgramAddress(
-        [Buffer.from("savings"), userPubkey.toBuffer()],
-        this.PROGRAM_ID
-      );
-
-      if (tokenAddress === 'SOL' || tokenAddress === 'native') {
-        // Withdraw SOL from savings program
-        const tx = await this.program.methods
-          .withdrawSol(amountBN)
-          .accounts({
-            savingsAccount: savingsAccount,
-            user: userPubkey,
-            systemProgram: SystemProgram.programId,
-          })
-          .rpc();
-
-        console.log('SOL withdrawal transaction:', tx);
-        return { hash: tx, success: true, signature: tx };
-      } else {
-        // Withdraw SPL tokens from savings program
-        const mintPubkey = new PublicKey(tokenAddress);
-
-        // Get user's associated token account address (for receiving withdrawn tokens)
-        console.log('Getting user token account for withdrawal...');
-        const userTokenAccountAddress = await getAssociatedTokenAddress(
-          mintPubkey,
-          userPubkey
-        );
-
-        // Check if user token account exists, create instruction if not
-        const userTokenAccountInfo = await this.connection.getAccountInfo(userTokenAccountAddress);
-        const needsUserTokenAccount = !userTokenAccountInfo;
-
-        if (needsUserTokenAccount) {
-          console.log('User token account does not exist - will create in withdrawal transaction');
-        }
-
-        // Get savings account's token account address
-        console.log('Getting savings token account address...');
-        const savingsTokenAccountAddress = await getAssociatedTokenAddress(
-          mintPubkey,
-          savingsAccount,
-          true // allowOwnerOffCurve for PDA
-        );
-
-        // For now, if user token account doesn't exist, we need to create it first
-        // This is a withdrawal operation using Anchor methods, so account creation
-        // needs to be handled separately until we implement full manual transaction building
-        if (needsUserTokenAccount) {
-          console.log('Creating user token account before withdrawal...');
-          const createUserAccountInstruction = createAssociatedTokenAccountInstruction(
-            userPubkey, // payer
-            userTokenAccountAddress, // account address
-            userPubkey, // owner
-            mintPubkey // mint
-          );
-
-          const createAccountTx = new Transaction().add(createUserAccountInstruction);
-          createAccountTx.feePayer = userPubkey;
-          const createTxSig = await this.wallet.sendTransaction(createAccountTx, this.connection);
-          await this.connection.confirmTransaction(createTxSig, 'confirmed');
-        }
-
-        const tx = await this.program.methods
-          .withdrawSpl(amountBN)
-          .accounts({
-            savingsAccount: savingsAccount,
-            user: userPubkey,
-            userTokenAccount: userTokenAccountAddress,
-            savingsTokenAccount: savingsTokenAccountAddress,
-            mint: mintPubkey,
-            tokenProgram: TOKEN_PROGRAM_ID,
-          })
-          .rpc();
-
-        console.log('SPL token withdrawal transaction:', tx);
-        return { hash: tx, success: true, signature: tx };
-      }
-    } catch (error) {
-      console.error('Solana withdrawal error:', error);
-      throw error;
-    }
-  }
-
-  // Initialize Savings Account (required for payment activation)
-  async initializeSavingsAccount() {
-    if (!this.wallet?.publicKey) {
-      throw new Error('Wallet not connected');
-    }
-
-    const userPubkey = this.wallet.publicKey;
-    const [savingsAccount] = await PublicKey.findProgramAddress(
-      [Buffer.from("savings"), userPubkey.toBuffer()],
-      this.PROGRAM_ID
-    );
-
-    // Check if savings account already exists
-    const accountInfo = await this.connection.getAccountInfo(savingsAccount);
-    if (accountInfo) {
-      console.log('✅ Savings account already exists');
-      return {
-        hash: 'already_exists',
-        success: true,
-        signature: 'already_exists'
-      };
-    }
-
-    // Initialize savings account
-    try {
-      console.log('🔧 Initializing savings account for user:', userPubkey.toString());
-      const instruction = await this.createInitializeInstruction(userPubkey);
-      const transaction = new Transaction().add(instruction);
-      transaction.feePayer = userPubkey;
-
-      const signature = await this._sendTransaction(transaction);
-      await this.connection.confirmTransaction(signature, 'confirmed');
-
-      console.log('✅ Savings account initialized:', signature);
-      return {
-        hash: signature,
-        success: true,
-        signature: signature
-      };
-    } catch (error) {
-      console.error('❌ Error initializing savings account:', error);
-      throw error;
-    }
-  }
-
-  // Proxy Management (Solana equivalent)
-  async isProxyDeployed(userAddress) {
-    try {
-      const userPubkey = new PublicKey(userAddress);
-      const [savingsAccount] = await PublicKey.findProgramAddress(
-        [Buffer.from("savings"), userPubkey.toBuffer()],
-        this.PROGRAM_ID
-      );
-
-      const accountInfo = await this.connection.getAccountInfo(savingsAccount);
-      return accountInfo !== null;
-    } catch {
-      return false;
-    }
-  }
-
-  async getDepositAddress(userAddress) {
-    // Return the permanent deposit proxy address for this user
-    const userPubkey = new PublicKey(userAddress);
-    const [depositProxy] = await PublicKey.findProgramAddress(
-      [Buffer.from("deposit_proxy"), userPubkey.toBuffer()],
-      this.PROGRAM_ID
-    );
-
-    return depositProxy.toString();
-  }
-
-  async deployProxy() {
-    if (!this.wallet?.publicKey) {
-      throw new Error('Wallet not connected');
-    }
-
-    // Deploy deposit proxy first, then initialize savings account if needed
-    await this.initializeDepositProxy();
-
-    const userPubkey = this.wallet.publicKey;
-    const [savingsAccount] = await PublicKey.findProgramAddress(
-      [Buffer.from("savings"), userPubkey.toBuffer()],
-      this.PROGRAM_ID
-    );
-
-    // Check if savings account already exists
-    const accountInfo = await this.connection.getAccountInfo(savingsAccount);
-    if (accountInfo) {
-      console.log('Savings account already exists');
-      return {
-        hash: 'already_exists',
-        success: true,
-        signature: 'already_exists'
-      };
-    }
-
-    // Initialize savings account
-    try {
-      const instruction = await this.createInitializeInstruction(userPubkey);
-      const transaction = new Transaction().add(instruction);
-      transaction.feePayer = userPubkey;
-
-      const signature = await this._sendTransaction(transaction);
-      await this.connection.confirmTransaction(signature, 'confirmed');
-
-      console.log('✅ Savings account initialized:', signature);
-
-      return {
-        hash: signature,
-        success: true,
-        signature: signature
-      };
-    } catch (error) {
-      console.error('Error initializing Solana savings account:', error);
-      throw error;
-    }
-  }
-
-  async initializeDepositProxy() {
-    if (!this.wallet?.publicKey) {
-      throw new Error('Wallet not connected');
-    }
-
-    const userPubkey = this.wallet.publicKey;
-    const [depositProxy] = await PublicKey.findProgramAddress(
-      [Buffer.from("deposit_proxy"), userPubkey.toBuffer()],
-      this.PROGRAM_ID
-    );
-
-    // Check if proxy already exists
-    const proxyInfo = await this.connection.getAccountInfo(depositProxy);
-    if (proxyInfo) {
-      console.log('Deposit proxy already exists');
-      return depositProxy.toString();
-    }
-
-    try {
-      // Create initialize proxy instruction
-      const instructionData = new Uint8Array([
-        ...INSTRUCTION_DISCRIMINATORS.InitializeProxy
-      ]);
-
-      const accounts = [
-        { pubkey: depositProxy, isSigner: false, isWritable: true },
-        { pubkey: userPubkey, isSigner: true, isWritable: true },
-        { pubkey: this.PROGRAM_ID, isSigner: false, isWritable: false }, // savings_program
-        { pubkey: SystemProgram.programId, isSigner: false, isWritable: false }
-      ];
-
-      const instruction = new TransactionInstruction({
-        keys: accounts,
-        programId: this.PROGRAM_ID,
-        data: instructionData
-      });
-
-      const transaction = new Transaction().add(instruction);
-
-      // Set recent blockhash
-      const { blockhash } = await this.connection.getLatestBlockhash();
-      transaction.recentBlockhash = blockhash;
-      transaction.feePayer = userPubkey;
-
-      const signature = await this._sendTransaction(transaction);
-      await this.connection.confirmTransaction(signature, 'confirmed');
-
-      console.log('✅ Deposit proxy initialized:', signature);
-      return depositProxy.toString();
-    } catch (error) {
-      console.error('Error initializing deposit proxy:', error);
-      throw error;
-    }
-  }
-
-  async isProxyDeployed(userAddress) {
-    const userPubkey = new PublicKey(userAddress);
-    const [depositProxy] = await PublicKey.findProgramAddress(
-      [Buffer.from("deposit_proxy"), userPubkey.toBuffer()],
-      this.PROGRAM_ID
-    );
-
-    const proxyInfo = await this.connection.getAccountInfo(depositProxy);
-    return proxyInfo !== null;
-  }
-
-  // Legacy method - redirects to the proper implementation
-  async getSpendingLimits(userAddress) {
-    // Redirect to the proper implementation that doesn't need userAddress parameter
-    return await this.fetchSpendingLimitsFromAccount();
-  }
-
-  async setSpendingLimits(daily, weekly, monthly) {
-    // Redirect to setCommonPeriodLimits
-    const dailyLimit = daily > 0 ? daily : null;
-    const weeklyLimit = weekly > 0 ? weekly : null;
-    const monthlyLimit = monthly > 0 ? monthly : null;
-    return await this.setCommonPeriodLimits(dailyLimit, weeklyLimit, monthlyLimit);
-  }
-
-  // Utility Methods
-  formatAmount(amount, decimals) {
-    const divisor = 10n ** BigInt(decimals);
-    const quotient = amount / divisor;
-    const remainder = amount % divisor;
-
-    if (remainder === 0n) {
-      return quotient.toString();
-    }
-
-    const remainderStr = remainder.toString().padStart(decimals, '0');
-    return `${quotient.toString()}.${remainderStr}`.replace(/\.?0+$/, '');
-  }
-
-  parseAmount(amount, decimals) {
-    const [whole, fraction = ''] = amount.toString().split('.');
-    const paddedFraction = fraction.padEnd(decimals, '0').slice(0, decimals);
-    const combined = whole + paddedFraction;
-    return BigInt(combined);
-  }
-
-  isValidAddress(address) {
-    try {
-      new PublicKey(address);
-      return true;
-    } catch {
-      return false;
-    }
-  }
-
-  // Network Validation
-  async isCorrectNetwork() {
-    // For Solana, we check if we can connect to the expected RPC endpoint
-    try {
-      const version = await this.connection.getVersion();
-      return version !== null;
-    } catch {
-      return false;
-    }
-  }
-
-  // Helper method to get savings account data
-  async getSavingsAccountData(userAddress) {
-    try {
-      const userPubkey = new PublicKey(userAddress);
-      const [savingsAccount] = await PublicKey.findProgramAddress(
-        [Buffer.from("savings"), userPubkey.toBuffer()],
-        this.PROGRAM_ID
-      );
-
-      // Fetch the account data
-      const accountInfo = await this.connection.getAccountInfo(savingsAccount);
-      if (!accountInfo) {
-        console.log('Savings account not found for user:', userAddress);
-        return null;
-      }
-
-      // Manually deserialize the account data (since we're using pure web3.js)
-      const data = accountInfo.data;
-
-      // Skip the 8-byte discriminator and read the account data
-      // Based on the SavingsAccount struct: owner(32) + sol_balance(8) + spl_balances(vec) + bump(1) + created_at(8) + updated_at(8)
-      let offset = 8; // Skip discriminator
-
-      // Read owner (32 bytes)
-      const owner = new PublicKey(data.slice(offset, offset + 32));
-      offset += 32;
-
-      // Read sol_balance (8 bytes, little-endian u64)
-      const solBalance = new DataView(data.buffer, data.byteOffset + offset, 8).getBigUint64(0, true);
-      offset += 8;
-
-      // Read spl_balances vector length (4 bytes, little-endian u32)
-      const splBalancesLength = new DataView(data.buffer, data.byteOffset + offset, 4).getUint32(0, true);
-      offset += 4;
-
-      const splBalances = [];
-      for (let i = 0; i < splBalancesLength; i++) {
-        // Read mint (32 bytes)
-        const mint = new PublicKey(data.slice(offset, offset + 32));
-        offset += 32;
-
-        // Read amount (8 bytes, little-endian u64)
-        const amount = new DataView(data.buffer, data.byteOffset + offset, 8).getBigUint64(0, true);
-        offset += 8;
-
-        splBalances.push({ mint: mint.toString(), amount: amount.toString() });
-      }
-
-      const savingsAccountData = {
-        owner: owner.toString(),
-        solBalance: solBalance.toString(),
-        splBalances
-      };
-
-      console.log('Savings account data:', savingsAccountData);
-
-      // Debug: Show detailed splBalances array
-      console.log('🔍 Detailed splBalances analysis:');
-      splBalances.forEach((balance, index) => {
-        console.log(`  Entry ${index}: mint=${balance.mint}, amount=${balance.amount}`);
-      });
-
-      return {
-        address: savingsAccount,
-        data: savingsAccountData
-      };
-    } catch (error) {
-      console.error('Error fetching savings account data:', error);
-      return null;
-    }
-  }
-
-  // Private Methods
-  async _initializeProgram() {
-    try {
-      console.log('_initializeProgram called - using Anchor library approach');
-
-      if (!this.provider) {
-        console.log('Creating AnchorProvider...');
-        this.provider = new AnchorProvider(
-          this.connection,
-          this.wallet,
-          { commitment: 'confirmed' }
-        );
-      }
-
-      // Try to use Anchor Program with the IDL
-      console.log('Loading Anchor program with IDL...');
-      try {
-        this.program = new Program(savingsCoreIdl, this.PROGRAM_ID, this.provider);
-        console.log('✅ Anchor program loaded successfully:', {
-          programId: this.PROGRAM_ID.toString(),
-          methods: Object.keys(this.program.methods || {}),
-          provider: !!this.provider
-        });
-      } catch (idlError) {
-        console.error('Failed to load Anchor program with IDL:', idlError);
-        console.log('Falling back to raw web3.js approach...');
-
-        // Fallback to raw web3.js if Anchor fails
-        this.program = {
-          methods: {
-            depositSol: (amount) => this._createDepositSolInstruction(amount),
-            depositSpl: (amount) => this._createDepositSplInstruction(amount),
-            initialize: () => this._createInitializeInstruction(),
-            withdrawSol: (amount) => this._createWithdrawSolInstruction(amount),
-            withdrawSpl: (amount) => this._createWithdrawSplInstruction(amount)
-          },
-          account: {
-            savingsAccount: {
-              fetch: async (address) => {
-                throw new Error('Raw web3.js mode - account fetching not implemented');
-              }
-            }
-          }
-        };
-        console.log('Raw web3.js fallback program initialized');
-      }
-    } catch (error) {
-      console.error('Error initializing Solana program:', error);
-      throw error;
-    }
-  }
-
-  // Raw instruction builders using discriminators from IDL
-  async _createDepositSolInstruction(amount) {
-    const userPubkey = this.wallet.publicKey;
-    const [savingsAccount] = await PublicKey.findProgramAddress(
-      [Buffer.from("savings"), userPubkey.toBuffer()],
-      this.PROGRAM_ID
-    );
-
-    // Instruction data: discriminator (8 bytes) + amount (8 bytes)
-    const discriminator = Buffer.from([108, 81, 78, 117, 125, 155, 56, 200]);
-    const amountBuffer = Buffer.alloc(8);
-    amountBuffer.writeBigUInt64LE(BigInt(amount.toString()), 0);
-    const data = Buffer.concat([discriminator, amountBuffer]);
-
-    const instruction = new web3.TransactionInstruction({
-      keys: [
-        { pubkey: savingsAccount, isSigner: false, isWritable: true },
-        { pubkey: userPubkey, isSigner: true, isWritable: true },
-        { pubkey: SystemProgram.programId, isSigner: false, isWritable: false }
-      ],
-      programId: this.PROGRAM_ID,
-      data
-    });
-
-    return {
-      accounts: (accountsObj) => ({
-        rpc: async () => {
-          const transaction = new web3.Transaction().add(instruction);
-          return await this._sendTransaction(transaction);
-        }
-      })
-    };
-  }
-
-  async _createDepositSplInstruction(amount) {
-    const userPubkey = this.wallet.publicKey;
-    const [savingsAccount] = await PublicKey.findProgramAddress(
-      [Buffer.from("savings"), userPubkey.toBuffer()],
-      this.PROGRAM_ID
-    );
-
-    // Instruction data: discriminator (8 bytes) + amount (8 bytes)
-    const discriminator = Buffer.from([224, 0, 198, 175, 198, 47, 105, 204]);
-    const amountBuffer = Buffer.alloc(8);
-    amountBuffer.writeBigUInt64LE(BigInt(amount.toString()), 0);
-    const data = Buffer.concat([discriminator, amountBuffer]);
-
-    // Store the instruction data for use in the accounts().rpc() call
-    this._pendingInstructionData = { discriminator, amountBuffer, data, savingsAccount };
-
-    return {
-      accounts: (accountsObj) => ({
-        rpc: async () => {
-          // This method will be called from the deposit() method with the token account addresses
-          // For now, return a promise that will be resolved by the deposit method
-          return new Promise((resolve, reject) => {
-            this._pendingRpcCall = { resolve, reject };
-          });
-        }
-      })
-    };
-  }
-
-  async _executeDepositSplInstruction(mintAddress, userTokenAddr, savingsTokenAddr) {
-    if (!this._pendingInstructionData) {
-      throw new Error('No pending instruction data');
-    }
-
-    const { data, savingsAccount } = this._pendingInstructionData;
-    const userPubkey = this.wallet.publicKey;
-
-    const instruction = new web3.TransactionInstruction({
-      keys: [
-        { pubkey: savingsAccount, isSigner: false, isWritable: true },
-        { pubkey: userPubkey, isSigner: true, isWritable: true },
-        { pubkey: userTokenAddr, isSigner: false, isWritable: true },
-        { pubkey: savingsTokenAddr, isSigner: false, isWritable: true },
-        { pubkey: mintAddress, isSigner: false, isWritable: false },
+    if (isSpl) {
+      keys.push(
         { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
-        { pubkey: ASSOCIATED_TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
-        { pubkey: SystemProgram.programId, isSigner: false, isWritable: false }
-      ],
-      programId: this.PROGRAM_ID,
-      data
-    });
-
-    const transaction = new web3.Transaction().add(instruction);
-
-    try {
-      const txHash = await this._sendTransaction(transaction);
-      console.log('Transaction sent successfully:', txHash);
-
-      // Resolve the pending promise
-      if (this._pendingRpcCall) {
-        this._pendingRpcCall.resolve(txHash);
-        this._pendingRpcCall = null;
-      }
-      this._pendingInstructionData = null;
-
-      return txHash;
-    } catch (error) {
-      console.error('Transaction failed:', error);
-      console.error('Transaction details:', {
-        instruction: instruction,
-        accounts: instruction.keys.map(k => ({
-          pubkey: k.pubkey.toString(),
-          signer: k.isSigner,
-          writable: k.isWritable
-        })),
-        programId: instruction.programId.toString(),
-        dataLength: instruction.data.length
-      });
-
-      // Reject the pending promise
-      if (this._pendingRpcCall) {
-        this._pendingRpcCall.reject(error);
-        this._pendingRpcCall = null;
-      }
-      this._pendingInstructionData = null;
-
-      throw error;
+        { pubkey: ASSOCIATED_TOKEN_PROGRAM_ID, isSigner: false, isWritable: false }
+      );
     }
+
+    const tx = new Transaction().add(
+      new TransactionInstruction({ keys, programId: PROGRAM_ID, data: instructionData })
+    );
+    const sig = await this.sendTransaction(tx);
+    return { signature: sig, vaultAddress: vaultPDA.toString(), vaultNonce };
   }
 
-  async _createInitializeInstruction() {
-    const userPubkey = this.wallet.publicKey;
-    const [savingsAccount, bump] = await PublicKey.findProgramAddress(
-      [Buffer.from("savings"), userPubkey.toBuffer()],
-      this.PROGRAM_ID
-    );
+  async joinVault(vaultAddress) {
+    const vaultPubkey = new PublicKey(vaultAddress);
+    const member = this.wallet.publicKey;
+    const [memberPDA] = this.getVaultMemberPDA(vaultPubkey, member);
 
-    console.log('Initialize instruction details:', {
-      userPubkey: userPubkey.toString(),
-      savingsAccount: savingsAccount.toString(),
-      bump: bump,
-      programId: this.PROGRAM_ID.toString()
-    });
-
-    // Instruction data: discriminator only (no args)
-    const discriminator = Buffer.from([175, 175, 109, 31, 13, 152, 155, 237]);
-
-    const instruction = new web3.TransactionInstruction({
-      keys: [
-        { pubkey: savingsAccount, isSigner: false, isWritable: true },
-        { pubkey: userPubkey, isSigner: true, isWritable: true },
-        { pubkey: SystemProgram.programId, isSigner: false, isWritable: false }
-      ],
-      programId: this.PROGRAM_ID,
-      data: discriminator
-    });
-
-    return {
-      accounts: (accountsObj) => ({
-        rpc: async () => {
-          console.log('Executing initialize instruction...');
-          console.log('Transaction details:', {
-            accounts: instruction.keys.map(k => ({
-              pubkey: k.pubkey.toString(),
-              signer: k.isSigner,
-              writable: k.isWritable
-            })),
-            programId: instruction.programId.toString(),
-            dataLength: instruction.data.length,
-            discriminator: Array.from(discriminator)
-          });
-
-          try {
-            const transaction = new web3.Transaction().add(instruction);
-
-            // Add recent blockhash and fee payer
-            const { blockhash } = await this.connection.getRecentBlockhash();
-            transaction.recentBlockhash = blockhash;
-            transaction.feePayer = userPubkey;
-
-            console.log('Sending transaction with recent blockhash:', blockhash);
-            const txHash = await this._sendTransaction(transaction);
-            console.log('Initialize transaction sent successfully:', txHash);
-            return txHash;
-          } catch (error) {
-            console.error('Initialize transaction failed:', error);
-            console.error('Full error object:', {
-              name: error.name,
-              message: error.message,
-              stack: error.stack,
-              code: error.code,
-              details: error.details || error.logs || error.response || error.data
-            });
-
-            // Try to get more specific error information
-            if (error.logs) {
-              console.error('Transaction logs:', error.logs);
-            }
-
-            throw error;
-          }
-        }
+    const tx = new Transaction().add(
+      new TransactionInstruction({
+        keys: [
+          { pubkey: vaultPubkey, isSigner: false, isWritable: true },
+          { pubkey: memberPDA, isSigner: false, isWritable: true },
+          { pubkey: member, isSigner: true, isWritable: true },
+          { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+        ],
+        programId: PROGRAM_ID,
+        data: Buffer.from(DISC.JoinVault),
       })
+    );
+    return this.sendTransaction(tx);
+  }
+
+  async leaveVault(vaultAddress) {
+    const vaultPubkey = new PublicKey(vaultAddress);
+    const member = this.wallet.publicKey;
+    const [memberPDA] = this.getVaultMemberPDA(vaultPubkey, member);
+
+    const tx = new Transaction().add(
+      new TransactionInstruction({
+        keys: [
+          { pubkey: vaultPubkey, isSigner: false, isWritable: true },
+          { pubkey: memberPDA, isSigner: false, isWritable: true },
+          { pubkey: member, isSigner: true, isWritable: true },
+          { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+        ],
+        programId: PROGRAM_ID,
+        data: Buffer.from(DISC.LeaveVault),
+      })
+    );
+    return this.sendTransaction(tx);
+  }
+
+  // ---- Deposits ----
+
+  async depositSol(vaultAddress, amount) {
+    const vaultPubkey = new PublicKey(vaultAddress);
+    const member = this.wallet.publicKey;
+    const [memberPDA] = this.getVaultMemberPDA(vaultPubkey, member);
+    const lamports = Math.round(amount * LAMPORTS_PER_SOL);
+
+    const data = Buffer.concat([
+      Buffer.from(DISC.DepositSol),
+      encodeU64(lamports),
+    ]);
+
+    const tx = new Transaction().add(
+      new TransactionInstruction({
+        keys: [
+          { pubkey: vaultPubkey, isSigner: false, isWritable: true },
+          { pubkey: memberPDA, isSigner: false, isWritable: true },
+          { pubkey: member, isSigner: true, isWritable: true },
+          { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+        ],
+        programId: PROGRAM_ID,
+        data,
+      })
+    );
+    return this.sendTransaction(tx);
+  }
+
+  async depositSpl(vaultAddress, tokenMint, amount, decimals) {
+    const vaultPubkey = new PublicKey(vaultAddress);
+    const mint = new PublicKey(tokenMint);
+    const member = this.wallet.publicKey;
+    const [memberPDA] = this.getVaultMemberPDA(vaultPubkey, member);
+    const vaultATA = await getAssociatedTokenAddress(mint, vaultPubkey, true);
+    const memberATA = await getAssociatedTokenAddress(mint, member);
+    const tokenAmount = Math.round(amount * 10 ** decimals);
+
+    const data = Buffer.concat([
+      Buffer.from(DISC.DepositSpl),
+      encodeU64(tokenAmount),
+    ]);
+
+    const tx = new Transaction().add(
+      new TransactionInstruction({
+        keys: [
+          { pubkey: vaultPubkey, isSigner: false, isWritable: true },
+          { pubkey: memberPDA, isSigner: false, isWritable: true },
+          { pubkey: vaultATA, isSigner: false, isWritable: true },
+          { pubkey: memberATA, isSigner: false, isWritable: true },
+          { pubkey: mint, isSigner: false, isWritable: false },
+          { pubkey: member, isSigner: true, isWritable: true },
+          { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
+        ],
+        programId: PROGRAM_ID,
+        data,
+      })
+    );
+    return this.sendTransaction(tx);
+  }
+
+  // ---- Withdrawals (within limits) ----
+
+  async withdrawSol(vaultAddress, amount) {
+    const vaultPubkey = new PublicKey(vaultAddress);
+    const member = this.wallet.publicKey;
+    const [memberPDA] = this.getVaultMemberPDA(vaultPubkey, member);
+    const lamports = Math.round(amount * LAMPORTS_PER_SOL);
+
+    const data = Buffer.concat([Buffer.from(DISC.WithdrawSol), encodeU64(lamports)]);
+
+    const tx = new Transaction().add(
+      new TransactionInstruction({
+        keys: [
+          { pubkey: vaultPubkey, isSigner: false, isWritable: true },
+          { pubkey: memberPDA, isSigner: false, isWritable: true },
+          { pubkey: member, isSigner: true, isWritable: true },
+          { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+        ],
+        programId: PROGRAM_ID,
+        data,
+      })
+    );
+    return this.sendTransaction(tx);
+  }
+
+  async withdrawSpl(vaultAddress, tokenMint, amount, decimals) {
+    const vaultPubkey = new PublicKey(vaultAddress);
+    const mint = new PublicKey(tokenMint);
+    const member = this.wallet.publicKey;
+    const [memberPDA] = this.getVaultMemberPDA(vaultPubkey, member);
+    const vaultATA = await getAssociatedTokenAddress(mint, vaultPubkey, true);
+    const memberATA = await getAssociatedTokenAddress(mint, member);
+    const tokenAmount = Math.round(amount * 10 ** decimals);
+
+    // Ensure member ATA exists
+    const txInstructions = [];
+    const memberATAInfo = await this.connection.getAccountInfo(memberATA);
+    if (!memberATAInfo) {
+      txInstructions.push(
+        createAssociatedTokenAccountInstruction(member, memberATA, member, mint)
+      );
+    }
+
+    const data = Buffer.concat([Buffer.from(DISC.WithdrawSpl), encodeU64(tokenAmount)]);
+
+    txInstructions.push(
+      new TransactionInstruction({
+        keys: [
+          { pubkey: vaultPubkey, isSigner: false, isWritable: true },
+          { pubkey: memberPDA, isSigner: false, isWritable: true },
+          { pubkey: vaultATA, isSigner: false, isWritable: true },
+          { pubkey: memberATA, isSigner: false, isWritable: true },
+          { pubkey: mint, isSigner: false, isWritable: false },
+          { pubkey: member, isSigner: true, isWritable: true },
+          { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
+        ],
+        programId: PROGRAM_ID,
+        data,
+      })
+    );
+
+    const tx = new Transaction();
+    txInstructions.forEach((ix) => tx.add(ix));
+    return this.sendTransaction(tx);
+  }
+
+  // ---- Penalty withdrawals ----
+
+  async withdrawSolWithPenalty(vaultAddress, amount) {
+    const vaultPubkey = new PublicKey(vaultAddress);
+    const member = this.wallet.publicKey;
+    const [memberPDA] = this.getVaultMemberPDA(vaultPubkey, member);
+    const [configPDA] = this.getProgramConfigPDA();
+    const treasury = this.getTreasuryAddress();
+    const lamports = Math.round(amount * LAMPORTS_PER_SOL);
+
+    const data = Buffer.concat([Buffer.from(DISC.WithdrawSolWithPenalty), encodeU64(lamports)]);
+
+    const tx = new Transaction().add(
+      new TransactionInstruction({
+        keys: [
+          { pubkey: vaultPubkey, isSigner: false, isWritable: true },
+          { pubkey: memberPDA, isSigner: false, isWritable: true },
+          { pubkey: configPDA, isSigner: false, isWritable: false },
+          { pubkey: treasury, isSigner: false, isWritable: true },
+          { pubkey: member, isSigner: true, isWritable: true },
+          { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+        ],
+        programId: PROGRAM_ID,
+        data,
+      })
+    );
+    return this.sendTransaction(tx);
+  }
+
+  async withdrawSplWithPenalty(vaultAddress, tokenMint, amount, decimals) {
+    const vaultPubkey = new PublicKey(vaultAddress);
+    const mint = new PublicKey(tokenMint);
+    const member = this.wallet.publicKey;
+    const [memberPDA] = this.getVaultMemberPDA(vaultPubkey, member);
+    const [configPDA] = this.getProgramConfigPDA();
+    const treasury = this.getTreasuryAddress();
+    const vaultATA = await getAssociatedTokenAddress(mint, vaultPubkey, true);
+    const memberATA = await getAssociatedTokenAddress(mint, member);
+    const treasuryATA = await getAssociatedTokenAddress(mint, treasury);
+    const tokenAmount = Math.round(amount * 10 ** decimals);
+
+    const txInstructions = [];
+    const [memberATAInfo, treasuryATAInfo] = await Promise.all([
+      this.connection.getAccountInfo(memberATA),
+      this.connection.getAccountInfo(treasuryATA),
+    ]);
+    if (!memberATAInfo) {
+      txInstructions.push(
+        createAssociatedTokenAccountInstruction(member, memberATA, member, mint)
+      );
+    }
+    if (!treasuryATAInfo) {
+      txInstructions.push(
+        createAssociatedTokenAccountInstruction(member, treasuryATA, treasury, mint)
+      );
+    }
+
+    const data = Buffer.concat([Buffer.from(DISC.WithdrawSplWithPenalty), encodeU64(tokenAmount)]);
+
+    txInstructions.push(
+      new TransactionInstruction({
+        keys: [
+          { pubkey: vaultPubkey, isSigner: false, isWritable: true },
+          { pubkey: memberPDA, isSigner: false, isWritable: true },
+          { pubkey: configPDA, isSigner: false, isWritable: false },
+          { pubkey: vaultATA, isSigner: false, isWritable: true },
+          { pubkey: memberATA, isSigner: false, isWritable: true },
+          { pubkey: treasuryATA, isSigner: false, isWritable: true },
+          { pubkey: treasury, isSigner: false, isWritable: false },
+          { pubkey: mint, isSigner: false, isWritable: false },
+          { pubkey: member, isSigner: true, isWritable: true },
+          { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
+        ],
+        programId: PROGRAM_ID,
+        data,
+      })
+    );
+
+    const tx = new Transaction();
+    txInstructions.forEach((ix) => tx.add(ix));
+    return this.sendTransaction(tx);
+  }
+
+  // ---- Penalty rewards ----
+
+  async claimPenaltyRewards(vaultAddress, isSpl = false, tokenMint = null) {
+    const vaultPubkey = new PublicKey(vaultAddress);
+    const member = this.wallet.publicKey;
+    const [memberPDA] = this.getVaultMemberPDA(vaultPubkey, member);
+
+    if (!isSpl) {
+      const tx = new Transaction().add(
+        new TransactionInstruction({
+          keys: [
+            { pubkey: vaultPubkey, isSigner: false, isWritable: true },
+            { pubkey: memberPDA, isSigner: false, isWritable: true },
+            { pubkey: member, isSigner: true, isWritable: true },
+            { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+          ],
+          programId: PROGRAM_ID,
+          data: Buffer.from(DISC.ClaimPenaltyRewards),
+        })
+      );
+      return this.sendTransaction(tx);
+    }
+
+    const mint = new PublicKey(tokenMint);
+    const vaultATA = await getAssociatedTokenAddress(mint, vaultPubkey, true);
+    const memberATA = await getAssociatedTokenAddress(mint, member);
+
+    const tx = new Transaction().add(
+      new TransactionInstruction({
+        keys: [
+          { pubkey: vaultPubkey, isSigner: false, isWritable: true },
+          { pubkey: memberPDA, isSigner: false, isWritable: true },
+          { pubkey: vaultATA, isSigner: false, isWritable: true },
+          { pubkey: memberATA, isSigner: false, isWritable: true },
+          { pubkey: mint, isSigner: false, isWritable: false },
+          { pubkey: member, isSigner: true, isWritable: true },
+          { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
+        ],
+        programId: PROGRAM_ID,
+        data: Buffer.from(DISC.ClaimSplPenaltyRewards),
+      })
+    );
+    return this.sendTransaction(tx);
+  }
+
+  // ---- Vault rules (personal only) ----
+
+  async updateVaultRules(vaultAddress, { dailyLimit, weeklyLimit, monthlyLimit, penaltyRateBps, limitsArePercentage } = {}) {
+    const vaultPubkey = new PublicKey(vaultAddress);
+    const creator = this.wallet.publicKey;
+
+    // Limits arrive in business units (percent or token amounts); omitted
+    // fields (undefined) keep their current on-chain value.
+    const vault = await this.getVaultInfo(vaultAddress);
+    if (!vault) throw new Error("Vault not found");
+    const pctMode = limitsArePercentage ?? vault.limitsArePercentage;
+    if (
+      pctMode !== vault.limitsArePercentage &&
+      (dailyLimit == null || weeklyLimit == null || monthlyLimit == null)
+    ) {
+      // Stored raw limits are meaningless under the other mode, so a mode
+      // switch must respecify every limit
+      throw new Error("Provide daily, weekly and monthly limits when changing the limit type");
+    }
+    const toRawLimit = (value) => {
+      if (value == null) return undefined;
+      if (value <= 0) return 0;
+      return pctMode ? Math.round(value * 100) : Math.round(value * 10 ** vault.tokenDecimals);
     };
+
+    const data = Buffer.concat([
+      Buffer.from(DISC.UpdateVaultRules),
+      encodeOptionU64(toRawLimit(dailyLimit)),
+      encodeOptionU64(toRawLimit(weeklyLimit)),
+      encodeOptionU64(toRawLimit(monthlyLimit)),
+      encodeOptionU16(penaltyRateBps),
+      encodeOptionBool(limitsArePercentage),
+    ]);
+
+    const tx = new Transaction().add(
+      new TransactionInstruction({
+        keys: [
+          { pubkey: vaultPubkey, isSigner: false, isWritable: true },
+          { pubkey: creator, isSigner: true, isWritable: false },
+        ],
+        programId: PROGRAM_ID,
+        data,
+      })
+    );
+    return this.sendTransaction(tx);
   }
 
-  // Getters for compatibility
-  getProgram() {
-    return this.program;
+  // ---- Unified vault operations (same interface as EVMAdapter) ----
+
+  async depositToVault(vaultAddress, amount) {
+    const vault = await this.getVaultInfo(vaultAddress);
+    if (!vault) throw new Error("Vault not found");
+    if (vault.isNativeToken) return this.depositSol(vaultAddress, amount);
+    return this.depositSpl(vaultAddress, vault.tokenMint, amount, vault.tokenDecimals);
   }
 
-  getWallet() {
-    return this.wallet;
+  async withdrawFromVault(vaultAddress, amount) {
+    const vault = await this.getVaultInfo(vaultAddress);
+    if (!vault) throw new Error("Vault not found");
+    if (vault.isNativeToken) return this.withdrawSol(vaultAddress, amount);
+    return this.withdrawSpl(vaultAddress, vault.tokenMint, amount, vault.tokenDecimals);
   }
 
-  getConnection() {
-    return this.connection;
+  async withdrawFromVaultWithPenalty(vaultAddress, amount) {
+    const vault = await this.getVaultInfo(vaultAddress);
+    if (!vault) throw new Error("Vault not found");
+    if (vault.isNativeToken) return this.withdrawSolWithPenalty(vaultAddress, amount);
+    return this.withdrawSplWithPenalty(vaultAddress, vault.tokenMint, amount, vault.tokenDecimals);
   }
 
-  // ========== SPENDING LIMITS FUNCTIONALITY ==========
-
-  // Helper function to generate discriminators (from actual IDL)
-  _generateDiscriminator(methodName) {
-    // Actual discriminators from anchor build IDL (auto-generated)
-    const discriminators = {
-      'ActivatePermanentAddressWithPayment': [69, 22, 97, 109, 112, 159, 18, 60],
-      'AddTimePeriodLimit': [241, 217, 123, 93, 14, 188, 236, 51],
-      'AddWithdrawalDestination': [22, 253, 18, 184, 234, 85, 147, 84],
-      'CancelLimitProposal': [201, 126, 142, 5, 126, 97, 232, 133],
-      'CancelWithdrawalBypass': [67, 241, 187, 146, 79, 62, 136, 181],
-      'CancelWithdrawalDestinationRequest': [233, 183, 160, 123, 7, 15, 61, 197],
-      'CommitInitialSetup': [248, 193, 240, 26, 1, 132, 74, 226],
-      'DepositSol': [108, 81, 78, 117, 125, 155, 56, 200],
-      'DepositSolSelf': [253, 113, 121, 194, 75, 233, 114, 223],
-      'DepositSpl': [224, 0, 198, 175, 198, 47, 105, 204],
-      'DepositSplSelf': [177, 32, 212, 139, 117, 61, 41, 95],
-      'ExecuteLimitProposal': [77, 88, 235, 59, 216, 111, 1, 133],
-      'ExecuteSplWithdrawalBypass': [241, 42, 36, 134, 236, 241, 142, 40],
-      'ExecuteWithdrawalBypass': [179, 43, 138, 230, 25, 62, 50, 189],
-      'ExecuteWithdrawalDestinationRequest': [117, 222, 85, 202, 28, 30, 24, 66],
-      'ForwardSolDeposit': [29, 156, 48, 213, 90, 128, 229, 58],
-      'ForwardSplDeposit': [131, 71, 27, 250, 233, 24, 75, 240],
-      'GetProxyAddress': [152, 239, 157, 227, 144, 172, 220, 146],
-      'GetSolBalance': [177, 197, 179, 97, 50, 111, 178, 70],
-      'GetSpendingLimits': [23, 121, 238, 204, 69, 213, 157, 147],
-      'GetSplBalance': [92, 135, 40, 171, 133, 246, 90, 120],
-      'Initialize': [175, 175, 109, 31, 13, 152, 155, 237],
-      'InitializeProgramConfig': [6, 131, 61, 237, 40, 110, 83, 124],
-      'InitializeProxy': [245, 74, 175, 136, 0, 146, 100, 224],
-      'InitializeSpendingLimits': [240, 49, 54, 19, 46, 201, 202, 42],
-      'ProposeLimitChange': [146, 253, 178, 82, 191, 64, 35, 251],
-      'RemoveTimePeriodLimit': [213, 185, 190, 218, 206, 221, 93, 152],
-      'RemoveWithdrawalDestination': [60, 84, 70, 83, 98, 9, 151, 106],
-      'RequestWithdrawalBypass': [179, 63, 197, 165, 24, 134, 204, 54],
-      'RequestWithdrawalDestinationAddition': [249, 50, 136, 94, 75, 10, 162, 98],
-      'SetCommonPeriodLimits': [200, 130, 17, 128, 169, 59, 33, 89],
-      'UpdateProgramConfig': [214, 3, 187, 98, 170, 106, 33, 45],
-      'WithdrawSol': [145, 131, 74, 136, 65, 137, 42, 38],
-      'WithdrawSolToDestination': [170, 140, 47, 249, 105, 179, 11, 204],
-      'WithdrawSolWithLimits': [75, 241, 60, 175, 113, 191, 138, 113],
-      'WithdrawSolWithPenalty': [240, 110, 162, 147, 195, 128, 43, 135],
-      'WithdrawSpl': [181, 154, 94, 86, 62, 115, 6, 186],
-      'WithdrawSplToDestination': [30, 228, 247, 163, 185, 59, 123, 128],
-      'WithdrawSplWithLimits': [103, 31, 251, 151, 88, 136, 64, 53],
-      'WithdrawSplWithPenalty': [21, 196, 114, 73, 196, 90, 228, 178]
-    };
-    return discriminators[methodName] || [0, 0, 0, 0, 0, 0, 0, 0];
-  }
-
-  // Get spending limits PDA (now unified with savings account)
-  async getSpendingLimitsPDA(userPubkey) {
-    return await PublicKey.findProgramAddress(
-      [Buffer.from("savings"), userPubkey.toBuffer()],
-      this.PROGRAM_ID
+  async claimVaultPenaltyRewards(vaultAddress) {
+    const vault = await this.getVaultInfo(vaultAddress);
+    if (!vault) throw new Error("Vault not found");
+    return this.claimPenaltyRewards(
+      vaultAddress,
+      !vault.isNativeToken,
+      vault.isNativeToken ? null : vault.tokenMint
     );
   }
 
-  // Helper function to create spending limits initialization instruction
-  async createInitializeSpendingLimitsInstruction(userPubkey) {
-    const [spendingLimitsAccount] = await this.getSpendingLimitsPDA(userPubkey);
-    const discriminator = Buffer.from(this._generateDiscriminator('InitializeSpendingLimits'));
+  // ---- Read operations ----
 
-    return new TransactionInstruction({
-      keys: [
-        { pubkey: spendingLimitsAccount, isSigner: false, isWritable: true },
-        { pubkey: userPubkey, isSigner: true, isWritable: true },
-        { pubkey: SystemProgram.programId, isSigner: false, isWritable: false }
-      ],
-      programId: this.PROGRAM_ID,
-      data: discriminator
+  /**
+   * Read decimals from the mint account for tokens missing from the network
+   * config — a wrong-decimals fallback would misprice every amount.
+   */
+  async _resolveMintDecimals(tokenMint) {
+    if (!this._mintDecimalsCache) this._mintDecimalsCache = {};
+    if (this._mintDecimalsCache[tokenMint] != null) return this._mintDecimalsCache[tokenMint];
+
+    const info = await this.connection.getAccountInfo(new PublicKey(tokenMint));
+    if (!info) throw new Error("Token mint not found");
+    const decimals = info.data[44]; // SPL mint layout: decimals u8 at offset 44
+    this._mintDecimalsCache[tokenMint] = decimals;
+    return decimals;
+  }
+
+  /** Attach chain-agnostic token metadata used by the unified UI. */
+  _enrichVault(vault) {
+    const meta = getTokenMeta(this.networkConfig, vault.isSolVault ? null : vault.tokenMint);
+    return {
+      ...vault,
+      isNativeToken: vault.isSolVault,
+      tokenSymbol: meta.symbol,
+      tokenDecimals: meta.decimals,
+    };
+  }
+
+  /** Like _enrichVault, but resolves unknown mints' decimals on-chain. */
+  async _enrichVaultAsync(vault) {
+    const enriched = this._enrichVault(vault);
+    if (!enriched.isNativeToken && enriched.tokenSymbol === "TOKEN") {
+      enriched.tokenDecimals = await this._resolveMintDecimals(enriched.tokenMint);
+    }
+    return enriched;
+  }
+
+  async getVaultInfo(vaultAddress) {
+    const vaultPubkey = new PublicKey(vaultAddress);
+    const accountInfo = await this.connection.getAccountInfo(vaultPubkey);
+    if (!accountInfo) return null;
+    return this._enrichVaultAsync({
+      ...deserializeVault(Buffer.from(accountInfo.data)),
+      address: vaultAddress,
     });
   }
 
-  // Initialize spending limits account
-  async initializeSpendingLimits() {
-    if (!this.wallet?.publicKey) {
-      throw new Error('Wallet not connected');
-    }
-
-    const userPubkey = this.wallet.publicKey;
-    const instruction = await this.createInitializeSpendingLimitsInstruction(userPubkey);
-
-    const transaction = new Transaction().add(instruction);
-    transaction.feePayer = this.wallet.publicKey;
-
-    console.log('📤 SolanaAdapter: Sending spending limits initialization transaction...');
-    const txHash = await this._sendTransaction(transaction);
-    console.log('📝 SolanaAdapter: Transaction sent with signature:', txHash);
-
-    // Wait for transaction confirmation
-    console.log('⏳ SolanaAdapter: Waiting for transaction confirmation...');
-    try {
-      await this.connection.confirmTransaction(txHash, 'confirmed');
-      console.log('✅ SolanaAdapter: Transaction confirmed successfully');
-
-      // Double-check that the account now exists
-      const accountInfo = await this.connection.getAccountInfo(spendingLimitsAccount);
-      if (!accountInfo) {
-        throw new Error('Account still does not exist after confirmed transaction');
-      }
-      console.log('✅ SolanaAdapter: Spending limits account verified to exist after confirmation');
-
-      return txHash;
-    } catch (confirmError) {
-      console.error('❌ SolanaAdapter: Transaction confirmation failed:', confirmError);
-      throw new Error(`Failed to confirm spending limits initialization: ${confirmError.message}`);
-    }
+  async getVaultMemberInfo(vaultAddress, memberAddress = null) {
+    const vaultPubkey = new PublicKey(vaultAddress);
+    const memberPubkey = memberAddress
+      ? new PublicKey(memberAddress)
+      : this.wallet.publicKey;
+    const [memberPDA] = this.getVaultMemberPDA(vaultPubkey, memberPubkey);
+    const accountInfo = await this.connection.getAccountInfo(memberPDA);
+    if (!accountInfo) return null;
+    return deserializeVaultMember(Buffer.from(accountInfo.data));
   }
 
-  // Set common period limits (Daily, Weekly, Monthly)
-  async setCommonPeriodLimits(dailyLimit, weeklyLimit, monthlyLimit) {
-    console.log('🔧 SolanaAdapter: setCommonPeriodLimits called with:', { dailyLimit, weeklyLimit, monthlyLimit });
+  async getUserVaults() {
+    const member = this.wallet.publicKey;
+    if (!member) return [];
 
-    if (!this.wallet?.publicKey) {
-      throw new Error('Wallet not connected');
-    }
-
-    const userPubkey = this.wallet.publicKey;
-    const [spendingLimitsAccount] = await this.getSpendingLimitsPDA(userPubkey);
-    console.log('🔑 SolanaAdapter: Using spending limits PDA:', spendingLimitsAccount.toString());
-
-    // Check if spending limits account exists and is valid
-    let needsInitialization = false;
-    try {
-      console.log('🔍 SolanaAdapter: Checking if spending limits account exists...');
-      const accountInfo = await this.connection.getAccountInfo(spendingLimitsAccount);
-      console.log('📊 SolanaAdapter: Account info result:', accountInfo ? 'EXISTS' : 'NULL');
-
-      if (!accountInfo) {
-        console.log('🔧 SolanaAdapter: Spending limits account does not exist, will initialize in same transaction...');
-        needsInitialization = true;
-      } else {
-        // Account exists, but check if it's properly formatted by trying to deserialize
-        console.log('🔍 SolanaAdapter: Account exists, checking if data is valid...');
-        try {
-          this.deserializeSavingsAccount(accountInfo.data);
-          console.log('✅ SolanaAdapter: Account data is valid');
-        } catch (deserializeError) {
-          console.log('⚠️ SolanaAdapter: Account data is corrupted/incompatible');
-          console.log('💡 SolanaAdapter: The account exists but has incompatible data structure');
-          console.log('🔧 SolanaAdapter: You may need to use a different wallet or reset the local validator');
-          console.log('❌ SolanaAdapter: Cannot proceed with corrupted account data');
-          throw new Error('Savings account has corrupted data. Please use a different wallet or reset the validator.');
-        }
-      }
-    } catch (error) {
-      console.error('❌ SolanaAdapter: Error checking spending limits account:', error);
-      throw error;
-    }
-
-    // Create transaction with batched instructions
-    const transaction = new Transaction();
-
-    // Add initialization instruction if needed
-    if (needsInitialization) {
-      console.log('🔧 SolanaAdapter: Adding initialization instruction to transaction...');
-      const initInstruction = await this.createInitializeSpendingLimitsInstruction(userPubkey);
-      transaction.add(initInstruction);
-    }
-
-    // Add main setCommonPeriodLimits instruction to the transaction
-    console.log('🔧 SolanaAdapter: Adding setCommonPeriodLimits instruction to transaction...');
-
-    // Serialize the data: discriminator + 3 optional u64 values
-    const discriminator = Buffer.from(this._generateDiscriminator('SetCommonPeriodLimits'));
-
-    // Encode optional values (1 byte for Some/None + 8 bytes for u64 if Some)
-    let data = discriminator;
-
-    // Daily limit - Use USDT as the base denomination for spending limits
-    const SPENDING_LIMIT_TOKEN = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'; // USDT
-    if (dailyLimit !== null && dailyLimit !== undefined) {
-      data = Buffer.concat([data, Buffer.from([1])]);  // Some
-      const dailyBuffer = Buffer.alloc(8);
-      const dailyAmountSmallest = this.toSmallestUnit(dailyLimit, SPENDING_LIMIT_TOKEN);
-      dailyBuffer.writeBigUInt64LE(dailyAmountSmallest, 0);
-      data = Buffer.concat([data, dailyBuffer]);
-    } else {
-      data = Buffer.concat([data, Buffer.from([0])]);  // None
-    }
-
-    // Weekly limit
-    if (weeklyLimit !== null && weeklyLimit !== undefined) {
-      data = Buffer.concat([data, Buffer.from([1])]);  // Some
-      const weeklyBuffer = Buffer.alloc(8);
-      const weeklyAmountSmallest = this.toSmallestUnit(weeklyLimit, SPENDING_LIMIT_TOKEN);
-      weeklyBuffer.writeBigUInt64LE(weeklyAmountSmallest, 0);
-      data = Buffer.concat([data, weeklyBuffer]);
-    } else {
-      data = Buffer.concat([data, Buffer.from([0])]);  // None
-    }
-
-    // Monthly limit
-    if (monthlyLimit !== null && monthlyLimit !== undefined) {
-      data = Buffer.concat([data, Buffer.from([1])]);  // Some
-      const monthlyBuffer = Buffer.alloc(8);
-      const monthlyAmountSmallest = this.toSmallestUnit(monthlyLimit, SPENDING_LIMIT_TOKEN);
-      monthlyBuffer.writeBigUInt64LE(monthlyAmountSmallest, 0);
-      data = Buffer.concat([data, monthlyBuffer]);
-    } else {
-      data = Buffer.concat([data, Buffer.from([0])]);  // None
-    }
-
-    const setLimitsInstruction = new TransactionInstruction({
-      keys: [
-        { pubkey: spendingLimitsAccount, isSigner: false, isWritable: true },
-        { pubkey: userPubkey, isSigner: true, isWritable: true }
+    // Find all VaultMember accounts for this user
+    const memberAccounts = await this.connection.getProgramAccounts(PROGRAM_ID, {
+      filters: [
+        { memcmp: { offset: 0, bytes: bs58.encode(Buffer.from(ACCOUNT_DISC.VaultMember)) } },
+        { memcmp: { offset: 8 + 32, bytes: member.toBase58() } },
       ],
-      programId: this.PROGRAM_ID,
-      data
     });
 
-    transaction.add(setLimitsInstruction);
-
-    // Set the fee payer to the user's wallet
-    transaction.feePayer = userPubkey;
-
-    console.log('📋 SolanaAdapter: Transaction created with instruction:', setLimitsInstruction);
-    console.log('📋 SolanaAdapter: Transaction fee payer set to:', transaction.feePayer.toString());
-    console.log('📋 SolanaAdapter: Instruction data length:', setLimitsInstruction.data.length);
-    console.log('📋 SolanaAdapter: Instruction keys:', setLimitsInstruction.keys);
-
-    try {
-      // First simulate the transaction to get better error details
-      console.log('🔍 SolanaAdapter: Simulating transaction first...');
-      const simulation = await this.connection.simulateTransaction(transaction);
-      console.log('📊 SolanaAdapter: Simulation result:', simulation);
-
-      if (simulation.value.err) {
-        console.error('❌ SolanaAdapter: Simulation failed:', simulation.value.err);
-        if (simulation.value.logs) {
-          console.error('📋 SolanaAdapter: Simulation logs:', simulation.value.logs);
-        }
-        throw new Error(`Transaction simulation failed: ${JSON.stringify(simulation.value.err)}`);
+    const results = [];
+    for (const { account } of memberAccounts) {
+      const memberData = deserializeVaultMember(Buffer.from(account.data));
+      const vaultInfo = await this.getVaultInfo(memberData.vault);
+      if (vaultInfo) {
+        results.push({ vault: vaultInfo, membership: memberData });
       }
-
-      console.log('✅ SolanaAdapter: Simulation passed, sending transaction...');
-      const txHash = await this._sendTransaction(transaction);
-      console.log('📝 SolanaAdapter: Transaction sent with signature:', txHash);
-
-      // Wait for transaction confirmation to ensure it's processed
-      console.log('⏳ SolanaAdapter: Waiting for transaction confirmation...');
-      await this.connection.confirmTransaction(txHash, 'confirmed');
-      console.log('✅ SolanaAdapter: SetCommonPeriodLimits transaction confirmed successfully');
-
-      return txHash;
-    } catch (error) {
-      console.error('❌ SolanaAdapter: Transaction failed:', error);
-      console.error('❌ SolanaAdapter: Error details:', error.message);
-      console.error('❌ SolanaAdapter: Full error object:', error);
-      if (error.logs) {
-        console.error('❌ SolanaAdapter: Transaction logs:', error.logs);
-      }
-      throw error;
     }
+    return results;
   }
 
-  // Add custom time period limit
-  async addTimePeriodLimit(name, limit, duration) {
-    if (!this.wallet?.publicKey) {
-      throw new Error('Wallet not connected');
+  async discoverVaults({ tokenMint = null, vaultType = null } = {}) {
+    const filters = [
+      { memcmp: { offset: 0, bytes: bs58.encode(Buffer.from(ACCOUNT_DISC.Vault)) } },
+    ];
+
+    // Filter by vault_type if specified (offset: 8 + 32 = 40 for vault_type byte)
+    if (vaultType !== null) {
+      const typeByte = vaultType === "Community" ? 1 : 0;
+      filters.push({ memcmp: { offset: 40, bytes: bs58.encode(Buffer.from([typeByte])) } });
     }
 
-    const userPubkey = this.wallet.publicKey;
-    const [spendingLimitsAccount] = await this.getSpendingLimitsPDA(userPubkey);
+    const accounts = await this.connection.getProgramAccounts(PROGRAM_ID, { filters });
 
-    // Serialize the data: discriminator + name (string) + limit (u64) + duration (u64)
-    const discriminator = Buffer.from(this._generateDiscriminator('AddTimePeriodLimit'));
+    const vaults = await Promise.all(
+      accounts.map(({ pubkey, account }) =>
+        this._enrichVaultAsync({
+          ...deserializeVault(Buffer.from(account.data)),
+          address: pubkey.toString(),
+        })
+      )
+    );
 
-    // String encoding: length (4 bytes) + string bytes
-    const nameBytes = Buffer.from(name, 'utf8');
-    const nameLength = Buffer.alloc(4);
-    nameLength.writeUInt32LE(nameBytes.length, 0);
+    // Client-side filter by token mint if specified
+    if (tokenMint) {
+      return vaults.filter((v) => v.tokenMint === tokenMint);
+    }
+    return vaults.filter((v) => v.isActive);
+  }
 
-    // Amount encoding (convert to smallest unit) - Use USDT as base denomination
-    const SPENDING_LIMIT_TOKEN = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'; // USDT
-    const limitBuffer = Buffer.alloc(8);
-    const limitAmountSmallest = this.toSmallestUnit(limit, SPENDING_LIMIT_TOKEN);
-    limitBuffer.writeBigUInt64LE(limitAmountSmallest, 0);
-
-    // Duration encoding (seconds)
-    const durationBuffer = Buffer.alloc(8);
-    durationBuffer.writeBigUInt64LE(BigInt(duration), 0);
-
-    const data = Buffer.concat([discriminator, nameLength, nameBytes, limitBuffer, durationBuffer]);
-
-    const instruction = new TransactionInstruction({
-      keys: [
-        { pubkey: spendingLimitsAccount, isSigner: false, isWritable: true },
-        { pubkey: userPubkey, isSigner: true, isWritable: true }
+  async getVaultMembers(vaultAddress) {
+    const vaultPubkey = new PublicKey(vaultAddress);
+    const accounts = await this.connection.getProgramAccounts(PROGRAM_ID, {
+      filters: [
+        { memcmp: { offset: 0, bytes: bs58.encode(Buffer.from(ACCOUNT_DISC.VaultMember)) } },
+        { memcmp: { offset: 8, bytes: vaultPubkey.toBase58() } },
       ],
-      programId: this.PROGRAM_ID,
-      data
     });
 
-    const transaction = new Transaction().add(instruction);
-    transaction.feePayer = this.wallet.publicKey;
-    return await this._sendTransaction(transaction);
+    return accounts.map(({ account }) =>
+      deserializeVaultMember(Buffer.from(account.data))
+    );
   }
 
-  // Remove time period limit
-  async removeTimePeriodLimit(name) {
-    if (!this.wallet?.publicKey) {
-      throw new Error('Wallet not connected');
-    }
+  // ---- Withdrawal destinations ----
 
-    const userPubkey = this.wallet.publicKey;
-    const [spendingLimitsAccount] = await this.getSpendingLimitsPDA(userPubkey);
+  async addWithdrawalDestination(vaultAddress, destinationAddress, title) {
+    const vaultPubkey = new PublicKey(vaultAddress);
+    const destination = new PublicKey(destinationAddress);
+    const member = this.wallet.publicKey;
+    const [memberPDA] = this.getVaultMemberPDA(vaultPubkey, member);
+    const [destPDA] = this.getWithdrawalDestPDA(vaultPubkey, member, destination);
 
-    // Serialize the data: discriminator + name (string)
-    const discriminator = Buffer.from(this._generateDiscriminator('RemoveTimePeriodLimit'));
+    const data = Buffer.concat([
+      Buffer.from(DISC.AddWithdrawalDestination),
+      encodeString(title),
+    ]);
 
-    const nameBytes = Buffer.from(name, 'utf8');
-    const nameLength = Buffer.alloc(4);
-    nameLength.writeUInt32LE(nameBytes.length, 0);
-
-    const data = Buffer.concat([discriminator, nameLength, nameBytes]);
-
-    const instruction = new TransactionInstruction({
-      keys: [
-        { pubkey: spendingLimitsAccount, isSigner: false, isWritable: true },
-        { pubkey: userPubkey, isSigner: true, isWritable: true }
-      ],
-      programId: this.PROGRAM_ID,
-      data
-    });
-
-    const transaction = new Transaction().add(instruction);
-    transaction.feePayer = this.wallet.publicKey;
-    return await this._sendTransaction(transaction);
-  }
-
-  // Commit initial setup
-  async commitInitialSetup() {
-    if (!this.wallet?.publicKey) {
-      throw new Error('Wallet not connected');
-    }
-
-    const userPubkey = this.wallet.publicKey;
-    const [spendingLimitsAccount] = await this.getSpendingLimitsPDA(userPubkey);
-
-    const discriminator = Buffer.from(this._generateDiscriminator('CommitInitialSetup'));
-
-    const instruction = new TransactionInstruction({
-      keys: [
-        { pubkey: spendingLimitsAccount, isSigner: false, isWritable: true },
-        { pubkey: userPubkey, isSigner: true, isWritable: true }
-      ],
-      programId: this.PROGRAM_ID,
-      data: discriminator
-    });
-
-    const transaction = new Transaction().add(instruction);
-    transaction.feePayer = this.wallet.publicKey;
-    return await this._sendTransaction(transaction);
-  }
-
-  // Commit setup with limits in a single batched transaction (solves double approval issue)
-  async commitSetupWithLimits(dailyLimit = null, weeklyLimit = null, monthlyLimit = null) {
-    console.log('🔧 SolanaAdapter: commitSetupWithLimits called with:', { dailyLimit, weeklyLimit, monthlyLimit });
-
-    if (!this.wallet?.publicKey) {
-      throw new Error('Wallet not connected');
-    }
-
-    const userPubkey = this.wallet.publicKey;
-    const [spendingLimitsAccount] = await this.getSpendingLimitsPDA(userPubkey);
-    console.log('🔑 SolanaAdapter: Using spending limits PDA:', spendingLimitsAccount.toString());
-
-    // Check if spending limits account exists
-    let needsInitialization = false;
-    try {
-      console.log('🔍 SolanaAdapter: Checking if spending limits account exists...');
-      const accountInfo = await this.connection.getAccountInfo(spendingLimitsAccount);
-      console.log('📊 SolanaAdapter: Account info result:', accountInfo ? 'EXISTS' : 'NULL');
-
-      if (!accountInfo) {
-        console.log('🔧 SolanaAdapter: Spending limits account does not exist, will initialize in same transaction...');
-        needsInitialization = true;
-      } else {
-        // Account exists, check if it's properly formatted
-        console.log('🔍 SolanaAdapter: Account exists, checking if data is valid...');
-        try {
-          this.deserializeSavingsAccount(accountInfo.data);
-          console.log('✅ SolanaAdapter: Account data is valid');
-        } catch (deserializeError) {
-          console.log('⚠️ SolanaAdapter: Account data is corrupted/incompatible');
-          throw new Error('Savings account has corrupted data. Please use a different wallet or reset the validator.');
-        }
-      }
-    } catch (error) {
-      console.error('❌ SolanaAdapter: Error checking spending limits account:', error);
-      throw error;
-    }
-
-    // Create transaction with batched instructions
-    const transaction = new Transaction();
-    console.log('🔧 SolanaAdapter: Creating batched transaction for setup commit...');
-
-    // Step 1: Add initialization instruction if needed
-    if (needsInitialization) {
-      console.log('🔧 SolanaAdapter: Adding initialization instruction to transaction...');
-      const initInstruction = await this.createInitializeSpendingLimitsInstruction(userPubkey);
-      transaction.add(initInstruction);
-    }
-
-    // Step 2: Add setCommonPeriodLimits instruction if any limits are provided
-    if (dailyLimit !== null || weeklyLimit !== null || monthlyLimit !== null) {
-      console.log('🔧 SolanaAdapter: Adding setCommonPeriodLimits instruction to transaction...');
-
-      // Serialize the data: discriminator + 3 optional u64 values
-      const setLimitsDiscriminator = Buffer.from(this._generateDiscriminator('SetCommonPeriodLimits'));
-      let setLimitsData = setLimitsDiscriminator;
-
-      // Daily limit - Use USDT as base denomination for spending limits
-      const SPENDING_LIMIT_TOKEN = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'; // USDT
-      if (dailyLimit !== null && dailyLimit !== undefined) {
-        setLimitsData = Buffer.concat([setLimitsData, Buffer.from([1])]);  // Some
-        const dailyBuffer = Buffer.alloc(8);
-        const dailyAmountSmallest = this.toSmallestUnit(dailyLimit, SPENDING_LIMIT_TOKEN);
-        dailyBuffer.writeBigUInt64LE(dailyAmountSmallest, 0);
-        setLimitsData = Buffer.concat([setLimitsData, dailyBuffer]);
-      } else {
-        setLimitsData = Buffer.concat([setLimitsData, Buffer.from([0])]);  // None
-      }
-
-      // Weekly limit
-      if (weeklyLimit !== null && weeklyLimit !== undefined) {
-        setLimitsData = Buffer.concat([setLimitsData, Buffer.from([1])]);  // Some
-        const weeklyBuffer = Buffer.alloc(8);
-        const weeklyAmountSmallest = this.toSmallestUnit(weeklyLimit, SPENDING_LIMIT_TOKEN);
-        weeklyBuffer.writeBigUInt64LE(weeklyAmountSmallest, 0);
-        setLimitsData = Buffer.concat([setLimitsData, weeklyBuffer]);
-      } else {
-        setLimitsData = Buffer.concat([setLimitsData, Buffer.from([0])]);  // None
-      }
-
-      // Monthly limit
-      if (monthlyLimit !== null && monthlyLimit !== undefined) {
-        setLimitsData = Buffer.concat([setLimitsData, Buffer.from([1])]);  // Some
-        const monthlyBuffer = Buffer.alloc(8);
-        const monthlyAmountSmallest = this.toSmallestUnit(monthlyLimit, SPENDING_LIMIT_TOKEN);
-        monthlyBuffer.writeBigUInt64LE(monthlyAmountSmallest, 0);
-        setLimitsData = Buffer.concat([setLimitsData, monthlyBuffer]);
-      } else {
-        setLimitsData = Buffer.concat([setLimitsData, Buffer.from([0])]);  // None
-      }
-
-      const setLimitsInstruction = new TransactionInstruction({
+    const tx = new Transaction().add(
+      new TransactionInstruction({
         keys: [
-          { pubkey: spendingLimitsAccount, isSigner: false, isWritable: true },
-          { pubkey: userPubkey, isSigner: true, isWritable: true }
+          { pubkey: vaultPubkey, isSigner: false, isWritable: false },
+          { pubkey: memberPDA, isSigner: false, isWritable: false },
+          { pubkey: destPDA, isSigner: false, isWritable: true },
+          { pubkey: destination, isSigner: false, isWritable: false },
+          { pubkey: member, isSigner: true, isWritable: true },
+          { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
         ],
-        programId: this.PROGRAM_ID,
-        data: setLimitsData
-      });
+        programId: PROGRAM_ID,
+        data,
+      })
+    );
+    return this.sendTransaction(tx);
+  }
 
-      transaction.add(setLimitsInstruction);
-    } else if (needsInitialization) {
-      // If we're initializing but no limits provided, still need to set null limits
-      console.log('🔧 SolanaAdapter: Adding null limits instruction after initialization...');
+  async requestWithdrawalDestination(vaultAddress, destinationAddress, title) {
+    const vaultPubkey = new PublicKey(vaultAddress);
+    const destination = new PublicKey(destinationAddress);
+    const member = this.wallet.publicKey;
+    const [memberPDA] = this.getVaultMemberPDA(vaultPubkey, member);
+    const [pendingPDA] = this.getPendingDestPDA(vaultPubkey, member, destination);
 
-      const setLimitsDiscriminator = Buffer.from(this._generateDiscriminator('SetCommonPeriodLimits'));
-      let setLimitsData = setLimitsDiscriminator;
+    const data = Buffer.concat([
+      Buffer.from(DISC.RequestWithdrawalDestination),
+      encodeString(title),
+    ]);
 
-      // All limits as None
-      setLimitsData = Buffer.concat([setLimitsData, Buffer.from([0, 0, 0])]);  // None, None, None
-
-      const setLimitsInstruction = new TransactionInstruction({
+    const tx = new Transaction().add(
+      new TransactionInstruction({
         keys: [
-          { pubkey: spendingLimitsAccount, isSigner: false, isWritable: true },
-          { pubkey: userPubkey, isSigner: true, isWritable: true }
+          { pubkey: vaultPubkey, isSigner: false, isWritable: false },
+          { pubkey: memberPDA, isSigner: false, isWritable: false },
+          { pubkey: pendingPDA, isSigner: false, isWritable: true },
+          { pubkey: destination, isSigner: false, isWritable: false },
+          { pubkey: member, isSigner: true, isWritable: true },
+          { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
         ],
-        programId: this.PROGRAM_ID,
-        data: setLimitsData
-      });
+        programId: PROGRAM_ID,
+        data,
+      })
+    );
+    return this.sendTransaction(tx);
+  }
 
-      transaction.add(setLimitsInstruction);
-    }
+  async executeDestinationRequest(vaultAddress, destinationAddress) {
+    const vaultPubkey = new PublicKey(vaultAddress);
+    const destination = new PublicKey(destinationAddress);
+    const member = this.wallet.publicKey;
+    const [memberPDA] = this.getVaultMemberPDA(vaultPubkey, member);
+    const [pendingPDA] = this.getPendingDestPDA(vaultPubkey, member, destination);
+    const [destPDA] = this.getWithdrawalDestPDA(vaultPubkey, member, destination);
 
-    // Step 3: Add commitInitialSetup instruction
-    console.log('🔧 SolanaAdapter: Adding commitInitialSetup instruction to transaction...');
-    const commitDiscriminator = Buffer.from(this._generateDiscriminator('CommitInitialSetup'));
+    const tx = new Transaction().add(
+      new TransactionInstruction({
+        keys: [
+          { pubkey: vaultPubkey, isSigner: false, isWritable: false },
+          { pubkey: memberPDA, isSigner: false, isWritable: false },
+          { pubkey: pendingPDA, isSigner: false, isWritable: true },
+          { pubkey: destPDA, isSigner: false, isWritable: true },
+          { pubkey: destination, isSigner: false, isWritable: false },
+          { pubkey: member, isSigner: true, isWritable: true },
+          { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+        ],
+        programId: PROGRAM_ID,
+        data: Buffer.from(DISC.ExecuteDestinationRequest),
+      })
+    );
+    return this.sendTransaction(tx);
+  }
 
-    const commitInstruction = new TransactionInstruction({
-      keys: [
-        { pubkey: spendingLimitsAccount, isSigner: false, isWritable: true },
-        { pubkey: userPubkey, isSigner: true, isWritable: true }
+  async cancelDestinationRequest(vaultAddress, destinationAddress) {
+    const vaultPubkey = new PublicKey(vaultAddress);
+    const destination = new PublicKey(destinationAddress);
+    const member = this.wallet.publicKey;
+    const [memberPDA] = this.getVaultMemberPDA(vaultPubkey, member);
+    const [pendingPDA] = this.getPendingDestPDA(vaultPubkey, member, destination);
+
+    const tx = new Transaction().add(
+      new TransactionInstruction({
+        keys: [
+          { pubkey: vaultPubkey, isSigner: false, isWritable: false },
+          { pubkey: memberPDA, isSigner: false, isWritable: false },
+          { pubkey: pendingPDA, isSigner: false, isWritable: true },
+          { pubkey: destination, isSigner: false, isWritable: false },
+          { pubkey: member, isSigner: true, isWritable: true },
+        ],
+        programId: PROGRAM_ID,
+        data: Buffer.from(DISC.CancelDestinationRequest),
+      })
+    );
+    return this.sendTransaction(tx);
+  }
+
+  async removeWithdrawalDestination(vaultAddress, destinationAddress) {
+    const vaultPubkey = new PublicKey(vaultAddress);
+    const destination = new PublicKey(destinationAddress);
+    const member = this.wallet.publicKey;
+    const [memberPDA] = this.getVaultMemberPDA(vaultPubkey, member);
+    const [destPDA] = this.getWithdrawalDestPDA(vaultPubkey, member, destination);
+
+    const tx = new Transaction().add(
+      new TransactionInstruction({
+        keys: [
+          { pubkey: vaultPubkey, isSigner: false, isWritable: false },
+          { pubkey: memberPDA, isSigner: false, isWritable: false },
+          { pubkey: destPDA, isSigner: false, isWritable: true },
+          { pubkey: destination, isSigner: false, isWritable: false },
+          { pubkey: member, isSigner: true, isWritable: true },
+        ],
+        programId: PROGRAM_ID,
+        data: Buffer.from(DISC.RemoveWithdrawalDestination),
+      })
+    );
+    return this.sendTransaction(tx);
+  }
+
+  // ---- Rule change proposals ----
+
+  async proposeRuleChange(vaultAddress, { dailyLimit, weeklyLimit, monthlyLimit, penaltyRateBps, limitsArePercentage }) {
+    const vaultPubkey = new PublicKey(vaultAddress);
+    const creator = this.wallet.publicKey;
+    const [proposalPDA] = this.getRuleProposalPDA(vaultPubkey);
+
+    const data = Buffer.concat([
+      Buffer.from(DISC.ProposeRuleChange),
+      encodeOptionU64(dailyLimit),
+      encodeOptionU64(weeklyLimit),
+      encodeOptionU64(monthlyLimit),
+      encodeOptionU16(penaltyRateBps),
+      encodeOptionBool(limitsArePercentage),
+    ]);
+
+    const tx = new Transaction().add(
+      new TransactionInstruction({
+        keys: [
+          { pubkey: vaultPubkey, isSigner: false, isWritable: false },
+          { pubkey: proposalPDA, isSigner: false, isWritable: true },
+          { pubkey: creator, isSigner: true, isWritable: true },
+          { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+        ],
+        programId: PROGRAM_ID,
+        data,
+      })
+    );
+    return this.sendTransaction(tx);
+  }
+
+  async executeRuleChange(vaultAddress) {
+    const vaultPubkey = new PublicKey(vaultAddress);
+    const creator = this.wallet.publicKey;
+    const [proposalPDA] = this.getRuleProposalPDA(vaultPubkey);
+
+    const tx = new Transaction().add(
+      new TransactionInstruction({
+        keys: [
+          { pubkey: vaultPubkey, isSigner: false, isWritable: true },
+          { pubkey: proposalPDA, isSigner: false, isWritable: true },
+          { pubkey: creator, isSigner: true, isWritable: true },
+        ],
+        programId: PROGRAM_ID,
+        data: Buffer.from(DISC.ExecuteRuleChange),
+      })
+    );
+    return this.sendTransaction(tx);
+  }
+
+  async cancelRuleChange(vaultAddress) {
+    const vaultPubkey = new PublicKey(vaultAddress);
+    const creator = this.wallet.publicKey;
+    const [proposalPDA] = this.getRuleProposalPDA(vaultPubkey);
+
+    const tx = new Transaction().add(
+      new TransactionInstruction({
+        keys: [
+          { pubkey: vaultPubkey, isSigner: false, isWritable: false },
+          { pubkey: proposalPDA, isSigner: false, isWritable: true },
+          { pubkey: creator, isSigner: true, isWritable: true },
+        ],
+        programId: PROGRAM_ID,
+        data: Buffer.from(DISC.CancelRuleChange),
+      })
+    );
+    return this.sendTransaction(tx);
+  }
+
+  // ---- Bypass requests ----
+
+  async requestBypass(vaultAddress, amount, isSol = true) {
+    const vaultPubkey = new PublicKey(vaultAddress);
+    const member = this.wallet.publicKey;
+    const [memberPDA] = this.getVaultMemberPDA(vaultPubkey, member);
+    const [bypassPDA] = this.getBypassRequestPDA(vaultPubkey, member);
+
+    const lamports = isSol
+      ? Math.round(amount * LAMPORTS_PER_SOL)
+      : amount;
+
+    const data = Buffer.concat([
+      Buffer.from(DISC.RequestBypass),
+      encodeU64(lamports),
+      encodeBool(isSol),
+    ]);
+
+    const tx = new Transaction().add(
+      new TransactionInstruction({
+        keys: [
+          { pubkey: vaultPubkey, isSigner: false, isWritable: false },
+          { pubkey: memberPDA, isSigner: false, isWritable: false },
+          { pubkey: bypassPDA, isSigner: false, isWritable: true },
+          { pubkey: member, isSigner: true, isWritable: true },
+          { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+        ],
+        programId: PROGRAM_ID,
+        data,
+      })
+    );
+    return this.sendTransaction(tx);
+  }
+
+  async executeBypassSol(vaultAddress) {
+    const vaultPubkey = new PublicKey(vaultAddress);
+    const member = this.wallet.publicKey;
+    const [memberPDA] = this.getVaultMemberPDA(vaultPubkey, member);
+    const [bypassPDA] = this.getBypassRequestPDA(vaultPubkey, member);
+
+    const tx = new Transaction().add(
+      new TransactionInstruction({
+        keys: [
+          { pubkey: vaultPubkey, isSigner: false, isWritable: true },
+          { pubkey: memberPDA, isSigner: false, isWritable: true },
+          { pubkey: bypassPDA, isSigner: false, isWritable: true },
+          { pubkey: member, isSigner: true, isWritable: true },
+          { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+        ],
+        programId: PROGRAM_ID,
+        data: Buffer.from(DISC.ExecuteBypassSol),
+      })
+    );
+    return this.sendTransaction(tx);
+  }
+
+  async executeBypassSpl(vaultAddress, tokenMint) {
+    const vaultPubkey = new PublicKey(vaultAddress);
+    const mint = new PublicKey(tokenMint);
+    const member = this.wallet.publicKey;
+    const [memberPDA] = this.getVaultMemberPDA(vaultPubkey, member);
+    const [bypassPDA] = this.getBypassRequestPDA(vaultPubkey, member);
+    const vaultATA = await getAssociatedTokenAddress(mint, vaultPubkey, true);
+    const memberATA = await getAssociatedTokenAddress(mint, member);
+
+    const tx = new Transaction().add(
+      new TransactionInstruction({
+        keys: [
+          { pubkey: vaultPubkey, isSigner: false, isWritable: true },
+          { pubkey: memberPDA, isSigner: false, isWritable: true },
+          { pubkey: bypassPDA, isSigner: false, isWritable: true },
+          { pubkey: vaultATA, isSigner: false, isWritable: true },
+          { pubkey: memberATA, isSigner: false, isWritable: true },
+          { pubkey: mint, isSigner: false, isWritable: false },
+          { pubkey: member, isSigner: true, isWritable: true },
+          { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
+        ],
+        programId: PROGRAM_ID,
+        data: Buffer.from(DISC.ExecuteBypassSpl),
+      })
+    );
+    return this.sendTransaction(tx);
+  }
+
+  async cancelBypass(vaultAddress) {
+    const vaultPubkey = new PublicKey(vaultAddress);
+    const member = this.wallet.publicKey;
+    const [memberPDA] = this.getVaultMemberPDA(vaultPubkey, member);
+    const [bypassPDA] = this.getBypassRequestPDA(vaultPubkey, member);
+
+    const tx = new Transaction().add(
+      new TransactionInstruction({
+        keys: [
+          { pubkey: vaultPubkey, isSigner: false, isWritable: false },
+          { pubkey: memberPDA, isSigner: false, isWritable: false },
+          { pubkey: bypassPDA, isSigner: false, isWritable: true },
+          { pubkey: member, isSigner: true, isWritable: true },
+        ],
+        programId: PROGRAM_ID,
+        data: Buffer.from(DISC.CancelBypass),
+      })
+    );
+    return this.sendTransaction(tx);
+  }
+
+  // ---- Read: withdrawal destinations ----
+
+  async getWithdrawalDestinations(vaultAddress, memberAddress = null) {
+    const vaultPubkey = new PublicKey(vaultAddress);
+    const memberPubkey = memberAddress ? new PublicKey(memberAddress) : this.wallet.publicKey;
+
+    const accounts = await this.connection.getProgramAccounts(PROGRAM_ID, {
+      filters: [
+        { memcmp: { offset: 0, bytes: bs58.encode(Buffer.from(ACCOUNT_DISC.WithdrawalDestination)) } },
+        { memcmp: { offset: 8, bytes: vaultPubkey.toBase58() } },
+        { memcmp: { offset: 8 + 32, bytes: memberPubkey.toBase58() } },
       ],
-      programId: this.PROGRAM_ID,
-      data: commitDiscriminator
     });
 
-    transaction.add(commitInstruction);
-
-    // Set the fee payer
-    transaction.feePayer = userPubkey;
-
-    console.log('📋 SolanaAdapter: Batched transaction created with', transaction.instructions.length, 'instructions');
-    console.log('📋 SolanaAdapter: Transaction fee payer set to:', transaction.feePayer.toString());
-
-    try {
-      // Simulate the transaction first
-      console.log('🔍 SolanaAdapter: Simulating batched transaction...');
-      const simulation = await this.connection.simulateTransaction(transaction);
-      console.log('📊 SolanaAdapter: Simulation result:', simulation);
-
-      if (simulation.value.err) {
-        console.error('❌ SolanaAdapter: Simulation failed:', simulation.value.err);
-        if (simulation.value.logs) {
-          console.error('📋 SolanaAdapter: Simulation logs:', simulation.value.logs);
-        }
-        throw new Error(`Transaction simulation failed: ${JSON.stringify(simulation.value.err)}`);
-      }
-
-      console.log('✅ SolanaAdapter: Simulation passed, sending batched transaction...');
-      const txHash = await this._sendTransaction(transaction);
-      console.log('📝 SolanaAdapter: Batched setup transaction sent with signature:', txHash);
-
-      // Wait for transaction confirmation
-      console.log('⏳ SolanaAdapter: Waiting for transaction confirmation...');
-      await this.connection.confirmTransaction(txHash, 'confirmed');
-      console.log('✅ SolanaAdapter: Batched setup transaction confirmed successfully');
-
-      return txHash;
-    } catch (error) {
-      console.error('❌ SolanaAdapter: Batched transaction failed:', error);
-      console.error('❌ SolanaAdapter: Error details:', error.message);
-      console.error('❌ SolanaAdapter: Full error object:', error);
-      if (error.logs) {
-        console.error('❌ SolanaAdapter: Transaction logs:', error.logs);
-      }
-      throw error;
-    }
+    return accounts.map(({ account }) =>
+      deserializeWithdrawalDestination(Buffer.from(account.data))
+    );
   }
 
-  // Fetch spending limits from account (main implementation)
-  async fetchSpendingLimitsFromAccount() {
-    console.log('🔵 SolanaAdapter: fetchSpendingLimitsFromAccount called');
+  async getPendingDestinationRequests(vaultAddress, memberAddress = null) {
+    const vaultPubkey = new PublicKey(vaultAddress);
+    const memberPubkey = memberAddress ? new PublicKey(memberAddress) : this.wallet.publicKey;
 
-    if (!this.wallet?.publicKey) {
-      console.log('❌ SolanaAdapter: Wallet not connected');
-      throw new Error('Wallet not connected');
-    }
-
-    try {
-      const userPubkey = this.wallet.publicKey;
-      console.log('👤 SolanaAdapter: User pubkey:', userPubkey.toString());
-
-      const [spendingLimitsAccount] = await this.getSpendingLimitsPDA(userPubkey);
-      console.log('🔑 SolanaAdapter: Spending limits PDA:', spendingLimitsAccount.toString());
-
-      // Check if account exists
-      const accountInfo = await this.connection.getAccountInfo(spendingLimitsAccount);
-      console.log('📄 SolanaAdapter: Account info:', {
-        exists: !!accountInfo,
-        hasData: !!accountInfo?.data,
-        dataLength: accountInfo?.data?.length || 0
-      });
-
-      if (!accountInfo || !accountInfo.data) {
-        console.log('❌ SolanaAdapter: Spending limits account not found, returning empty limits');
-        return {
-          limits: [],
-          isSetupCommitted: false,
-          totalLockedValue: 0
-        };
-      }
-
-      console.log('✅ SolanaAdapter: Found spending limits account, deserializing data...');
-      console.log('📊 SolanaAdapter: Account data length:', accountInfo.data.length);
-
-      // Deserialize the account data
-      const accountData = this.deserializeSavingsAccount(accountInfo.data);
-      console.log('📋 SolanaAdapter: Deserialized account data:', accountData);
-
-      // Convert Solana spending limits to frontend format
-      const formattedLimits = this.formatSpendingLimitsForFrontend(accountData);
-      console.log('🎨 SolanaAdapter: Formatted limits for frontend:', formattedLimits);
-
-      console.log('✅ SolanaAdapter: Returning spending limits data');
-      return formattedLimits;
-
-    } catch (error) {
-      console.error('Error fetching spending limits:', error);
-      return {
-        limits: [],
-        isSetupCommitted: false,
-        totalLockedValue: 0
-      };
-    }
-  }
-
-  // Deserialize unified SavingsAccount data from Solana
-  deserializeSavingsAccount(data) {
-    console.log('🔄 SolanaAdapter: Starting deserialization of unified SavingsAccount');
-    console.log('📊 SolanaAdapter: Data buffer length:', data.length);
-
-    try {
-      let offset = 0;
-
-      // Skip the 8-byte Anchor discriminator
-      console.log('🔄 SolanaAdapter: Skipping 8-byte Anchor discriminator');
-      offset += 8;
-
-      // Read owner pubkey (32 bytes)
-      const owner = new PublicKey(data.slice(offset, offset + 32));
-      console.log('👤 SolanaAdapter: Account owner:', owner.toString());
-      offset += 32;
-
-      // Read sol_balance (8 bytes)
-      const solBalance = data.readBigUInt64LE(offset);
-      offset += 8;
-
-      // Read spl_balances vector
-      const splBalancesCount = data.readUInt32LE(offset);
-      console.log('📊 SolanaAdapter: SPL balances count:', splBalancesCount);
-      offset += 4;
-
-      const splBalances = [];
-      for (let i = 0; i < splBalancesCount; i++) {
-        const mint = new PublicKey(data.slice(offset, offset + 32));
-        offset += 32;
-        const amount = data.readBigUInt64LE(offset);
-        offset += 8;
-        splBalances.push({ mint, amount });
-      }
-
-      // Read bump (1 byte)
-      const bump = data.readUInt8(offset);
-      offset += 1;
-
-      // Read created_at (8 bytes)
-      const createdAt = data.readBigInt64LE(offset);
-      offset += 8;
-
-      // Read updated_at (8 bytes)
-      const updatedAt = data.readBigInt64LE(offset);
-      offset += 8;
-
-      // Skip withdrawal_destinations vector
-      const withdrawalDestinationsCount = data.readUInt32LE(offset);
-      console.log('📊 SolanaAdapter: Withdrawal destinations count:', withdrawalDestinationsCount);
-      offset += 4;
-      for (let i = 0; i < withdrawalDestinationsCount; i++) {
-        offset += 32; // address (Pubkey)
-        const titleLength = data.readUInt32LE(offset);
-        offset += 4;
-        offset += titleLength; // title string
-        offset += 8; // added_at (i64)
-      }
-
-      // Skip pending_withdrawal_destination_requests vector
-      const pendingWithdrawalRequestsCount = data.readUInt32LE(offset);
-      console.log('📊 SolanaAdapter: Pending withdrawal requests count:', pendingWithdrawalRequestsCount);
-      offset += 4;
-      for (let i = 0; i < pendingWithdrawalRequestsCount; i++) {
-        offset += 32; // request_id
-        offset += 32; // address
-        const titleLength = data.readUInt32LE(offset);
-        offset += 4;
-        offset += titleLength; // title
-        offset += 8; // execute_after
-        offset += 8; // created_at
-      }
-
-      // Skip pending_bypass_requests vector
-      const pendingBypassRequestsCount = data.readUInt32LE(offset);
-      console.log('📊 SolanaAdapter: Pending bypass requests count:', pendingBypassRequestsCount);
-      offset += 4;
-      for (let i = 0; i < pendingBypassRequestsCount; i++) {
-        offset += 32; // request_id
-        offset += 8; // amount
-        offset += 32; // token_mint
-        const periodNameLength = data.readUInt32LE(offset);
-        offset += 4;
-        offset += periodNameLength; // bypassing_period
-        offset += 32; // destination
-        offset += 8; // execute_after
-        offset += 8; // created_at
-      }
-
-      // Read permanent_address_activated (1 byte)
-      const permanentAddressActivated = data.readUInt8(offset) === 1;
-      offset += 1;
-
-      // Skip activation_payment_signature vector
-      const signatureLength = data.readUInt32LE(offset);
-      offset += 4;
-      offset += signatureLength;
-
-      // Read activated_at (8 bytes)
-      const activatedAt = data.readBigInt64LE(offset);
-      offset += 8;
-
-      // ===== MERGED SPENDING LIMITS FIELDS =====
-
-      // Read time_period_limits vector
-      const timePeriodLimitsCount = data.readUInt32LE(offset);
-      console.log('📊 SolanaAdapter: Time period limits count:', timePeriodLimitsCount);
-      offset += 4;
-
-      const timePeriodLimits = [];
-      for (let i = 0; i < timePeriodLimitsCount; i++) {
-        // Read TimePeriodLimit struct fields in Rust order:
-        const limit = data.readBigUInt64LE(offset);
-        offset += 8;
-        const currentSpent = data.readBigUInt64LE(offset);
-        offset += 8;
-        const lastReset = data.readBigInt64LE(offset);
-        offset += 8;
-        const duration = data.readBigUInt64LE(offset);
-        offset += 8;
-
-        // Read name string
-        const nameLength = data.readUInt32LE(offset);
-        offset += 4;
-        const name = data.slice(offset, offset + nameLength).toString('utf8');
-        offset += nameLength;
-
-        // Read active flag
-        const active = data.readUInt8(offset) === 1;
-        offset += 1;
-
-        timePeriodLimits.push({
-          name,
-          limit,
-          duration,
-          currentSpent,
-          lastReset,
-          active
-        });
-      }
-
-      // Read pending_proposals vector
-      const pendingProposalsCount = data.readUInt32LE(offset);
-      console.log('📊 SolanaAdapter: Pending proposals count:', pendingProposalsCount);
-      offset += 4;
-
-      const pendingProposals = [];
-      for (let i = 0; i < pendingProposalsCount; i++) {
-        const proposalId = Array.from(data.slice(offset, offset + 32));
-        offset += 32;
-
-        const periodNameLength = data.readUInt32LE(offset);
-        offset += 4;
-        const periodName = data.slice(offset, offset + periodNameLength).toString('utf8');
-        offset += periodNameLength;
-
-        const newLimit = data.readBigUInt64LE(offset);
-        offset += 8;
-
-        const executeAfter = data.readBigInt64LE(offset);
-        offset += 8;
-
-        const executed = data.readUInt8(offset) === 1;
-        offset += 1;
-
-        const isIncrease = data.readUInt8(offset) === 1;
-        offset += 1;
-
-        const createdAt = data.readBigInt64LE(offset);
-        offset += 8;
-
-        pendingProposals.push({
-          proposalId,
-          periodName,
-          newLimit,
-          executeAfter,
-          executed,
-          isIncrease,
-          createdAt
-        });
-      }
-
-      // Read has_committed_setup (1 byte)
-      const hasCommittedSetup = data.readUInt8(offset) === 1;
-      console.log('✅ SolanaAdapter: has_committed_setup:', hasCommittedSetup);
-      offset += 1;
-
-      // Read total_locked_value (8 bytes)
-      const totalLockedValue = data.readBigUInt64LE(offset);
-      offset += 8;
-
-      // Read commit_timestamp (8 bytes)
-      const commitTimestamp = data.readBigInt64LE(offset);
-      offset += 8;
-
-      console.log('✅ SolanaAdapter: Successfully deserialized unified SavingsAccount');
-      return {
-        owner,
-        solBalance,
-        splBalances,
-        timePeriodLimits,
-        pendingProposals,
-        isSetupCommitted: hasCommittedSetup,
-        totalLockedValue,
-        permanentAddressActivated,
-        activatedAt,
-        createdAt,
-        updatedAt,
-        commitTimestamp
-      };
-
-    } catch (error) {
-      console.error('❌ SolanaAdapter: Error deserializing unified SavingsAccount:', error);
-      return {
-        owner: null,
-        timePeriodLimits: [],
-        pendingProposals: [],
-        isSetupCommitted: false,
-        totalLockedValue: 0n,
-        permanentAddressActivated: false
-      };
-    }
-  }
-
-  // Format Solana spending limits for frontend display
-  formatSpendingLimitsForFrontend(accountData) {
-    const limits = [];
-
-    // Spending limits are denominated in USDT
-    const SPENDING_LIMIT_TOKEN = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'; // USDT
-
-    // Add time period limits
-    accountData.timePeriodLimits.forEach(limit => {
-      // Convert from smallest units to human-readable amounts using token-aware conversion
-      const limitAmount = this.fromSmallestUnit(limit.limit, SPENDING_LIMIT_TOKEN);
-      const spentAmount = this.fromSmallestUnit(limit.currentSpent, SPENDING_LIMIT_TOKEN);
-      const remainingAmount = limitAmount - spentAmount;
-
-      // Calculate time remaining for reset
-      const now = Math.floor(Date.now() / 1000);
-      const lastReset = Number(limit.lastReset);
-      const duration = Number(limit.duration);
-      const nextReset = lastReset + duration;
-      const timeRemaining = Math.max(0, nextReset - now);
-
-      limits.push({
-        name: limit.name,
-        limit: limitAmount,
-        spent: spentAmount,
-        remaining: remainingAmount,
-        timeRemaining,
-        resetAt: nextReset,
-        active: true,
-        duration: duration
-      });
+    const accounts = await this.connection.getProgramAccounts(PROGRAM_ID, {
+      filters: [
+        { memcmp: { offset: 0, bytes: bs58.encode(Buffer.from(ACCOUNT_DISC.PendingDestinationRequest)) } },
+        { memcmp: { offset: 8, bytes: vaultPubkey.toBase58() } },
+        { memcmp: { offset: 8 + 32, bytes: memberPubkey.toBase58() } },
+      ],
     });
+
+    return accounts.map(({ account }) =>
+      deserializePendingDestinationRequest(Buffer.from(account.data))
+    );
+  }
+
+  // ---- Read: rule change proposals ----
+
+  async getRuleChangeProposal(vaultAddress) {
+    const vaultPubkey = new PublicKey(vaultAddress);
+    const [proposalPDA] = this.getRuleProposalPDA(vaultPubkey);
+    const accountInfo = await this.connection.getAccountInfo(proposalPDA);
+    if (!accountInfo) return null;
+    return deserializeRuleChangeProposal(Buffer.from(accountInfo.data));
+  }
+
+  // ---- Read: bypass requests ----
+
+  async getBypassRequest(vaultAddress, memberAddress = null) {
+    const vaultPubkey = new PublicKey(vaultAddress);
+    const memberPubkey = memberAddress ? new PublicKey(memberAddress) : this.wallet.publicKey;
+    const [bypassPDA] = this.getBypassRequestPDA(vaultPubkey, memberPubkey);
+    const accountInfo = await this.connection.getAccountInfo(bypassPDA);
+    if (!accountInfo) return null;
+    return deserializeBypassRequest(Buffer.from(accountInfo.data));
+  }
+
+  // ---- Program config ----
+
+  async initializeProgramConfig(penaltyRateBps = 2000) {
+    const admin = this.wallet.publicKey;
+    const [configPDA] = this.getProgramConfigPDA();
+
+    const data = Buffer.concat([
+      Buffer.from(DISC.InitializeProgramConfig),
+      encodeU16(penaltyRateBps),
+    ]);
+
+    const tx = new Transaction().add(
+      new TransactionInstruction({
+        keys: [
+          { pubkey: configPDA, isSigner: false, isWritable: true },
+          { pubkey: admin, isSigner: true, isWritable: true },
+          { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+        ],
+        programId: PROGRAM_ID,
+        data,
+      })
+    );
+    return this.sendTransaction(tx);
+  }
+
+  async getProgramConfig() {
+    const [configPDA] = this.getProgramConfigPDA();
+    const accountInfo = await this.connection.getAccountInfo(configPDA);
+    if (!accountInfo) return null;
+
+    const data = Buffer.from(accountInfo.data);
+    let offset = 8;
+    const treasuryAddress = readPublicKey(data, offset); offset += 32;
+    const defaultPenaltyRateBps = readU16(data, offset); offset += 2;
+    const admin = readPublicKey(data, offset);
 
     return {
-      limits,
-      isSetupCommitted: accountData.isSetupCommitted,
-      totalLockedValue: this.fromSmallestUnit(accountData.totalLockedValue, 'SOL') // Convert from lamports to SOL
+      treasuryAddress: treasuryAddress.toString(),
+      defaultPenaltyRateBps,
+      admin: admin.toString(),
     };
   }
 
-  // Legacy method name for compatibility
-  async getSpendingLimits() {
-    return await this.fetchSpendingLimitsFromAccount();
-  }
+  // ---- Compatibility: cross-vault account searches by member ----
 
-  // Withdraw with spending limits validation
-  async withdrawWithLimits(tokenAddress, amount, tokenDecimals) {
-    if (!this.wallet?.publicKey) {
-      throw new Error('Wallet not connected');
-    }
+  async fetchWithdrawalAddresses(userAddress) {
+    const memberPubkey = new PublicKey(userAddress);
+    const accounts = await this.connection.getProgramAccounts(PROGRAM_ID, {
+      filters: [
+        { memcmp: { offset: 0, bytes: bs58.encode(Buffer.from(ACCOUNT_DISC.WithdrawalDestination)) } },
+        { memcmp: { offset: 40, bytes: memberPubkey.toBase58() } },
+      ],
+    });
 
-    const userPubkey = this.wallet.publicKey;
-    const [savingsAccount] = await PublicKey.findProgramAddress(
-      [Buffer.from("savings"), userPubkey.toBuffer()],
-      this.PROGRAM_ID
+    return accounts.map(({ account }) =>
+      deserializeWithdrawalDestination(Buffer.from(account.data))
     );
-
-    const amountBigInt = this.parseAmount(amount, tokenDecimals);
-
-    if (tokenAddress === 'SOL' || tokenAddress === 'native') {
-      const discriminator = Buffer.from(this._generateDiscriminator('WithdrawSolWithLimits'));
-      const amountBuffer = Buffer.alloc(8);
-      amountBuffer.writeBigUInt64LE(amountBigInt, 0);
-      const data = Buffer.concat([discriminator, amountBuffer]);
-
-      const instruction = new TransactionInstruction({
-        keys: [
-          { pubkey: savingsAccount, isSigner: false, isWritable: true },
-          { pubkey: userPubkey, isSigner: true, isWritable: true },
-          { pubkey: SystemProgram.programId, isSigner: false, isWritable: false }
-        ],
-        programId: this.PROGRAM_ID,
-        data
-      });
-
-      const transaction = new Transaction().add(instruction);
-      return await this._sendTransaction(transaction);
-    } else {
-      const mintPubkey = new PublicKey(tokenAddress);
-      const userTokenAccount = await getAssociatedTokenAddress(mintPubkey, userPubkey);
-      const savingsTokenAccount = await getAssociatedTokenAddress(mintPubkey, savingsAccount, true);
-
-      const discriminator = Buffer.from(this._generateDiscriminator('WithdrawSplWithLimits'));
-      const amountBuffer = Buffer.alloc(8);
-      amountBuffer.writeBigUInt64LE(amountBigInt, 0);
-      const data = Buffer.concat([discriminator, amountBuffer]);
-
-      const instruction = new TransactionInstruction({
-        keys: [
-          { pubkey: savingsAccount, isSigner: false, isWritable: true },
-          { pubkey: userPubkey, isSigner: true, isWritable: true },
-          { pubkey: userTokenAccount, isSigner: false, isWritable: true },
-          { pubkey: savingsTokenAccount, isSigner: false, isWritable: true },
-          { pubkey: mintPubkey, isSigner: false, isWritable: false },
-          { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false }
-        ],
-        programId: this.PROGRAM_ID,
-        data
-      });
-
-      const transaction = new Transaction().add(instruction);
-      return await this._sendTransaction(transaction);
-    }
   }
 
-  // ========== PENALTY WITHDRAWAL FUNCTIONALITY ==========
+  async fetchPendingProposals(userAddress) {
+    const proposerPubkey = new PublicKey(userAddress);
+    const accounts = await this.connection.getProgramAccounts(PROGRAM_ID, {
+      filters: [
+        { memcmp: { offset: 0, bytes: bs58.encode(Buffer.from(ACCOUNT_DISC.RuleChangeProposal)) } },
+        { memcmp: { offset: 40, bytes: proposerPubkey.toBase58() } },
+      ],
+    });
 
-  async getPenaltyRate() {
-    try {
-      const [programConfigPDA] = await PublicKey.findProgramAddress(
-        [Buffer.from("program_config")],
-        this.PROGRAM_ID
-      );
-      const accountInfo = await this.connection.getAccountInfo(programConfigPDA);
-      if (!accountInfo || !accountInfo.data) {
-        return ProgramConfig_DEFAULT_PENALTY_BPS;
-      }
-      // penalty_rate_bps is the last field: skip discriminator(8) + treasury(32) + fee(8) + admin(32) + bump(1) + created_at(8) + updated_at(8) = 97
-      const offset = 97;
-      if (accountInfo.data.length >= offset + 2) {
-        return accountInfo.data.readUInt16LE(offset);
-      }
-      return ProgramConfig_DEFAULT_PENALTY_BPS;
-    } catch (error) {
-      console.error('Error fetching penalty rate:', error);
-      return ProgramConfig_DEFAULT_PENALTY_BPS;
-    }
-  }
-
-  async ensureProgramConfigExists() {
-    const [programConfigPDA] = await PublicKey.findProgramAddress(
-      [Buffer.from("program_config")],
-      this.PROGRAM_ID
+    return accounts.map(({ account }) =>
+      deserializeRuleChangeProposal(Buffer.from(account.data))
     );
-    const accountInfo = await this.connection.getAccountInfo(programConfigPDA);
-    if (accountInfo) return;
-
-    const treasuryAddress = this.getTreasuryAddress();
-    const discriminator = Buffer.from(this._generateDiscriminator('InitializeProgramConfig'));
-    const feeBuffer = Buffer.alloc(8);
-    feeBuffer.writeBigUInt64LE(BigInt(5000000), 0); // 0.005 SOL default fee
-    const data = Buffer.concat([discriminator, feeBuffer]);
-
-    const instruction = new TransactionInstruction({
-      keys: [
-        { pubkey: programConfigPDA, isSigner: false, isWritable: true },
-        { pubkey: this.wallet.publicKey, isSigner: true, isWritable: true },
-        { pubkey: treasuryAddress, isSigner: false, isWritable: false },
-        { pubkey: SystemProgram.programId, isSigner: false, isWritable: false }
-      ],
-      programId: this.PROGRAM_ID,
-      data
-    });
-
-    const transaction = new Transaction().add(instruction);
-    await this._sendTransaction(transaction);
-    console.log('✅ ProgramConfig initialized');
   }
 
-  async withdrawWithPenalty(tokenAddress, amount, tokenDecimals) {
-    if (!this.wallet?.publicKey) {
-      throw new Error('Wallet not connected');
-    }
+  async fetchPendingBypassRequests(userAddress) {
+    const memberPubkey = new PublicKey(userAddress);
+    const accounts = await this.connection.getProgramAccounts(PROGRAM_ID, {
+      filters: [
+        { memcmp: { offset: 0, bytes: bs58.encode(Buffer.from(ACCOUNT_DISC.BypassRequest)) } },
+        { memcmp: { offset: 40, bytes: memberPubkey.toBase58() } },
+      ],
+    });
 
-    await this.ensureProgramConfigExists();
-
-    const userPubkey = this.wallet.publicKey;
-    const [savingsAccount] = await PublicKey.findProgramAddress(
-      [Buffer.from("savings"), userPubkey.toBuffer()],
-      this.PROGRAM_ID
+    return accounts.map(({ account }) =>
+      deserializeBypassRequest(Buffer.from(account.data))
     );
-    const [programConfigPDA] = await PublicKey.findProgramAddress(
-      [Buffer.from("program_config")],
-      this.PROGRAM_ID
+  }
+
+  async fetchPendingWithdrawalDestinationRequests(userAddress) {
+    const memberPubkey = new PublicKey(userAddress);
+    const accounts = await this.connection.getProgramAccounts(PROGRAM_ID, {
+      filters: [
+        { memcmp: { offset: 0, bytes: bs58.encode(Buffer.from(ACCOUNT_DISC.PendingDestinationRequest)) } },
+        { memcmp: { offset: 40, bytes: memberPubkey.toBase58() } },
+      ],
+    });
+
+    return accounts.map(({ account }) =>
+      deserializePendingDestinationRequest(Buffer.from(account.data))
     );
-    const treasuryAddress = this.getTreasuryAddress();
-
-    const amountBigInt = this.parseAmount(amount, tokenDecimals);
-
-    if (tokenAddress === 'SOL' || tokenAddress === 'native') {
-      const discriminator = Buffer.from(this._generateDiscriminator('WithdrawSolWithPenalty'));
-      const amountBuffer = Buffer.alloc(8);
-      amountBuffer.writeBigUInt64LE(amountBigInt, 0);
-      const data = Buffer.concat([discriminator, amountBuffer]);
-
-      const instruction = new TransactionInstruction({
-        keys: [
-          { pubkey: savingsAccount, isSigner: false, isWritable: true },
-          { pubkey: userPubkey, isSigner: true, isWritable: true },
-          { pubkey: programConfigPDA, isSigner: false, isWritable: false },
-          { pubkey: treasuryAddress, isSigner: false, isWritable: true },
-          { pubkey: SystemProgram.programId, isSigner: false, isWritable: false }
-        ],
-        programId: this.PROGRAM_ID,
-        data
-      });
-
-      const transaction = new Transaction().add(instruction);
-      return await this._sendTransaction(transaction);
-    } else {
-      const mintPubkey = new PublicKey(tokenAddress);
-      const userTokenAccount = await getAssociatedTokenAddress(mintPubkey, userPubkey);
-      const savingsTokenAccount = await getAssociatedTokenAddress(mintPubkey, savingsAccount, true);
-      const treasuryTokenAccount = await getAssociatedTokenAddress(mintPubkey, treasuryAddress);
-
-      const transaction = new Transaction();
-
-      // Create treasury token account if it doesn't exist
-      const treasuryAtaInfo = await this.connection.getAccountInfo(treasuryTokenAccount);
-      if (!treasuryAtaInfo) {
-        transaction.add(
-          createAssociatedTokenAccountInstruction(
-            userPubkey,
-            treasuryTokenAccount,
-            treasuryAddress,
-            mintPubkey
-          )
-        );
-      }
-
-      const discriminator = Buffer.from(this._generateDiscriminator('WithdrawSplWithPenalty'));
-      const amountBuffer = Buffer.alloc(8);
-      amountBuffer.writeBigUInt64LE(amountBigInt, 0);
-      const data = Buffer.concat([discriminator, amountBuffer]);
-
-      const instruction = new TransactionInstruction({
-        keys: [
-          { pubkey: savingsAccount, isSigner: false, isWritable: true },
-          { pubkey: userPubkey, isSigner: true, isWritable: true },
-          { pubkey: programConfigPDA, isSigner: false, isWritable: false },
-          { pubkey: userTokenAccount, isSigner: false, isWritable: true },
-          { pubkey: savingsTokenAccount, isSigner: false, isWritable: true },
-          { pubkey: treasuryTokenAccount, isSigner: false, isWritable: true },
-          { pubkey: mintPubkey, isSigner: false, isWritable: false },
-          { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false }
-        ],
-        programId: this.PROGRAM_ID,
-        data
-      });
-
-      transaction.add(instruction);
-      return await this._sendTransaction(transaction);
-    }
-  }
-
-  // ========== PROPOSAL MANAGEMENT FUNCTIONALITY ==========
-
-  // Propose a spending limit change
-  async proposeLimitChange(periodName, newLimit) {
-    if (!this.wallet?.publicKey) {
-      throw new Error('Wallet not connected');
-    }
-
-    const userPubkey = this.wallet.publicKey;
-    const [spendingLimitsAccount] = await this.getSpendingLimitsPDA(userPubkey);
-
-    // Check if spending limits account exists
-    const accountInfo = await this.connection.getAccountInfo(spendingLimitsAccount);
-    if (!accountInfo) {
-      throw new Error('Spending limits account not found. Please initialize spending limits first.');
-    }
-
-    // Check if setup is committed by deserializing the unified account
-    try {
-      const accountData = this.deserializeSavingsAccount(accountInfo.data);
-
-      if (!accountData.isSetupCommitted) {
-        throw new Error('Initial setup must be committed before creating proposals. Please commit your spending limits setup first.');
-      }
-
-      console.log('✅ Setup is committed, proceeding with proposal...');
-    } catch (error) {
-      if (error.message.includes('Initial setup must be committed')) {
-        throw error;
-      }
-      console.warn('⚠️ Could not verify setup status, proceeding anyway:', error.message);
-    }
-
-    // Convert newLimit to base units (treat input as USDT value, store as lamports for precision)
-    const newLimitBigInt = BigInt(Math.floor(parseFloat(newLimit) * Math.pow(10, 9))); // Convert to lamports
-
-    // Create instruction data: discriminator + period_name + new_limit
-    const discriminator = Buffer.from(this._generateDiscriminator('ProposeLimitChange'));
-
-    // Encode period name as Anchor string (4 bytes length + UTF-8 bytes)
-    const periodNameBytes = Buffer.from(periodName, 'utf8');
-    const periodNameLength = Buffer.alloc(4);
-    periodNameLength.writeUInt32LE(periodNameBytes.length, 0);
-
-    // Encode new limit (8 bytes, little-endian u64)
-    const newLimitBuffer = Buffer.alloc(8);
-    newLimitBuffer.writeBigUInt64LE(newLimitBigInt, 0);
-
-    const data = Buffer.concat([discriminator, periodNameLength, periodNameBytes, newLimitBuffer]);
-
-    const instruction = new TransactionInstruction({
-      keys: [
-        { pubkey: spendingLimitsAccount, isSigner: false, isWritable: true },
-        { pubkey: userPubkey, isSigner: true, isWritable: true }
-      ],
-      programId: this.PROGRAM_ID,
-      data
-    });
-
-    const transaction = new Transaction().add(instruction);
-
-    try {
-      console.log('📝 Sending proposal transaction with data:', {
-        periodName,
-        newLimit,
-        discriminator: Array.from(discriminator),
-        dataLength: data.length,
-        instruction: {
-          programId: this.PROGRAM_ID.toString(),
-          keys: instruction.keys.map(k => ({
-            pubkey: k.pubkey.toString(),
-            isSigner: k.isSigner,
-            isWritable: k.isWritable
-          }))
-        }
-      });
-
-      const txHash = await this._sendTransaction(transaction);
-      console.log(`✅ Proposed limit change for ${periodName}: ${newLimit} (tx: ${txHash})`);
-
-      // Wait for transaction confirmation to ensure blockchain state is updated
-      console.log('⏳ Waiting for proposal transaction confirmation...');
-      await this.connection.confirmTransaction(txHash, 'confirmed');
-      console.log('✅ Proposal transaction confirmed successfully');
-
-      return txHash;
-    } catch (error) {
-      console.error('❌ Proposal transaction failed:', {
-        error: error.message,
-        logs: error.logs,
-        code: error.code,
-        periodName,
-        newLimit,
-        dataLength: data.length
-      });
-      throw error;
-    }
-  }
-
-  // Fetch pending proposals from the spending limits account
-  async fetchPendingProposals(userAddress = null) {
-    try {
-      const userPubkey = userAddress ? new PublicKey(userAddress) : this.wallet?.publicKey;
-      if (!userPubkey) {
-        throw new Error('No user address provided');
-      }
-
-      const [spendingLimitsAccount] = await this.getSpendingLimitsPDA(userPubkey);
-      const accountInfo = await this.connection.getAccountInfo(spendingLimitsAccount);
-
-      if (!accountInfo) {
-        console.log('No spending limits account found');
-        return [];
-      }
-
-      console.log('📋 Fetching proposals: Using unified deserializer...');
-      const accountData = this.deserializeSavingsAccount(accountInfo.data);
-
-      const proposals = [];
-      for (let i = 0; i < accountData.pendingProposals.length; i++) {
-        const proposal = accountData.pendingProposals[i];
-
-        // Calculate timelock info
-        const executeAfterTimestamp = Number(proposal.executeAfter);
-        const currentTime = Math.floor(Date.now() / 1000);
-        const timeRemaining = Math.max(0, executeAfterTimestamp - currentTime);
-        const canExecute = timeRemaining === 0 && !proposal.executed;
-
-        console.log(`📋 Proposal ${i + 1}: ${proposal.periodName} -> ${Number(proposal.newLimit) / Math.pow(10, 9)} SOL, executeAfter: ${executeAfterTimestamp}, timeRemaining: ${timeRemaining}s`);
-
-        proposals.push({
-          proposalId: Buffer.from(proposal.proposalId).toString('hex'), // Convert array to hex string for UI
-          periodName: proposal.periodName,
-          newLimit: (Number(proposal.newLimit) / Math.pow(10, 9)).toString(), // Convert from lamports to SOL
-          executeAfter: executeAfterTimestamp,
-          executed: proposal.executed,
-          isIncrease: proposal.isIncrease,
-          createdAt: Number(proposal.createdAt),
-          action: 'change', // For compatibility with EVM format
-          networkType: 'solana',
-          timeRemaining, // Time in seconds until executable
-          canExecute, // Boolean: can be executed now
-          // Readable time remaining for UI
-          timeRemainingText: timeRemaining > 0 ? this.formatTimeRemaining(timeRemaining) : 'Ready to execute'
-        });
-      }
-
-      // Filter out executed proposals - only return pending ones
-      const pendingProposals = proposals.filter(proposal => !proposal.executed);
-
-      console.log(`Found ${proposals.length} total proposals, ${pendingProposals.length} pending for user ${userPubkey.toString()}`);
-      return pendingProposals;
-    } catch (error) {
-      console.error('Error fetching pending proposals:', error);
-      return [];
-    }
-  }
-
-  // Helper function to format time remaining
-  formatTimeRemaining(seconds) {
-    if (seconds <= 0) return 'Ready to execute';
-
-    const hours = Math.floor(seconds / 3600);
-    const minutes = Math.floor((seconds % 3600) / 60);
-    const remainingSeconds = seconds % 60;
-
-    if (hours > 0) {
-      return `${hours}h ${minutes}m ${remainingSeconds}s`;
-    } else if (minutes > 0) {
-      return `${minutes}m ${remainingSeconds}s`;
-    } else {
-      return `${remainingSeconds}s`;
-    }
-  }
-
-  // Execute a pending proposal
-  async executeLimitProposal(proposalId) {
-    if (!this.wallet?.publicKey) {
-      throw new Error('Wallet not connected');
-    }
-
-    const userPubkey = this.wallet.publicKey;
-    const [spendingLimitsAccount] = await this.getSpendingLimitsPDA(userPubkey);
-
-    // Create instruction data: discriminator + proposal_id
-    const discriminator = Buffer.from(this._generateDiscriminator('ExecuteLimitProposal'));
-    const proposalIdBuffer = Buffer.from(proposalId, 'hex'); // Convert hex string back to bytes
-
-    const data = Buffer.concat([discriminator, proposalIdBuffer]);
-
-    const instruction = new TransactionInstruction({
-      keys: [
-        { pubkey: spendingLimitsAccount, isSigner: false, isWritable: true },
-        { pubkey: userPubkey, isSigner: true, isWritable: true }
-      ],
-      programId: this.PROGRAM_ID,
-      data
-    });
-
-    const transaction = new Transaction().add(instruction);
-    const txHash = await this._sendTransaction(transaction);
-
-    // Wait for transaction confirmation to ensure blockchain state is updated
-    console.log('⏳ Waiting for proposal execution transaction confirmation...');
-    await this.connection.confirmTransaction(txHash, 'confirmed');
-    console.log('✅ Proposal execution transaction confirmed successfully');
-
-    console.log(`Executed proposal ${proposalId} (tx: ${txHash})`);
-    return txHash;
-  }
-
-  // Cancel a pending proposal
-  async cancelLimitProposal(proposalId) {
-    if (!this.wallet?.publicKey) {
-      throw new Error('Wallet not connected');
-    }
-
-    const userPubkey = this.wallet.publicKey;
-    const [spendingLimitsAccount] = await this.getSpendingLimitsPDA(userPubkey);
-
-    // Create instruction data: discriminator + proposal_id
-    const discriminator = Buffer.from(this._generateDiscriminator('CancelLimitProposal'));
-    const proposalIdBuffer = Buffer.from(proposalId, 'hex'); // Convert hex string back to bytes
-
-    const data = Buffer.concat([discriminator, proposalIdBuffer]);
-
-    const instruction = new TransactionInstruction({
-      keys: [
-        { pubkey: spendingLimitsAccount, isSigner: false, isWritable: true },
-        { pubkey: userPubkey, isSigner: true, isWritable: true }
-      ],
-      programId: this.PROGRAM_ID,
-      data
-    });
-
-    const transaction = new Transaction().add(instruction);
-    const txHash = await this._sendTransaction(transaction);
-
-    console.log(`Cancelled proposal ${proposalId} (tx: ${txHash})`);
-
-    // Wait for transaction confirmation to ensure blockchain state is updated
-    console.log('⏳ Waiting for proposal cancellation confirmation...');
-    await this.connection.confirmTransaction(txHash, 'confirmed');
-    console.log('✅ Proposal cancellation confirmed successfully');
-
-    return txHash;
-  }
-
-  // ========== WITHDRAWAL DESTINATIONS METHODS ==========
-
-  /**
-   * Fetch withdrawal destinations from the savings account
-   * @param {string} userAddress - Optional user address (uses connected wallet if not provided)
-   * @returns {Array} Array of withdrawal destinations
-   */
-  async fetchWithdrawalAddresses(userAddress = null) {
-    try {
-      const userPubkey = userAddress ? new PublicKey(userAddress) : this.wallet?.publicKey;
-      if (!userPubkey) {
-        throw new Error('No user address provided');
-      }
-
-      const [savingsAccount] = await this.getSavingsAccountPDA(userPubkey);
-      const accountInfo = await this.connection.getAccountInfo(savingsAccount);
-
-      if (!accountInfo) {
-        console.log('📭 No savings account found, returning empty destinations');
-        return [];
-      }
-
-      // Parse withdrawal destinations from account data
-      const data = accountInfo.data;
-
-      let offset = 8; // Skip discriminator
-      offset += 32; // Skip owner
-      offset += 8; // Skip sol_balance
-
-      // Skip spl_balances vector
-      const splBalancesLength = new DataView(data.buffer, data.byteOffset + offset, 4).getUint32(0, true);
-      offset += 4;
-      offset += splBalancesLength * 40; // Each TokenBalance is 40 bytes (32 + 8)
-
-      offset += 1; // Skip bump
-      offset += 8; // Skip created_at
-      offset += 8; // Skip updated_at
-
-      // Read withdrawal_destinations vector
-      if (offset + 4 > data.length) {
-        console.log('📭 Account data too small for withdrawal destinations');
-        return [];
-      }
-
-      const destinationsLength = new DataView(data.buffer, data.byteOffset + offset, 4).getUint32(0, true);
-      offset += 4;
-
-      const destinations = [];
-      for (let i = 0; i < destinationsLength; i++) {
-        // Read WithdrawalDestination struct
-        const addressBytes = data.slice(offset, offset + 32);
-        const address = new PublicKey(addressBytes);
-        offset += 32;
-
-        // Read title string
-        if (offset + 4 > data.length) {
-          console.error(`Cannot read title length for destination ${i + 1}`);
-          break;
-        }
-        const titleLength = new DataView(data.buffer, data.byteOffset + offset, 4).getUint32(0, true);
-        offset += 4;
-
-        if (offset + titleLength > data.length) {
-          console.error(`Cannot read title bytes for destination ${i + 1}`);
-          break;
-        }
-        const titleBytes = data.slice(offset, offset + titleLength);
-        const title = new TextDecoder().decode(titleBytes);
-        offset += titleLength;
-
-        // Read added_at (i64)
-        if (offset + 8 > data.length) {
-          console.error(`Cannot read added_at for destination ${i + 1}`);
-          break;
-        }
-        const addedAt = new DataView(data.buffer, data.byteOffset + offset, 8).getBigInt64(0, true);
-        offset += 8;
-
-        // Read active (bool)
-        if (offset + 1 > data.length) {
-          console.error(`Cannot read active status for destination ${i + 1}`);
-          break;
-        }
-        const active = data[offset] !== 0;
-        offset += 1;
-
-        if (active) {
-          destinations.push({
-            destination: address.toString(),
-            title,
-            addedAt: Number(addedAt),
-            active
-          });
-        }
-      }
-
-      console.log(`📋 Found ${destinations.length} withdrawal destinations`);
-      return destinations;
-    } catch (error) {
-      console.error('❌ Error fetching withdrawal destinations:', error);
-      return [];
-    }
-  }
-
-  /**
-   * Add a new withdrawal destination (conditional logic based on contract lock status)
-   * @param {string} address - Destination address
-   * @param {string} title - Title/label for the destination
-   * @returns {string} Transaction hash
-   */
-  async addWithdrawalDestination(address, title) {
-    if (!this.wallet?.publicKey) {
-      throw new Error('Wallet not connected');
-    }
-
-    try {
-      // Check if contract is locked by getting spending limits data
-      const spendingData = await this.getSpendingLimits();
-      const isContractLocked = spendingData.isSetupCommitted;
-
-      console.log(`📊 Contract lock status: ${isContractLocked ? 'LOCKED' : 'UNLOCKED'}`);
-
-      if (isContractLocked) {
-        // Contract is locked - use timelock pattern for security
-        console.log('🔒 Contract is locked, using timelock request...');
-        return this.requestWithdrawalDestinationAddition(address, title);
-      } else {
-        // Contract is unlocked - add directly without timelock
-        console.log('🔓 Contract is unlocked, adding directly...');
-        return this.addWithdrawalDestinationDirect(address, title);
-      }
-    } catch (error) {
-      console.error('❌ Error checking contract lock status:', error);
-      // Fallback to timelock pattern for safety
-      console.log('⚠️ Falling back to timelock pattern for safety');
-      return this.requestWithdrawalDestinationAddition(address, title);
-    }
-  }
-
-  /**
-   * Request withdrawal destination addition (with timelock)
-   * @param {string} address - Destination address
-   * @param {string} title - Title/label for the destination
-   * @returns {string} Transaction hash
-   */
-  async requestWithdrawalDestinationAddition(address, title) {
-    if (!this.wallet?.publicKey) {
-      throw new Error('Wallet not connected');
-    }
-
-    const userPubkey = this.wallet.publicKey;
-    const [savingsAccount] = await this.getSavingsAccountPDA(userPubkey);
-    const destinationPubkey = new PublicKey(address);
-
-    // Validate inputs
-    if (!title || title.length === 0) {
-      throw new Error('Destination title cannot be empty');
-    }
-
-    if (title.length > 64) {
-      throw new Error('Destination title too long (max 64 characters)');
-    }
-
-    if (destinationPubkey.equals(userPubkey)) {
-      throw new Error('Cannot add your own address as a withdrawal destination');
-    }
-
-    // Create instruction data
-    const discriminator = Buffer.from(this._generateDiscriminator('RequestWithdrawalDestinationAddition'));
-
-    // Encode address (32 bytes)
-    const addressBytes = destinationPubkey.toBuffer();
-
-    // Encode title string
-    const titleBytes = Buffer.from(title, 'utf8');
-    const titleLength = Buffer.alloc(4);
-    titleLength.writeUInt32LE(titleBytes.length, 0);
-
-    const data = Buffer.concat([discriminator, addressBytes, titleLength, titleBytes]);
-
-    const instruction = new TransactionInstruction({
-      keys: [
-        { pubkey: savingsAccount, isSigner: false, isWritable: true },
-        { pubkey: userPubkey, isSigner: true, isWritable: true }
-      ],
-      programId: this.PROGRAM_ID,
-      data
-    });
-
-    // Check if savings account exists, if not initialize it first
-    const savingsAccountInfo = await this.connection.getAccountInfo(savingsAccount);
-    const transaction = new Transaction();
-
-    if (!savingsAccountInfo) {
-      console.log('Savings account not found, adding initialize instruction...');
-      const initInstruction = await this.createInitializeInstruction(userPubkey);
-      transaction.add(initInstruction);
-    }
-
-    transaction.add(instruction);
-    transaction.feePayer = this.wallet.publicKey;
-
-    const { blockhash } = await this.connection.getRecentBlockhash();
-    transaction.recentBlockhash = blockhash;
-
-    // Debug transaction details
-    console.log('🔍 Transaction debug info:', {
-      feePayer: transaction.feePayer.toString(),
-      recentBlockhash: transaction.recentBlockhash,
-      instructionsCount: transaction.instructions.length,
-      programId: this.PROGRAM_ID.toString(),
-      savingsAccount: savingsAccount.toString(),
-      destinationAddress: address
-    });
-
-    // Simulate transaction first to get better error details
-    console.log('🔍 Simulating withdrawal destination request transaction...');
-    try {
-      const simulation = await this.connection.simulateTransaction(transaction);
-      if (simulation.value.err) {
-        console.error('❌ Transaction simulation failed:', simulation.value.err);
-        if (simulation.value.logs) {
-          console.log('📋 Simulation logs:', simulation.value.logs);
-        }
-        throw new Error(`Transaction simulation failed: ${JSON.stringify(simulation.value.err)}`);
-      }
-      console.log('✅ Transaction simulation succeeded');
-    } catch (simError) {
-      console.error('❌ Simulation error:', simError);
-
-      // Check for specific error codes and provide user-friendly messages
-      if (simError.message.includes('"Custom":6012')) {
-        throw new Error('Maximum withdrawal destinations limit reached (20 max). Please remove some existing destinations or wait for pending requests to be processed.');
-      }
-
-      throw new Error(`Failed to simulate transaction: ${simError.message}`);
-    }
-
-    const txHash = await this._sendTransaction(transaction);
-
-    // Wait for transaction confirmation to ensure blockchain state is updated
-    console.log('⏳ Waiting for withdrawal destination request transaction confirmation...');
-    await this.connection.confirmTransaction(txHash, 'confirmed');
-    console.log('✅ Withdrawal destination request transaction confirmed successfully');
-
-    console.log(`✅ Requested withdrawal destination addition: ${address} - ${title} (tx: ${txHash})`);
-    console.log(`⏰ Will be executable after 24 hours`);
-    return txHash;
-  }
-
-  /**
-   * Add withdrawal destination directly (without timelock - for unlocked contracts)
-   * @param {string} address - Destination address
-   * @param {string} title - Title/label for the destination
-   * @returns {string} Transaction hash
-   */
-  async addWithdrawalDestinationDirect(address, title) {
-    if (!this.wallet?.publicKey) {
-      throw new Error('Wallet not connected');
-    }
-
-    const userPubkey = this.wallet.publicKey;
-    const [savingsAccount] = await this.getSavingsAccountPDA(userPubkey);
-    const destinationPubkey = new PublicKey(address);
-
-    // Validate inputs
-    if (!title || title.length === 0) {
-      throw new Error('Destination title cannot be empty');
-    }
-
-    if (title.length > 64) {
-      throw new Error('Destination title too long (max 64 characters)');
-    }
-
-    if (destinationPubkey.equals(userPubkey)) {
-      throw new Error('Cannot add your own address as a withdrawal destination');
-    }
-
-    // Create instruction data for direct addition
-    const discriminator = Buffer.from(this._generateDiscriminator('AddWithdrawalDestination'));
-
-    // Encode address (32 bytes)
-    const addressBytes = destinationPubkey.toBuffer();
-
-    // Encode title string
-    const titleBytes = Buffer.from(title, 'utf8');
-    const titleLength = Buffer.alloc(4);
-    titleLength.writeUInt32LE(titleBytes.length, 0);
-
-    const data = Buffer.concat([discriminator, addressBytes, titleLength, titleBytes]);
-
-    const instruction = new TransactionInstruction({
-      keys: [
-        { pubkey: savingsAccount, isSigner: false, isWritable: true },
-        { pubkey: userPubkey, isSigner: true, isWritable: true }
-      ],
-      programId: this.PROGRAM_ID,
-      data
-    });
-
-    // Check if savings account exists, if not initialize it first
-    const savingsAccountInfo = await this.connection.getAccountInfo(savingsAccount);
-    const transaction = new Transaction();
-
-    if (!savingsAccountInfo) {
-      console.log('Savings account not found, adding initialize instruction...');
-      const initInstruction = await this.createInitializeInstruction(userPubkey);
-      transaction.add(initInstruction);
-    }
-
-    transaction.add(instruction);
-    transaction.feePayer = this.wallet.publicKey;
-
-    const { blockhash } = await this.connection.getRecentBlockhash();
-    transaction.recentBlockhash = blockhash;
-
-    const txHash = await this._sendTransaction(transaction);
-
-    // Wait for transaction confirmation before returning
-    console.log('⏳ Waiting for transaction confirmation...');
-    await this.connection.confirmTransaction(txHash, 'confirmed');
-
-    console.log(`✅ Added withdrawal destination directly: ${address} - ${title} (tx: ${txHash})`);
-    console.log(`🎯 Address is immediately available (contract unlocked)`);
-    return txHash;
-  }
-
-  /**
-   * Execute a pending withdrawal destination request
-   * @param {string} requestId - The request ID (hex string)
-   * @returns {string} Transaction hash
-   */
-  async executeWithdrawalDestinationRequest(requestId) {
-    if (!this.wallet?.publicKey) {
-      throw new Error('Wallet not connected');
-    }
-
-    const userPubkey = this.wallet.publicKey;
-    const [savingsAccount] = await this.getSavingsAccountPDA(userPubkey);
-
-    // Create instruction data
-    const discriminator = Buffer.from(this._generateDiscriminator('ExecuteWithdrawalDestinationRequest'));
-    // Convert hex request ID to buffer
-    const requestIdBuffer = Buffer.from(requestId, 'hex');
-    const data = Buffer.concat([discriminator, requestIdBuffer]);
-
-    const instruction = new TransactionInstruction({
-      keys: [
-        { pubkey: savingsAccount, isSigner: false, isWritable: true },
-        { pubkey: userPubkey, isSigner: true, isWritable: true }
-      ],
-      programId: this.PROGRAM_ID,
-      data
-    });
-
-    const transaction = new Transaction().add(instruction);
-    const txHash = await this._sendTransaction(transaction);
-
-    console.log(`✅ Executed withdrawal destination request: ${requestId} (tx: ${txHash})`);
-    return txHash;
-  }
-
-  /**
-   * Cancel a pending withdrawal destination request
-   * @param {string} requestId - The request ID (hex string)
-   * @returns {string} Transaction hash
-   */
-  async cancelWithdrawalDestinationRequest(requestId) {
-    if (!this.wallet?.publicKey) {
-      throw new Error('Wallet not connected');
-    }
-
-    const userPubkey = this.wallet.publicKey;
-    const [savingsAccount] = await this.getSavingsAccountPDA(userPubkey);
-
-    // Create instruction data
-    const discriminator = Buffer.from(this._generateDiscriminator('CancelWithdrawalDestinationRequest'));
-    // Convert hex request ID to buffer
-    const requestIdBuffer = Buffer.from(requestId, 'hex');
-    const data = Buffer.concat([discriminator, requestIdBuffer]);
-
-    const instruction = new TransactionInstruction({
-      keys: [
-        { pubkey: savingsAccount, isSigner: false, isWritable: true },
-        { pubkey: userPubkey, isSigner: true, isWritable: true }
-      ],
-      programId: this.PROGRAM_ID,
-      data
-    });
-
-    const transaction = new Transaction().add(instruction);
-    const txHash = await this._sendTransaction(transaction);
-
-    console.log(`✅ Cancelled withdrawal destination request: ${requestId} (tx: ${txHash})`);
-    return txHash;
-  }
-
-  /**
-   * Remove a withdrawal destination
-   * @param {string} address - Destination address to remove
-   * @returns {string} Transaction hash
-   */
-  async removeWithdrawalDestination(address) {
-    if (!this.wallet?.publicKey) {
-      throw new Error('Wallet not connected');
-    }
-
-    const userPubkey = this.wallet.publicKey;
-    const [savingsAccount] = await this.getSavingsAccountPDA(userPubkey);
-    const destinationPubkey = new PublicKey(address);
-
-    // Create instruction data
-    const discriminator = Buffer.from(this._generateDiscriminator('RemoveWithdrawalDestination'));
-    const addressBytes = destinationPubkey.toBuffer();
-
-    const data = Buffer.concat([discriminator, addressBytes]);
-
-    const instruction = new TransactionInstruction({
-      keys: [
-        { pubkey: savingsAccount, isSigner: false, isWritable: true },
-        { pubkey: userPubkey, isSigner: true, isWritable: true }
-      ],
-      programId: this.PROGRAM_ID,
-      data
-    });
-
-    const transaction = new Transaction().add(instruction);
-    const txHash = await this._sendTransaction(transaction);
-
-    console.log(`✅ Removed withdrawal destination: ${address} (tx: ${txHash})`);
-    return txHash;
-  }
-
-  /**
-   * Withdraw SOL to a specific destination (enhanced withdraw with destination)
-   * @param {number} amount - Amount in lamports
-   * @param {string} destination - Destination address
-   * @returns {string} Transaction hash
-   */
-  async withdrawSolToDestination(amount, destination) {
-    if (!this.wallet?.publicKey) {
-      throw new Error('Wallet not connected');
-    }
-
-    const userPubkey = this.wallet.publicKey;
-    const [savingsAccount] = await this.getSavingsAccountPDA(userPubkey);
-    const destinationPubkey = new PublicKey(destination);
-
-    // Create instruction data
-    const discriminator = Buffer.from(this._generateDiscriminator('WithdrawSolToDestination'));
-    const amountBuffer = Buffer.alloc(8);
-    amountBuffer.writeBigUInt64LE(BigInt(amount), 0);
-
-    const data = Buffer.concat([discriminator, amountBuffer]);
-
-    const instruction = new TransactionInstruction({
-      keys: [
-        { pubkey: savingsAccount, isSigner: false, isWritable: true },
-        { pubkey: userPubkey, isSigner: true, isWritable: true },
-        { pubkey: destinationPubkey, isSigner: false, isWritable: true },
-        { pubkey: SystemProgram.programId, isSigner: false, isWritable: false }
-      ],
-      programId: this.PROGRAM_ID,
-      data
-    });
-
-    const transaction = new Transaction().add(instruction);
-    transaction.feePayer = userPubkey;
-
-    // Simulate transaction first to get better error details
-    console.log('🔍 SolanaAdapter: Simulating SOL withdrawal transaction first...');
-    try {
-      const simulation = await this.connection.simulateTransaction(transaction);
-      if (simulation.value.err) {
-        console.error('❌ SolanaAdapter: SOL withdrawal simulation failed:', simulation.value.err);
-        if (simulation.value.logs) {
-          console.error('📋 SolanaAdapter: Simulation logs:', simulation.value.logs);
-        }
-        throw new Error(`Transaction simulation failed: ${JSON.stringify(simulation.value.err)}`);
-      } else {
-        console.log('✅ SolanaAdapter: SOL withdrawal simulation successful!');
-        console.log('📋 SolanaAdapter: Simulation logs:', simulation.value.logs);
-      }
-    } catch (simError) {
-      console.error('❌ SolanaAdapter: Could not simulate SOL withdrawal transaction:', simError);
-      throw new Error('Failed to simulate transaction: ' + simError.message);
-    }
-
-    console.log('📤 SolanaAdapter: Simulation passed, sending SOL withdrawal transaction...');
-    const txHash = await this._sendTransaction(transaction);
-
-    console.log(`✅ Withdrew ${amount} lamports to ${destination} (tx: ${txHash})`);
-    return txHash;
-  }
-
-  /**
-   * Withdraw SPL tokens to a specific destination
-   * @param {number} amount - Amount in token units
-   * @param {string} tokenMint - Token mint address
-   * @param {string} destination - Destination address
-   * @returns {string} Transaction hash
-   */
-  async withdrawSplToDestination(amount, tokenMint, destination) {
-    if (!this.wallet?.publicKey) {
-      throw new Error('Wallet not connected');
-    }
-
-    const userPubkey = this.wallet.publicKey;
-    const [savingsAccount] = await this.getSavingsAccountPDA(userPubkey);
-    const mintPubkey = new PublicKey(tokenMint);
-    const destinationPubkey = new PublicKey(destination);
-
-    // Get the savings account's token account for this mint
-    const savingsTokenAccount = await getAssociatedTokenAddress(
-      mintPubkey,
-      savingsAccount,
-      true // allowOwnerOffCurve
-    );
-
-    // Get or create the destination token account
-    const destinationTokenAccount = await getAssociatedTokenAddress(
-      mintPubkey,
-      destinationPubkey
-    );
-
-    console.log('🔍 SolanaAdapter: Account details for withdrawal:', {
-      savingsAccount: savingsAccount.toString(),
-      userPubkey: userPubkey.toString(),
-      mintPubkey: mintPubkey.toString(),
-      savingsTokenAccount: savingsTokenAccount.toString(),
-      destinationTokenAccount: destinationTokenAccount.toString(),
-      destinationPubkey: destinationPubkey.toString()
-    });
-
-    // Check if the savings token account exists and get its details
-    try {
-      const savingsTokenAccountInfo = await this.connection.getAccountInfo(savingsTokenAccount);
-      if (savingsTokenAccountInfo) {
-        console.log('✅ SolanaAdapter: Savings token account exists');
-        console.log('📊 SolanaAdapter: Account owner:', savingsTokenAccountInfo.owner.toString());
-        console.log('📊 SolanaAdapter: Account data length:', savingsTokenAccountInfo.data.length);
-      } else {
-        console.log('❌ SolanaAdapter: Savings token account does not exist!');
-      }
-
-      const destinationTokenAccountInfo = await this.connection.getAccountInfo(destinationTokenAccount);
-      if (destinationTokenAccountInfo) {
-        console.log('✅ SolanaAdapter: Destination token account exists');
-        console.log('📊 SolanaAdapter: Destination account owner:', destinationTokenAccountInfo.owner.toString());
-      } else {
-        console.log('❌ SolanaAdapter: Destination token account does not exist!');
-      }
-    } catch (accountCheckError) {
-      console.log('⚠️ SolanaAdapter: Could not check token accounts:', accountCheckError);
-    }
-
-    // Create instruction data
-    const discriminator = Buffer.from(this._generateDiscriminator('WithdrawSplToDestination'));
-    const amountBuffer = Buffer.alloc(8);
-    amountBuffer.writeBigUInt64LE(BigInt(amount), 0);
-
-    const data = Buffer.concat([discriminator, amountBuffer]);
-
-    const instruction = new TransactionInstruction({
-      keys: [
-        { pubkey: savingsAccount, isSigner: false, isWritable: true },           // savings_account
-        { pubkey: userPubkey, isSigner: true, isWritable: true },               // user
-        { pubkey: mintPubkey, isSigner: false, isWritable: false },             // mint
-        { pubkey: savingsTokenAccount, isSigner: false, isWritable: true },     // savings_token_account
-        { pubkey: destinationTokenAccount, isSigner: false, isWritable: true }, // destination_token_account
-        { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false }        // token_program
-      ],
-      programId: this.PROGRAM_ID,
-      data
-    });
-
-    const transaction = new Transaction().add(instruction);
-    transaction.feePayer = userPubkey;
-
-    // Simulate transaction first to get better error details
-    console.log('🔍 SolanaAdapter: Simulating withdrawal transaction first...');
-    try {
-      const simulation = await this.connection.simulateTransaction(transaction);
-      if (simulation.value.err) {
-        console.error('❌ SolanaAdapter: Withdrawal simulation failed:', simulation.value.err);
-        if (simulation.value.logs) {
-          console.error('📋 SolanaAdapter: Simulation logs:', simulation.value.logs);
-        }
-        throw new Error(`Transaction simulation failed: ${JSON.stringify(simulation.value.err)}`);
-      } else {
-        console.log('✅ SolanaAdapter: Withdrawal simulation successful!');
-        console.log('📋 SolanaAdapter: Simulation logs:', simulation.value.logs);
-      }
-    } catch (simError) {
-      console.error('❌ SolanaAdapter: Could not simulate withdrawal transaction:', simError);
-      throw new Error('Failed to simulate transaction: ' + simError.message);
-    }
-
-    console.log('📤 SolanaAdapter: Simulation passed, sending withdrawal transaction...');
-    const txHash = await this._sendTransaction(transaction);
-
-    console.log(`✅ Withdrew ${amount} tokens to ${destination} (tx: ${txHash})`);
-    return txHash;
-  }
-
-  // ========== BYPASS REQUEST METHODS ==========
-
-  /**
-   * Fetch pending bypass requests from the savings account
-   * @param {string} userAddress - Optional user address (uses connected wallet if not provided)
-   * @returns {Array} Array of pending bypass requests
-   */
-  async fetchPendingBypassRequests(userAddress = null) {
-    try {
-      const userPubkey = userAddress ? new PublicKey(userAddress) : this.wallet?.publicKey;
-      if (!userPubkey) {
-        throw new Error('No user address provided');
-      }
-
-      const [savingsAccount] = await this.getSavingsAccountPDA(userPubkey);
-      const accountInfo = await this.connection.getAccountInfo(savingsAccount);
-
-      if (!accountInfo) {
-        console.log('📭 No savings account found, returning empty bypass requests');
-        return [];
-      }
-
-      // Parse bypass requests from account data
-      const data = accountInfo.data;
-      console.log(`🔍 Account data length: ${data.length} bytes`);
-
-      if (data.length < 64) {
-        console.log('📭 Account data too small, likely uninitialized, returning empty bypass requests');
-        return [];
-      }
-
-      let offset = 8; // Skip discriminator
-      offset += 32; // Skip owner
-      offset += 8; // Skip sol_balance
-
-      // Skip spl_balances vector with bounds checking
-      if (offset + 4 > data.length) {
-        console.log('📭 Account data incomplete (spl_balances length), returning empty bypass requests');
-        return [];
-      }
-      const splBalancesLength = new DataView(data.buffer, data.byteOffset + offset, 4).getUint32(0, true);
-      console.log(`🔍 SPL balances length: ${splBalancesLength}`);
-
-      // Validate SPL balances length is reasonable
-      if (splBalancesLength > 100) {
-        console.log(`📭 SPL balances length too large (${splBalancesLength}), account may be corrupted`);
-        return [];
-      }
-
-      offset += 4;
-      if (offset + splBalancesLength * 40 > data.length) {
-        console.log(`📭 Account data incomplete (spl_balances data: need ${splBalancesLength * 40} bytes), returning empty bypass requests`);
-        return [];
-      }
-      offset += splBalancesLength * 40; // Each TokenBalance is 40 bytes
-
-      offset += 1; // Skip bump
-      offset += 8; // Skip created_at
-      offset += 8; // Skip updated_at
-
-      // Skip withdrawal_destinations vector with bounds checking
-      if (offset + 4 > data.length) {
-        console.log('📭 Account data incomplete (withdrawal_destinations length), returning empty bypass requests');
-        return [];
-      }
-      const destinationsLength = new DataView(data.buffer, data.byteOffset + offset, 4).getUint32(0, true);
-      console.log(`🔍 Withdrawal destinations length: ${destinationsLength}`);
-
-      // Validate destinations length is reasonable
-      if (destinationsLength > 50) {
-        console.log(`📭 Withdrawal destinations length too large (${destinationsLength}), account may be corrupted`);
-        return [];
-      }
-
-      offset += 4;
-      // Skip destinations data - we need to calculate size properly
-      for (let i = 0; i < destinationsLength; i++) {
-        if (offset + 32 + 4 > data.length) {
-          console.log(`📭 Account data incomplete (destination ${i} address+title_len), returning empty bypass requests`);
-          return [];
-        }
-        offset += 32; // address
-        const titleLength = new DataView(data.buffer, data.byteOffset + offset, 4).getUint32(0, true);
-        console.log(`🔍 Destination ${i} title length: ${titleLength}`);
-
-        // Validate title length is reasonable
-        if (titleLength > 200) {
-          console.log(`📭 Destination ${i} title length too large (${titleLength}), account may be corrupted`);
-          return [];
-        }
-
-        if (offset + 4 + titleLength + 8 + 1 > data.length) {
-          console.log(`📭 Account data incomplete (destination ${i} full data), returning empty bypass requests`);
-          return [];
-        }
-        offset += 4 + titleLength; // title
-        offset += 8; // added_at
-        offset += 1; // active
-      }
-
-      // Skip pending_withdrawal_destination_requests vector with bounds checking
-      if (offset + 4 > data.length) {
-        console.log('📭 Account data incomplete (pending_withdrawal_destination_requests length), returning empty bypass requests');
-        return [];
-      }
-      const pendingDestRequestsLength = new DataView(data.buffer, data.byteOffset + offset, 4).getUint32(0, true);
-      console.log(`🔍 Pending withdrawal destination requests length: ${pendingDestRequestsLength}`);
-
-      // Validate pending requests length is reasonable
-      if (pendingDestRequestsLength > 20) {
-        console.log(`📭 Pending withdrawal destination requests length too large (${pendingDestRequestsLength}), account may be corrupted`);
-        return [];
-      }
-
-      offset += 4;
-      // Skip pending withdrawal destination requests data
-      for (let i = 0; i < pendingDestRequestsLength; i++) {
-        if (offset + 32 + 32 + 4 > data.length) {
-          console.log(`📭 Account data incomplete (pending dest request ${i} headers), returning empty bypass requests`);
-          return [];
-        }
-        offset += 32; // request_id
-        offset += 32; // address
-
-        const titleLength = new DataView(data.buffer, data.byteOffset + offset, 4).getUint32(0, true);
-        console.log(`🔍 Pending dest request ${i} title length: ${titleLength}`);
-
-        // Validate title length is reasonable
-        if (titleLength > 200) {
-          console.log(`📭 Pending dest request ${i} title length too large (${titleLength}), account may be corrupted`);
-          return [];
-        }
-
-        if (offset + 4 + titleLength + 8 + 1 + 1 + 8 > data.length) {
-          console.log(`📭 Account data incomplete (pending dest request ${i} full data), returning empty bypass requests`);
-          return [];
-        }
-        offset += 4 + titleLength; // title
-        offset += 8; // execute_after
-        offset += 1; // executed
-        offset += 1; // cancelled
-        offset += 8; // created_at
-      }
-
-      // Read pending_bypass_requests vector with final bounds checking
-      if (offset + 4 > data.length) {
-        console.log('📭 Account data incomplete (pending_bypass_requests length), returning empty bypass requests');
-        return [];
-      }
-      const requestsLength = new DataView(data.buffer, data.byteOffset + offset, 4).getUint32(0, true);
-      console.log(`🔍 Pending bypass requests length: ${requestsLength}`);
-
-      // Validate bypass requests length is reasonable
-      if (requestsLength > 50) {
-        console.log(`📭 Pending bypass requests length too large (${requestsLength}), account may be corrupted`);
-        return [];
-      }
-
-      offset += 4;
-
-      const requests = [];
-      for (let i = 0; i < requestsLength; i++) {
-        // Check if we have enough data for this bypass request
-        if (offset + 32 + 8 + 32 + 4 > data.length) {
-          console.log(`📭 Account data incomplete (bypass request ${i} headers), stopping parsing`);
-          break;
-        }
-
-        // Read BypassRequest struct
-        const requestId = data.slice(offset, offset + 32);
-        offset += 32;
-
-        const amount = new DataView(data.buffer, data.byteOffset + offset, 8).getBigUint64(0, true);
-        offset += 8;
-
-        const tokenMintBytes = data.slice(offset, offset + 32);
-        const tokenMint = new PublicKey(tokenMintBytes);
-        offset += 32;
-
-        // Read bypassing_period string
-        const periodLength = new DataView(data.buffer, data.byteOffset + offset, 4).getUint32(0, true);
-        console.log(`🔍 Bypass request ${i} period length: ${periodLength}`);
-
-        // Validate period length is reasonable
-        if (periodLength > 100) {
-          console.log(`📭 Bypass request ${i} period length too large (${periodLength}), stopping parsing`);
-          break;
-        }
-
-        if (offset + 4 + periodLength + 32 + 8 + 1 + 1 + 8 > data.length) {
-          console.log(`📭 Account data incomplete (bypass request ${i} full data), stopping parsing`);
-          break;
-        }
-
-        offset += 4;
-        const periodBytes = data.slice(offset, offset + periodLength);
-        const bypassingPeriod = new TextDecoder().decode(periodBytes);
-        offset += periodLength;
-
-        const destinationBytes = data.slice(offset, offset + 32);
-        const destination = new PublicKey(destinationBytes);
-        offset += 32;
-
-        const executeAfter = new DataView(data.buffer, data.byteOffset + offset, 8).getBigInt64(0, true);
-        offset += 8;
-
-        const executed = data[offset] !== 0;
-        offset += 1;
-
-        const cancelled = data[offset] !== 0;
-        offset += 1;
-
-        const createdAt = new DataView(data.buffer, data.byteOffset + offset, 8).getBigInt64(0, true);
-        offset += 8;
-
-        // Only include active (not executed, not cancelled) requests
-        if (!executed && !cancelled) {
-          requests.push({
-            requestId: Array.from(requestId),
-            amount: amount.toString(),
-            tokenMint: tokenMint.toString(),
-            bypassingPeriod,
-            destination: destination.toString(),
-            executeAfter: Number(executeAfter),
-            executed,
-            cancelled,
-            createdAt: Number(createdAt)
-          });
-        }
-      }
-
-      console.log(`📋 Found ${requests.length} pending bypass requests`);
-      return requests;
-    } catch (error) {
-      console.error('❌ Error fetching bypass requests:', error);
-      return [];
-    }
-  }
-
-  /**
-   * Get pending withdrawal destination requests
-   * @param {string} userAddress - Optional user address (uses connected wallet if not provided)
-   * @returns {Array} Array of pending withdrawal destination requests
-   */
-  async getPendingWithdrawalDestinationRequests(userAddress = null) {
-    try {
-      // Validate userAddress format before creating PublicKey
-      if (userAddress && (userAddress.startsWith('0x') || userAddress.length !== 44)) {
-        console.error(`❌ Invalid Solana address format: ${userAddress}`);
-        console.log('📭 Address appears to be Ethereum format, returning empty withdrawal destination requests');
-        return [];
-      }
-
-      const userPubkey = userAddress ? new PublicKey(userAddress) : this.wallet?.publicKey;
-      if (!userPubkey) {
-        throw new Error('No user address provided');
-      }
-
-      const [savingsAccount] = await this.getSavingsAccountPDA(userPubkey);
-      const accountInfo = await this.connection.getAccountInfo(savingsAccount);
-
-      if (!accountInfo) {
-        console.log('📭 No savings account found, returning empty withdrawal destination requests');
-        return [];
-      }
-
-      // Parse withdrawal destination requests from account data
-      const data = accountInfo.data;
-      console.log(`🔍 [Withdrawal Destinations] Account data length: ${data.length} bytes`);
-
-      if (data.length < 64) {
-        console.log('📭 Account data too small, likely uninitialized, returning empty withdrawal destination requests');
-        return [];
-      }
-
-      let offset = 8; // Skip discriminator
-      offset += 32; // Skip owner
-      offset += 8; // Skip sol_balance
-
-      // Skip spl_balances vector with bounds checking
-      if (offset + 4 > data.length) {
-        console.log('📭 Account data incomplete (spl_balances length), returning empty withdrawal destination requests');
-        return [];
-      }
-      const splBalancesLength = new DataView(data.buffer, data.byteOffset + offset, 4).getUint32(0, true);
-      console.log(`🔍 [Withdrawal Destinations] SPL balances length: ${splBalancesLength}`);
-
-      // Validate SPL balances length is reasonable
-      if (splBalancesLength > 100) {
-        console.log(`📭 SPL balances length too large (${splBalancesLength}), account may be corrupted`);
-        return [];
-      }
-
-      offset += 4;
-      if (offset + splBalancesLength * 40 > data.length) {
-        console.log(`📭 Account data incomplete (spl_balances data: need ${splBalancesLength * 40} bytes), returning empty withdrawal destination requests`);
-        return [];
-      }
-      offset += splBalancesLength * 40; // Each TokenBalance is 40 bytes
-
-      offset += 1; // Skip bump
-      offset += 8; // Skip created_at
-      offset += 8; // Skip updated_at
-
-      // Skip withdrawal_destinations vector with bounds checking
-      if (offset + 4 > data.length) {
-        console.log('📭 Account data incomplete (withdrawal_destinations length), returning empty withdrawal destination requests');
-        return [];
-      }
-      const destinationsLength = new DataView(data.buffer, data.byteOffset + offset, 4).getUint32(0, true);
-      console.log(`🔍 [Withdrawal Destinations] Withdrawal destinations length: ${destinationsLength}`);
-
-      // Validate destinations length is reasonable
-      if (destinationsLength > 50) {
-        console.log(`📭 Withdrawal destinations length too large (${destinationsLength}), account may be corrupted`);
-        return [];
-      }
-
-      offset += 4;
-      // Skip destinations data - we need to calculate size properly
-      for (let i = 0; i < destinationsLength; i++) {
-        if (offset + 32 + 4 > data.length) {
-          console.log(`📭 Account data incomplete (destination ${i} address+title_len), returning empty withdrawal destination requests`);
-          return [];
-        }
-        offset += 32; // address
-        const titleLength = new DataView(data.buffer, data.byteOffset + offset, 4).getUint32(0, true);
-        console.log(`🔍 [Withdrawal Destinations] Destination ${i} title length: ${titleLength}`);
-
-        // Validate title length is reasonable
-        if (titleLength > 200) {
-          console.log(`📭 Destination ${i} title length too large (${titleLength}), account may be corrupted`);
-          return [];
-        }
-
-        if (offset + 4 + titleLength + 8 + 1 > data.length) {
-          console.log(`📭 Account data incomplete (destination ${i} full data), returning empty withdrawal destination requests`);
-          return [];
-        }
-        offset += 4 + titleLength; // title
-        offset += 8; // added_at
-        offset += 1; // active
-      }
-
-      // Read pending_withdrawal_destination_requests vector with final bounds checking
-      if (offset + 4 > data.length) {
-        console.log('📭 Account data incomplete (pending_withdrawal_destination_requests length), returning empty withdrawal destination requests');
-        return [];
-      }
-      const requestsLength = new DataView(data.buffer, data.byteOffset + offset, 4).getUint32(0, true);
-      console.log(`🔍 [Withdrawal Destinations] Pending withdrawal destination requests length: ${requestsLength}`);
-
-      // Validate requests length is reasonable
-      if (requestsLength > 20) {
-        console.log(`📭 Pending withdrawal destination requests length too large (${requestsLength}), account may be corrupted`);
-        return [];
-      }
-
-      offset += 4;
-
-      const requests = [];
-      for (let i = 0; i < requestsLength; i++) {
-        // Check if we have enough data for this withdrawal destination request
-        if (offset + 32 + 32 + 4 > data.length) {
-          console.log(`📭 Account data incomplete (withdrawal dest request ${i} headers), stopping parsing`);
-          break;
-        }
-
-        // Read PendingWithdrawalDestinationRequest struct
-        const requestId = data.slice(offset, offset + 32);
-        offset += 32;
-
-        const addressBytes = data.slice(offset, offset + 32);
-        console.log(`🔍 [Withdrawal Destinations] Request ${i} address bytes:`, Array.from(addressBytes.slice(0, 8)).map(b => b.toString(16).padStart(2, '0')).join(' '));
-
-        // Validate address bytes before creating PublicKey
-        try {
-          const address = new PublicKey(addressBytes);
-          offset += 32;
-
-          // Read title string
-          const titleLength = new DataView(data.buffer, data.byteOffset + offset, 4).getUint32(0, true);
-          console.log(`🔍 [Withdrawal Destinations] Request ${i} title length: ${titleLength}`);
-
-          // Validate title length is reasonable
-          if (titleLength > 200) {
-            console.log(`📭 Request ${i} title length too large (${titleLength}), stopping parsing`);
-            break;
-          }
-
-          if (offset + 4 + titleLength + 8 + 1 + 1 + 8 > data.length) {
-            console.log(`📭 Account data incomplete (withdrawal dest request ${i} full data), stopping parsing`);
-            break;
-          }
-
-          offset += 4;
-          const titleBytes = data.slice(offset, offset + titleLength);
-          const title = new TextDecoder().decode(titleBytes);
-          offset += titleLength;
-
-          const executeAfter = new DataView(data.buffer, data.byteOffset + offset, 8).getBigInt64(0, true);
-          offset += 8;
-
-          const executed = data[offset] !== 0;
-          offset += 1;
-
-          const cancelled = data[offset] !== 0;
-          offset += 1;
-
-          const createdAt = new DataView(data.buffer, data.byteOffset + offset, 8).getBigInt64(0, true);
-          offset += 8;
-
-          // Only include active (not executed, not cancelled) requests
-          if (!executed && !cancelled) {
-            requests.push({
-              requestId: Array.from(requestId),
-              address: address.toString(),
-              title,
-              executeAfter: Number(executeAfter),
-              executed,
-              cancelled,
-              createdAt: Number(createdAt)
-            });
-          }
-        } catch (addressError) {
-          console.error(`❌ [Withdrawal Destinations] Failed to parse address for request ${i}:`, addressError);
-          console.log(`📭 Invalid address bytes, stopping parsing at request ${i}`);
-          break;
-        }
-      }
-
-      console.log(`📋 Found ${requests.length} pending withdrawal destination requests`);
-      return requests;
-    } catch (error) {
-      console.error('❌ Error fetching withdrawal destination requests:', error);
-      return [];
-    }
-  }
-
-  /**
-   * Request a withdrawal bypass for amounts exceeding spending limits
-   * @param {number} amount - Amount to withdraw
-   * @param {string} tokenAddress - Token address (use System Program ID for SOL)
-   * @param {string} bypassingPeriod - Which spending period this bypasses
-   * @param {string} destination - Destination address
-   * @returns {string} Transaction hash
-   */
-  async requestWithdrawalBypass(amount, tokenAddress, bypassingPeriod, destination) {
-    if (!this.wallet?.publicKey) {
-      throw new Error('Wallet not connected');
-    }
-
-    const userPubkey = this.wallet.publicKey;
-    const [savingsAccount] = await this.getSavingsAccountPDA(userPubkey);
-
-    // Convert amount to appropriate units based on token type
-    const amountBigInt = this.toSmallestUnit(amount, tokenAddress);
-    const tokenMintPubkey = new PublicKey(tokenAddress);
-    const destinationPubkey = new PublicKey(destination);
-
-    // Create instruction data
-    const discriminator = Buffer.from(this._generateDiscriminator('RequestWithdrawalBypass'));
-
-    // Encode amount (u64)
-    const amountBuffer = Buffer.alloc(8);
-    amountBuffer.writeBigUInt64LE(amountBigInt, 0);
-
-    // Encode token_mint (Pubkey)
-    const tokenMintBytes = tokenMintPubkey.toBuffer();
-
-    // Encode bypassing_period string
-    const periodBytes = Buffer.from(bypassingPeriod, 'utf8');
-    const periodLength = Buffer.alloc(4);
-    periodLength.writeUInt32LE(periodBytes.length, 0);
-
-    // Encode destination (Pubkey)
-    const destinationBytes = destinationPubkey.toBuffer();
-
-    const data = Buffer.concat([discriminator, amountBuffer, tokenMintBytes, periodLength, periodBytes, destinationBytes]);
-
-    const instruction = new TransactionInstruction({
-      keys: [
-        { pubkey: savingsAccount, isSigner: false, isWritable: true },
-        { pubkey: userPubkey, isSigner: true, isWritable: true }
-      ],
-      programId: this.PROGRAM_ID,
-      data
-    });
-
-    // Check if savings account exists, if not initialize it first
-    const savingsAccountInfo = await this.connection.getAccountInfo(savingsAccount);
-    const transaction = new Transaction();
-
-    if (!savingsAccountInfo) {
-      console.log('Savings account not found, adding initialize instruction...');
-      const initInstruction = await this.createInitializeInstruction(userPubkey);
-      transaction.add(initInstruction);
-    }
-
-    transaction.add(instruction);
-    const txHash = await this._sendTransaction(transaction);
-
-    console.log(`✅ Requested withdrawal bypass: ${amount} tokens for ${bypassingPeriod} (tx: ${txHash})`);
-    return txHash;
-  }
-
-  /**
-   * Get the savings account balance for a specific SPL token
-   * @param {PublicKey} tokenMint - The token mint to check
-   * @param {PublicKey} userAddress - User's public key
-   * @returns {BigInt} The token balance in the savings account
-   */
-  async getSavingsTokenBalance(tokenMint, userAddress = null) {
-    const targetUser = userAddress || this.wallet?.publicKey;
-    if (!targetUser) {
-      throw new Error('No user address provided and wallet not connected');
-    }
-
-    try {
-      const [savingsAccount] = await this.getSavingsAccountPDA(targetUser);
-      const accountInfo = await this.connection.getAccountInfo(savingsAccount);
-
-      if (!accountInfo) {
-        console.log('📭 No savings account found, balance is 0');
-        return BigInt(0);
-      }
-
-      const data = accountInfo.data;
-      if (data.length < 16) {
-        console.log('📭 Account data too small, balance is 0');
-        return BigInt(0);
-      }
-
-      // Parse the savings account structure to find SPL token balances
-      let offset = 8; // Skip discriminator
-
-      // Skip SOL balance (8 bytes)
-      offset += 8;
-
-      // Read spl_balances vector
-      const splBalancesLength = new DataView(data.buffer, data.byteOffset + offset, 4).getUint32(0, true);
-      offset += 4;
-
-      console.log(`🔍 Found ${splBalancesLength} SPL token entries in savings account`);
-
-      // Look for the specific token mint
-      for (let i = 0; i < splBalancesLength; i++) {
-        if (offset + 40 > data.length) break; // Each entry is 32 bytes (mint) + 8 bytes (balance)
-
-        const mintBytes = data.slice(offset, offset + 32);
-        const mint = new PublicKey(mintBytes);
-        offset += 32;
-
-        const balance = new DataView(data.buffer, data.byteOffset + offset, 8).getBigUint64(0, true);
-        offset += 8;
-
-        console.log(`🪙 Token ${mint.toString()}: ${balance.toString()}`);
-
-        if (mint.equals(tokenMint)) {
-          console.log(`✅ Found matching token balance: ${balance.toString()}`);
-          return balance;
-        }
-      }
-
-      console.log(`❌ Token ${tokenMint.toString()} not found in savings account`);
-      return BigInt(0);
-
-    } catch (error) {
-      console.error('❌ Error fetching savings token balance:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Execute a withdrawal bypass request after timelock period
-   * @param {Array} requestId - Request ID as byte array
-   * @returns {string} Transaction hash
-   */
-  async executeWithdrawalBypass(requestId) {
-    if (!this.wallet?.publicKey) {
-      throw new Error('Wallet not connected');
-    }
-
-    // First, fetch the bypass request to determine token type
-    console.log('🔍 Fetching bypass request data to determine token type...');
-    const bypassRequests = await this.fetchPendingBypassRequests();
-    const matchingRequest = bypassRequests.find(req =>
-      JSON.stringify(req.requestId) === JSON.stringify(requestId)
-    );
-
-    if (!matchingRequest) {
-      throw new Error('Bypass request not found or no longer pending');
-    }
-
-    // Check if this is a SOL or SPL token withdrawal
-    const isSOL = matchingRequest.tokenMint === SystemProgram.programId.toString();
-    console.log(`🪙 Token type: ${isSOL ? 'SOL' : 'SPL Token'} (${matchingRequest.tokenMint})`);
-
-    // Route to the appropriate execution method
-    if (isSOL) {
-      return await this.executeSOLWithdrawalBypass(requestId, matchingRequest);
-    } else {
-      return await this.executeSplWithdrawalBypass(requestId, matchingRequest);
-    }
-  }
-
-  /**
-   * Execute a SOL withdrawal bypass request
-   * @param {Array} requestId - Request ID as byte array
-   * @param {Object} requestData - The bypass request data
-   * @returns {string} Transaction hash
-   */
-  async executeSOLWithdrawalBypass(requestId, requestData) {
-    const userPubkey = this.wallet.publicKey;
-    const [savingsAccount] = await this.getSavingsAccountPDA(userPubkey);
-
-    // Create instruction data
-    const discriminator = Buffer.from(this._generateDiscriminator('ExecuteWithdrawalBypass'));
-    const requestIdBuffer = Buffer.from(requestId);
-
-    const data = Buffer.concat([discriminator, requestIdBuffer]);
-
-    // For SOL withdrawal, we need the destination as an account
-    const destinationPubkey = new PublicKey(requestData.destination);
-    console.log(`🏠 SOL withdrawal destination: ${destinationPubkey.toString()}`);
-
-    const instruction = new TransactionInstruction({
-      keys: [
-        { pubkey: savingsAccount, isSigner: false, isWritable: true },
-        { pubkey: userPubkey, isSigner: true, isWritable: true },
-        { pubkey: destinationPubkey, isSigner: false, isWritable: true }, // actual destination
-        { pubkey: SystemProgram.programId, isSigner: false, isWritable: false }
-      ],
-      programId: this.PROGRAM_ID,
-      data
-    });
-
-    const transaction = new Transaction().add(instruction);
-    const txHash = await this._sendTransaction(transaction, { requestId });
-
-    // Wait for transaction confirmation to ensure blockchain state is updated
-    console.log('⏳ Waiting for bypass execution transaction confirmation...');
-    await this.connection.confirmTransaction(txHash, 'confirmed');
-    console.log('✅ Bypass execution transaction confirmed successfully');
-
-    console.log(`✅ Executed withdrawal bypass (tx: ${txHash})`);
-    return txHash;
-  }
-
-  /**
-   * Execute an SPL token withdrawal bypass request
-   * @param {Array} requestId - Request ID as byte array
-   * @param {Object} requestData - The bypass request data
-   * @returns {string} Transaction hash
-   */
-  async executeSplWithdrawalBypass(requestId, requestData) {
-    const userPubkey = this.wallet.publicKey;
-    const [savingsAccount] = await this.getSavingsAccountPDA(userPubkey);
-
-    // Get token mint from request data
-    const tokenMint = new PublicKey(requestData.tokenMint);
-    console.log(`🪙 Executing SPL bypass for token: ${tokenMint.toString()}`);
-
-    // Debug: Show withdrawal details
-    const withdrawalAmount = BigInt(requestData.amount);
-    console.log(`🎯 Requested withdrawal amount: ${withdrawalAmount.toString()} (raw)`);
-    const humanReadableAmount = this.fromSmallestUnit(withdrawalAmount, tokenMint);
-    console.log(`🎯 Requested withdrawal amount: ${humanReadableAmount} tokens (${this.getTokenDecimals(tokenMint)} decimals)`);
-
-    // Debug: Get actual savings balance for this token
-    try {
-      const actualBalance = await this.getSavingsTokenBalance(tokenMint, userPubkey);
-      console.log(`🏦 Actual savings balance: ${actualBalance.toString()} (raw)`);
-      const humanReadableBalance = this.fromSmallestUnit(actualBalance, tokenMint);
-      console.log(`🏦 Actual savings balance: ${humanReadableBalance} tokens (${this.getTokenDecimals(tokenMint)} decimals)`);
-      console.log(`⚖️ Balance check: ${actualBalance.toString()} >= ${withdrawalAmount.toString()} = ${actualBalance >= withdrawalAmount}`);
-
-      if (actualBalance < withdrawalAmount) {
-        const actualTokens = this.fromSmallestUnit(actualBalance, tokenMint);
-        const requestedTokens = this.fromSmallestUnit(withdrawalAmount, tokenMint);
-        throw new Error(`Insufficient savings balance. Available: ${actualTokens} tokens, Requested: ${requestedTokens} tokens. Please deposit more tokens into your savings account.`);
-      }
-    } catch (balanceError) {
-      console.warn(`⚠️ Could not fetch balance for pre-flight check: ${balanceError.message}`);
-    }
-
-    // Get user's token account for this mint
-    const userTokenAccount = await getAssociatedTokenAddress(tokenMint, userPubkey);
-
-    // Get destination token account (for now, use same as user - could be different in practice)
-    const destinationPubkey = new PublicKey(requestData.destination);
-    const destinationTokenAccount = await getAssociatedTokenAddress(tokenMint, destinationPubkey);
-
-    // Create instruction data
-    const discriminator = Buffer.from(this._generateDiscriminator('ExecuteSplWithdrawalBypass'));
-    const requestIdBuffer = Buffer.from(requestId);
-    const data = Buffer.concat([discriminator, requestIdBuffer]);
-
-    // Create SPL token withdrawal bypass instruction
-    const instruction = new TransactionInstruction({
-      keys: [
-        { pubkey: savingsAccount, isSigner: false, isWritable: true },
-        { pubkey: userPubkey, isSigner: true, isWritable: true },
-        { pubkey: tokenMint, isSigner: false, isWritable: false },
-        { pubkey: userTokenAccount, isSigner: false, isWritable: true },
-        { pubkey: destinationTokenAccount, isSigner: false, isWritable: true },
-        { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false }
-      ],
-      programId: this.PROGRAM_ID,
-      data
-    });
-
-    const transaction = new Transaction().add(instruction);
-    const txHash = await this._sendTransaction(transaction, { requestId });
-
-    // Wait for transaction confirmation to ensure blockchain state is updated
-    console.log('⏳ Waiting for SPL bypass execution transaction confirmation...');
-    await this.connection.confirmTransaction(txHash, 'confirmed');
-    console.log('✅ SPL bypass execution transaction confirmed successfully');
-
-    console.log(`✅ Executed SPL withdrawal bypass (tx: ${txHash})`);
-    return txHash;
-  }
-
-  /**
-   * Cancel a withdrawal bypass request
-   * @param {Array} requestId - Request ID as byte array
-   * @returns {string} Transaction hash
-   */
-  async cancelWithdrawalBypass(requestId) {
-    if (!this.wallet?.publicKey) {
-      throw new Error('Wallet not connected');
-    }
-
-    const userPubkey = this.wallet.publicKey;
-    const [savingsAccount] = await this.getSavingsAccountPDA(userPubkey);
-
-    // Create instruction data
-    const discriminator = Buffer.from(this._generateDiscriminator('CancelWithdrawalBypass'));
-    const requestIdBuffer = Buffer.from(requestId);
-
-    const data = Buffer.concat([discriminator, requestIdBuffer]);
-
-    const instruction = new TransactionInstruction({
-      keys: [
-        { pubkey: savingsAccount, isSigner: false, isWritable: true },
-        { pubkey: userPubkey, isSigner: true, isWritable: true }
-      ],
-      programId: this.PROGRAM_ID,
-      data
-    });
-
-    const transaction = new Transaction().add(instruction);
-    const txHash = await this._sendTransaction(transaction, { requestId });
-
-    console.log(`✅ Cancelled withdrawal bypass (tx: ${txHash})`);
-    return txHash;
-  }
-
-  // ========== TRANSACTION HISTORY ==========
-
-  async getTransactionHistory() {
-    if (!this.wallet?.publicKey) {
-      throw new Error('Wallet not connected');
-    }
-
-    const userPubkey = this.wallet.publicKey;
-    const [savingsAccount] = await PublicKey.findProgramAddress(
-      [Buffer.from("savings"), userPubkey.toBuffer()],
-      this.PROGRAM_ID
-    );
-
-    const SOLANA_EVENT_TYPES = {
-      'DepositSol': { label: 'Deposit', icon: '📥', hasAmount: true, isSol: true },
-      'DepositSolSelf': { label: 'Deposit', icon: '📥', hasAmount: true, isSol: true },
-      'DepositSpl': { label: 'Deposit', icon: '📥', hasAmount: true, isSol: false },
-      'DepositSplSelf': { label: 'Deposit', icon: '📥', hasAmount: true, isSol: false },
-      'WithdrawSol': { label: 'Withdrawal', icon: '📤', hasAmount: true, isSol: true },
-      'WithdrawSolToDestination': { label: 'Withdrawal', icon: '📤', hasAmount: true, isSol: true },
-      'WithdrawSolWithLimits': { label: 'Withdrawal', icon: '📤', hasAmount: true, isSol: true },
-      'WithdrawSpl': { label: 'Withdrawal', icon: '📤', hasAmount: true, isSol: false },
-      'WithdrawSplToDestination': { label: 'Withdrawal', icon: '📤', hasAmount: true, isSol: false },
-      'WithdrawSplWithLimits': { label: 'Withdrawal', icon: '📤', hasAmount: true, isSol: false },
-      'CommitInitialSetup': { label: 'Setup Committed', icon: '🔒', hasAmount: false, isSol: false },
-      'SetCommonPeriodLimits': { label: 'Limits Set', icon: '⏱️', hasAmount: false, isSol: false },
-      'AddWithdrawalDestination': { label: 'Address Added', icon: '📋', hasAmount: false, isSol: false },
-      'RemoveWithdrawalDestination': { label: 'Address Removed', icon: '🗑️', hasAmount: false, isSol: false },
-      'ExecuteWithdrawalBypass': { label: 'Bypass Withdrawal', icon: '⚡', hasAmount: true, isSol: true },
-      'ExecuteSplWithdrawalBypass': { label: 'Bypass Withdrawal', icon: '⚡', hasAmount: true, isSol: false },
-      'WithdrawSolWithPenalty': { label: 'Penalty Withdrawal', icon: '🔴', hasAmount: true, isSol: true },
-      'WithdrawSplWithPenalty': { label: 'Penalty Withdrawal', icon: '🔴', hasAmount: true, isSol: false },
-      'ProposeLimitChange': { label: 'Limit Proposal', icon: '📝', hasAmount: false, isSol: false },
-      'ExecuteLimitProposal': { label: 'Limit Changed', icon: '✅', hasAmount: false, isSol: false },
-    };
-
-    const discMap = {};
-    for (const methodName of Object.keys(SOLANA_EVENT_TYPES)) {
-      const disc = this._generateDiscriminator(methodName);
-      discMap[JSON.stringify(disc)] = methodName;
-    }
-
-    const tokensByMint = {};
-    if (this.networkConfig?.tokens) {
-      for (const [symbol, token] of Object.entries(this.networkConfig.tokens)) {
-        if (token.address) {
-          tokensByMint[token.address] = { symbol, decimals: token.decimals || 6 };
-        }
-      }
-    }
-
-    try {
-      const signatures = await this.connection.getSignaturesForAddress(
-        savingsAccount,
-        { limit: 50 },
-        'confirmed'
-      );
-
-      if (!signatures || signatures.length === 0) {
-        return [];
-      }
-
-      const transactions = await this.connection.getParsedTransactions(
-        signatures.map(s => s.signature),
-        { maxSupportedTransactionVersion: 0 }
-      );
-
-      const history = [];
-      for (let i = 0; i < signatures.length; i++) {
-        const sig = signatures[i];
-        const tx = transactions[i];
-        if (!tx || sig.err) continue;
-
-        let methodName = null;
-        let decoded = null;
-        let ixAccounts = null;
-        const instructions = tx.transaction?.message?.instructions || [];
-        for (const ix of instructions) {
-          if (ix.programId?.toString() === this.PROGRAM_ID.toString() && ix.data) {
-            try {
-              decoded = Buffer.from(bs58.decode(ix.data));
-              const disc = Array.from(decoded.slice(0, 8));
-              const key = JSON.stringify(disc);
-              if (discMap[key]) {
-                methodName = discMap[key];
-                ixAccounts = ix.accounts;
-                break;
-              }
-            } catch {
-              // Skip unparseable instructions
-            }
-          }
-        }
-
-        if (!methodName) continue;
-
-        const eventType = SOLANA_EVENT_TYPES[methodName];
-        if (!eventType) continue;
-
-        let amount = null;
-        let token = null;
-        let decimals = 6;
-
-        if (eventType.hasAmount && decoded && decoded.length >= 16) {
-          const rawAmount = decoded.readBigUInt64LE(8);
-          if (eventType.isSol) {
-            token = 'SOL';
-            decimals = 9;
-          } else if (ixAccounts && ixAccounts.length > 0) {
-            for (const acc of ixAccounts) {
-              const accStr = acc?.toString();
-              if (accStr && tokensByMint[accStr]) {
-                token = tokensByMint[accStr].symbol;
-                decimals = tokensByMint[accStr].decimals;
-                break;
-              }
-            }
-            if (!token) token = 'SPL';
-          }
-          amount = Number(rawAmount) / Math.pow(10, decimals);
-        }
-
-        history.push({
-          txHash: sig.signature,
-          blockNumber: sig.slot,
-          eventName: methodName,
-          label: eventType.label,
-          icon: eventType.icon,
-          timestamp: sig.blockTime || null,
-          token,
-          amount,
-          decimals,
-        });
-      }
-
-      return history;
-    } catch (error) {
-      console.error('Error fetching Solana transaction history:', error);
-      return [];
-    }
-  }
-
-  // ========== MONETIZATION METHODS ==========
-
-  /**
-   * Check if user's permanent address is activated
-   * @returns {Promise<boolean>} True if activated, false otherwise
-   */
-  async isPermanentAddressActivated() {
-    try {
-      const userPubkey = new PublicKey(this.userAddress);
-      const [savingsAccount] = PublicKey.findProgramAddressSync(
-        [Buffer.from("savings"), userPubkey.toBuffer()],
-        this.PROGRAM_ID
-      );
-
-      const accountInfo = await this.connection.getAccountInfo(savingsAccount);
-      if (!accountInfo) {
-        return false; // Account doesn't exist, so not activated
-      }
-
-      // Parse the account data to check permanent_address_activated field
-      // The field is at a specific offset in the account data
-      const accountData = accountInfo.data;
-
-      // Skip discriminator (8 bytes) + owner (32 bytes) + sol_balance (8 bytes) + spl_balances (variable)
-      // + bump (1 byte) + created_at (8 bytes) + updated_at (8 bytes) + withdrawal_destinations (variable)
-      // + pending_withdrawal_destination_requests (variable) + pending_bypass_requests (variable)
-      // Then permanent_address_activated is a boolean (1 byte)
-
-      // For now, let's try to find the boolean at a reasonable offset
-      // This is a simplified approach - in production you'd want proper account parsing
-      if (accountData.length < 100) {
-        return false;
-      }
-
-      // Try to find the activation flag (this is a simplified check)
-      // The exact offset would depend on the serialized account structure
-      for (let i = 50; i < Math.min(accountData.length - 1, 200); i++) {
-        if (accountData[i] === 1) { // Boolean true value
-          // Additional validation could be added here
-          return true;
-        }
-      }
-
-      return false;
-    } catch (error) {
-      console.error('Error checking permanent address activation:', error);
-      return false;
-    }
-  }
-
-  /**
-   * Activate permanent address with $5 USD equivalent SOL payment
-   * @returns {Promise<string>} Transaction hash
-   */
-  async activatePermanentAddressWithPayment() {
-    try {
-      const userPubkey = new PublicKey(this.userAddress);
-
-      // Derive accounts
-      const [savingsAccount] = PublicKey.findProgramAddressSync(
-        [Buffer.from("savings"), userPubkey.toBuffer()],
-        this.PROGRAM_ID
-      );
-
-      const [programConfig] = PublicKey.findProgramAddressSync(
-        [Buffer.from("program_config")],
-        this.PROGRAM_ID
-      );
-
-      // Get treasury address from environment configuration
-      // This must match the address used during program initialization
-      const treasuryAddress = this.getTreasuryAddress();
-
-      // Build instruction data
-      const discriminator = this._generateDiscriminator('ActivatePermanentAddressWithPayment');
-      const data = Buffer.from(discriminator);
-
-      const instruction = new TransactionInstruction({
-        keys: [
-          { pubkey: savingsAccount, isSigner: false, isWritable: true },
-          { pubkey: programConfig, isSigner: false, isWritable: false },
-          { pubkey: userPubkey, isSigner: true, isWritable: true },
-          { pubkey: treasuryAddress, isSigner: false, isWritable: true },
-          { pubkey: SystemProgram.programId, isSigner: false, isWritable: false }
-        ],
-        programId: this.PROGRAM_ID,
-        data
-      });
-
-      const transaction = new Transaction().add(instruction);
-      const txHash = await this._sendTransaction(transaction);
-
-      console.log(`✅ Permanent address activated with payment (tx: ${txHash})`);
-      return txHash;
-    } catch (error) {
-      console.error('Error activating permanent address:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Get the current activation fee in lamports
-   * @returns {Promise<number>} Fee amount in lamports
-   */
-  async getActivationFee() {
-    try {
-      // For now, return a fixed fee equivalent to ~$5 USD (0.1 SOL)
-      // In production, this would be fetched from the program config
-      return 0.1 * LAMPORTS_PER_SOL; // 0.1 SOL
-    } catch (error) {
-      console.error('Error getting activation fee:', error);
-      // Return default fee if unable to fetch
-      return 0.1 * LAMPORTS_PER_SOL;
-    }
-  }
-
-  /**
-   * Check if user has sufficient balance for activation fee
-   * @returns {Promise<boolean>} True if user has sufficient balance
-   */
-  async hasSufficientBalanceForActivation() {
-    try {
-      const userPubkey = new PublicKey(this.userAddress);
-      const balance = await this.connection.getBalance(userPubkey);
-      const fee = await this.getActivationFee();
-
-      // Add some buffer for transaction fees
-      const requiredBalance = fee + (0.01 * LAMPORTS_PER_SOL); // Fee + 0.01 SOL buffer
-
-      return balance >= requiredBalance;
-    } catch (error) {
-      console.error('Error checking balance for activation:', error);
-      return false;
-    }
   }
 }

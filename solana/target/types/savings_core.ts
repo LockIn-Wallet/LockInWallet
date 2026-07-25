@@ -14,153 +14,7 @@ export type SavingsCore = {
   },
   "instructions": [
     {
-      "name": "activatePermanentAddressWithPayment",
-      "docs": [
-        "Activate permanent address with $5 USD equivalent SOL payment"
-      ],
-      "discriminator": [
-        69,
-        22,
-        97,
-        109,
-        112,
-        159,
-        18,
-        60
-      ],
-      "accounts": [
-        {
-          "name": "savingsAccount",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  115,
-                  97,
-                  118,
-                  105,
-                  110,
-                  103,
-                  115
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "user"
-              }
-            ]
-          }
-        },
-        {
-          "name": "programConfig",
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  112,
-                  114,
-                  111,
-                  103,
-                  114,
-                  97,
-                  109,
-                  95,
-                  99,
-                  111,
-                  110,
-                  102,
-                  105,
-                  103
-                ]
-              }
-            ]
-          }
-        },
-        {
-          "name": "user",
-          "writable": true,
-          "signer": true
-        },
-        {
-          "name": "treasuryAddress",
-          "writable": true
-        },
-        {
-          "name": "systemProgram",
-          "address": "11111111111111111111111111111111"
-        }
-      ],
-      "args": []
-    },
-    {
-      "name": "addTimePeriodLimit",
-      "docs": [
-        "Add or update a time period limit"
-      ],
-      "discriminator": [
-        241,
-        217,
-        123,
-        93,
-        14,
-        188,
-        236,
-        51
-      ],
-      "accounts": [
-        {
-          "name": "savingsAccount",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  115,
-                  97,
-                  118,
-                  105,
-                  110,
-                  103,
-                  115
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "user"
-              }
-            ]
-          }
-        },
-        {
-          "name": "user",
-          "writable": true,
-          "signer": true
-        }
-      ],
-      "args": [
-        {
-          "name": "name",
-          "type": "string"
-        },
-        {
-          "name": "limit",
-          "type": "u64"
-        },
-        {
-          "name": "duration",
-          "type": "u64"
-        }
-      ]
-    },
-    {
       "name": "addWithdrawalDestination",
-      "docs": [
-        "Add a withdrawal destination"
-      ],
       "discriminator": [
         22,
         253,
@@ -173,40 +27,100 @@ export type SavingsCore = {
       ],
       "accounts": [
         {
-          "name": "savingsAccount",
+          "name": "vault",
+          "relations": [
+            "vaultMember"
+          ]
+        },
+        {
+          "name": "vaultMember",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116,
+                  95,
+                  109,
+                  101,
+                  109,
+                  98,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault"
+              },
+              {
+                "kind": "account",
+                "path": "member"
+              }
+            ]
+          }
+        },
+        {
+          "name": "withdrawalDest",
           "writable": true,
           "pda": {
             "seeds": [
               {
                 "kind": "const",
                 "value": [
-                  115,
-                  97,
-                  118,
+                  119,
                   105,
-                  110,
-                  103,
-                  115
+                  116,
+                  104,
+                  100,
+                  114,
+                  97,
+                  119,
+                  97,
+                  108,
+                  95,
+                  100,
+                  101,
+                  115,
+                  116
                 ]
               },
               {
                 "kind": "account",
-                "path": "user"
+                "path": "vault"
+              },
+              {
+                "kind": "account",
+                "path": "member"
+              },
+              {
+                "kind": "account",
+                "path": "destination"
               }
             ]
           }
         },
         {
-          "name": "user",
+          "name": "destination"
+        },
+        {
+          "name": "member",
           "writable": true,
-          "signer": true
+          "signer": true,
+          "relations": [
+            "vaultMember"
+          ]
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
         }
       ],
       "args": [
-        {
-          "name": "address",
-          "type": "pubkey"
-        },
         {
           "name": "title",
           "type": "string"
@@ -214,232 +128,940 @@ export type SavingsCore = {
       ]
     },
     {
-      "name": "cancelLimitProposal",
-      "docs": [
-        "Cancel a pending proposal"
-      ],
+      "name": "cancelBypass",
       "discriminator": [
-        201,
-        126,
-        142,
-        5,
-        126,
-        97,
         232,
-        133
-      ],
-      "accounts": [
-        {
-          "name": "savingsAccount",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  115,
-                  97,
-                  118,
-                  105,
-                  110,
-                  103,
-                  115
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "user"
-              }
-            ]
-          }
-        },
-        {
-          "name": "user",
-          "writable": true,
-          "signer": true
-        }
-      ],
-      "args": [
-        {
-          "name": "proposalId",
-          "type": {
-            "array": [
-              "u8",
-              32
-            ]
-          }
-        }
-      ]
-    },
-    {
-      "name": "cancelWithdrawalBypass",
-      "docs": [
-        "Cancel withdrawal bypass request"
-      ],
-      "discriminator": [
         67,
-        241,
-        187,
-        146,
-        79,
-        62,
-        136,
-        181
+        164,
+        11,
+        244,
+        194,
+        195,
+        237
       ],
       "accounts": [
         {
-          "name": "savingsAccount",
+          "name": "vault",
+          "relations": [
+            "vaultMember",
+            "bypassRequest"
+          ]
+        },
+        {
+          "name": "vaultMember",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116,
+                  95,
+                  109,
+                  101,
+                  109,
+                  98,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault"
+              },
+              {
+                "kind": "account",
+                "path": "member"
+              }
+            ]
+          }
+        },
+        {
+          "name": "bypassRequest",
           "writable": true,
           "pda": {
             "seeds": [
               {
                 "kind": "const",
                 "value": [
-                  115,
+                  98,
+                  121,
+                  112,
                   97,
-                  118,
-                  105,
-                  110,
-                  103,
-                  115
+                  115,
+                  115,
+                  95,
+                  114,
+                  101,
+                  113,
+                  117,
+                  101,
+                  115,
+                  116
                 ]
               },
               {
                 "kind": "account",
-                "path": "user"
+                "path": "vault"
+              },
+              {
+                "kind": "account",
+                "path": "member"
               }
             ]
           }
         },
         {
-          "name": "user",
+          "name": "member",
           "writable": true,
-          "signer": true
-        }
-      ],
-      "args": [
-        {
-          "name": "requestId",
-          "type": {
-            "array": [
-              "u8",
-              32
-            ]
-          }
-        }
-      ]
-    },
-    {
-      "name": "cancelWithdrawalDestinationRequest",
-      "docs": [
-        "Cancel a pending withdrawal destination request"
-      ],
-      "discriminator": [
-        233,
-        183,
-        160,
-        123,
-        7,
-        15,
-        61,
-        197
-      ],
-      "accounts": [
-        {
-          "name": "savingsAccount",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  115,
-                  97,
-                  118,
-                  105,
-                  110,
-                  103,
-                  115
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "user"
-              }
-            ]
-          }
-        },
-        {
-          "name": "user",
-          "writable": true,
-          "signer": true
-        }
-      ],
-      "args": [
-        {
-          "name": "requestId",
-          "type": {
-            "array": [
-              "u8",
-              32
-            ]
-          }
-        }
-      ]
-    },
-    {
-      "name": "commitInitialSetup",
-      "docs": [
-        "Commit initial setup"
-      ],
-      "discriminator": [
-        248,
-        193,
-        240,
-        26,
-        1,
-        132,
-        74,
-        226
-      ],
-      "accounts": [
-        {
-          "name": "savingsAccount",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  115,
-                  97,
-                  118,
-                  105,
-                  110,
-                  103,
-                  115
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "user"
-              }
-            ]
-          }
-        },
-        {
-          "name": "user",
-          "writable": true,
-          "signer": true
+          "signer": true,
+          "relations": [
+            "vaultMember",
+            "bypassRequest"
+          ]
         }
       ],
       "args": []
     },
     {
-      "name": "depositSol",
-      "docs": [
-        "Deposit SOL to the savings account (supports CPI)"
+      "name": "cancelDestinationRequest",
+      "discriminator": [
+        255,
+        245,
+        78,
+        237,
+        53,
+        195,
+        7,
+        238
       ],
+      "accounts": [
+        {
+          "name": "vault",
+          "relations": [
+            "vaultMember",
+            "pendingRequest"
+          ]
+        },
+        {
+          "name": "vaultMember",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116,
+                  95,
+                  109,
+                  101,
+                  109,
+                  98,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault"
+              },
+              {
+                "kind": "account",
+                "path": "member"
+              }
+            ]
+          }
+        },
+        {
+          "name": "pendingRequest",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  101,
+                  110,
+                  100,
+                  105,
+                  110,
+                  103,
+                  95,
+                  100,
+                  101,
+                  115,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault"
+              },
+              {
+                "kind": "account",
+                "path": "member"
+              },
+              {
+                "kind": "account",
+                "path": "destination"
+              }
+            ]
+          }
+        },
+        {
+          "name": "destination"
+        },
+        {
+          "name": "member",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "vaultMember",
+            "pendingRequest"
+          ]
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "cancelRuleChange",
+      "discriminator": [
+        91,
+        241,
+        197,
+        38,
+        185,
+        169,
+        36,
+        92
+      ],
+      "accounts": [
+        {
+          "name": "vault",
+          "relations": [
+            "proposal"
+          ]
+        },
+        {
+          "name": "proposal",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  117,
+                  108,
+                  101,
+                  95,
+                  112,
+                  114,
+                  111,
+                  112,
+                  111,
+                  115,
+                  97,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "creator",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "vault"
+          ]
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "claimPenaltyRewards",
+      "discriminator": [
+        51,
+        113,
+        194,
+        34,
+        228,
+        128,
+        172,
+        219
+      ],
+      "accounts": [
+        {
+          "name": "vault",
+          "writable": true,
+          "relations": [
+            "vaultMember"
+          ]
+        },
+        {
+          "name": "vaultMember",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116,
+                  95,
+                  109,
+                  101,
+                  109,
+                  98,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault"
+              },
+              {
+                "kind": "account",
+                "path": "member"
+              }
+            ]
+          }
+        },
+        {
+          "name": "member",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "vaultMember"
+          ]
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "claimSplPenaltyRewards",
+      "discriminator": [
+        11,
+        61,
+        48,
+        49,
+        152,
+        57,
+        163,
+        239
+      ],
+      "accounts": [
+        {
+          "name": "vault",
+          "writable": true,
+          "relations": [
+            "vaultMember"
+          ]
+        },
+        {
+          "name": "vaultMember",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116,
+                  95,
+                  109,
+                  101,
+                  109,
+                  98,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault"
+              },
+              {
+                "kind": "account",
+                "path": "member"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vaultTokenAccount",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "vault"
+              },
+              {
+                "kind": "const",
+                "value": [
+                  6,
+                  221,
+                  246,
+                  225,
+                  215,
+                  101,
+                  161,
+                  147,
+                  217,
+                  203,
+                  225,
+                  70,
+                  206,
+                  235,
+                  121,
+                  172,
+                  28,
+                  180,
+                  133,
+                  237,
+                  95,
+                  91,
+                  55,
+                  145,
+                  58,
+                  140,
+                  245,
+                  133,
+                  126,
+                  255,
+                  0,
+                  169
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "tokenMint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "memberTokenAccount",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "member"
+              },
+              {
+                "kind": "const",
+                "value": [
+                  6,
+                  221,
+                  246,
+                  225,
+                  215,
+                  101,
+                  161,
+                  147,
+                  217,
+                  203,
+                  225,
+                  70,
+                  206,
+                  235,
+                  121,
+                  172,
+                  28,
+                  180,
+                  133,
+                  237,
+                  95,
+                  91,
+                  55,
+                  145,
+                  58,
+                  140,
+                  245,
+                  133,
+                  126,
+                  255,
+                  0,
+                  169
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "tokenMint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "tokenMint"
+        },
+        {
+          "name": "member",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "vaultMember"
+          ]
+        },
+        {
+          "name": "tokenProgram",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "createSplVault",
+      "discriminator": [
+        70,
+        237,
+        30,
+        3,
+        24,
+        231,
+        70,
+        67
+      ],
+      "accounts": [
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "creator"
+              },
+              {
+                "kind": "arg",
+                "path": "vaultNonce"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vaultMember",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116,
+                  95,
+                  109,
+                  101,
+                  109,
+                  98,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault"
+              },
+              {
+                "kind": "account",
+                "path": "creator"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vaultTokenAccount",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "vault"
+              },
+              {
+                "kind": "const",
+                "value": [
+                  6,
+                  221,
+                  246,
+                  225,
+                  215,
+                  101,
+                  161,
+                  147,
+                  217,
+                  203,
+                  225,
+                  70,
+                  206,
+                  235,
+                  121,
+                  172,
+                  28,
+                  180,
+                  133,
+                  237,
+                  95,
+                  91,
+                  55,
+                  145,
+                  58,
+                  140,
+                  245,
+                  133,
+                  126,
+                  255,
+                  0,
+                  169
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "tokenMint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "tokenMint"
+        },
+        {
+          "name": "creator",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "tokenProgram",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "associatedTokenProgram",
+          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
+        }
+      ],
+      "args": [
+        {
+          "name": "name",
+          "type": "string"
+        },
+        {
+          "name": "vaultNonce",
+          "type": "u64"
+        },
+        {
+          "name": "description",
+          "type": "string"
+        },
+        {
+          "name": "vaultType",
+          "type": {
+            "defined": {
+              "name": "vaultType"
+            }
+          }
+        },
+        {
+          "name": "dailyLimit",
+          "type": "u64"
+        },
+        {
+          "name": "weeklyLimit",
+          "type": "u64"
+        },
+        {
+          "name": "monthlyLimit",
+          "type": "u64"
+        },
+        {
+          "name": "penaltyRateBps",
+          "type": "u16"
+        },
+        {
+          "name": "limitsArePercentage",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "createVault",
+      "discriminator": [
+        29,
+        237,
+        247,
+        208,
+        193,
+        82,
+        54,
+        135
+      ],
+      "accounts": [
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "creator"
+              },
+              {
+                "kind": "arg",
+                "path": "vaultNonce"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vaultMember",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116,
+                  95,
+                  109,
+                  101,
+                  109,
+                  98,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault"
+              },
+              {
+                "kind": "account",
+                "path": "creator"
+              }
+            ]
+          }
+        },
+        {
+          "name": "creator",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "name",
+          "type": "string"
+        },
+        {
+          "name": "vaultNonce",
+          "type": "u64"
+        },
+        {
+          "name": "description",
+          "type": "string"
+        },
+        {
+          "name": "vaultType",
+          "type": {
+            "defined": {
+              "name": "vaultType"
+            }
+          }
+        },
+        {
+          "name": "dailyLimit",
+          "type": "u64"
+        },
+        {
+          "name": "weeklyLimit",
+          "type": "u64"
+        },
+        {
+          "name": "monthlyLimit",
+          "type": "u64"
+        },
+        {
+          "name": "penaltyRateBps",
+          "type": "u16"
+        },
+        {
+          "name": "limitsArePercentage",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "depositSol",
       "discriminator": [
         108,
         81,
@@ -452,99 +1074,52 @@ export type SavingsCore = {
       ],
       "accounts": [
         {
-          "name": "savingsAccount",
+          "name": "vault",
           "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  115,
-                  97,
-                  118,
-                  105,
-                  110,
-                  103,
-                  115
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "beneficiary"
-              }
-            ]
-          }
-        },
-        {
-          "name": "beneficiary",
-          "docs": [
-            "The beneficiary whose savings account will be credited"
+          "relations": [
+            "vaultMember"
           ]
         },
         {
-          "name": "payer",
-          "docs": [
-            "The payer for account creation and transaction fees"
-          ],
-          "writable": true,
-          "signer": true
-        },
-        {
-          "name": "systemProgram",
-          "address": "11111111111111111111111111111111"
-        }
-      ],
-      "args": [
-        {
-          "name": "amount",
-          "type": "u64"
-        }
-      ]
-    },
-    {
-      "name": "depositSolSelf",
-      "docs": [
-        "Deposit SOL for self (backward compatibility)"
-      ],
-      "discriminator": [
-        253,
-        113,
-        121,
-        194,
-        75,
-        233,
-        114,
-        223
-      ],
-      "accounts": [
-        {
-          "name": "savingsAccount",
+          "name": "vaultMember",
           "writable": true,
           "pda": {
             "seeds": [
               {
                 "kind": "const",
                 "value": [
-                  115,
-                  97,
                   118,
-                  105,
-                  110,
-                  103,
-                  115
+                  97,
+                  117,
+                  108,
+                  116,
+                  95,
+                  109,
+                  101,
+                  109,
+                  98,
+                  101,
+                  114
                 ]
               },
               {
                 "kind": "account",
-                "path": "user"
+                "path": "vault"
+              },
+              {
+                "kind": "account",
+                "path": "member"
               }
             ]
           }
         },
         {
-          "name": "user",
+          "name": "member",
           "writable": true,
-          "signer": true
+          "signer": true,
+          "relations": [
+            "vaultMember"
+          ]
         },
         {
           "name": "systemProgram",
@@ -560,9 +1135,6 @@ export type SavingsCore = {
     },
     {
       "name": "depositSpl",
-      "docs": [
-        "Deposit SPL tokens to the savings account (supports CPI)"
-      ],
       "discriminator": [
         224,
         0,
@@ -575,61 +1147,53 @@ export type SavingsCore = {
       ],
       "accounts": [
         {
-          "name": "savingsAccount",
+          "name": "vault",
+          "writable": true,
+          "relations": [
+            "vaultMember"
+          ]
+        },
+        {
+          "name": "vaultMember",
           "writable": true,
           "pda": {
             "seeds": [
               {
                 "kind": "const",
                 "value": [
-                  115,
-                  97,
                   118,
-                  105,
-                  110,
-                  103,
-                  115
+                  97,
+                  117,
+                  108,
+                  116,
+                  95,
+                  109,
+                  101,
+                  109,
+                  98,
+                  101,
+                  114
                 ]
               },
               {
                 "kind": "account",
-                "path": "beneficiary"
+                "path": "vault"
+              },
+              {
+                "kind": "account",
+                "path": "member"
               }
             ]
           }
         },
         {
-          "name": "beneficiary",
-          "docs": [
-            "The beneficiary whose savings account will be credited"
-          ]
-        },
-        {
-          "name": "payer",
-          "docs": [
-            "The payer for account creation and transaction fees"
-          ],
-          "writable": true,
-          "signer": true
-        },
-        {
-          "name": "sourceTokenAccount",
-          "docs": [
-            "Source token account that holds the tokens to deposit"
-          ],
-          "writable": true
-        },
-        {
-          "name": "savingsTokenAccount",
-          "docs": [
-            "The savings account's token account for this mint"
-          ],
+          "name": "vaultTokenAccount",
           "writable": true,
           "pda": {
             "seeds": [
               {
                 "kind": "account",
-                "path": "savingsAccount"
+                "path": "vault"
               },
               {
                 "kind": "const",
@@ -670,7 +1234,7 @@ export type SavingsCore = {
               },
               {
                 "kind": "account",
-                "path": "mint"
+                "path": "tokenMint"
               }
             ],
             "program": {
@@ -713,94 +1277,13 @@ export type SavingsCore = {
           }
         },
         {
-          "name": "mint",
-          "docs": [
-            "The mint of the SPL token being deposited"
-          ]
-        },
-        {
-          "name": "tokenProgram",
-          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
-        },
-        {
-          "name": "associatedTokenProgram",
-          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
-        },
-        {
-          "name": "systemProgram",
-          "address": "11111111111111111111111111111111"
-        }
-      ],
-      "args": [
-        {
-          "name": "amount",
-          "type": "u64"
-        }
-      ]
-    },
-    {
-      "name": "depositSplSelf",
-      "docs": [
-        "Deposit SPL tokens for self (backward compatibility)"
-      ],
-      "discriminator": [
-        177,
-        32,
-        212,
-        139,
-        117,
-        61,
-        41,
-        95
-      ],
-      "accounts": [
-        {
-          "name": "savingsAccount",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  115,
-                  97,
-                  118,
-                  105,
-                  110,
-                  103,
-                  115
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "user"
-              }
-            ]
-          }
-        },
-        {
-          "name": "user",
-          "writable": true,
-          "signer": true
-        },
-        {
-          "name": "userTokenAccount",
-          "docs": [
-            "User's token account that holds the tokens to deposit"
-          ],
-          "writable": true
-        },
-        {
-          "name": "savingsTokenAccount",
-          "docs": [
-            "The savings account's token account for this mint"
-          ],
+          "name": "memberTokenAccount",
           "writable": true,
           "pda": {
             "seeds": [
               {
                 "kind": "account",
-                "path": "savingsAccount"
+                "path": "member"
               },
               {
                 "kind": "const",
@@ -841,7 +1324,7 @@ export type SavingsCore = {
               },
               {
                 "kind": "account",
-                "path": "mint"
+                "path": "tokenMint"
               }
             ],
             "program": {
@@ -884,22 +1367,19 @@ export type SavingsCore = {
           }
         },
         {
-          "name": "mint",
-          "docs": [
-            "The mint of the SPL token being deposited"
+          "name": "tokenMint"
+        },
+        {
+          "name": "member",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "vaultMember"
           ]
         },
         {
           "name": "tokenProgram",
           "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
-        },
-        {
-          "name": "associatedTokenProgram",
-          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
-        },
-        {
-          "name": "systemProgram",
-          "address": "11111111111111111111111111111111"
         }
       ],
       "args": [
@@ -910,808 +1390,609 @@ export type SavingsCore = {
       ]
     },
     {
-      "name": "executeLimitProposal",
-      "docs": [
-        "Execute a pending proposal"
-      ],
+      "name": "executeBypassSol",
       "discriminator": [
-        77,
-        88,
-        235,
-        59,
-        216,
-        111,
-        1,
-        133
-      ],
-      "accounts": [
-        {
-          "name": "savingsAccount",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  115,
-                  97,
-                  118,
-                  105,
-                  110,
-                  103,
-                  115
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "user"
-              }
-            ]
-          }
-        },
-        {
-          "name": "user",
-          "writable": true,
-          "signer": true
-        }
-      ],
-      "args": [
-        {
-          "name": "proposalId",
-          "type": {
-            "array": [
-              "u8",
-              32
-            ]
-          }
-        }
-      ]
-    },
-    {
-      "name": "executeSplWithdrawalBypass",
-      "docs": [
-        "Execute SPL withdrawal bypass"
-      ],
-      "discriminator": [
-        241,
-        42,
-        36,
-        134,
-        236,
-        241,
-        142,
-        40
-      ],
-      "accounts": [
-        {
-          "name": "savingsAccount",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  115,
-                  97,
-                  118,
-                  105,
-                  110,
-                  103,
-                  115
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "user"
-              }
-            ]
-          }
-        },
-        {
-          "name": "user",
-          "writable": true,
-          "signer": true
-        },
-        {
-          "name": "mint",
-          "docs": [
-            "Token mint"
-          ]
-        },
-        {
-          "name": "savingsTokenAccount",
-          "docs": [
-            "User's token account for sending"
-          ],
-          "writable": true
-        },
-        {
-          "name": "destinationTokenAccount",
-          "docs": [
-            "Destination token account for receiving"
-          ],
-          "writable": true
-        },
-        {
-          "name": "tokenProgram",
-          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
-        }
-      ],
-      "args": [
-        {
-          "name": "requestId",
-          "type": {
-            "array": [
-              "u8",
-              32
-            ]
-          }
-        }
-      ]
-    },
-    {
-      "name": "executeWithdrawalBypass",
-      "docs": [
-        "Execute withdrawal bypass (SOL)"
-      ],
-      "discriminator": [
-        179,
-        43,
-        138,
         230,
-        25,
-        62,
-        50,
-        189
+        35,
+        193,
+        232,
+        98,
+        192,
+        95,
+        77
       ],
       "accounts": [
         {
-          "name": "savingsAccount",
+          "name": "vault",
+          "writable": true,
+          "relations": [
+            "vaultMember",
+            "bypassRequest"
+          ]
+        },
+        {
+          "name": "vaultMember",
           "writable": true,
           "pda": {
             "seeds": [
               {
                 "kind": "const",
                 "value": [
-                  115,
-                  97,
                   118,
-                  105,
-                  110,
-                  103,
-                  115
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "user"
-              }
-            ]
-          }
-        },
-        {
-          "name": "user",
-          "writable": true,
-          "signer": true
-        },
-        {
-          "name": "destination",
-          "writable": true
-        },
-        {
-          "name": "systemProgram",
-          "address": "11111111111111111111111111111111"
-        }
-      ],
-      "args": [
-        {
-          "name": "requestId",
-          "type": {
-            "array": [
-              "u8",
-              32
-            ]
-          }
-        }
-      ]
-    },
-    {
-      "name": "executeWithdrawalDestinationRequest",
-      "docs": [
-        "Execute a pending withdrawal destination request"
-      ],
-      "discriminator": [
-        117,
-        222,
-        85,
-        202,
-        28,
-        30,
-        24,
-        66
-      ],
-      "accounts": [
-        {
-          "name": "savingsAccount",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  115,
                   97,
-                  118,
-                  105,
-                  110,
-                  103,
-                  115
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "user"
-              }
-            ]
-          }
-        },
-        {
-          "name": "user",
-          "writable": true,
-          "signer": true
-        }
-      ],
-      "args": [
-        {
-          "name": "requestId",
-          "type": {
-            "array": [
-              "u8",
-              32
-            ]
-          }
-        }
-      ]
-    },
-    {
-      "name": "forwardSolDeposit",
-      "docs": [
-        "Forward SOL deposit to savings program"
-      ],
-      "discriminator": [
-        29,
-        156,
-        48,
-        213,
-        90,
-        128,
-        229,
-        58
-      ],
-      "accounts": [
-        {
-          "name": "depositProxy",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  100,
-                  101,
-                  112,
-                  111,
-                  115,
-                  105,
+                  117,
+                  108,
                   116,
                   95,
-                  112,
-                  114,
-                  111,
-                  120,
-                  121
+                  109,
+                  101,
+                  109,
+                  98,
+                  101,
+                  114
                 ]
               },
               {
                 "kind": "account",
-                "path": "deposit_proxy.owner",
-                "account": "depositProxy"
+                "path": "vault"
+              },
+              {
+                "kind": "account",
+                "path": "member"
               }
             ]
           }
         },
         {
-          "name": "depositor",
-          "writable": true,
-          "signer": true
-        },
-        {
-          "name": "proxyOwner",
-          "docs": [
-            "The proxy owner (beneficiary of the deposit)"
-          ]
-        },
-        {
-          "name": "savingsProgram",
-          "docs": [
-            "The savings program to forward to"
-          ]
-        },
-        {
-          "name": "savingsAccount",
-          "docs": [
-            "Savings account PDA in the target program"
-          ]
-        },
-        {
-          "name": "systemProgram",
-          "address": "11111111111111111111111111111111"
-        }
-      ],
-      "args": [
-        {
-          "name": "amount",
-          "type": "u64"
-        }
-      ]
-    },
-    {
-      "name": "forwardSplDeposit",
-      "docs": [
-        "Forward SPL token deposit to savings program"
-      ],
-      "discriminator": [
-        131,
-        71,
-        27,
-        250,
-        233,
-        24,
-        75,
-        240
-      ],
-      "accounts": [
-        {
-          "name": "depositProxy",
+          "name": "bypassRequest",
           "writable": true,
           "pda": {
             "seeds": [
               {
                 "kind": "const",
                 "value": [
-                  100,
-                  101,
-                  112,
-                  111,
-                  115,
-                  105,
-                  116,
-                  95,
-                  112,
-                  114,
-                  111,
-                  120,
-                  121
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "deposit_proxy.owner",
-                "account": "depositProxy"
-              }
-            ]
-          }
-        },
-        {
-          "name": "depositor",
-          "writable": true,
-          "signer": true
-        },
-        {
-          "name": "proxyOwner",
-          "docs": [
-            "The proxy owner (beneficiary of the deposit)"
-          ]
-        },
-        {
-          "name": "depositorTokenAccount",
-          "docs": [
-            "Depositor's token account"
-          ],
-          "writable": true
-        },
-        {
-          "name": "proxyTokenAccount",
-          "docs": [
-            "Proxy's token account (intermediate holder)"
-          ],
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "account",
-                "path": "depositProxy"
-              },
-              {
-                "kind": "const",
-                "value": [
-                  6,
-                  221,
-                  246,
-                  225,
-                  215,
-                  101,
-                  161,
-                  147,
-                  217,
-                  203,
-                  225,
-                  70,
-                  206,
-                  235,
+                  98,
                   121,
-                  172,
-                  28,
-                  180,
-                  133,
-                  237,
+                  112,
+                  97,
+                  115,
+                  115,
                   95,
-                  91,
-                  55,
-                  145,
-                  58,
-                  140,
-                  245,
-                  133,
-                  126,
-                  255,
-                  0,
-                  169
+                  114,
+                  101,
+                  113,
+                  117,
+                  101,
+                  115,
+                  116
                 ]
               },
               {
                 "kind": "account",
-                "path": "mint"
+                "path": "vault"
+              },
+              {
+                "kind": "account",
+                "path": "member"
               }
-            ],
-            "program": {
-              "kind": "const",
-              "value": [
-                140,
-                151,
-                37,
-                143,
-                78,
-                36,
-                137,
-                241,
-                187,
-                61,
-                16,
-                41,
-                20,
-                142,
-                13,
-                131,
-                11,
-                90,
-                19,
-                153,
-                218,
-                255,
-                16,
-                132,
-                4,
-                142,
-                123,
-                216,
-                219,
-                233,
-                248,
-                89
-              ]
-            }
+            ]
           }
         },
         {
-          "name": "savingsAccount",
-          "docs": [
-            "Target savings account for the proxy owner"
+          "name": "member",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "vaultMember",
+            "bypassRequest"
           ]
-        },
-        {
-          "name": "savingsTokenAccount",
-          "docs": [
-            "Owner's token account in savings program"
-          ]
-        },
-        {
-          "name": "mint",
-          "docs": [
-            "The mint of the SPL token being deposited"
-          ]
-        },
-        {
-          "name": "savingsProgram",
-          "docs": [
-            "The savings program to forward to"
-          ]
-        },
-        {
-          "name": "tokenProgram",
-          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
-        },
-        {
-          "name": "associatedTokenProgram",
-          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
         },
         {
           "name": "systemProgram",
           "address": "11111111111111111111111111111111"
-        }
-      ],
-      "args": [
-        {
-          "name": "amount",
-          "type": "u64"
-        }
-      ]
-    },
-    {
-      "name": "getProxyAddress",
-      "docs": [
-        "Get the proxy address for a user (view function)"
-      ],
-      "discriminator": [
-        152,
-        239,
-        157,
-        227,
-        144,
-        172,
-        220,
-        146
-      ],
-      "accounts": [
-        {
-          "name": "depositProxy",
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  100,
-                  101,
-                  112,
-                  111,
-                  115,
-                  105,
-                  116,
-                  95,
-                  112,
-                  114,
-                  111,
-                  120,
-                  121
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "user"
-              }
-            ]
-          }
-        },
-        {
-          "name": "user",
-          "signer": true
-        }
-      ],
-      "args": [],
-      "returns": "pubkey"
-    },
-    {
-      "name": "getSolBalance",
-      "docs": [
-        "Get user's total SOL balance"
-      ],
-      "discriminator": [
-        177,
-        197,
-        179,
-        97,
-        50,
-        111,
-        178,
-        70
-      ],
-      "accounts": [
-        {
-          "name": "savingsAccount",
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  115,
-                  97,
-                  118,
-                  105,
-                  110,
-                  103,
-                  115
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "user"
-              }
-            ]
-          }
-        },
-        {
-          "name": "user",
-          "signer": true
-        }
-      ],
-      "args": [],
-      "returns": "u64"
-    },
-    {
-      "name": "getSpendingLimits",
-      "docs": [
-        "Get spending limits information"
-      ],
-      "discriminator": [
-        23,
-        121,
-        238,
-        204,
-        69,
-        213,
-        157,
-        147
-      ],
-      "accounts": [
-        {
-          "name": "savingsAccount",
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  115,
-                  97,
-                  118,
-                  105,
-                  110,
-                  103,
-                  115
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "user"
-              }
-            ]
-          }
-        },
-        {
-          "name": "user",
-          "signer": true
         }
       ],
       "args": []
     },
     {
-      "name": "getSplBalance",
-      "docs": [
-        "Get user's SPL token balance for a specific mint"
-      ],
+      "name": "executeBypassSpl",
       "discriminator": [
-        92,
-        135,
-        40,
-        171,
-        133,
-        246,
-        90,
-        120
+        66,
+        221,
+        128,
+        233,
+        134,
+        52,
+        197,
+        195
       ],
       "accounts": [
         {
-          "name": "savingsAccount",
+          "name": "vault",
+          "writable": true,
+          "relations": [
+            "vaultMember",
+            "bypassRequest"
+          ]
+        },
+        {
+          "name": "vaultMember",
+          "writable": true,
           "pda": {
             "seeds": [
               {
                 "kind": "const",
                 "value": [
-                  115,
-                  97,
                   118,
-                  105,
-                  110,
-                  103,
-                  115
+                  97,
+                  117,
+                  108,
+                  116,
+                  95,
+                  109,
+                  101,
+                  109,
+                  98,
+                  101,
+                  114
                 ]
               },
               {
                 "kind": "account",
-                "path": "user"
+                "path": "vault"
+              },
+              {
+                "kind": "account",
+                "path": "member"
               }
             ]
           }
         },
         {
-          "name": "user",
-          "signer": true
-        }
-      ],
-      "args": [
+          "name": "bypassRequest",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  121,
+                  112,
+                  97,
+                  115,
+                  115,
+                  95,
+                  114,
+                  101,
+                  113,
+                  117,
+                  101,
+                  115,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault"
+              },
+              {
+                "kind": "account",
+                "path": "member"
+              }
+            ]
+          }
+        },
         {
-          "name": "mint",
-          "type": "pubkey"
+          "name": "vaultTokenAccount",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "vault"
+              },
+              {
+                "kind": "const",
+                "value": [
+                  6,
+                  221,
+                  246,
+                  225,
+                  215,
+                  101,
+                  161,
+                  147,
+                  217,
+                  203,
+                  225,
+                  70,
+                  206,
+                  235,
+                  121,
+                  172,
+                  28,
+                  180,
+                  133,
+                  237,
+                  95,
+                  91,
+                  55,
+                  145,
+                  58,
+                  140,
+                  245,
+                  133,
+                  126,
+                  255,
+                  0,
+                  169
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "tokenMint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "memberTokenAccount",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "member"
+              },
+              {
+                "kind": "const",
+                "value": [
+                  6,
+                  221,
+                  246,
+                  225,
+                  215,
+                  101,
+                  161,
+                  147,
+                  217,
+                  203,
+                  225,
+                  70,
+                  206,
+                  235,
+                  121,
+                  172,
+                  28,
+                  180,
+                  133,
+                  237,
+                  95,
+                  91,
+                  55,
+                  145,
+                  58,
+                  140,
+                  245,
+                  133,
+                  126,
+                  255,
+                  0,
+                  169
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "tokenMint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "tokenMint"
+        },
+        {
+          "name": "member",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "vaultMember",
+            "bypassRequest"
+          ]
+        },
+        {
+          "name": "tokenProgram",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
         }
       ],
-      "returns": "u64"
+      "args": []
     },
     {
-      "name": "initialize",
-      "docs": [
-        "Initialize a savings account for a user"
-      ],
+      "name": "executeDestinationRequest",
       "discriminator": [
-        175,
-        175,
-        109,
-        31,
-        13,
-        152,
-        155,
-        237
+        95,
+        211,
+        0,
+        122,
+        188,
+        41,
+        61,
+        46
       ],
       "accounts": [
         {
-          "name": "savingsAccount",
+          "name": "vault",
+          "relations": [
+            "vaultMember",
+            "pendingRequest"
+          ]
+        },
+        {
+          "name": "vaultMember",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116,
+                  95,
+                  109,
+                  101,
+                  109,
+                  98,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault"
+              },
+              {
+                "kind": "account",
+                "path": "member"
+              }
+            ]
+          }
+        },
+        {
+          "name": "pendingRequest",
           "writable": true,
           "pda": {
             "seeds": [
               {
                 "kind": "const",
                 "value": [
-                  115,
-                  97,
-                  118,
+                  112,
+                  101,
+                  110,
+                  100,
                   105,
                   110,
                   103,
-                  115
+                  95,
+                  100,
+                  101,
+                  115,
+                  116
                 ]
               },
               {
                 "kind": "account",
-                "path": "user"
+                "path": "vault"
+              },
+              {
+                "kind": "account",
+                "path": "member"
+              },
+              {
+                "kind": "account",
+                "path": "destination"
               }
             ]
           }
         },
         {
-          "name": "user",
+          "name": "withdrawalDest",
           "writable": true,
-          "signer": true
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  119,
+                  105,
+                  116,
+                  104,
+                  100,
+                  114,
+                  97,
+                  119,
+                  97,
+                  108,
+                  95,
+                  100,
+                  101,
+                  115,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault"
+              },
+              {
+                "kind": "account",
+                "path": "member"
+              },
+              {
+                "kind": "account",
+                "path": "destination"
+              }
+            ]
+          }
+        },
+        {
+          "name": "destination"
+        },
+        {
+          "name": "member",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "vaultMember",
+            "pendingRequest"
+          ]
         },
         {
           "name": "systemProgram",
           "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "executeRuleChange",
+      "discriminator": [
+        84,
+        93,
+        44,
+        13,
+        64,
+        43,
+        176,
+        238
+      ],
+      "accounts": [
+        {
+          "name": "vault",
+          "writable": true,
+          "relations": [
+            "proposal"
+          ]
+        },
+        {
+          "name": "proposal",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  117,
+                  108,
+                  101,
+                  95,
+                  112,
+                  114,
+                  111,
+                  112,
+                  111,
+                  115,
+                  97,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "creator",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "vault"
+          ]
         }
       ],
       "args": []
     },
     {
       "name": "initializeProgramConfig",
-      "docs": [
-        "Initialize program configuration (admin only)"
-      ],
       "discriminator": [
         6,
         131,
@@ -1756,75 +2037,138 @@ export type SavingsCore = {
           "signer": true
         },
         {
-          "name": "treasuryAddress"
-        },
-        {
           "name": "systemProgram",
           "address": "11111111111111111111111111111111"
         }
       ],
       "args": [
         {
-          "name": "permanentAddressFeeLamports",
-          "type": "u64"
+          "name": "defaultPenaltyRateBps",
+          "type": "u16"
         }
       ]
     },
     {
-      "name": "initializeProxy",
-      "docs": [
-        "Initialize a deposit proxy for a user"
-      ],
+      "name": "joinVault",
       "discriminator": [
-        245,
-        74,
-        175,
-        136,
-        0,
-        146,
-        100,
-        224
+        73,
+        225,
+        253,
+        176,
+        198,
+        180,
+        207,
+        152
       ],
       "accounts": [
         {
-          "name": "depositProxy",
+          "name": "vault",
+          "writable": true
+        },
+        {
+          "name": "vaultMember",
           "writable": true,
           "pda": {
             "seeds": [
               {
                 "kind": "const",
                 "value": [
-                  100,
-                  101,
-                  112,
-                  111,
-                  115,
-                  105,
+                  118,
+                  97,
+                  117,
+                  108,
                   116,
                   95,
-                  112,
-                  114,
-                  111,
-                  120,
-                  121
+                  109,
+                  101,
+                  109,
+                  98,
+                  101,
+                  114
                 ]
               },
               {
                 "kind": "account",
-                "path": "user"
+                "path": "vault"
+              },
+              {
+                "kind": "account",
+                "path": "member"
               }
             ]
           }
         },
         {
-          "name": "user",
+          "name": "member",
           "writable": true,
           "signer": true
         },
         {
-          "name": "savingsProgram",
-          "docs": [
-            "The savings program this proxy will forward to"
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "leaveVault",
+      "discriminator": [
+        89,
+        198,
+        97,
+        6,
+        231,
+        152,
+        118,
+        242
+      ],
+      "accounts": [
+        {
+          "name": "vault",
+          "writable": true,
+          "relations": [
+            "vaultMember"
+          ]
+        },
+        {
+          "name": "vaultMember",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116,
+                  95,
+                  109,
+                  101,
+                  109,
+                  98,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault"
+              },
+              {
+                "kind": "account",
+                "path": "member"
+              }
+            ]
+          }
+        },
+        {
+          "name": "member",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "vaultMember"
           ]
         },
         {
@@ -1835,172 +2179,99 @@ export type SavingsCore = {
       "args": []
     },
     {
-      "name": "initializeSpendingLimits",
-      "docs": [
-        "Initialize a spending limits account for a user"
-      ],
+      "name": "proposeRuleChange",
       "discriminator": [
-        240,
-        49,
-        54,
-        19,
-        46,
-        201,
-        202,
-        42
+        242,
+        244,
+        60,
+        185,
+        100,
+        231,
+        68,
+        220
       ],
       "accounts": [
         {
-          "name": "savingsAccount",
+          "name": "vault"
+        },
+        {
+          "name": "proposal",
           "writable": true,
           "pda": {
             "seeds": [
               {
                 "kind": "const",
                 "value": [
+                  114,
+                  117,
+                  108,
+                  101,
+                  95,
+                  112,
+                  114,
+                  111,
+                  112,
+                  111,
                   115,
                   97,
-                  118,
-                  105,
-                  110,
-                  103,
-                  115
+                  108
                 ]
               },
               {
                 "kind": "account",
-                "path": "user"
+                "path": "vault"
               }
             ]
           }
         },
         {
-          "name": "user",
+          "name": "creator",
           "writable": true,
-          "signer": true
+          "signer": true,
+          "relations": [
+            "vault"
+          ]
         },
         {
           "name": "systemProgram",
           "address": "11111111111111111111111111111111"
         }
       ],
-      "args": []
-    },
-    {
-      "name": "proposeLimitChange",
-      "docs": [
-        "Propose a spending limit change"
-      ],
-      "discriminator": [
-        146,
-        253,
-        178,
-        82,
-        191,
-        64,
-        35,
-        251
-      ],
-      "accounts": [
+      "args": [
         {
-          "name": "savingsAccount",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  115,
-                  97,
-                  118,
-                  105,
-                  110,
-                  103,
-                  115
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "user"
-              }
-            ]
+          "name": "newDailyLimit",
+          "type": {
+            "option": "u64"
           }
         },
         {
-          "name": "user",
-          "writable": true,
-          "signer": true
-        }
-      ],
-      "args": [
-        {
-          "name": "periodName",
-          "type": "string"
-        },
-        {
-          "name": "newLimit",
-          "type": "u64"
-        }
-      ]
-    },
-    {
-      "name": "removeTimePeriodLimit",
-      "docs": [
-        "Remove a time period limit"
-      ],
-      "discriminator": [
-        213,
-        185,
-        190,
-        218,
-        206,
-        221,
-        93,
-        152
-      ],
-      "accounts": [
-        {
-          "name": "savingsAccount",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  115,
-                  97,
-                  118,
-                  105,
-                  110,
-                  103,
-                  115
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "user"
-              }
-            ]
+          "name": "newWeeklyLimit",
+          "type": {
+            "option": "u64"
           }
         },
         {
-          "name": "user",
-          "writable": true,
-          "signer": true
-        }
-      ],
-      "args": [
+          "name": "newMonthlyLimit",
+          "type": {
+            "option": "u64"
+          }
+        },
         {
-          "name": "name",
-          "type": "string"
+          "name": "newPenaltyRateBps",
+          "type": {
+            "option": "u16"
+          }
+        },
+        {
+          "name": "newLimitsArePercentage",
+          "type": {
+            "option": "bool"
+          }
         }
       ]
     },
     {
       "name": "removeWithdrawalDestination",
-      "docs": [
-        "Remove a withdrawal destination"
-      ],
       "discriminator": [
         60,
         84,
@@ -2013,86 +2284,196 @@ export type SavingsCore = {
       ],
       "accounts": [
         {
-          "name": "savingsAccount",
+          "name": "vault",
+          "relations": [
+            "vaultMember",
+            "withdrawalDest"
+          ]
+        },
+        {
+          "name": "vaultMember",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116,
+                  95,
+                  109,
+                  101,
+                  109,
+                  98,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault"
+              },
+              {
+                "kind": "account",
+                "path": "member"
+              }
+            ]
+          }
+        },
+        {
+          "name": "withdrawalDest",
           "writable": true,
           "pda": {
             "seeds": [
               {
                 "kind": "const",
                 "value": [
-                  115,
-                  97,
-                  118,
+                  119,
                   105,
-                  110,
-                  103,
-                  115
+                  116,
+                  104,
+                  100,
+                  114,
+                  97,
+                  119,
+                  97,
+                  108,
+                  95,
+                  100,
+                  101,
+                  115,
+                  116
                 ]
               },
               {
                 "kind": "account",
-                "path": "user"
+                "path": "vault"
+              },
+              {
+                "kind": "account",
+                "path": "member"
+              },
+              {
+                "kind": "account",
+                "path": "destination"
               }
             ]
           }
         },
         {
-          "name": "user",
+          "name": "destination"
+        },
+        {
+          "name": "member",
           "writable": true,
-          "signer": true
+          "signer": true,
+          "relations": [
+            "vaultMember",
+            "withdrawalDest"
+          ]
         }
       ],
-      "args": [
-        {
-          "name": "address",
-          "type": "pubkey"
-        }
-      ]
+      "args": []
     },
     {
-      "name": "requestWithdrawalBypass",
-      "docs": [
-        "Request withdrawal bypass for amounts exceeding spending limits"
-      ],
+      "name": "requestBypass",
       "discriminator": [
-        179,
-        63,
-        197,
-        165,
-        24,
-        134,
-        204,
-        54
+        250,
+        5,
+        48,
+        228,
+        66,
+        2,
+        188,
+        184
       ],
       "accounts": [
         {
-          "name": "savingsAccount",
+          "name": "vault",
+          "relations": [
+            "vaultMember"
+          ]
+        },
+        {
+          "name": "vaultMember",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116,
+                  95,
+                  109,
+                  101,
+                  109,
+                  98,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault"
+              },
+              {
+                "kind": "account",
+                "path": "member"
+              }
+            ]
+          }
+        },
+        {
+          "name": "bypassRequest",
           "writable": true,
           "pda": {
             "seeds": [
               {
                 "kind": "const",
                 "value": [
-                  115,
+                  98,
+                  121,
+                  112,
                   97,
-                  118,
-                  105,
-                  110,
-                  103,
-                  115
+                  115,
+                  115,
+                  95,
+                  114,
+                  101,
+                  113,
+                  117,
+                  101,
+                  115,
+                  116
                 ]
               },
               {
                 "kind": "account",
-                "path": "user"
+                "path": "vault"
+              },
+              {
+                "kind": "account",
+                "path": "member"
               }
             ]
           }
         },
         {
-          "name": "user",
+          "name": "member",
           "writable": true,
-          "signer": true
+          "signer": true,
+          "relations": [
+            "vaultMember"
+          ]
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
         }
       ],
       "args": [
@@ -2101,70 +2482,116 @@ export type SavingsCore = {
           "type": "u64"
         },
         {
-          "name": "tokenMint",
-          "type": "pubkey"
-        },
-        {
-          "name": "bypassingPeriod",
-          "type": "string"
-        },
-        {
-          "name": "destination",
-          "type": "pubkey"
+          "name": "isSol",
+          "type": "bool"
         }
       ]
     },
     {
-      "name": "requestWithdrawalDestinationAddition",
-      "docs": [
-        "Request withdrawal destination addition (with timelock)"
-      ],
+      "name": "requestWithdrawalDestination",
       "discriminator": [
-        249,
-        50,
-        136,
-        94,
-        75,
-        10,
-        162,
-        98
+        214,
+        192,
+        95,
+        236,
+        194,
+        244,
+        22,
+        196
       ],
       "accounts": [
         {
-          "name": "savingsAccount",
+          "name": "vault",
+          "relations": [
+            "vaultMember"
+          ]
+        },
+        {
+          "name": "vaultMember",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116,
+                  95,
+                  109,
+                  101,
+                  109,
+                  98,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault"
+              },
+              {
+                "kind": "account",
+                "path": "member"
+              }
+            ]
+          }
+        },
+        {
+          "name": "pendingRequest",
           "writable": true,
           "pda": {
             "seeds": [
               {
                 "kind": "const",
                 "value": [
-                  115,
-                  97,
-                  118,
+                  112,
+                  101,
+                  110,
+                  100,
                   105,
                   110,
                   103,
-                  115
+                  95,
+                  100,
+                  101,
+                  115,
+                  116
                 ]
               },
               {
                 "kind": "account",
-                "path": "user"
+                "path": "vault"
+              },
+              {
+                "kind": "account",
+                "path": "member"
+              },
+              {
+                "kind": "account",
+                "path": "destination"
               }
             ]
           }
         },
         {
-          "name": "user",
+          "name": "destination"
+        },
+        {
+          "name": "member",
           "writable": true,
-          "signer": true
+          "signer": true,
+          "relations": [
+            "vaultMember"
+          ]
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
         }
       ],
       "args": [
-        {
-          "name": "address",
-          "type": "pubkey"
-        },
         {
           "name": "title",
           "type": "string"
@@ -2172,77 +2599,7 @@ export type SavingsCore = {
       ]
     },
     {
-      "name": "setCommonPeriodLimits",
-      "docs": [
-        "Set common period limits (Daily, Weekly, Monthly)"
-      ],
-      "discriminator": [
-        200,
-        130,
-        17,
-        128,
-        169,
-        59,
-        33,
-        89
-      ],
-      "accounts": [
-        {
-          "name": "savingsAccount",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  115,
-                  97,
-                  118,
-                  105,
-                  110,
-                  103,
-                  115
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "user"
-              }
-            ]
-          }
-        },
-        {
-          "name": "user",
-          "writable": true,
-          "signer": true
-        }
-      ],
-      "args": [
-        {
-          "name": "dailyLimit",
-          "type": {
-            "option": "u64"
-          }
-        },
-        {
-          "name": "weeklyLimit",
-          "type": {
-            "option": "u64"
-          }
-        },
-        {
-          "name": "monthlyLimit",
-          "type": {
-            "option": "u64"
-          }
-        }
-      ]
-    },
-    {
       "name": "updateProgramConfig",
-      "docs": [
-        "Update program configuration (admin only)"
-      ],
       "discriminator": [
         214,
         3,
@@ -2283,21 +2640,17 @@ export type SavingsCore = {
         },
         {
           "name": "admin",
-          "writable": true,
-          "signer": true
+          "signer": true,
+          "relations": [
+            "programConfig"
+          ]
         }
       ],
       "args": [
         {
-          "name": "newTreasuryAddress",
+          "name": "newTreasury",
           "type": {
             "option": "pubkey"
-          }
-        },
-        {
-          "name": "newFeeLamports",
-          "type": {
-            "option": "u64"
           }
         },
         {
@@ -2309,10 +2662,65 @@ export type SavingsCore = {
       ]
     },
     {
-      "name": "withdrawSol",
-      "docs": [
-        "Withdraw SOL from the savings account"
+      "name": "updateVaultRules",
+      "discriminator": [
+        195,
+        219,
+        47,
+        10,
+        219,
+        203,
+        75,
+        154
       ],
+      "accounts": [
+        {
+          "name": "vault",
+          "writable": true
+        },
+        {
+          "name": "creator",
+          "signer": true,
+          "relations": [
+            "vault"
+          ]
+        }
+      ],
+      "args": [
+        {
+          "name": "dailyLimit",
+          "type": {
+            "option": "u64"
+          }
+        },
+        {
+          "name": "weeklyLimit",
+          "type": {
+            "option": "u64"
+          }
+        },
+        {
+          "name": "monthlyLimit",
+          "type": {
+            "option": "u64"
+          }
+        },
+        {
+          "name": "penaltyRateBps",
+          "type": {
+            "option": "u16"
+          }
+        },
+        {
+          "name": "limitsArePercentage",
+          "type": {
+            "option": "bool"
+          }
+        }
+      ]
+    },
+    {
+      "name": "withdrawSol",
       "discriminator": [
         145,
         131,
@@ -2325,151 +2733,52 @@ export type SavingsCore = {
       ],
       "accounts": [
         {
-          "name": "savingsAccount",
+          "name": "vault",
+          "writable": true,
+          "relations": [
+            "vaultMember"
+          ]
+        },
+        {
+          "name": "vaultMember",
           "writable": true,
           "pda": {
             "seeds": [
               {
                 "kind": "const",
                 "value": [
-                  115,
-                  97,
                   118,
-                  105,
-                  110,
-                  103,
-                  115
+                  97,
+                  117,
+                  108,
+                  116,
+                  95,
+                  109,
+                  101,
+                  109,
+                  98,
+                  101,
+                  114
                 ]
               },
               {
                 "kind": "account",
-                "path": "user"
+                "path": "vault"
+              },
+              {
+                "kind": "account",
+                "path": "member"
               }
             ]
           }
         },
         {
-          "name": "user",
+          "name": "member",
           "writable": true,
-          "signer": true
-        },
-        {
-          "name": "systemProgram",
-          "address": "11111111111111111111111111111111"
-        }
-      ],
-      "args": [
-        {
-          "name": "amount",
-          "type": "u64"
-        }
-      ]
-    },
-    {
-      "name": "withdrawSolToDestination",
-      "docs": [
-        "Withdraw SOL to destination"
-      ],
-      "discriminator": [
-        170,
-        140,
-        47,
-        249,
-        105,
-        179,
-        11,
-        204
-      ],
-      "accounts": [
-        {
-          "name": "savingsAccount",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  115,
-                  97,
-                  118,
-                  105,
-                  110,
-                  103,
-                  115
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "user"
-              }
-            ]
-          }
-        },
-        {
-          "name": "user",
-          "writable": true,
-          "signer": true
-        },
-        {
-          "name": "destination",
-          "writable": true
-        },
-        {
-          "name": "systemProgram",
-          "address": "11111111111111111111111111111111"
-        }
-      ],
-      "args": [
-        {
-          "name": "amount",
-          "type": "u64"
-        }
-      ]
-    },
-    {
-      "name": "withdrawSolWithLimits",
-      "docs": [
-        "Withdraw SOL with spending limits validation"
-      ],
-      "discriminator": [
-        75,
-        241,
-        60,
-        175,
-        113,
-        191,
-        138,
-        113
-      ],
-      "accounts": [
-        {
-          "name": "savingsAccount",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  115,
-                  97,
-                  118,
-                  105,
-                  110,
-                  103,
-                  115
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "user"
-              }
-            ]
-          }
-        },
-        {
-          "name": "user",
-          "writable": true,
-          "signer": true
+          "signer": true,
+          "relations": [
+            "vaultMember"
+          ]
         },
         {
           "name": "systemProgram",
@@ -2485,9 +2794,6 @@ export type SavingsCore = {
     },
     {
       "name": "withdrawSolWithPenalty",
-      "docs": [
-        "Withdraw SOL with penalty (instant bypass, penalty goes to treasury)"
-      ],
       "discriminator": [
         240,
         110,
@@ -2500,33 +2806,44 @@ export type SavingsCore = {
       ],
       "accounts": [
         {
-          "name": "savingsAccount",
+          "name": "vault",
+          "writable": true,
+          "relations": [
+            "vaultMember"
+          ]
+        },
+        {
+          "name": "vaultMember",
           "writable": true,
           "pda": {
             "seeds": [
               {
                 "kind": "const",
                 "value": [
-                  115,
-                  97,
                   118,
-                  105,
-                  110,
-                  103,
-                  115
+                  97,
+                  117,
+                  108,
+                  116,
+                  95,
+                  109,
+                  101,
+                  109,
+                  98,
+                  101,
+                  114
                 ]
               },
               {
                 "kind": "account",
-                "path": "user"
+                "path": "vault"
+              },
+              {
+                "kind": "account",
+                "path": "member"
               }
             ]
           }
-        },
-        {
-          "name": "user",
-          "writable": true,
-          "signer": true
         },
         {
           "name": "programConfig",
@@ -2555,8 +2872,16 @@ export type SavingsCore = {
           }
         },
         {
-          "name": "treasuryAddress",
+          "name": "treasury",
           "writable": true
+        },
+        {
+          "name": "member",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "vaultMember"
+          ]
         },
         {
           "name": "systemProgram",
@@ -2572,9 +2897,6 @@ export type SavingsCore = {
     },
     {
       "name": "withdrawSpl",
-      "docs": [
-        "Withdraw SPL tokens from the savings account"
-      ],
       "discriminator": [
         181,
         154,
@@ -2587,52 +2909,53 @@ export type SavingsCore = {
       ],
       "accounts": [
         {
-          "name": "savingsAccount",
+          "name": "vault",
+          "writable": true,
+          "relations": [
+            "vaultMember"
+          ]
+        },
+        {
+          "name": "vaultMember",
           "writable": true,
           "pda": {
             "seeds": [
               {
                 "kind": "const",
                 "value": [
-                  115,
-                  97,
                   118,
-                  105,
-                  110,
-                  103,
-                  115
+                  97,
+                  117,
+                  108,
+                  116,
+                  95,
+                  109,
+                  101,
+                  109,
+                  98,
+                  101,
+                  114
                 ]
               },
               {
                 "kind": "account",
-                "path": "user"
+                "path": "vault"
+              },
+              {
+                "kind": "account",
+                "path": "member"
               }
             ]
           }
         },
         {
-          "name": "user",
-          "writable": true,
-          "signer": true
-        },
-        {
-          "name": "userTokenAccount",
-          "docs": [
-            "User's token account to receive the withdrawn tokens"
-          ],
-          "writable": true
-        },
-        {
-          "name": "savingsTokenAccount",
-          "docs": [
-            "The savings account's token account for this mint"
-          ],
+          "name": "vaultTokenAccount",
           "writable": true,
           "pda": {
             "seeds": [
               {
                 "kind": "account",
-                "path": "savingsAccount"
+                "path": "vault"
               },
               {
                 "kind": "const",
@@ -2673,7 +2996,7 @@ export type SavingsCore = {
               },
               {
                 "kind": "account",
-                "path": "mint"
+                "path": "tokenMint"
               }
             ],
             "program": {
@@ -2716,163 +3039,13 @@ export type SavingsCore = {
           }
         },
         {
-          "name": "mint",
-          "docs": [
-            "The mint of the SPL token being withdrawn"
-          ]
-        },
-        {
-          "name": "tokenProgram",
-          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
-        }
-      ],
-      "args": [
-        {
-          "name": "amount",
-          "type": "u64"
-        }
-      ]
-    },
-    {
-      "name": "withdrawSplToDestination",
-      "docs": [
-        "Withdraw SPL tokens to destination"
-      ],
-      "discriminator": [
-        30,
-        228,
-        247,
-        163,
-        185,
-        59,
-        123,
-        128
-      ],
-      "accounts": [
-        {
-          "name": "savingsAccount",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  115,
-                  97,
-                  118,
-                  105,
-                  110,
-                  103,
-                  115
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "user"
-              }
-            ]
-          }
-        },
-        {
-          "name": "user",
-          "writable": true,
-          "signer": true
-        },
-        {
-          "name": "mint",
-          "docs": [
-            "Token mint"
-          ]
-        },
-        {
-          "name": "savingsTokenAccount",
-          "docs": [
-            "User's token account for sending"
-          ],
-          "writable": true
-        },
-        {
-          "name": "destinationTokenAccount",
-          "docs": [
-            "Destination token account for receiving"
-          ],
-          "writable": true
-        },
-        {
-          "name": "tokenProgram",
-          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
-        }
-      ],
-      "args": [
-        {
-          "name": "amount",
-          "type": "u64"
-        }
-      ]
-    },
-    {
-      "name": "withdrawSplWithLimits",
-      "docs": [
-        "Withdraw SPL tokens with spending limits validation"
-      ],
-      "discriminator": [
-        103,
-        31,
-        251,
-        151,
-        88,
-        136,
-        64,
-        53
-      ],
-      "accounts": [
-        {
-          "name": "savingsAccount",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  115,
-                  97,
-                  118,
-                  105,
-                  110,
-                  103,
-                  115
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "user"
-              }
-            ]
-          }
-        },
-        {
-          "name": "user",
-          "writable": true,
-          "signer": true
-        },
-        {
-          "name": "userTokenAccount",
-          "docs": [
-            "User's token account to receive the withdrawn tokens"
-          ],
-          "writable": true
-        },
-        {
-          "name": "savingsTokenAccount",
-          "docs": [
-            "The savings account's token account for this mint"
-          ],
+          "name": "memberTokenAccount",
           "writable": true,
           "pda": {
             "seeds": [
               {
                 "kind": "account",
-                "path": "savingsAccount"
+                "path": "member"
               },
               {
                 "kind": "const",
@@ -2913,7 +3086,7 @@ export type SavingsCore = {
               },
               {
                 "kind": "account",
-                "path": "mint"
+                "path": "tokenMint"
               }
             ],
             "program": {
@@ -2956,9 +3129,14 @@ export type SavingsCore = {
           }
         },
         {
-          "name": "mint",
-          "docs": [
-            "The mint of the SPL token being withdrawn"
+          "name": "tokenMint"
+        },
+        {
+          "name": "member",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "vaultMember"
           ]
         },
         {
@@ -2975,9 +3153,6 @@ export type SavingsCore = {
     },
     {
       "name": "withdrawSplWithPenalty",
-      "docs": [
-        "Withdraw SPL tokens with penalty (instant bypass, penalty goes to treasury)"
-      ],
       "discriminator": [
         21,
         196,
@@ -2990,33 +3165,44 @@ export type SavingsCore = {
       ],
       "accounts": [
         {
-          "name": "savingsAccount",
+          "name": "vault",
+          "writable": true,
+          "relations": [
+            "vaultMember"
+          ]
+        },
+        {
+          "name": "vaultMember",
           "writable": true,
           "pda": {
             "seeds": [
               {
                 "kind": "const",
                 "value": [
-                  115,
-                  97,
                   118,
-                  105,
-                  110,
-                  103,
-                  115
+                  97,
+                  117,
+                  108,
+                  116,
+                  95,
+                  109,
+                  101,
+                  109,
+                  98,
+                  101,
+                  114
                 ]
               },
               {
                 "kind": "account",
-                "path": "user"
+                "path": "vault"
+              },
+              {
+                "kind": "account",
+                "path": "member"
               }
             ]
           }
-        },
-        {
-          "name": "user",
-          "writable": true,
-          "signer": true
         },
         {
           "name": "programConfig",
@@ -3045,17 +3231,13 @@ export type SavingsCore = {
           }
         },
         {
-          "name": "userTokenAccount",
-          "writable": true
-        },
-        {
-          "name": "savingsTokenAccount",
+          "name": "vaultTokenAccount",
           "writable": true,
           "pda": {
             "seeds": [
               {
                 "kind": "account",
-                "path": "savingsAccount"
+                "path": "vault"
               },
               {
                 "kind": "const",
@@ -3096,7 +3278,97 @@ export type SavingsCore = {
               },
               {
                 "kind": "account",
-                "path": "mint"
+                "path": "tokenMint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "memberTokenAccount",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "member"
+              },
+              {
+                "kind": "const",
+                "value": [
+                  6,
+                  221,
+                  246,
+                  225,
+                  215,
+                  101,
+                  161,
+                  147,
+                  217,
+                  203,
+                  225,
+                  70,
+                  206,
+                  235,
+                  121,
+                  172,
+                  28,
+                  180,
+                  133,
+                  237,
+                  95,
+                  91,
+                  55,
+                  145,
+                  58,
+                  140,
+                  245,
+                  133,
+                  126,
+                  255,
+                  0,
+                  169
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "tokenMint"
               }
             ],
             "program": {
@@ -3141,12 +3413,109 @@ export type SavingsCore = {
         {
           "name": "treasuryTokenAccount",
           "docs": [
-            "Treasury's token account for receiving the penalty"
+            "Treasury ATA for SPL penalty on personal vaults"
           ],
-          "writable": true
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "treasury"
+              },
+              {
+                "kind": "const",
+                "value": [
+                  6,
+                  221,
+                  246,
+                  225,
+                  215,
+                  101,
+                  161,
+                  147,
+                  217,
+                  203,
+                  225,
+                  70,
+                  206,
+                  235,
+                  121,
+                  172,
+                  28,
+                  180,
+                  133,
+                  237,
+                  95,
+                  91,
+                  55,
+                  145,
+                  58,
+                  140,
+                  245,
+                  133,
+                  126,
+                  255,
+                  0,
+                  169
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "tokenMint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
         },
         {
-          "name": "mint"
+          "name": "treasury"
+        },
+        {
+          "name": "tokenMint"
+        },
+        {
+          "name": "member",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "vaultMember"
+          ]
         },
         {
           "name": "tokenProgram",
@@ -3163,16 +3532,29 @@ export type SavingsCore = {
   ],
   "accounts": [
     {
-      "name": "depositProxy",
+      "name": "bypassRequest",
       "discriminator": [
-        6,
-        171,
-        248,
-        84,
+        118,
+        86,
+        48,
         68,
+        69,
+        64,
         180,
-        200,
-        168
+        78
+      ]
+    },
+    {
+      "name": "pendingDestinationRequest",
+      "discriminator": [
+        86,
+        251,
+        149,
+        176,
+        60,
+        244,
+        117,
+        141
       ]
     },
     {
@@ -3189,16 +3571,55 @@ export type SavingsCore = {
       ]
     },
     {
-      "name": "savingsAccount",
+      "name": "ruleChangeProposal",
       "discriminator": [
-        136,
-        151,
-        16,
-        72,
-        219,
-        51,
-        51,
-        116
+        68,
+        220,
+        255,
+        196,
+        232,
+        2,
+        46,
+        148
+      ]
+    },
+    {
+      "name": "vault",
+      "discriminator": [
+        211,
+        8,
+        232,
+        43,
+        2,
+        152,
+        117,
+        119
+      ]
+    },
+    {
+      "name": "vaultMember",
+      "discriminator": [
+        26,
+        195,
+        159,
+        142,
+        38,
+        12,
+        117,
+        218
+      ]
+    },
+    {
+      "name": "withdrawalDestination",
+      "discriminator": [
+        62,
+        214,
+        109,
+        21,
+        186,
+        251,
+        166,
+        109
       ]
     }
   ],
@@ -3206,414 +3627,215 @@ export type SavingsCore = {
     {
       "code": 6000,
       "name": "invalidAmount",
-      "msg": "Invalid amount: amount must be greater than zero"
+      "msg": "Amount must be greater than zero"
     },
     {
       "code": 6001,
       "name": "arithmeticOverflow",
-      "msg": "Math overflow occurred"
+      "msg": "Arithmetic overflow"
     },
     {
       "code": 6002,
-      "name": "tokenLimitExceeded",
-      "msg": "Too many different tokens in account (max 10 supported)"
+      "name": "insufficientBalance",
+      "msg": "Insufficient balance"
     },
     {
       "code": 6003,
-      "name": "insufficientBalance",
-      "msg": "Insufficient balance for this operation"
+      "name": "spendingLimitExceeded",
+      "msg": "Spending limit exceeded for this period"
     },
     {
       "code": 6004,
-      "name": "unauthorizedAccess",
-      "msg": "Unauthorized access to this savings account"
+      "name": "invalidVaultName",
+      "msg": "Vault name is empty or too long"
     },
     {
       "code": 6005,
-      "name": "accountNotInitialized",
-      "msg": "Account not properly initialized"
+      "name": "invalidVaultDescription",
+      "msg": "Vault description is too long"
     },
     {
       "code": 6006,
-      "name": "spendingLimitExceeded",
-      "msg": "Spending limit exceeded for this time period"
+      "name": "invalidLimit",
+      "msg": "Invalid limit: percentage mode values must be 0-10000 basis points"
     },
     {
       "code": 6007,
-      "name": "invalidLimitParameters",
-      "msg": "Invalid spending limit parameters"
+      "name": "invalidPenaltyRate",
+      "msg": "Invalid penalty rate: must be 1-5000 basis points (0.01%-50%)"
     },
     {
       "code": 6008,
-      "name": "setupNotCommitted",
-      "msg": "Setup must be committed before withdrawals are allowed"
+      "name": "noLimitsSet",
+      "msg": "At least one withdrawal limit must be set"
     },
     {
       "code": 6009,
-      "name": "spendingLimitsNotFound",
-      "msg": "Spending limits account not found"
+      "name": "communityVaultImmutable",
+      "msg": "Only personal vaults allow rule changes"
     },
     {
       "code": 6010,
-      "name": "periodLimitNotFound",
-      "msg": "Period limit not found"
+      "name": "personalVaultOnly",
+      "msg": "Cannot join a personal vault"
     },
     {
       "code": 6011,
-      "name": "invalidParameters",
-      "msg": "Invalid parameters provided"
+      "name": "vaultNotActive",
+      "msg": "Vault is not active"
     },
     {
       "code": 6012,
-      "name": "tooManyDestinations",
-      "msg": "Too many withdrawal destinations (max 20 allowed)"
+      "name": "alreadyMember",
+      "msg": "Already a member of this vault"
     },
     {
       "code": 6013,
-      "name": "destinationAlreadyExists",
-      "msg": "Destination address already exists"
+      "name": "balanceNotZero",
+      "msg": "Member balance must be zero to leave"
     },
     {
       "code": 6014,
-      "name": "cannotSetOwnAddress",
-      "msg": "Cannot set own address as withdrawal destination"
+      "name": "noPenaltyRewards",
+      "msg": "No penalty rewards to claim"
     },
     {
       "code": 6015,
-      "name": "destinationNotFound",
-      "msg": "Withdrawal destination not found"
+      "name": "tokenMintMismatch",
+      "msg": "Token mint does not match vault"
     },
     {
       "code": 6016,
-      "name": "destinationNotApproved",
-      "msg": "Destination is not approved for withdrawals"
-    },
-    {
-      "code": 6017,
-      "name": "tooManyBypassRequests",
-      "msg": "Too many bypass requests (max 10 allowed)"
-    },
-    {
-      "code": 6018,
-      "name": "requestStillInTimelock",
-      "msg": "Request is still in timelock period"
-    },
-    {
-      "code": 6019,
-      "name": "requestNotFound",
-      "msg": "Bypass request not found"
-    },
-    {
-      "code": 6020,
-      "name": "invalidSavingsProgram",
-      "msg": "Invalid savings program"
-    },
-    {
-      "code": 6021,
-      "name": "proxyAlreadyExists",
-      "msg": "Proxy already exists for this user"
-    },
-    {
-      "code": 6022,
-      "name": "cpiCallFailed",
-      "msg": "Cross-program invocation failed"
-    },
-    {
-      "code": 6023,
-      "name": "alreadyActivated",
-      "msg": "Permanent address already activated"
-    },
-    {
-      "code": 6024,
-      "name": "invalidTreasuryAddress",
-      "msg": "Invalid treasury address"
-    },
-    {
-      "code": 6025,
       "name": "unauthorized",
       "msg": "Unauthorized: only admin can perform this action"
     },
     {
-      "code": 6026,
-      "name": "permanentAddressNotActivated",
-      "msg": "Permanent address not activated - payment required"
+      "code": 6017,
+      "name": "expectedSolVault",
+      "msg": "Vault is a SOL vault, use SOL instructions"
     },
     {
-      "code": 6027,
-      "name": "insufficientFundsForActivation",
-      "msg": "Insufficient funds for activation fee"
+      "code": 6018,
+      "name": "expectedSplVault",
+      "msg": "Vault is an SPL vault, use SPL instructions"
     },
     {
-      "code": 6028,
-      "name": "invalidPenaltyRate",
-      "msg": "Invalid penalty rate: must be between 0 and 5000 basis points (50%)"
+      "code": 6019,
+      "name": "weeklyLessThanDaily",
+      "msg": "Weekly limit must be >= daily limit"
     },
     {
-      "code": 6029,
-      "name": "programConfigNotInitialized",
-      "msg": "Program config not initialized - penalty rate not available"
+      "code": 6020,
+      "name": "monthlyLessThanWeekly",
+      "msg": "Monthly limit must be >= weekly limit"
+    },
+    {
+      "code": 6021,
+      "name": "timelockNotExpired",
+      "msg": "Timelock has not expired yet"
+    },
+    {
+      "code": 6022,
+      "name": "invalidDestinationTitle",
+      "msg": "Destination title is empty or too long"
+    },
+    {
+      "code": 6023,
+      "name": "cannotAddSelfAsDestination",
+      "msg": "Cannot add own address as withdrawal destination"
+    },
+    {
+      "code": 6024,
+      "name": "bypassRequestExists",
+      "msg": "Active bypass request already exists"
+    },
+    {
+      "code": 6025,
+      "name": "proposalAlreadyExists",
+      "msg": "Active rule change proposal already exists"
     }
   ],
   "types": [
     {
       "name": "bypassRequest",
       "docs": [
-        "Represents a pending bypass request for withdrawals exceeding spending limits"
+        "A bypass request to withdraw above limits after a timelock.",
+        "One active per vault+member. PDA seeds: [\"bypass_request\", vault, member]"
       ],
       "type": {
         "kind": "struct",
         "fields": [
           {
-            "name": "requestId",
-            "docs": [
-              "Unique identifier for this request"
-            ],
-            "type": {
-              "array": [
-                "u8",
-                32
-              ]
-            }
+            "name": "vault",
+            "type": "pubkey"
+          },
+          {
+            "name": "member",
+            "type": "pubkey"
           },
           {
             "name": "amount",
-            "docs": [
-              "Amount to withdraw (in lamports for SOL, token units for SPL)"
-            ],
             "type": "u64"
+          },
+          {
+            "name": "isSol",
+            "type": "bool"
           },
           {
             "name": "tokenMint",
-            "docs": [
-              "Token mint (use System Program ID for SOL)"
-            ],
-            "type": "pubkey"
-          },
-          {
-            "name": "bypassingPeriod",
-            "docs": [
-              "Which spending period this request is bypassing"
-            ],
-            "type": "string"
-          },
-          {
-            "name": "destination",
-            "docs": [
-              "Destination address for the withdrawal"
-            ],
             "type": "pubkey"
           },
           {
             "name": "executeAfter",
-            "docs": [
-              "Unix timestamp when this request can be executed (24 hours after creation)"
-            ],
             "type": "i64"
-          },
-          {
-            "name": "executed",
-            "docs": [
-              "Whether this request has been executed"
-            ],
-            "type": "bool"
-          },
-          {
-            "name": "cancelled",
-            "docs": [
-              "Whether this request has been cancelled"
-            ],
-            "type": "bool"
           },
           {
             "name": "createdAt",
-            "docs": [
-              "When this request was created"
-            ],
             "type": "i64"
-          }
-        ]
-      }
-    },
-    {
-      "name": "depositProxy",
-      "docs": [
-        "Deposit proxy account that provides permanent addresses for exchange deposits",
-        "This allows users to have deterministic deposit addresses that forward to their savings"
-      ],
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "owner",
-            "docs": [
-              "The owner of this deposit proxy (user's wallet)"
-            ],
-            "type": "pubkey"
-          },
-          {
-            "name": "savingsProgram",
-            "docs": [
-              "The savings program this proxy forwards to (should be current program)"
-            ],
-            "type": "pubkey"
           },
           {
             "name": "bump",
-            "docs": [
-              "Bump seed for this PDA"
-            ],
             "type": "u8"
-          },
-          {
-            "name": "createdAt",
-            "docs": [
-              "When this proxy was created"
-            ],
-            "type": "i64"
-          },
-          {
-            "name": "lastUsed",
-            "docs": [
-              "Last time this proxy was used"
-            ],
-            "type": "i64"
-          },
-          {
-            "name": "depositCount",
-            "docs": [
-              "Total number of deposits forwarded"
-            ],
-            "type": "u64"
           }
         ]
       }
     },
     {
-      "name": "pendingProposal",
+      "name": "pendingDestinationRequest",
       "docs": [
-        "Pending proposal for spending limit changes (mirrors EVM proposal system)"
+        "A pending request to add a withdrawal destination (timelock).",
+        "PDA seeds: [\"pending_dest\", vault, member, destination]"
       ],
       "type": {
         "kind": "struct",
         "fields": [
           {
-            "name": "proposalId",
-            "docs": [
-              "Unique identifier for this proposal"
-            ],
-            "type": {
-              "array": [
-                "u8",
-                32
-              ]
-            }
+            "name": "vault",
+            "type": "pubkey"
           },
           {
-            "name": "periodName",
-            "docs": [
-              "Period name being modified (\"Daily\", \"Weekly\", \"Monthly\", etc.)"
-            ],
-            "type": "string"
+            "name": "member",
+            "type": "pubkey"
           },
           {
-            "name": "newLimit",
-            "docs": [
-              "New limit being proposed"
-            ],
-            "type": "u64"
-          },
-          {
-            "name": "executeAfter",
-            "docs": [
-              "Unix timestamp when this proposal can be executed"
-            ],
-            "type": "i64"
-          },
-          {
-            "name": "executed",
-            "docs": [
-              "Whether this proposal has been executed"
-            ],
-            "type": "bool"
-          },
-          {
-            "name": "isIncrease",
-            "docs": [
-              "Whether this is a limit increase (true) or decrease/removal (false)"
-            ],
-            "type": "bool"
-          },
-          {
-            "name": "createdAt",
-            "docs": [
-              "When this proposal was created"
-            ],
-            "type": "i64"
-          }
-        ]
-      }
-    },
-    {
-      "name": "pendingWithdrawalDestinationRequest",
-      "docs": [
-        "Represents a pending withdrawal destination request (similar to EVM timelock system)"
-      ],
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "requestId",
-            "docs": [
-              "Unique identifier for this request"
-            ],
-            "type": {
-              "array": [
-                "u8",
-                32
-              ]
-            }
-          },
-          {
-            "name": "address",
-            "docs": [
-              "The destination address to be added"
-            ],
+            "name": "destination",
             "type": "pubkey"
           },
           {
             "name": "title",
-            "docs": [
-              "Title/label for this destination"
-            ],
             "type": "string"
           },
           {
             "name": "executeAfter",
-            "docs": [
-              "Unix timestamp when this request can be executed (24 hours after creation)"
-            ],
             "type": "i64"
-          },
-          {
-            "name": "executed",
-            "docs": [
-              "Whether this request has been executed"
-            ],
-            "type": "bool"
-          },
-          {
-            "name": "cancelled",
-            "docs": [
-              "Whether this request has been cancelled"
-            ],
-            "type": "bool"
           },
           {
             "name": "createdAt",
-            "docs": [
-              "When this request was created"
-            ],
             "type": "i64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
           }
         ]
       }
@@ -3621,304 +3843,298 @@ export type SavingsCore = {
     {
       "name": "programConfig",
       "docs": [
-        "Program configuration that stores treasury and fee settings"
+        "Global program configuration."
       ],
       "type": {
         "kind": "struct",
         "fields": [
           {
             "name": "treasuryAddress",
-            "docs": [
-              "Treasury address where activation fees are sent"
-            ],
             "type": "pubkey"
           },
           {
-            "name": "permanentAddressFeeLamports",
-            "docs": [
-              "Fee amount in lamports for permanent address activation ($5 USD equivalent)"
-            ],
-            "type": "u64"
+            "name": "defaultPenaltyRateBps",
+            "type": "u16"
           },
           {
             "name": "admin",
-            "docs": [
-              "Admin address that can update treasury and fee settings"
-            ],
             "type": "pubkey"
           },
           {
             "name": "bump",
-            "docs": [
-              "Bump seed for this PDA"
-            ],
             "type": "u8"
           },
           {
             "name": "createdAt",
-            "docs": [
-              "When this config was created"
-            ],
             "type": "i64"
           },
           {
             "name": "updatedAt",
-            "docs": [
-              "Last update timestamp"
-            ],
             "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ruleChangeProposal",
+      "docs": [
+        "A pending proposal to change vault rules (timelock).",
+        "Only one active per vault. PDA seeds: [\"rule_proposal\", vault]"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "vault",
+            "type": "pubkey"
+          },
+          {
+            "name": "proposer",
+            "type": "pubkey"
+          },
+          {
+            "name": "newDailyLimit",
+            "type": {
+              "option": "u64"
+            }
+          },
+          {
+            "name": "newWeeklyLimit",
+            "type": {
+              "option": "u64"
+            }
+          },
+          {
+            "name": "newMonthlyLimit",
+            "type": {
+              "option": "u64"
+            }
+          },
+          {
+            "name": "newLimitsArePercentage",
+            "type": {
+              "option": "bool"
+            }
+          },
+          {
+            "name": "newPenaltyRateBps",
+            "type": {
+              "option": "u16"
+            }
+          },
+          {
+            "name": "executeAfter",
+            "type": "i64"
+          },
+          {
+            "name": "createdAt",
+            "type": "i64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "vault",
+      "docs": [
+        "A vault holds a single token type with withdrawal limits.",
+        "Limits can be fixed amounts (lamports) or percentage-based (bps of balance).",
+        "Personal vaults: single member, mutable rules.",
+        "Community vaults: multiple members, immutable rules, penalty redistribution."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "creator",
+            "type": "pubkey"
+          },
+          {
+            "name": "vaultType",
+            "type": {
+              "defined": {
+                "name": "vaultType"
+              }
+            }
+          },
+          {
+            "name": "tokenMint",
+            "docs": [
+              "SPL token mint. Pubkey::default() means native SOL vault."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "name",
+            "type": "string"
+          },
+          {
+            "name": "description",
+            "type": "string"
+          },
+          {
+            "name": "dailyLimit",
+            "docs": [
+              "Daily withdrawal limit. Interpretation depends on `limits_are_percentage`.",
+              "Fixed mode: amount in lamports/smallest-unit. Percentage mode: basis points (e.g. 500 = 5%)."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "weeklyLimit",
+            "docs": [
+              "Weekly withdrawal limit (same interpretation as daily_limit)."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "monthlyLimit",
+            "docs": [
+              "Monthly withdrawal limit (same interpretation as daily_limit)."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "limitsArePercentage",
+            "docs": [
+              "When true, daily/weekly/monthly_limit are basis points of member balance.",
+              "When false, they are fixed amounts in lamports/smallest-unit."
+            ],
+            "type": "bool"
           },
           {
             "name": "penaltyRateBps",
             "docs": [
-              "Penalty rate in basis points (e.g., 1000 = 10%) for instant bypass withdrawals"
+              "Penalty rate for instant withdrawals beyond limits (always basis points)"
             ],
             "type": "u16"
-          }
-        ]
-      }
-    },
-    {
-      "name": "savingsAccount",
-      "docs": [
-        "Main savings account that stores user's deposit information",
-        "Similar to the userTokenBalances mapping in your EVM contract"
-      ],
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "owner",
-            "docs": [
-              "The owner of this savings account"
-            ],
-            "type": "pubkey"
           },
           {
-            "name": "solBalance",
+            "name": "vaultNonce",
             "docs": [
-              "Total SOL deposited (in lamports)"
+              "Creator-chosen nonce to allow multiple vaults per creator"
             ],
             "type": "u64"
           },
           {
-            "name": "splBalances",
-            "docs": [
-              "SPL token balances"
-            ],
-            "type": {
-              "vec": {
-                "defined": {
-                  "name": "tokenBalance"
-                }
-              }
-            }
+            "name": "memberCount",
+            "type": "u32"
           },
           {
-            "name": "bump",
+            "name": "totalBalance",
             "docs": [
-              "Bump seed for this PDA"
+              "Sum of all member balances (excluding penalty pool)"
             ],
-            "type": "u8"
+            "type": "u64"
+          },
+          {
+            "name": "accumulatedPenaltyPerShare",
+            "docs": [
+              "Accumulated penalty per share, scaled by PRECISION (reward-per-share pattern)"
+            ],
+            "type": "u128"
+          },
+          {
+            "name": "isActive",
+            "type": "bool"
           },
           {
             "name": "createdAt",
-            "docs": [
-              "When this account was created"
-            ],
             "type": "i64"
           },
           {
             "name": "updatedAt",
-            "docs": [
-              "Last update timestamp"
-            ],
             "type": "i64"
           },
           {
-            "name": "withdrawalDestinations",
-            "docs": [
-              "Approved withdrawal destinations (addresses user can withdraw to)"
-            ],
-            "type": {
-              "vec": {
-                "defined": {
-                  "name": "withdrawalDestination"
-                }
-              }
-            }
-          },
-          {
-            "name": "pendingWithdrawalDestinationRequests",
-            "docs": [
-              "Pending withdrawal destination requests (addresses pending approval with timelock)"
-            ],
-            "type": {
-              "vec": {
-                "defined": {
-                  "name": "pendingWithdrawalDestinationRequest"
-                }
-              }
-            }
-          },
-          {
-            "name": "pendingBypassRequests",
-            "docs": [
-              "Pending bypass requests for withdrawals exceeding spending limits"
-            ],
-            "type": {
-              "vec": {
-                "defined": {
-                  "name": "bypassRequest"
-                }
-              }
-            }
-          },
-          {
-            "name": "permanentAddressActivated",
-            "docs": [
-              "Whether permanent address functionality has been activated with payment"
-            ],
-            "type": "bool"
-          },
-          {
-            "name": "activationPaymentSignature",
-            "docs": [
-              "The transaction signature of the activation payment (for verification)"
-            ],
-            "type": "bytes"
-          },
-          {
-            "name": "activatedAt",
-            "docs": [
-              "When the permanent address was activated (Unix timestamp)"
-            ],
-            "type": "i64"
-          },
-          {
-            "name": "timePeriodLimits",
-            "docs": [
-              "Array of time-based spending limits (Daily, Weekly, Monthly, Custom)"
-            ],
-            "type": {
-              "vec": {
-                "defined": {
-                  "name": "timePeriodLimit"
-                }
-              }
-            }
-          },
-          {
-            "name": "pendingProposals",
-            "docs": [
-              "Pending proposals for limit changes (mirrors EVM proposal system)"
-            ],
-            "type": {
-              "vec": {
-                "defined": {
-                  "name": "pendingProposal"
-                }
-              }
-            }
-          },
-          {
-            "name": "hasCommittedSetup",
-            "docs": [
-              "Track if user has committed initial setup (flattened from UserSetupData)"
-            ],
-            "type": "bool"
-          },
-          {
-            "name": "totalLockedValue",
-            "docs": [
-              "Total value locked across all periods (for validation)"
-            ],
-            "type": "u64"
-          },
-          {
-            "name": "commitTimestamp",
-            "docs": [
-              "When setup was committed (Unix timestamp)"
-            ],
-            "type": "i64"
+            "name": "bump",
+            "type": "u8"
           }
         ]
       }
     },
     {
-      "name": "timePeriodLimit",
+      "name": "vaultMember",
       "docs": [
-        "Represents a time-based spending limit (mirrors EVM TimePeriodLimit struct)"
+        "Per-member state within a vault."
       ],
       "type": {
         "kind": "struct",
         "fields": [
           {
-            "name": "limit",
-            "docs": [
-              "Spending limit for this period (in lamports for SOL, token amount for SPL)"
-            ],
-            "type": "u64"
-          },
-          {
-            "name": "spent",
-            "docs": [
-              "Amount spent in current period"
-            ],
-            "type": "u64"
-          },
-          {
-            "name": "lastReset",
-            "docs": [
-              "When this period was last reset (Unix timestamp)"
-            ],
-            "type": "i64"
-          },
-          {
-            "name": "duration",
-            "docs": [
-              "Period duration in seconds (86400 for daily, 604800 for weekly, etc.)"
-            ],
-            "type": "u64"
-          },
-          {
-            "name": "name",
-            "docs": [
-              "Period name (\"Daily\", \"Weekly\", \"Monthly\", \"Custom Salary\", etc.)"
-            ],
-            "type": "string"
-          },
-          {
-            "name": "active",
-            "docs": [
-              "Whether this limit is currently active"
-            ],
-            "type": "bool"
-          }
-        ]
-      }
-    },
-    {
-      "name": "tokenBalance",
-      "docs": [
-        "Represents a balance for a specific SPL token"
-      ],
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "mint",
-            "docs": [
-              "The mint address of the SPL token"
-            ],
+            "name": "vault",
             "type": "pubkey"
           },
           {
-            "name": "amount",
+            "name": "member",
+            "type": "pubkey"
+          },
+          {
+            "name": "balance",
+            "type": "u64"
+          },
+          {
+            "name": "dailySpent",
+            "type": "u64"
+          },
+          {
+            "name": "dailyLastReset",
+            "type": "i64"
+          },
+          {
+            "name": "weeklySpent",
+            "type": "u64"
+          },
+          {
+            "name": "weeklyLastReset",
+            "type": "i64"
+          },
+          {
+            "name": "monthlySpent",
+            "type": "u64"
+          },
+          {
+            "name": "monthlyLastReset",
+            "type": "i64"
+          },
+          {
+            "name": "penaltyDebt",
             "docs": [
-              "The amount of tokens deposited"
+              "Reward-per-share debt for penalty redistribution"
+            ],
+            "type": "u128"
+          },
+          {
+            "name": "unclaimedPenalties",
+            "docs": [
+              "Accumulated but unclaimed penalty rewards"
             ],
             "type": "u64"
+          },
+          {
+            "name": "joinedAt",
+            "type": "i64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "vaultType",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "personal"
+          },
+          {
+            "name": "community"
           }
         ]
       }
@@ -3926,38 +4142,35 @@ export type SavingsCore = {
     {
       "name": "withdrawalDestination",
       "docs": [
-        "Represents an approved withdrawal destination address"
+        "An approved withdrawal destination for a vault member.",
+        "PDA seeds: [\"withdrawal_dest\", vault, member, destination]"
       ],
       "type": {
         "kind": "struct",
         "fields": [
           {
-            "name": "address",
-            "docs": [
-              "The destination address"
-            ],
+            "name": "vault",
+            "type": "pubkey"
+          },
+          {
+            "name": "member",
+            "type": "pubkey"
+          },
+          {
+            "name": "destination",
             "type": "pubkey"
           },
           {
             "name": "title",
-            "docs": [
-              "Optional title/label for this destination"
-            ],
             "type": "string"
           },
           {
             "name": "addedAt",
-            "docs": [
-              "When this destination was added"
-            ],
             "type": "i64"
           },
           {
-            "name": "active",
-            "docs": [
-              "Whether this destination is currently active"
-            ],
-            "type": "bool"
+            "name": "bump",
+            "type": "u8"
           }
         ]
       }
