@@ -37,6 +37,7 @@ export async function fetchWithdrawalAddresses(params) {
         });
       } else {
         return await fetchEvmWithdrawalAddresses({
+          transactionManager,
           savingsContract,
           userAddress
         });
