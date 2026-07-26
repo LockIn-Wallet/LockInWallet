@@ -1,7 +1,8 @@
 import React from "react";
 
-import Icon from "../../atoms/Icon.js";
 import LandingLink from "../../atoms/LandingLink.js";
+
+import logo from "../../../assets/images/logo-mint-nav.png";
 
 import { landingStyles } from "../../../styles";
 
@@ -15,10 +16,7 @@ import { NAV_LINKS, GITHUB_URL } from "../../../utils/landingContent.js";
 const LandingNav = ({ onLaunch }) => (
   <nav style={landingStyles.nav}>
     <LandingLink href="/" internal style={landingStyles.brand}>
-      <span style={landingStyles.brandMark}>
-        <Icon name="lock" size={15} />
-      </span>
-      <span style={landingStyles.brandName}>LockIn</span>
+      <img src={logo} alt="LockIn Wallet" style={landingStyles.brandLogo} />
     </LandingLink>
 
     <div className="landing-nav-links" style={landingStyles.navLinks}>

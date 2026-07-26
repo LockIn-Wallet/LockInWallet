@@ -1,7 +1,8 @@
 import React from "react";
 
-import Icon from "../../atoms/Icon.js";
 import LandingLink from "../../atoms/LandingLink.js";
+
+import logo from "../../../assets/images/logo-mint-nav.png";
 
 import { landingStyles } from "../../../styles";
 
@@ -15,12 +16,11 @@ const LandingFooter = () => (
   <>
     <footer style={landingStyles.footer}>
       <div>
-        <span style={landingStyles.brand}>
-          <span style={landingStyles.brandMark}>
-            <Icon name="lock" size={15} />
-          </span>
-          <span style={landingStyles.brandName}>LockIn</span>
-        </span>
+        <img
+          src={logo}
+          alt="LockIn Wallet"
+          style={landingStyles.brandLogoFooter}
+        />
         <p style={landingStyles.footerBlurb}>
           A commitment savings account whose withdrawal limits are enforced by
           smart contracts, not by good intentions.

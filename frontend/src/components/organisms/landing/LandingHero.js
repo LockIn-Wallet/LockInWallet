@@ -17,7 +17,7 @@ const LandingHero = ({ onLaunch }) => (
     <div style={landingStyles.heroCopy}>
       <span style={landingStyles.badge}>
         <Icon name="shield" size={13} />
-        SAVINGS WITH A SPEED LIMIT
+        TIME-LOCK WALLET
       </span>
 
       <h1 style={landingStyles.heroTitle}>
@@ -27,9 +27,7 @@ const LandingHero = ({ onLaunch }) => (
       </h1>
 
       <p style={landingStyles.heroSubtitle}>
-        Set how much can leave your wallet, and how often. From then on a
-        contract enforces it — not your willpower, and not whoever ends up
-        holding your key.
+        Set withdrawal limits. From then on a contract enforces it and bypassing the limits require 24.
       </p>
 
       <div style={landingStyles.ctaRowCenter}>

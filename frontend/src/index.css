@@ -145,6 +145,17 @@ a:hover {
   }
 }
 
+/* Below this the three nav groups no longer fit on one line. Rather than let
+   the CTA drop under the logo at whatever position it lands, the links take a
+   full row of their own so brand and CTA stay paired on the row above. */
+@media (max-width: 900px) {
+  .landing-nav-links {
+    order: 3;
+    flex-basis: 100%;
+    justify-content: center;
+  }
+}
+
 @media (max-width: 720px) {
   .landing-shell nav,
   .landing-shell section,

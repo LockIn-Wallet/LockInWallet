@@ -107,9 +107,23 @@ export const landingStyles = {
   brand: {
     display: "flex",
     alignItems: "center",
+    flexShrink: 0,
     gap: space[3],
     textDecoration: "none",
     color: colors.text.primary,
+  },
+
+  // The logo carries the wordmark, so nothing sits beside it
+  brandLogo: {
+    height: "40px",
+    width: "auto",
+    display: "block",
+  },
+
+  brandLogoFooter: {
+    height: "34px",
+    width: "auto",
+    display: "block",
   },
 
   brandMark: {
@@ -133,11 +147,15 @@ export const landingStyles = {
   navLinks: {
     display: "flex",
     alignItems: "center",
-    gap: space[6],
+    justifyContent: "center",
+    gap: space[5],
     flexWrap: "wrap",
+    flex: "1 1 auto",
+    minWidth: 0,
   },
 
   navLink: {
+    whiteSpace: "nowrap",
     fontSize: type.body,
     color: colors.text.light,
     textDecoration: "none",
@@ -199,6 +217,8 @@ export const landingStyles = {
   ctaCompact: {
     display: "inline-flex",
     margin: 0,
+    flexShrink: 0,
+    whiteSpace: "nowrap",
     alignItems: "center",
     gap: space[2],
     backgroundColor: colors.text.primary,
