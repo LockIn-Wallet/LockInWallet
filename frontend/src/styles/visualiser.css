@@ -87,8 +87,8 @@
   text-align: left;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%);
-  color: #f1f5f9;
+  background: linear-gradient(135deg, #0a0c0d 0%, #0e1214 50%, #0a0c0d 100%);
+  color: #e8eaec;
   padding: 2rem 1rem;
   border-radius: 12px;
   /* Own stacking context, so nothing bleeds either way */
@@ -109,7 +109,7 @@
   width: 100%;
   height: 8px;
   border-radius: 4px;
-  background: #475569;
+  background: #2a3236;
   cursor: pointer;
 }
 
@@ -119,15 +119,15 @@
   height: 20px;
   width: 20px;
   border-radius: 50%;
-  background: #14b8a6;
-  border: 2px solid #0d9488;
+  background: #7ee3b8;
+  border: 2px solid #6fd9a8;
   cursor: pointer;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
   transition: all 0.2s ease;
 }
 
 .fm-page .fm-slider::-webkit-slider-thumb:hover {
-  background: #0d9488;
+  background: #6fd9a8;
   transform: scale(1.1);
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
 }
@@ -136,15 +136,15 @@
   height: 20px;
   width: 20px;
   border-radius: 50%;
-  background: #14b8a6;
-  border: 2px solid #0d9488;
+  background: #7ee3b8;
+  border: 2px solid #6fd9a8;
   cursor: pointer;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
   transition: all 0.2s ease;
 }
 
 .fm-page .fm-slider::-moz-range-thumb:hover {
-  background: #0d9488;
+  background: #6fd9a8;
   transform: scale(1.1);
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
 }

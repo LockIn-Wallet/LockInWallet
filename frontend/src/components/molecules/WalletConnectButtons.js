@@ -32,7 +32,7 @@ const WalletConnectButtons = ({ networkType, connectWallet, onConnectPhantom }) 
       onMouseEnter={buttonHoverEffects.metamaskHover}
       onMouseLeave={buttonHoverEffects.metamaskReset}
     >
-      🦊 Connect MetaMask
+      Connect MetaMask
     </button>
   );
 
@@ -53,7 +53,7 @@ const WalletConnectButtons = ({ networkType, connectWallet, onConnectPhantom }) 
               onMouseEnter={buttonHoverEffects.phantomHover}
               onMouseLeave={buttonHoverEffects.phantomReset}
             >
-              👻 Connect Phantom
+              Connect Phantom
             </button>
           )}
         </>

@@ -33,15 +33,10 @@ const regularTiers = PRIZE_TIERS.filter((tier) => !tier.grand);
  */
 const PrizeSavingsShowcase = () => (
   <div style={homeStyles.section}>
-    <h2 style={homeStyles.sectionTitle}>
-      🎁 No-loss prize savings
-      <span style={homeStyles.demoBadge}>opt-in</span>
-    </h2>
     <p style={homeStyles.sectionSubtitle}>
-      It's a savings lottery where the ticket is free: your locked funds join a
-      shared pool, the pool's interest is paid out as prizes, and your deposit
-      is always yours to withdraw. Worst case you win nothing — you never lose
-      a cent.
+      A savings lottery where the ticket is free: the pool&apos;s interest is
+      paid out as prizes, and your deposit is always yours to withdraw. Worst
+      case you win nothing — you never lose a cent.
     </p>
 
     <div style={homeStyles.stepsRow}>

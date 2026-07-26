@@ -8,10 +8,10 @@ export const buttonStyles = {
     borderRadius: borderRadius.xl,
     border: 'none',
     backgroundColor: colors.button.primary,
-    color: colors.text.primary,
+    color: colors.text.onAccent,
     cursor: 'pointer',
     fontSize: fontSize.lg,
-    fontWeight: fontWeight.bold,
+    fontWeight: fontWeight.semibold,
     transition: transitions.normal,
   },
 
@@ -37,7 +37,7 @@ export const buttonStyles = {
     borderRadius: borderRadius.xl,
     border: 'none',
     backgroundColor: colors.success.main,
-    color: colors.text.primary,
+    color: colors.text.onAccent,
     cursor: 'pointer',
     fontSize: fontSize.lg,
     fontWeight: fontWeight.bold,
@@ -60,7 +60,7 @@ export const buttonStyles = {
     borderRadius: borderRadius.lg,
     border: 'none',
     backgroundColor: colors.warning.main,
-    color: colors.text.primary,
+    color: colors.text.dark,
     cursor: 'pointer',
     fontSize: fontSize.normal,
     fontWeight: fontWeight.bold,
@@ -99,10 +99,10 @@ export const buttonStyles = {
     borderRadius: borderRadius.lg,
     border: 'none',
     backgroundColor: colors.button.primary,
-    color: colors.text.primary,
+    color: colors.text.onAccent,
     cursor: 'pointer',
     fontSize: fontSize.normal,
-    fontWeight: fontWeight.medium,
+    fontWeight: fontWeight.semibold,
     transition: transitions.normal,
   },
 
@@ -112,10 +112,10 @@ export const buttonStyles = {
     borderRadius: borderRadius.lg,
     border: `1px solid ${colors.button.primary}`,
     backgroundColor: colors.button.primary,
-    color: colors.text.primary,
+    color: colors.text.onAccent,
     cursor: 'pointer',
     fontSize: fontSize.normal,
-    fontWeight: fontWeight.medium,
+    fontWeight: fontWeight.semibold,
     transition: transitions.normal,
   },
 
@@ -143,16 +143,18 @@ export const buttonStyles = {
     transition: transitions.fast,
   },
 
-  // Wallet connection buttons
+  // Wallet connection buttons. These carry the page's primary action, so they
+  // take the accent rather than each wallet's brand colour — two vendor colours
+  // competing at the CTA is the loudest thing on an otherwise near-neutral page.
   metamask: {
     padding: `${spacing.xl} ${spacing.xxxxl}`,
-    borderRadius: borderRadius.xl,
+    borderRadius: borderRadius.md,
     border: 'none',
-    backgroundColor: colors.wallet.metamask,
-    color: colors.text.primary,
+    backgroundColor: colors.primary.main,
+    color: colors.text.onAccent,
     cursor: 'pointer',
     fontSize: fontSize.lg,
-    fontWeight: fontWeight.bold,
+    fontWeight: fontWeight.semibold,
     transition: transitions.normal,
     display: 'flex',
     alignItems: 'center',
@@ -162,13 +164,13 @@ export const buttonStyles = {
 
   phantom: {
     padding: `${spacing.xl} ${spacing.xxxxl}`,
-    borderRadius: borderRadius.xl,
-    border: 'none',
-    backgroundColor: colors.wallet.phantom,
+    borderRadius: borderRadius.md,
+    border: `1px solid ${colors.border.strong}`,
+    backgroundColor: 'transparent',
     color: colors.text.primary,
     cursor: 'pointer',
     fontSize: fontSize.lg,
-    fontWeight: fontWeight.bold,
+    fontWeight: fontWeight.semibold,
     transition: transitions.normal,
     display: 'flex',
     alignItems: 'center',
@@ -187,17 +189,17 @@ export const buttonHoverEffects = {
   },
 
   metamaskHover: (e) => {
-    e.target.style.backgroundColor = colors.wallet.metamaskHover;
+    e.target.style.backgroundColor = colors.primary.light;
   },
   metamaskReset: (e) => {
-    e.target.style.backgroundColor = colors.wallet.metamask;
+    e.target.style.backgroundColor = colors.primary.main;
   },
 
   phantomHover: (e) => {
-    e.target.style.backgroundColor = colors.wallet.phantomHover;
+    e.target.style.borderColor = colors.primary.main;
   },
   phantomReset: (e) => {
-    e.target.style.backgroundColor = colors.wallet.phantom;
+    e.target.style.borderColor = colors.border.strong;
   },
 
   refreshHover: (e) => {

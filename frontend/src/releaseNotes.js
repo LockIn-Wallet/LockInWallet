@@ -9,6 +9,25 @@
 
 export const RELEASE_NOTES = [
   {
+    version: "Unreleased",
+    date: "",
+    title: "A home page you can check",
+    highlights: [
+      {
+        emoji: "🔍",
+        text: "The home page has been rebuilt around one idea: every claim on it should be something you can verify. It opens with a live vault refusing a withdrawal that breaks its own limit, and links straight to the source, the security model and the governance queue.",
+      },
+      {
+        emoji: "📋",
+        text: "We removed the claim that there are 'zero admin keys' — it wasn't true. Upgrades are still executed by a single maintainer key today, and the page now says so plainly, alongside the protection that does hold: you can always start a full exit and be out within 24 hours.",
+      },
+      {
+        emoji: "🎨",
+        text: "The whole app moves to one design system — a dark, near-neutral palette with a single green accent that only ever means 'enforced on-chain', and a monospaced typeface for anything the contract says: amounts, countdowns, addresses.",
+      },
+    ],
+  },
+  {
     version: "0.3.1",
     date: "2026-07-26",
     title: "Clearer recovery story",

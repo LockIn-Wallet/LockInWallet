@@ -110,7 +110,9 @@ const GovernancePage = ({ transactionManager, navigate }) => {
         {RELEASE_NOTES.map((release) => (
           <div key={release.version} style={{ marginBottom: spacing.lg }}>
             <div style={{ ...utilityStyles.textSuccess, fontWeight: "bold", marginBottom: spacing.sm }}>
-              v{release.version} — {release.title}
+              {/* Unreleased entries have no version number to prefix */}
+              {/^\d/.test(release.version) ? `v${release.version}` : release.version}{" "}
+              — {release.title}
               <span style={{ ...utilityStyles.textMuted, fontWeight: "normal", marginLeft: spacing.sm, fontSize: fontSize.sm }}>
                 {release.date}
               </span>

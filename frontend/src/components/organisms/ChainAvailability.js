@@ -11,13 +11,6 @@ import { SUPPORTED_CHAINS } from "../../utils/homeDemo.js";
  */
 const ChainAvailability = () => (
   <div style={homeStyles.section}>
-    <h2 style={homeStyles.sectionTitle}>⛓️ Where your vault lives</h2>
-    <p style={homeStyles.sectionSubtitle}>
-      LockInWallet runs on Optimism today — an Ethereum layer 2, so
-      withdrawals confirm in seconds for pennies while security still settles
-      back to Ethereum. More chains are on the way.
-    </p>
-
     <div style={homeStyles.chainGrid}>
       {SUPPORTED_CHAINS.map((chain) => (
         <div
@@ -51,7 +44,6 @@ const ChainAvailability = () => (
                 : homeStyles.chainBadge
             }
           >
-            {chain.live ? "🟢 " : "🚧 "}
             {chain.status}
           </div>
 

@@ -28,13 +28,14 @@ import {
  * Props:
  *   compact  - drop the deep-dive panels and show a CTA instead. Used for the
  *              homepage embed, where the full dashboard would run too long.
- *   title    - heading override
+ *   title    - heading override; pass null when the surrounding page already
+ *              supplies a heading, as the landing embed does
  *   subtitle - sub-heading override
  */
 const SavingsVisualiser = ({
   compact = false,
-  title = "🔮 Savings Visualiser",
-  subtitle = "See your life before it gets rekt.",
+  title = "Savings Visualiser",
+  subtitle = "See where each split actually lands you.",
 }) => {
   const [inputs, setInputs] = useState(DEFAULT_INPUTS);
   const [scenario, setScenario] = useState("balanced");
@@ -76,10 +77,12 @@ const SavingsVisualiser = ({
   return (
     <div className="fm-page">
       <div className="text-center mb-8">
-        <h2 className="text-3xl md:text-4xl font-bold text-white mb-3">
-          {title}
-        </h2>
-        <p className="text-lg text-slate-300 mb-2">{subtitle}</p>
+        {title && (
+          <h2 className="text-3xl md:text-4xl font-bold text-white mb-3">
+            {title}
+          </h2>
+        )}
+        {subtitle && <p className="text-lg text-slate-300 mb-2">{subtitle}</p>}
         <p className="text-xs text-slate-500">
           Illustrative projections, not financial advice.
         </p>

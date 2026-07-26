@@ -847,6 +847,10 @@ function AppContentInner({
     ? (solanaConnected && solanaWallet)
     : !!provider;
 
+  // The logged-out landing page is a full-width page with its own nav and
+  // footer — the app chrome would only duplicate them
+  const isLanding = location.pathname === "/" && !isWalletConnected;
+
   const networkConfig = networkType === "solana"
     ? (NETWORKS.solana?.[selectedNetwork] || NETWORKS.solana?.localhost)
     : (NETWORKS.evm?.[selectedNetwork] || {});
@@ -872,9 +876,18 @@ function AppContentInner({
   };
 
   return (
-    <div style={isWideRoute ? styles.app.containerWide : styles.app.container}>
-      <SocialLinks />
+    <div
+      style={
+        isLanding
+          ? styles.app.containerLanding
+          : isWideRoute
+          ? styles.app.containerWide
+          : styles.app.container
+      }
+    >
+      {!isLanding && <SocialLinks />}
 
+      {!isLanding && (
       <StatusHeader
         provider={provider}
         networkType={networkType}
@@ -889,6 +902,7 @@ function AppContentInner({
         switchNetworkType={switchNetworkType}
         switchNetwork={switchNetwork}
       />
+      )}
 
       <Routes>
         {/* Public — readable with or without a wallet */}
@@ -949,7 +963,7 @@ function AppContentInner({
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
 
-      <Footer />
+      {!isLanding && <Footer />}
     </div>
   );
 }
