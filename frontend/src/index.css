@@ -143,6 +143,16 @@ a:hover {
   .landing-steps-rule {
     display: none !important;
   }
+
+  /* Label and clock no longer fit side by side in a single column, and the
+     label was truncating. Stack them; the height is still fixed. */
+  .landing-bypass {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    justify-content: center !important;
+    gap: 2px !important;
+    height: 66px !important;
+  }
 }
 
 /* Below this the three nav groups no longer fit on one line. Rather than let

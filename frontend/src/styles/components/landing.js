@@ -407,6 +407,22 @@ export const landingStyles = {
     display: "block",
   },
 
+  bucketReset: {
+    ...monoBase,
+    display: "flex",
+    justifyContent: "flex-end",
+    fontSize: type.micro,
+    color: colors.text.gray,
+    height: "16px",
+    lineHeight: "16px",
+    marginTop: "5px",
+    whiteSpace: "nowrap",
+  },
+
+  bucketResetReady: {
+    color: colors.primary.lighter,
+  },
+
   bucketHeader: {
     display: "flex",
     alignItems: "baseline",
@@ -458,6 +474,11 @@ export const landingStyles = {
     boxSizing: "border-box",
   },
 
+  ticketReset: {
+    borderColor: colors.border.success,
+    color: colors.primary.light,
+  },
+
   ticketAccepted: {
     borderColor: colors.border.success,
     color: colors.primary.light,
@@ -488,39 +509,54 @@ export const landingStyles = {
     textOverflow: "ellipsis",
   },
 
-  // The 24h bypass clock. It only means anything once a request is refused,
-  // but it stays in flow at a constant height either way — appearing on
-  // demand would shove the rest of the page down mid-read.
+  // Always visible and always true: going over the limit costs a day, whether
+  // or not you have just tried. Reserving the space but hiding it left a hole
+  // on narrow screens; stating the rule fills that space with something worth
+  // reading, and the height never changes because the text never does.
   bypassStrip: {
     display: "flex",
     alignItems: "center",
     justifyContent: "space-between",
     gap: space[3],
-    flexWrap: "wrap",
+    flexWrap: "nowrap",
     backgroundColor: colors.background.dark,
-    border: `1px solid ${colors.border.warning}`,
+    border: `1px solid ${colors.border.hairline}`,
     borderRadius: borderRadius.lg,
     padding: `${space[3]} ${space[4]}`,
     marginTop: space[4],
-    transition: "opacity 0.25s ease",
+    height: "48px",
+    boxSizing: "border-box",
+    transition: "border-color 0.25s ease, color 0.25s ease",
   },
 
-  bypassStripIdle: {
-    opacity: 0,
-    visibility: "hidden",
+  // Armed: a refused request has started the clock
+  bypassStripActive: {
+    borderColor: colors.border.warning,
   },
 
   bypassLabel: {
     fontSize: type.small,
-    color: colors.text.light,
+    color: colors.text.muted,
+    lineHeight: "20px",
+    whiteSpace: "nowrap",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    minWidth: 0,
   },
 
   bypassClock: {
     ...monoBase,
-    fontSize: type.h3,
+    fontSize: type.body,
     fontWeight: fontWeight.semibold,
-    color: colors.warning.light,
+    color: colors.text.gray,
+    lineHeight: "20px",
     whiteSpace: "nowrap",
+    flexShrink: 0,
+    transition: "color 0.25s ease",
+  },
+
+  bypassClockActive: {
+    color: colors.warning.light,
   },
 
   consoleNote: {
@@ -531,7 +567,7 @@ export const landingStyles = {
     margin: `${space[5]} 0 0 0`,
   },
 
-  resetRow: {
+  resetRowUnused: {
     ...monoBase,
     display: "flex",
     alignItems: "center",

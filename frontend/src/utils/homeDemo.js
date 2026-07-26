@@ -246,6 +246,25 @@ export const getLimitTimeline = (elapsed) => {
   };
 };
 
+// Seconds until each bucket's own reset. On-chain every period resets at
+// `lastReset + duration` independently, so the same elapsed time eats a whole
+// hour of the hourly window but barely dents the weekly one — which is the
+// point the demo is making.
+export const bucketResetSeconds = (elapsed) => {
+  const { refillStartMs, refillEndMs } = LIMIT_SIM;
+  const span = refillEndMs - refillStartMs;
+  const progress = Math.max(0, Math.min(1, (elapsed - refillStartMs) / span));
+
+  // The refill window represents exactly one hour passing
+  const secondsElapsed = PERIOD_SECONDS.hour * progress;
+
+  return DEMO_LIMIT_BUCKETS.reduce((all, bucket) => {
+    const duration = PERIOD_SECONDS[bucket.boundary];
+    all[bucket.key] = Math.max(0, Math.ceil(duration - secondsElapsed));
+    return all;
+  }, {});
+};
+
 // Per-bucket usage. Buckets in `refilledKeys` have hit their own reset and
 // start from zero again, while the slower buckets keep the spend on record.
 export const bucketState = (spent, refilledKeys = []) =>

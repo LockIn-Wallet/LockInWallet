@@ -9,6 +9,7 @@ import {
   DEMO_VAULT_BALANCE,
   timelockSeconds,
   getLimitTimeline,
+  bucketResetSeconds,
   bucketState,
   tightestBucket,
   formatUSD,
@@ -20,6 +21,18 @@ const formatClock = (totalSeconds) =>
   `${pad(Math.floor(totalSeconds / 3600))}:${pad(
     Math.floor((totalSeconds % 3600) / 60),
   )}:${pad(totalSeconds % 60)}`;
+
+// Scale the unit to the period: seconds matter on the hourly window, days on
+// the weekly one.
+const formatCountdown = (seconds) => {
+  if (seconds <= 0) return "ready";
+  const d = Math.floor(seconds / 86400);
+  const h = Math.floor((seconds % 86400) / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  if (d) return `${d}d ${h}h`;
+  if (h) return `${h}h ${pad(m)}m`;
+  return `${m}:${pad(seconds % 60)}`;
+};
 
 /**
  * EnforcementConsole - the hero's centrepiece. It replays real withdrawal
@@ -40,11 +53,11 @@ const EnforcementConsole = () => {
     return () => clearInterval(interval);
   }, []);
 
-  const { spent, event, refilled, refillSecondsRemaining } =
-    getLimitTimeline(elapsed);
+  const { spent, event, refilled } = getLimitTimeline(elapsed);
 
   const tightest = tightestBucket();
   const buckets = bucketState(spent, refilled ? [tightest.key] : []);
+  const resets = bucketResetSeconds(elapsed);
 
   // The clock only exists once a refused withdrawal is pushed through as a
   // bypass request — before that there is nothing counting down
@@ -54,7 +67,9 @@ const EnforcementConsole = () => {
     ? timelockSeconds() - Math.floor((elapsed - rejectedAtMs) / 1000)
     : timelockSeconds();
 
-  const ticketStyle = !event
+  const ticketStyle = refilled
+    ? { ...landingStyles.ticket, ...landingStyles.ticketReset }
+    : !event
     ? landingStyles.ticket
     : event.accepted
     ? { ...landingStyles.ticket, ...landingStyles.ticketAccepted }
@@ -76,8 +91,16 @@ const EnforcementConsole = () => {
     ? `${formatUSD(event.amount)} sent instantly`
     : `${formatUSD(event.amount)} exceeds ${tightest.name.toLowerCase()} limit`;
 
-  const verdictIcon = !event || refilled ? null : event.accepted ? "check" : "cross";
-  const verdictColor = !event
+  const verdictIcon = refilled
+    ? "check"
+    : !event
+    ? null
+    : event.accepted
+    ? "check"
+    : "cross";
+  const verdictColor = refilled
+    ? colors.primary.light
+    : !event
     ? colors.text.gray
     : event.accepted
     ? colors.primary.light
@@ -120,17 +143,28 @@ const EnforcementConsole = () => {
           </div>
 
           <div
+            className="landing-bypass"
             style={
               bypassRequested
-                ? landingStyles.bypassStrip
-                : { ...landingStyles.bypassStrip, ...landingStyles.bypassStripIdle }
+                ? { ...landingStyles.bypassStrip, ...landingStyles.bypassStripActive }
+                : landingStyles.bypassStrip
             }
-            aria-hidden={!bypassRequested}
           >
             <span style={landingStyles.bypassLabel}>
-              Forcing it through takes a day in the open
+              {bypassRequested
+                ? "Bypass requested"
+                : "Going over needs a bypass"}
             </span>
-            <span style={landingStyles.bypassClock}>
+            <span
+              style={
+                bypassRequested
+                  ? {
+                      ...landingStyles.bypassClock,
+                      ...landingStyles.bypassClockActive,
+                    }
+                  : landingStyles.bypassClock
+              }
+            >
               {formatClock(Math.max(0, timelockRemaining))}
             </span>
           </div>
@@ -169,6 +203,19 @@ const EnforcementConsole = () => {
                     )}
                   />
                 </div>
+
+                <div
+                  style={
+                    resets[bucket.key] <= 0
+                      ? {
+                          ...landingStyles.bucketReset,
+                          ...landingStyles.bucketResetReady,
+                        }
+                      : landingStyles.bucketReset
+                  }
+                >
+                  resets in {formatCountdown(resets[bucket.key])}
+                </div>
               </div>
             ))}
           </div>
@@ -177,13 +224,6 @@ const EnforcementConsole = () => {
             Every withdrawal is charged to all three at once, so the tightest
             one is your real speed limit. Each refills on its own clock.
           </p>
-
-          <div style={landingStyles.resetRow}>
-            <span style={landingStyles.resetLabel}>
-              {refilled ? "JUST RESET" : "NEXT RESET IN"}
-            </span>
-            {!refilled && formatClock(refillSecondsRemaining)}
-          </div>
         </div>
       </div>
     </div>
