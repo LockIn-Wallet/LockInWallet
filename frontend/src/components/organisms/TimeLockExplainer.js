@@ -180,6 +180,28 @@ const TimeLockExplainer = () => {
           </span>
         </div>
       )}
+
+      {/* Beat 4: the recovery key, for when the primary key itself leaks */}
+      <p style={homeStyles.blockTitle}>
+        🛟 You set an offline recovery key to recover your wallet when your
+        primary key is stolen
+      </p>
+      <div style={homeStyles.demoGrid}>
+        <div style={homeStyles.walletPanel}>
+          <p style={homeStyles.panelTitle}>1. 🧊 Freeze</p>
+          <p style={homeStyles.panelStatus}>
+            One click blocks all withdrawals.
+          </p>
+        </div>
+        <div
+          style={{ ...homeStyles.walletPanel, ...homeStyles.walletPanelSafe }}
+        >
+          <p style={homeStyles.panelTitle}>2. 🔁 Move</p>
+          <p style={homeStyles.panelStatus}>
+            Your savings go to a fresh address; the leaked one is dead.
+          </p>
+        </div>
+      </div>
     </div>
   );
 };
