@@ -453,7 +453,8 @@ export const landingStyles = {
     padding: `${space[3]} ${space[4]}`,
     marginBottom: space[4],
     transition: "border-color 0.2s ease, color 0.2s ease",
-    height: "62px",
+    height: "68px",
+    lineHeight: "20px",
     boxSizing: "border-box",
   },
 
@@ -471,6 +472,8 @@ export const landingStyles = {
     display: "flex",
     alignItems: "center",
     gap: space[2],
+    height: "20px",
+    lineHeight: "20px",
     fontWeight: fontWeight.semibold,
     letterSpacing: letterSpacing.wide,
   },
@@ -478,6 +481,8 @@ export const landingStyles = {
   // One line, clipped rather than wrapped, so the box height is invariant
   ticketDetail: {
     color: colors.text.muted,
+    height: "20px",
+    lineHeight: "20px",
     whiteSpace: "nowrap",
     overflow: "hidden",
     textOverflow: "ellipsis",
