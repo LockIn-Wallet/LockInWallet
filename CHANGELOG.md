@@ -50,6 +50,26 @@ these notes on the in-app **Governance** page before they execute.
   bypass. The removed "audits" link is replaced by links to the source, the
   security model and the Governance page.
 
+- The logged-in app now uses the same design tokens as the home page. All
+  231 remaining hardcoded palette values across 16 component files were
+  converted to token references, mapped by (CSS property, hex) because the
+  same value carried different meanings — `#4a5568` was a border 27 times
+  and a background 18 times.
+- New `AllowanceBar` at the top of the vault view: remaining allowance per
+  active period, in mono, with a reset countdown. Answers "what can I
+  withdraw right now" without scrolling.
+- Once the wallet is locked, **Withdraw funds** sits above **Spending
+  limits** — withdrawing is the routine act, changing a limit is rare and
+  deliberately slow (24h timelock).
+- Collapsible sections use the line-icon set and no longer repeat the
+  heading that the component beneath them already renders.
+
+### Removed
+- The in-app tutorial card shown during setup. It re-sold the product to
+  users who had already connected, duplicating the home page, and claimed
+  compromise resistance was "coming soon" — the recovery system shipped in
+  v0.3.0.
+
 No contract changes; frontend only.
 
 ## [0.3.1] - 2026-07-26

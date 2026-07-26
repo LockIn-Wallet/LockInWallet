@@ -17,7 +17,7 @@ const LandingHero = ({ onLaunch }) => (
     <div style={landingStyles.heroCopy}>
       <span style={landingStyles.badge}>
         <Icon name="shield" size={13} />
-        TIME-LOCK WALLET
+        TIME-LOCK ON-CHAIN WALLET
       </span>
 
       <h1 style={landingStyles.heroTitle}>
@@ -27,7 +27,7 @@ const LandingHero = ({ onLaunch }) => (
       </h1>
 
       <p style={landingStyles.heroSubtitle}>
-        Set withdrawal limits. From then on a contract enforces it and bypassing the limits require 24.
+        Set withdrawal limits. Wallet enforces it on-chain.
       </p>
 
       <div style={landingStyles.ctaRowCenter}>

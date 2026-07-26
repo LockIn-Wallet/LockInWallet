@@ -31,7 +31,7 @@ function LimitModeToggle({ mode, onChange, disabled = false }) {
           gap: "4px",
           borderRadius: "999px",
           backgroundColor: "rgba(255,255,255,0.06)",
-          border: "1px solid #4a5568",
+          border: `1px solid ${colors.border.default}`,
         }}
       >
         {LIMIT_MODES.map((m) => {
@@ -50,7 +50,7 @@ function LimitModeToggle({ mode, onChange, disabled = false }) {
                 fontSize: fontSize.sm,
                 fontWeight: isActive ? "bold" : "normal",
                 backgroundColor: isActive ? colors.success.main : "transparent",
-                color: isActive ? "#1a202c" : colors.text.secondary,
+                color: isActive ? colors.text.dark : colors.text.secondary,
                 transition: "all 0.2s ease",
               }}
             >

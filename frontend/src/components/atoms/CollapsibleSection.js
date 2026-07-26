@@ -1,6 +1,17 @@
 import React, { useState, useCallback } from "react";
 import PropTypes from "prop-types";
-import { colors, spacing, borderRadius, fontSize, fontWeight, transitions } from "../../styles";
+
+import Icon from "./Icon.js";
+
+import {
+  colors,
+  space,
+  borderRadius,
+  type,
+  fontWeight,
+  letterSpacing,
+  transitions,
+} from "../../styles";
 
 const STORAGE_KEY = "collapsibleSections";
 
@@ -25,31 +36,38 @@ function saveSectionState(sectionId, expanded) {
 
 const sectionStyles = {
   container: {
-    marginBottom: spacing.sm,
+    marginBottom: space[2],
   },
   header: {
     display: "flex",
     justifyContent: "space-between",
     alignItems: "center",
-    padding: `${spacing.sm} ${spacing.md}`,
+    gap: space[3],
+    margin: 0,
+    padding: `${space[3]} ${space[4]}`,
     cursor: "pointer",
     userSelect: "none",
     transition: transitions.fast,
     backgroundColor: colors.background.dark,
-    border: `1px solid ${colors.border.default}`,
+    border: `1px solid ${colors.border.hairline}`,
     borderRadius: borderRadius.lg,
     width: "100%",
+    textAlign: "left",
     color: colors.text.primary,
   },
   title: {
-    fontSize: fontSize.normal,
+    display: "flex",
+    alignItems: "center",
+    gap: space[3],
+    fontSize: type.body,
     fontWeight: fontWeight.semibold,
-    color: colors.text.secondary,
+    letterSpacing: letterSpacing.snug,
+    color: colors.text.primary,
     margin: 0,
   },
   chevron: {
-    fontSize: fontSize.sm,
-    color: colors.text.muted,
+    display: "flex",
+    color: colors.text.gray,
     transition: transitions.normal,
   },
   content: {},
@@ -84,16 +102,16 @@ const CollapsibleSection = ({
         type="button"
       >
         <span style={sectionStyles.title}>
-          {icon && <span>{icon} </span>}
+          {icon && <Icon name={icon} size={16} />}
           {title}
         </span>
         <span
           style={{
             ...sectionStyles.chevron,
-            transform: isExpanded ? "rotate(180deg)" : "rotate(0deg)",
+            transform: isExpanded ? "rotate(-90deg)" : "rotate(90deg)",
           }}
         >
-          ▼
+          <Icon name="arrowRight" size={16} color={colors.text.gray} />
         </span>
       </button>
       {isExpanded && <div style={sectionStyles.content}>{children}</div>}
@@ -105,6 +123,7 @@ CollapsibleSection.propTypes = {
   title: PropTypes.string.isRequired,
   defaultExpanded: PropTypes.bool,
   children: PropTypes.node.isRequired,
+  /** Name from the Icon set — section chrome uses line icons, not emoji */
   icon: PropTypes.string,
   sectionId: PropTypes.string,
 };

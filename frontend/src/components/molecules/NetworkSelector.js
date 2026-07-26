@@ -1,11 +1,7 @@
 import React from "react";
 
 // Import styles
-import {
-  formStyles,
-  layoutStyles,
-  utilityStyles,
-} from "../../styles";
+import { formStyles, layoutStyles, utilityStyles, colors } from "../../styles";
 
 // Import network filtering utilities
 import {
@@ -71,12 +67,12 @@ const NetworkSelector = ({
           )}
         </select>
         {isNetworkSwitching && (
-          <span style={{ color: "#fbb6ce", fontSize: "0.8em", marginLeft: "8px" }}>
+          <span style={{ color: colors.accent.pink, fontSize: "0.8em", marginLeft: "8px" }}>
             Switching...
           </span>
         )}
         {allNetworks.length === 0 && !isNetworkSwitching && (
-          <span style={{ color: "#f56565", fontSize: "0.8em", marginLeft: "8px" }}>
+          <span style={{ color: colors.error.alt, fontSize: "0.8em", marginLeft: "8px" }}>
             No deployed networks
           </span>
         )}

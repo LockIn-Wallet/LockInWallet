@@ -202,9 +202,9 @@ function CreateVault({ transactionManager, navigate, networkConfig }) {
             padding: spacing.md,
             marginBottom: spacing.lg,
             backgroundColor: "rgba(229,62,62,0.1)",
-            border: "1px solid #e53e3e",
+            border: `1px solid ${colors.border.error}`,
             borderRadius: borderRadius.sm,
-            color: "#fc8181",
+            color: colors.error.light,
             fontSize: fontSize.sm,
           }}>
             {error}

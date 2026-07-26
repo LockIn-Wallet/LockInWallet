@@ -88,7 +88,7 @@ const SocialLinks = () => {
         }}
       >
         <svg
-          style={{ ...styles.socialLinks.icon, color: '#e2e8f0' }}
+          style={{ ...styles.socialLinks.icon, color: colors.text.secondary }}
           viewBox="0 0 24 24"
           fill="currentColor"
         >
@@ -117,7 +117,7 @@ const SocialLinks = () => {
         }}
       >
         <svg
-          style={{ ...styles.socialLinks.icon, color: '#e2e8f0' }}
+          style={{ ...styles.socialLinks.icon, color: colors.text.secondary }}
           viewBox="0 0 24 24"
           fill="currentColor"
         >

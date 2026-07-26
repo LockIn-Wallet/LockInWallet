@@ -53,14 +53,14 @@ const WithdrawalAddressSelector = ({
             borderRadius: "4px",
             backgroundColor:
               mode === "selection" && selectedDestination === "self"
-                ? "#2d3748"
+                ? colors.background.primary
                 : mode === "management"
-                ? "#1a365d"
+                ? colors.background.darkBlue
                 : "transparent",
             border:
               mode === "management"
-                ? "1px solid #2b77ad"
-                : "1px solid #4a5568",
+                ? `1px solid ${colors.border.info}`
+                : `1px solid ${colors.border.default}`,
           }}
           onClick={() =>
             mode === "selection" &&
@@ -82,7 +82,7 @@ const WithdrawalAddressSelector = ({
           )}
           <span
             style={{
-              color: mode === "management" ? "#9ae6b4" : "white",
+              color: mode === "management" ? colors.success.light : "white",
               fontSize: "0.9em",
             }}
           >
@@ -105,12 +105,12 @@ const WithdrawalAddressSelector = ({
             style={{
               display: "flex",
               alignItems: "flex-start",
-              border: "1px solid #4a5568",
+              border: `1px solid ${colors.border.default}`,
               borderRadius: "4px",
               backgroundColor:
                 mode === "selection" &&
                 selectedDestination === addr.destination
-                  ? "#2d3748"
+                  ? colors.background.primary
                   : "transparent",
               cursor: mode === "selection" ? "pointer" : "default",
             }}
@@ -152,7 +152,7 @@ const WithdrawalAddressSelector = ({
                 <div
                   style={{
                     fontSize: "0.8em",
-                    color: "#a0aec0",
+                    color: colors.text.muted,
                     fontFamily: "monospace",
                   }}
                 >
@@ -163,7 +163,7 @@ const WithdrawalAddressSelector = ({
                       )}...${addr.destination.slice(-15)}`
                     : addr.destination}
                 </div>
-                <div style={{ fontSize: "0.7em", color: "#718096" }}>
+                <div style={{ fontSize: "0.7em", color: colors.text.gray }}>
                   Added: {addr.addedDate}
                 </div>
               </div>
@@ -179,9 +179,9 @@ const WithdrawalAddressSelector = ({
                   marginTop: "8px",
                   padding: "4px 8px",
                   borderRadius: "4px",
-                  border: "1px solid #e53e3e",
+                  border: `1px solid ${colors.border.error}`,
                   backgroundColor: "transparent",
-                  color: "#e53e3e",
+                  color: colors.error.main,
                   cursor: "pointer",
                   fontSize: "0.7em",
                 }}
@@ -207,13 +207,13 @@ const WithdrawalAddressSelector = ({
             }}
             onMouseEnter={(e) => {
               e.target.style.opacity = "1";
-              e.target.style.color = "#e2e8f0";
-              e.target.style.borderColor = "#718096";
+              e.target.style.color = colors.text.secondary;
+              e.target.style.borderColor = colors.border.default;
             }}
             onMouseLeave={(e) => {
               e.target.style.opacity = "0.7";
-              e.target.style.color = "#a0aec0";
-              e.target.style.borderColor = "#4a5568";
+              e.target.style.color = colors.text.muted;
+              e.target.style.borderColor = colors.border.default;
             }}
           >
             ➕ Add Withdrawal Address

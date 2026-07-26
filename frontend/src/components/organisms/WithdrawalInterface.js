@@ -549,18 +549,17 @@ const WithdrawalInterface = ({
       style={{
         marginBottom: "20px",
         padding: "15px",
-        border: "1px solid #333",
+        border: `1px solid ${colors.border.light}`,
         borderRadius: "5px",
-        backgroundColor: "#2d3748",
+        backgroundColor: colors.background.primary,
         color: "white",
         position: "relative",
       }}
     >
-      <h3 style={{ color: colors.text.primary }}>💸 Withdraw Funds</h3>
       <p
         style={{
           fontSize: "0.9em",
-          color: "#cbd5e0",
+          color: colors.text.light,
           marginBottom: "15px",
         }}
       >
@@ -585,8 +584,8 @@ const WithdrawalInterface = ({
             style={{
               padding: "8px",
               borderRadius: "4px",
-              border: "1px solid #4a5568",
-              backgroundColor: "#4a5568",
+              border: `1px solid ${colors.border.default}`,
+              backgroundColor: colors.background.secondary,
               color: "white",
               flex: "1",
               minWidth: "120px",
@@ -617,8 +616,8 @@ const WithdrawalInterface = ({
               flex: "2",
               padding: "8px",
               borderRadius: "4px",
-              border: "1px solid #4a5568",
-              backgroundColor: "#4a5568",
+              border: `1px solid ${colors.border.default}`,
+              backgroundColor: colors.background.secondary,
               color: "white",
               minWidth: "150px",
             }}
@@ -631,9 +630,9 @@ const WithdrawalInterface = ({
         style={{
           marginBottom: "15px",
           padding: "10px",
-          backgroundColor: "#1a202c",
+          backgroundColor: colors.background.dark,
           borderRadius: "4px",
-          border: "1px solid #4a5568",
+          border: `1px solid ${colors.border.default}`,
         }}
       >
         <div
@@ -644,10 +643,10 @@ const WithdrawalInterface = ({
             marginBottom: "5px",
           }}
         >
-          <span style={{ fontSize: "0.9em", color: "#cbd5e0" }}>
+          <span style={{ fontSize: "0.9em", color: colors.text.light }}>
             💡 Instant Withdrawable:
           </span>
-          <span style={{ fontWeight: "bold", color: "#48bb78" }}>
+          <span style={{ fontWeight: "bold", color: colors.success.main }}>
             {(typeof instantWithdrawableAmount === "number"
               ? instantWithdrawableAmount
               : 0
@@ -656,7 +655,7 @@ const WithdrawalInterface = ({
           </span>
         </div>
         {limitingPeriod && (
-          <div style={{ fontSize: "0.8em", color: "#a0aec0" }}>
+          <div style={{ fontSize: "0.8em", color: colors.text.muted }}>
             Limited by: {limitingPeriod} spending limit
           </div>
         )}
@@ -665,15 +664,15 @@ const WithdrawalInterface = ({
             style={{
               marginTop: "8px",
               padding: "8px",
-              backgroundColor: "#2d3748",
+              backgroundColor: colors.background.primary,
               borderRadius: "4px",
-              border: "1px solid #ed8936",
+              border: `1px solid ${colors.border.warning}`,
             }}
           >
             <div
               style={{
                 fontSize: "0.85em",
-                color: "#ed8936",
+                color: colors.warning.main,
                 fontWeight: "bold",
               }}
             >
@@ -682,7 +681,7 @@ const WithdrawalInterface = ({
             <div
               style={{
                 fontSize: "0.8em",
-                color: "#a0aec0",
+                color: colors.text.muted,
                 marginTop: "2px",
               }}
             >
@@ -722,8 +721,8 @@ const WithdrawalInterface = ({
               border: "none",
               backgroundColor:
                 !withdrawalAmount || parseFloat(withdrawalAmount) <= 0
-                  ? "#4a5568"
-                  : "#48bb78",
+                  ? colors.background.secondary
+                  : colors.success.main,
               color: "white",
               cursor:
                 !withdrawalAmount || parseFloat(withdrawalAmount) <= 0
@@ -748,8 +747,8 @@ const WithdrawalInterface = ({
                 padding: "12px 24px",
                 borderRadius: "4px",
                 border: "none",
-                backgroundColor: "#4a5568",
-                color: "#a0aec0",
+                backgroundColor: colors.background.secondary,
+                color: colors.text.muted,
                 cursor: "not-allowed",
                 fontWeight: "bold",
                 flex: "1",
@@ -770,8 +769,8 @@ const WithdrawalInterface = ({
                 border: "none",
                 backgroundColor:
                   !withdrawalAmount || parseFloat(withdrawalAmount) <= 0
-                    ? "#4a5568"
-                    : "#ed8936",
+                    ? colors.background.secondary
+                    : colors.warning.main,
                 color: "white",
                 cursor:
                   !withdrawalAmount || parseFloat(withdrawalAmount) <= 0
@@ -799,8 +798,8 @@ const WithdrawalInterface = ({
                 border: "none",
                 backgroundColor:
                   isLoading || !withdrawalAmount || parseFloat(withdrawalAmount) <= 0
-                    ? "#4a5568"
-                    : "#e53e3e",
+                    ? colors.background.secondary
+                    : colors.error.main,
                 color: "white",
                 cursor:
                   isLoading || !withdrawalAmount || parseFloat(withdrawalAmount) <= 0
@@ -827,14 +826,14 @@ const WithdrawalInterface = ({
           style={{
             marginTop: "15px",
             padding: "15px",
-            backgroundColor: "#1a202c",
+            backgroundColor: colors.background.dark,
             borderRadius: "6px",
-            border: "1px solid #4a5568",
+            border: `1px solid ${colors.border.default}`,
           }}
         >
           <h5
             style={{
-              color: "#fbb043",
+              color: colors.warning.light,
               margin: "0 0 15px 0",
               fontSize: "1em",
               fontWeight: "bold",
@@ -856,7 +855,7 @@ const WithdrawalInterface = ({
                 style={{
                   display: "block",
                   marginBottom: "5px",
-                  color: "#e2e8f0",
+                  color: colors.text.secondary,
                   fontSize: "0.9em",
                   fontWeight: "bold",
                 }}
@@ -872,8 +871,8 @@ const WithdrawalInterface = ({
                   width: "100%",
                   padding: "8px",
                   borderRadius: "4px",
-                  border: "1px solid #4a5568",
-                  backgroundColor: "#4a5568",
+                  border: `1px solid ${colors.border.default}`,
+                  backgroundColor: colors.background.secondary,
                   color: "white",
                   fontSize: "0.9em",
                 }}
@@ -886,7 +885,7 @@ const WithdrawalInterface = ({
                 style={{
                   display: "block",
                   marginBottom: "5px",
-                  color: "#e2e8f0",
+                  color: colors.text.secondary,
                   fontSize: "0.9em",
                   fontWeight: "bold",
                 }}
@@ -906,8 +905,8 @@ const WithdrawalInterface = ({
                   width: "100%",
                   padding: "8px",
                   borderRadius: "4px",
-                  border: "1px solid #4a5568",
-                  backgroundColor: "#4a5568",
+                  border: `1px solid ${colors.border.default}`,
+                  backgroundColor: colors.background.secondary,
                   color: "white",
                   fontSize: "0.9em",
                   fontFamily: "monospace",
@@ -930,8 +929,8 @@ const WithdrawalInterface = ({
                 border: "none",
                 backgroundColor:
                   !newWithdrawalTitle.trim() || !newWithdrawalAddress.trim()
-                    ? "#4a5568"
-                    : "#fbb043",
+                    ? colors.background.secondary
+                    : colors.warning.light,
                 color: "white",
                 cursor:
                   !newWithdrawalTitle.trim() || !newWithdrawalAddress.trim()
@@ -956,9 +955,9 @@ const WithdrawalInterface = ({
               style={{
                 padding: "10px 16px",
                 borderRadius: "4px",
-                border: "1px solid #718096",
+                border: `1px solid ${colors.border.default}`,
                 backgroundColor: "transparent",
-                color: "#718096",
+                color: colors.text.gray,
                 cursor: "pointer",
                 fontSize: "0.9em",
               }}
@@ -975,7 +974,7 @@ const WithdrawalInterface = ({
           style={{
             marginTop: "15px",
             paddingTop: "15px",
-            borderTop: "1px solid #4a5568",
+            borderTop: `1px solid ${colors.border.default}`,
           }}
         >
           <div>
@@ -998,11 +997,11 @@ const WithdrawalInterface = ({
                     key={index}
                     style={{
                       padding: "10px",
-                      backgroundColor: "#1a202c",
+                      backgroundColor: colors.background.dark,
                       borderRadius: "6px",
                       border: countdown.ready
-                        ? "1px solid #48bb78"
-                        : "1px solid #ed8936",
+                        ? `1px solid ${colors.border.success}`
+                        : `1px solid ${colors.border.warning}`,
                     }}
                   >
                     <div
@@ -1025,7 +1024,7 @@ const WithdrawalInterface = ({
                         <div
                           style={{
                             fontSize: "0.8em",
-                            color: "#a0aec0",
+                            color: colors.text.muted,
                             fontFamily: "monospace",
                           }}
                         >
@@ -1044,7 +1043,7 @@ const WithdrawalInterface = ({
                               padding: "4px 8px",
                               borderRadius: "4px",
                               border: "none",
-                              backgroundColor: "#48bb78",
+                              backgroundColor: colors.success.main,
                               color: "white",
                               cursor: "pointer",
                               fontSize: "0.7em",
@@ -1061,9 +1060,9 @@ const WithdrawalInterface = ({
                           style={{
                             padding: "4px 8px",
                             borderRadius: "4px",
-                            border: "1px solid #e53e3e",
+                            border: `1px solid ${colors.border.error}`,
                             backgroundColor: "transparent",
-                            color: "#e53e3e",
+                            color: colors.error.main,
                             cursor: "pointer",
                             fontSize: "0.7em",
                           }}
@@ -1075,7 +1074,7 @@ const WithdrawalInterface = ({
                     <div
                       style={{
                         padding: "6px 10px",
-                        backgroundColor: "#4a5568",
+                        backgroundColor: colors.background.secondary,
                         borderRadius: "4px",
                         textAlign: "center",
                         color: countdown.color,
@@ -1099,7 +1098,7 @@ const WithdrawalInterface = ({
           style={{
             marginTop: "15px",
             paddingTop: "15px",
-            borderTop: "1px solid #4a5568",
+            borderTop: `1px solid ${colors.border.default}`,
           }}
         >
           <div>
@@ -1123,11 +1122,11 @@ const WithdrawalInterface = ({
                     key={index}
                     style={{
                       padding: "10px",
-                      backgroundColor: "#1a202c",
+                      backgroundColor: colors.background.dark,
                       borderRadius: "6px",
                       border: countdown.ready
-                        ? "1px solid #48bb78"
-                        : "1px solid #ed8936",
+                        ? `1px solid ${colors.border.success}`
+                        : `1px solid ${colors.border.warning}`,
                     }}
                   >
                     <div
@@ -1150,7 +1149,7 @@ const WithdrawalInterface = ({
                         <div
                           style={{
                             fontSize: "0.8em",
-                            color: "#a0aec0",
+                            color: colors.text.muted,
                           }}
                         >
                           Period: {request.period} • To:{" "}
@@ -1168,7 +1167,7 @@ const WithdrawalInterface = ({
                               padding: "4px 8px",
                               borderRadius: "4px",
                               border: "none",
-                              backgroundColor: "#48bb78",
+                              backgroundColor: colors.success.main,
                               color: "white",
                               cursor: "pointer",
                               fontSize: "0.7em",
@@ -1185,9 +1184,9 @@ const WithdrawalInterface = ({
                           style={{
                             padding: "4px 8px",
                             borderRadius: "4px",
-                            border: "1px solid #e53e3e",
+                            border: `1px solid ${colors.border.error}`,
                             backgroundColor: "transparent",
-                            color: "#e53e3e",
+                            color: colors.error.main,
                             cursor: "pointer",
                             fontSize: "0.7em",
                           }}
@@ -1199,7 +1198,7 @@ const WithdrawalInterface = ({
                     <div
                       style={{
                         padding: "6px 10px",
-                        backgroundColor: "#4a5568",
+                        backgroundColor: colors.background.secondary,
                         borderRadius: "4px",
                         textAlign: "center",
                         color: countdown.color,

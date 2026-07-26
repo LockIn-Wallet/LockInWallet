@@ -149,11 +149,11 @@ const SetupCommitStep = ({
   return (
     <div
       style={{
-        backgroundColor: "#2d3748",
+        backgroundColor: colors.background.primary,
         borderRadius: "8px",
         padding: "20px",
         margin: "20px 0",
-        border: "1px solid #4a5568",
+        border: `1px solid ${colors.border.default}`,
       }}
     >
       <h3 style={{
@@ -178,12 +178,12 @@ const SetupCommitStep = ({
           {!hasSpendingLimits && (
             <div
               style={{
-                backgroundColor: "#744210",
-                border: "1px solid #d69e2e",
+                backgroundColor: colors.warning.bg,
+                border: `1px solid ${colors.border.active}`,
                 borderRadius: "6px",
                 padding: "12px",
                 marginBottom: "15px",
-                color: "#faf089",
+                color: colors.warning.light,
               }}
             >
               ⚠️ Please set at least one spending limit before locking in your wallet.
@@ -216,9 +216,9 @@ const SetupCommitStep = ({
         <div
           style={{
             padding: "20px",
-            backgroundColor: "#1a365d",
+            backgroundColor: colors.background.darkBlue,
             borderRadius: "8px",
-            border: "2px solid #48bb78",
+            border: `2px solid ${colors.border.success}`,
             textAlign: "center",
           }}
         >
@@ -235,7 +235,7 @@ const SetupCommitStep = ({
           </h3>
           <p
             style={{
-              color: "#e2e8f0",
+              color: colors.text.secondary,
               margin: 0,
               fontSize: "0.9em",
               lineHeight: "1.5",

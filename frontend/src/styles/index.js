@@ -53,6 +53,12 @@ export {
 export { layoutStyles, default as layout } from "./components/layout.js";
 
 export {
+  appStyles,
+  getAllowanceFill,
+  default as app,
+} from "./components/app.js";
+
+export {
   landingStyles,
   getBarFill,
   default as landing,
@@ -84,6 +90,7 @@ import * as steps from "./components/steps.js";
 import * as layout from "./components/layout.js";
 import * as home from "./components/home.js";
 import * as landing from "./components/landing.js";
+import * as app from "./components/app.js";
 import * as utilities from "./utilities.js";
 
 // =====================================
@@ -225,6 +232,7 @@ export default {
   layout,
   home,
   landing,
+  app,
   utilities,
 
   // Convenience object
@@ -247,5 +255,6 @@ export default {
   layoutStyles: layout.layoutStyles,
   homeStyles: home.homeStyles,
   landingStyles: landing.landingStyles,
+  appStyles: app.appStyles,
   utilityStyles: utilities.utilityStyles,
 };
