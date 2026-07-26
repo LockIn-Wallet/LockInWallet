@@ -442,8 +442,9 @@ export const landingStyles = {
   ticket: {
     ...monoBase,
     display: "flex",
-    alignItems: "center",
-    gap: space[3],
+    flexDirection: "column",
+    justifyContent: "center",
+    gap: "2px",
     fontSize: type.small,
     color: colors.text.light,
     backgroundColor: colors.background.dark,
@@ -451,8 +452,8 @@ export const landingStyles = {
     borderRadius: borderRadius.lg,
     padding: `${space[3]} ${space[4]}`,
     marginBottom: space[4],
-    transition: transitions.normal,
-    minHeight: "48px",
+    transition: "border-color 0.2s ease, color 0.2s ease",
+    height: "62px",
     boxSizing: "border-box",
   },
 
@@ -467,11 +468,24 @@ export const landingStyles = {
   },
 
   ticketVerdict: {
+    display: "flex",
+    alignItems: "center",
+    gap: space[2],
     fontWeight: fontWeight.semibold,
     letterSpacing: letterSpacing.wide,
   },
 
-  // The 24h bypass clock, appearing only once a request is refused
+  // One line, clipped rather than wrapped, so the box height is invariant
+  ticketDetail: {
+    color: colors.text.muted,
+    whiteSpace: "nowrap",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+  },
+
+  // The 24h bypass clock. It only means anything once a request is refused,
+  // but it stays in flow at a constant height either way — appearing on
+  // demand would shove the rest of the page down mid-read.
   bypassStrip: {
     display: "flex",
     alignItems: "center",
@@ -483,6 +497,12 @@ export const landingStyles = {
     borderRadius: borderRadius.lg,
     padding: `${space[3]} ${space[4]}`,
     marginTop: space[4],
+    transition: "opacity 0.25s ease",
+  },
+
+  bypassStripIdle: {
+    opacity: 0,
+    visibility: "hidden",
   },
 
   bypassLabel: {
@@ -504,6 +524,24 @@ export const landingStyles = {
     color: colors.text.gray,
     lineHeight: 1.6,
     margin: `${space[5]} 0 0 0`,
+  },
+
+  resetRow: {
+    ...monoBase,
+    display: "flex",
+    alignItems: "center",
+    gap: space[2],
+    marginTop: space[3],
+    fontSize: type.caption,
+    color: colors.text.light,
+    // One line, always — the label and value both have fixed content widths
+    height: "20px",
+    whiteSpace: "nowrap",
+    overflow: "hidden",
+  },
+
+  resetLabel: {
+    color: colors.text.gray,
   },
 
   // ---- Proof strip ------------------------------------------------------

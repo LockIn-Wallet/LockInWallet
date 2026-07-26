@@ -179,12 +179,20 @@ export const homeStyles = {
     margin: 0,
   },
 
+  // Always in flow: this appears part-way through the loop, and revealing it
+  // on demand shoved the rest of the page down while someone was reading it.
   verdictRow: {
     display: "flex",
     gap: spacing.lg,
     justifyContent: "center",
     flexWrap: "wrap",
     marginTop: spacing.xl,
+    transition: "opacity 0.25s ease",
+  },
+
+  verdictRowIdle: {
+    opacity: 0,
+    visibility: "hidden",
   },
 
   verdictLost: {

@@ -49,10 +49,10 @@ const EnforcementConsole = () => {
   // The clock only exists once a refused withdrawal is pushed through as a
   // bypass request — before that there is nothing counting down
   const rejectedAtMs = event && !event.accepted ? event.atMs : null;
-  const timelockRemaining =
-    rejectedAtMs === null
-      ? null
-      : timelockSeconds() - Math.floor((elapsed - rejectedAtMs) / 1000);
+  const bypassRequested = rejectedAtMs !== null;
+  const timelockRemaining = bypassRequested
+    ? timelockSeconds() - Math.floor((elapsed - rejectedAtMs) / 1000)
+    : timelockSeconds();
 
   const ticketStyle = !event
     ? landingStyles.ticket
@@ -69,9 +69,7 @@ const EnforcementConsole = () => {
     : "DENIED";
 
   const detail = refilled
-    ? `${tightest.name.toLowerCase()} allowance restored — ${formatUSD(
-        tightest.limit,
-      )} available`
+    ? `${formatUSD(tightest.limit)} allowance restored`
     : !event
     ? "awaiting request"
     : event.accepted
@@ -112,23 +110,30 @@ const EnforcementConsole = () => {
             role="status"
             aria-live="polite"
           >
-            {verdictIcon && (
-              <Icon name={verdictIcon} size={16} color={verdictColor} />
-            )}
-            <span style={landingStyles.ticketVerdict}>{verdict}</span>
-            <span>{detail}</span>
+            <span style={landingStyles.ticketVerdict}>
+              {verdictIcon && (
+                <Icon name={verdictIcon} size={16} color={verdictColor} />
+              )}
+              {verdict}
+            </span>
+            <span style={landingStyles.ticketDetail}>{detail}</span>
           </div>
 
-          {timelockRemaining !== null && (
-            <div style={landingStyles.bypassStrip} className="home-fade-up">
-              <span style={landingStyles.bypassLabel}>
-                Forcing it through takes a day in the open
-              </span>
-              <span style={landingStyles.bypassClock}>
-                {formatClock(Math.max(0, timelockRemaining))}
-              </span>
-            </div>
-          )}
+          <div
+            style={
+              bypassRequested
+                ? landingStyles.bypassStrip
+                : { ...landingStyles.bypassStrip, ...landingStyles.bypassStripIdle }
+            }
+            aria-hidden={!bypassRequested}
+          >
+            <span style={landingStyles.bypassLabel}>
+              Forcing it through takes a day in the open
+            </span>
+            <span style={landingStyles.bypassClock}>
+              {formatClock(Math.max(0, timelockRemaining))}
+            </span>
+          </div>
         </div>
 
         <div
@@ -170,14 +175,15 @@ const EnforcementConsole = () => {
 
           <p style={landingStyles.consoleNote}>
             Every withdrawal is charged to all three at once, so the tightest
-            one is your real speed limit. It refills on its own clock —{" "}
-            <span style={{ fontFamily: "inherit", color: colors.text.light }}>
-              {refilled
-                ? "just reset"
-                : `next reset in ${formatClock(refillSecondsRemaining)}`}
-            </span>
-            .
+            one is your real speed limit. Each refills on its own clock.
           </p>
+
+          <div style={landingStyles.resetRow}>
+            <span style={landingStyles.resetLabel}>
+              {refilled ? "JUST RESET" : "NEXT RESET IN"}
+            </span>
+            {!refilled && formatClock(refillSecondsRemaining)}
+          </div>
         </div>
       </div>
     </div>

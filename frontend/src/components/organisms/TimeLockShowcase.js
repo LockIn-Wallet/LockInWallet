@@ -160,17 +160,22 @@ const TimeLockShowcase = () => {
         </div>
       </div>
 
-      {verdict && (
-        <div style={homeStyles.verdictRow} className="home-fade-up">
-          <span style={homeStyles.verdictLost}>
-            Regular wallet: lost {formatUSD(DEMO_VAULT_BALANCE)} (100%)
-          </span>
-          <span style={homeStyles.verdictSaved}>
-            LockInWallet: saved {formatUSD(vaultBalance)} (
-            {savedPercent.toFixed(0)}%)
-          </span>
-        </div>
-      )}
+      <div
+        style={
+          verdict
+            ? homeStyles.verdictRow
+            : { ...homeStyles.verdictRow, ...homeStyles.verdictRowIdle }
+        }
+        aria-hidden={!verdict}
+      >
+        <span style={homeStyles.verdictLost}>
+          Regular wallet: lost {formatUSD(DEMO_VAULT_BALANCE)} (100%)
+        </span>
+        <span style={homeStyles.verdictSaved}>
+          LockIn Wallet: saved {formatUSD(vaultBalance)} (
+          {savedPercent.toFixed(0)}%)
+        </span>
+      </div>
 
       <p style={homeStyles.captionText}>
         You choose your own hourly, daily and monthly limits. Anything above
