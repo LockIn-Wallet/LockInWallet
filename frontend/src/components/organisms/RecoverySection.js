@@ -80,7 +80,7 @@ const RecoverySection = ({ transactionManager, userAddress }) => {
   const handleProtect = () =>
     run(
       () => transactionManager.setRecoveryAddress(recoveryInput.trim()),
-      "Recovery key registered. Keep it offline and never use it for daily transactions.",
+      "Recovery key proposed. Now connect that wallet once and accept the role — protection activates only after it confirms.",
     );
 
   const handleFreeze = () => {
@@ -166,8 +166,36 @@ const RecoverySection = ({ transactionManager, userAddress }) => {
               </div>
               <p style={{ ...utilityStyles.textMuted, marginTop: spacing.sm }}>
                 Use an address whose key is NOT derived from this wallet's seed
-                and is stored offline.
+                and is stored offline. Two steps: propose it here, then connect
+                that wallet once to accept — this proves you control it and
+                that it can transact when it matters.
               </p>
+
+              {status.pendingRecoveryKey && (
+                <div style={{ ...cardStyles.warningCard, marginTop: spacing.md }}>
+                  <p style={{ marginBottom: spacing.sm }}>
+                    ⏳ Waiting for{" "}
+                    <span style={utilityStyles.addressText}>
+                      {truncateAddress(status.pendingRecoveryKey)}
+                    </span>{" "}
+                    to accept. Switch to that wallet and confirm in "Act as a
+                    recovery key" below — protection is NOT active yet. Wrong
+                    address? Propose again above or cancel.
+                  </p>
+                  <button
+                    style={isBusy ? buttonStyles.disabled : buttonStyles.warning}
+                    disabled={isBusy}
+                    onClick={() =>
+                      run(
+                        () => transactionManager.cancelRecoveryKeyProposal(),
+                        "Proposal cancelled.",
+                      )
+                    }
+                  >
+                    Cancel proposal
+                  </button>
+                </div>
+              )}
             </div>
           ) : (
             <div style={layoutStyles.section}>
@@ -177,6 +205,16 @@ const RecoverySection = ({ transactionManager, userAddress }) => {
                   {truncateAddress(status.recoveryAddress)} ✅
                 </span>
               </div>
+
+              {status.pendingRecoveryKey && (
+                <p style={{ ...utilityStyles.textMuted, marginBottom: spacing.md }}>
+                  🔁 Rotation in progress: the current key stays active until{" "}
+                  <span style={utilityStyles.addressText}>
+                    {truncateAddress(status.pendingRecoveryKey)}
+                  </span>{" "}
+                  accepts the role.
+                </p>
+              )}
 
               {status.pendingChange && (
                 <div style={cardStyles.warningCard}>
@@ -307,7 +345,26 @@ const RecoverySection = ({ transactionManager, userAddress }) => {
 
         {targetStatus?.supported && (
           <div style={{ marginTop: spacing.md }}>
-            {!targetStatus.isRecoveryKeyFor ? (
+            {targetStatus.isProposedRecoveryKeyFor && !targetStatus.isRecovered ? (
+              <div>
+                <p style={{ ...utilityStyles.textSecondary, marginBottom: spacing.md }}>
+                  ⏳ That account proposed this wallet as its recovery key.
+                  Accepting activates the protection.
+                </p>
+                <button
+                  style={isBusy ? buttonStyles.disabled : buttonStyles.success}
+                  disabled={isBusy}
+                  onClick={() =>
+                    run(
+                      () => transactionManager.acceptRecoveryRole(targetInput.trim()),
+                      "Recovery role accepted — the account is now protected.",
+                    )
+                  }
+                >
+                  ✅ Accept recovery role
+                </button>
+              </div>
+            ) : !targetStatus.isRecoveryKeyFor ? (
               <p style={utilityStyles.textMuted}>
                 This wallet is not the recovery key for that account.
               </p>

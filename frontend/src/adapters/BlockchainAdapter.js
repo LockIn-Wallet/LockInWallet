@@ -99,6 +99,14 @@ export class BlockchainAdapter {
     throw new Error("Recovery protection is not available on this network yet");
   }
 
+  async acceptRecoveryRole(targetAddress) {
+    throw new Error("Recovery protection is not available on this network yet");
+  }
+
+  async cancelRecoveryKeyProposal() {
+    throw new Error("Recovery protection is not available on this network yet");
+  }
+
   async freezeAccount(targetAddress) {
     throw new Error("Recovery protection is not available on this network yet");
   }

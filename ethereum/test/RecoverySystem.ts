@@ -75,21 +75,64 @@ describe("RecoverySystemModule", function () {
   async function deployWithRecoverySetFixture() {
     const fixture = await deployRecoveryFixture();
     await fixture.recoveryModule.connect(fixture.user1).setRecoveryAddress(fixture.recoveryKey.address);
+    await fixture.recoveryModule.connect(fixture.recoveryKey).acceptRecoveryRole(fixture.user1.address);
     return fixture;
   }
 
-  describe("Recovery key registration", function () {
-    it("Should register a recovery key and emit event", async function () {
+  describe("Recovery key registration (propose + accept)", function () {
+    it("Should propose a recovery key without activating it", async function () {
       const { recoveryModule, user1, recoveryKey } = await loadFixture(deployRecoveryFixture);
 
       await expect(recoveryModule.connect(user1).setRecoveryAddress(recoveryKey.address))
-        .to.emit(recoveryModule, "RecoveryAddressSet")
+        .to.emit(recoveryModule, "RecoveryKeyProposed")
         .withArgs(user1.address, recoveryKey.address, user1.address);
+
+      // Not active yet: no freeze power until the key proves itself
+      const [recovery] = await recoveryModule.getRecoveryConfig(user1.address);
+      expect(recovery).to.equal(hre.ethers.ZeroAddress);
+      expect(await recoveryModule.getPendingRecoveryKey(user1.address)).to.equal(recoveryKey.address);
+      await expect(recoveryModule.connect(user1).freeze(user1.address))
+        .to.be.revertedWith("No recovery key set");
+    });
+
+    it("Should activate on acceptance by the proposed key", async function () {
+      const { recoveryModule, user1, recoveryKey } = await loadFixture(deployRecoveryFixture);
+
+      await recoveryModule.connect(user1).setRecoveryAddress(recoveryKey.address);
+      await expect(recoveryModule.connect(recoveryKey).acceptRecoveryRole(user1.address))
+        .to.emit(recoveryModule, "RecoveryAddressSet")
+        .withArgs(user1.address, recoveryKey.address, recoveryKey.address);
 
       const [recovery, frozen, recovered] = await recoveryModule.getRecoveryConfig(user1.address);
       expect(recovery).to.equal(recoveryKey.address);
       expect(frozen).to.be.false;
       expect(recovered).to.be.false;
+      expect(await recoveryModule.getPendingRecoveryKey(user1.address)).to.equal(hre.ethers.ZeroAddress);
+    });
+
+    it("Should reject acceptance from anyone but the proposed key", async function () {
+      const { recoveryModule, user1, recoveryKey, attackerKey } = await loadFixture(deployRecoveryFixture);
+
+      await recoveryModule.connect(user1).setRecoveryAddress(recoveryKey.address);
+      await expect(recoveryModule.connect(attackerKey).acceptRecoveryRole(user1.address))
+        .to.be.revertedWith("Not the proposed recovery key");
+    });
+
+    it("Should let the user overwrite or cancel a not-yet-accepted proposal", async function () {
+      const { recoveryModule, user1, recoveryKey, newOwner } = await loadFixture(deployRecoveryFixture);
+
+      // Typo'd first proposal, overwritten by a second one
+      await recoveryModule.connect(user1).setRecoveryAddress(newOwner.address);
+      await recoveryModule.connect(user1).setRecoveryAddress(recoveryKey.address);
+      expect(await recoveryModule.getPendingRecoveryKey(user1.address)).to.equal(recoveryKey.address);
+      await expect(recoveryModule.connect(newOwner).acceptRecoveryRole(user1.address))
+        .to.be.revertedWith("Not the proposed recovery key");
+
+      await expect(recoveryModule.connect(user1).cancelRecoveryKeyProposal())
+        .to.emit(recoveryModule, "RecoveryKeyProposalCancelled")
+        .withArgs(user1.address);
+      await expect(recoveryModule.connect(recoveryKey).acceptRecoveryRole(user1.address))
+        .to.be.revertedWith("Not the proposed recovery key");
     });
 
     it("Should reject zero or self as recovery key", async function () {
@@ -108,12 +151,20 @@ describe("RecoverySystemModule", function () {
         .to.be.revertedWith("Recovery key already set - use timelocked change");
     });
 
-    it("Should let the recovery key rotate itself instantly", async function () {
+    it("Should rotate the recovery key with the old key active until the new one accepts", async function () {
       const { recoveryModule, user1, recoveryKey, newOwner } = await loadFixture(deployWithRecoverySetFixture);
 
       await expect(recoveryModule.connect(recoveryKey).updateRecoveryAddress(user1.address, newOwner.address))
-        .to.emit(recoveryModule, "RecoveryAddressSet")
+        .to.emit(recoveryModule, "RecoveryKeyProposed")
         .withArgs(user1.address, newOwner.address, recoveryKey.address);
+
+      // Old key still active while the new one hasn't accepted
+      let [recovery] = await recoveryModule.getRecoveryConfig(user1.address);
+      expect(recovery).to.equal(recoveryKey.address);
+
+      await recoveryModule.connect(newOwner).acceptRecoveryRole(user1.address);
+      [recovery] = await recoveryModule.getRecoveryConfig(user1.address);
+      expect(recovery).to.equal(newOwner.address);
     });
 
     it("Should not let the account key call updateRecoveryAddress", async function () {
@@ -226,8 +277,8 @@ describe("RecoverySystemModule", function () {
         .to.be.revertedWith("Still in timelock");
     });
 
-    it("Should execute after the timelock when not vetoed", async function () {
-      const { recoveryModule, user1, attackerKey, RECOVERY_CHANGE_DELAY } = await loadFixture(deployWithRecoverySetFixture);
+    it("Should execute after the timelock into a pending acceptance, not a direct swap", async function () {
+      const { recoveryModule, user1, recoveryKey, attackerKey, RECOVERY_CHANGE_DELAY } = await loadFixture(deployWithRecoverySetFixture);
 
       await recoveryModule.connect(user1).requestRecoveryAddressChange(attackerKey.address);
       await time.increase(RECOVERY_CHANGE_DELAY);
@@ -236,8 +287,25 @@ describe("RecoverySystemModule", function () {
         .to.emit(recoveryModule, "RecoveryAddressChangeExecuted")
         .withArgs(user1.address, attackerKey.address);
 
-      const [recovery] = await recoveryModule.getRecoveryConfig(user1.address);
+      // Old key remains in charge until the new key accepts
+      let [recovery] = await recoveryModule.getRecoveryConfig(user1.address);
+      expect(recovery).to.equal(recoveryKey.address);
+
+      await recoveryModule.connect(attackerKey).acceptRecoveryRole(user1.address);
+      [recovery] = await recoveryModule.getRecoveryConfig(user1.address);
       expect(recovery).to.equal(attackerKey.address);
+    });
+
+    it("Should apply a removal (change to none) directly, without acceptance", async function () {
+      const { recoveryModule, user1, RECOVERY_CHANGE_DELAY } = await loadFixture(deployWithRecoverySetFixture);
+
+      await recoveryModule.connect(user1).requestRecoveryAddressChange(hre.ethers.ZeroAddress);
+      await time.increase(RECOVERY_CHANGE_DELAY);
+      await recoveryModule.connect(user1).executeRecoveryAddressChange();
+
+      const [recovery] = await recoveryModule.getRecoveryConfig(user1.address);
+      expect(recovery).to.equal(hre.ethers.ZeroAddress);
+      expect(await recoveryModule.getPendingRecoveryKey(user1.address)).to.equal(hre.ethers.ZeroAddress);
     });
 
     it("Should let the recovery key veto a pending change", async function () {

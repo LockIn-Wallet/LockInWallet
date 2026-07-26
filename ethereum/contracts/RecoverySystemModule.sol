@@ -38,6 +38,12 @@ contract RecoverySystemModule is Initializable, UUPSUpgradeable, OwnableUpgradea
     mapping(address => RecoveryConfig) private userRecovery;
     mapping(address => RecoveryKeyChangeRequest) private pendingKeyChanges;
 
+    // Appended for upgrades: proposed recovery keys awaiting on-chain
+    // acceptance. A key only becomes active once it accepts, proving the
+    // user controls it AND that it can transact — an unverified key would
+    // turn any freeze into a permanent lock.
+    mapping(address => address) private pendingRecoveryKeys;
+
     modifier onlyRecoveryKey(address user) {
         address recovery = userRecovery[user].recoveryAddress;
         require(recovery != address(0) && msg.sender == recovery, "Only recovery key");
@@ -65,25 +71,48 @@ contract RecoverySystemModule is Initializable, UUPSUpgradeable, OwnableUpgradea
 
     // ========== RECOVERY KEY MANAGEMENT ==========
 
-    /// @notice Register the initial recovery key. Instant, but only while no
-    /// recovery key exists — replacing one goes through the timelocked flow.
+    /// @notice Propose the initial recovery key. Activation requires the
+    /// proposed key to call acceptRecoveryRole — until then no freeze or
+    /// recovery power exists. Re-proposing overwrites (fixes typos); only
+    /// allowed while no recovery key is active.
     function setRecoveryAddress(address recovery) external notRecovered(msg.sender) {
         RecoveryConfig storage config = userRecovery[msg.sender];
         require(config.recoveryAddress == address(0), "Recovery key already set - use timelocked change");
         require(recovery != address(0), "Invalid recovery address");
         require(recovery != msg.sender, "Recovery key must differ from account key");
 
-        config.recoveryAddress = recovery;
-        emit RecoveryAddressSet(msg.sender, recovery, msg.sender);
+        pendingRecoveryKeys[msg.sender] = recovery;
+        emit RecoveryKeyProposed(msg.sender, recovery, msg.sender);
     }
 
-    /// @notice Recovery key rotates itself (e.g. new hardware wallet). Instant.
+    /// @notice The proposed recovery key confirms it exists, is controlled,
+    /// and can transact. Only now does protection activate (or rotate).
+    function acceptRecoveryRole(address user) external notRecovered(user) {
+        require(pendingRecoveryKeys[user] == msg.sender, "Not the proposed recovery key");
+
+        userRecovery[user].recoveryAddress = msg.sender;
+        delete pendingRecoveryKeys[user];
+        emit RecoveryAddressSet(user, msg.sender, msg.sender);
+    }
+
+    /// @notice Withdraw one's own not-yet-accepted proposal. Harmless even
+    /// from a compromised key: a pending proposal has no powers yet, and an
+    /// already-active recovery key is untouched.
+    function cancelRecoveryKeyProposal() external {
+        require(pendingRecoveryKeys[msg.sender] != address(0), "No pending proposal");
+
+        delete pendingRecoveryKeys[msg.sender];
+        emit RecoveryKeyProposalCancelled(msg.sender);
+    }
+
+    /// @notice Recovery key rotates itself (e.g. new hardware wallet). The
+    /// current key stays active until the new one accepts.
     function updateRecoveryAddress(address user, address newRecovery) external onlyRecoveryKey(user) notRecovered(user) {
         require(newRecovery != address(0), "Invalid recovery address");
         require(newRecovery != user, "Recovery key must differ from account key");
 
-        userRecovery[user].recoveryAddress = newRecovery;
-        emit RecoveryAddressSet(user, newRecovery, msg.sender);
+        pendingRecoveryKeys[user] = newRecovery;
+        emit RecoveryKeyProposed(user, newRecovery, msg.sender);
     }
 
     /// @notice Hot key requests a recovery-key change (or removal via
@@ -111,9 +140,18 @@ contract RecoverySystemModule is Initializable, UUPSUpgradeable, OwnableUpgradea
         require(block.timestamp >= request.executeAfter, "Still in timelock");
         require(!config.frozen, "Account is frozen");
 
-        config.recoveryAddress = request.newRecovery;
         address newRecovery = request.newRecovery;
         delete pendingKeyChanges[msg.sender];
+
+        if (newRecovery == address(0)) {
+            // Removal needs no acceptance — there is no new key to verify
+            config.recoveryAddress = address(0);
+        } else {
+            // The old key keeps protecting the account until the new one
+            // proves itself by accepting
+            pendingRecoveryKeys[msg.sender] = newRecovery;
+            emit RecoveryKeyProposed(msg.sender, newRecovery, msg.sender);
+        }
 
         emit RecoveryAddressChangeExecuted(msg.sender, newRecovery);
     }
@@ -176,6 +214,7 @@ contract RecoverySystemModule is Initializable, UUPSUpgradeable, OwnableUpgradea
         config.recovered = true;
         config.frozen = true;
         delete pendingKeyChanges[user];
+        delete pendingRecoveryKeys[user];
 
         // Carry the recovery key over so the new account is protected from day one
         if (userRecovery[newOwner].recoveryAddress == address(0)) {
@@ -199,6 +238,10 @@ contract RecoverySystemModule is Initializable, UUPSUpgradeable, OwnableUpgradea
     function getRecoveryConfig(address user) external view returns (address recoveryAddress, bool frozen, bool recovered) {
         RecoveryConfig storage config = userRecovery[user];
         return (config.recoveryAddress, config.frozen, config.recovered);
+    }
+
+    function getPendingRecoveryKey(address user) external view returns (address) {
+        return pendingRecoveryKeys[user];
     }
 
     function getPendingRecoveryAddressChange(address user) external view returns (address newRecovery, uint256 executeAfter, bool exists) {

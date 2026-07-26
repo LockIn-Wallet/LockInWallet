@@ -23,6 +23,24 @@ these notes on the in-app **Governance** page before they execute.
 
 Nothing yet.
 
+## [0.3.1] - 2026-07-26
+
+### Added
+- Home page: the "stolen key" demo now ends with a recovery-protection
+  explainer — freeze instantly, move to a fresh key, and why the thief
+  always loses the 30-day race. Frontend copy only, no contract changes.
+
+### Changed
+- **Recovery keys must prove themselves before activating**: registering,
+  rotating, or timelock-changing a recovery key now only *proposes* it —
+  the proposed key must call `acceptRecoveryRole` once (Ownable2Step
+  pattern). Prevents a typo'd or dead recovery key from turning a freeze
+  into a permanent lock, and verifies the key can actually transact before
+  it's trusted; removal via the 30-day path needs no acceptance. *On-chain:
+  `RecoverySystemModule` upgraded in place with an appended
+  `pendingRecoveryKeys` mapping; already-active recovery keys are
+  unaffected.*
+
 ## [0.3.0] - 2026-07-26
 
 ### Added

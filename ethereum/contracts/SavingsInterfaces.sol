@@ -309,8 +309,10 @@ interface IVaultSystemModule {
 }
 
 interface IRecoverySystemModule {
-    // Recovery key management
+    // Recovery key management (two-step: propose, then the key accepts)
     function setRecoveryAddress(address recovery) external;
+    function acceptRecoveryRole(address user) external;
+    function cancelRecoveryKeyProposal() external;
     function updateRecoveryAddress(address user, address newRecovery) external;
     function requestRecoveryAddressChange(address newRecovery) external;
     function executeRecoveryAddressChange() external;
@@ -325,11 +327,14 @@ interface IRecoverySystemModule {
 
     // View functions
     function getRecoveryConfig(address user) external view returns (address recoveryAddress, bool frozen, bool recovered);
+    function getPendingRecoveryKey(address user) external view returns (address);
     function getPendingRecoveryAddressChange(address user) external view returns (address newRecovery, uint256 executeAfter, bool exists);
     function isFrozen(address user) external view returns (bool);
     function requireNotFrozen(address user) external view;
 
     // Events
+    event RecoveryKeyProposed(address indexed user, address indexed proposedRecovery, address proposedBy);
+    event RecoveryKeyProposalCancelled(address indexed user);
     event RecoveryAddressSet(address indexed user, address indexed recovery, address setBy);
     event RecoveryAddressChangeRequested(address indexed user, address indexed newRecovery, uint256 executeAfter);
     event RecoveryAddressChangeExecuted(address indexed user, address indexed newRecovery);

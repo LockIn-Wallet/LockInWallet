@@ -967,6 +967,12 @@ export class EVMAdapter extends BlockchainAdapter {
     if (message.includes("No pending change")) {
       return new Error("There is no pending recovery key change");
     }
+    if (message.includes("Not the proposed recovery key")) {
+      return new Error("This wallet is not the proposed recovery key for that account");
+    }
+    if (message.includes("No pending proposal")) {
+      return new Error("There is no recovery key proposal to cancel");
+    }
     return new Error(`${fallback}: ${message}`);
   }
 
@@ -993,10 +999,13 @@ export class EVMAdapter extends BlockchainAdapter {
     const targetAddress = userAddress || this.userAddress;
     const [recoveryAddress, frozen, recovered] = await module.getRecoveryConfig(targetAddress);
     const [newRecovery, executeAfter, exists] = await module.getPendingRecoveryAddressChange(targetAddress);
+    const pendingRecoveryKey = await module.getPendingRecoveryKey(targetAddress);
 
     return {
       supported: true,
       recoveryAddress: recoveryAddress === ethers.ZeroAddress ? null : recoveryAddress,
+      // Proposed key that has not yet proven itself via acceptRecoveryRole
+      pendingRecoveryKey: pendingRecoveryKey === ethers.ZeroAddress ? null : pendingRecoveryKey,
       isFrozen: frozen || recovered,
       isRecovered: recovered,
       pendingChange: exists
@@ -1008,7 +1017,35 @@ export class EVMAdapter extends BlockchainAdapter {
       isRecoveryKeyFor:
         recoveryAddress !== ethers.ZeroAddress &&
         recoveryAddress.toLowerCase() === this.userAddress?.toLowerCase(),
+      isProposedRecoveryKeyFor:
+        pendingRecoveryKey !== ethers.ZeroAddress &&
+        pendingRecoveryKey.toLowerCase() === this.userAddress?.toLowerCase(),
     };
+  }
+
+  /** Confirm this wallet as the recovery key someone proposed (activates protection). */
+  async acceptRecoveryRole(targetAddress) {
+    const module = await this._requireRecoveryModule();
+    if (!ethers.isAddress(targetAddress)) throw new Error("Invalid account address");
+    try {
+      const tx = await module.acceptRecoveryRole(targetAddress);
+      await tx.wait();
+      return tx.hash;
+    } catch (error) {
+      throw this._translateRecoveryError(error, "Could not accept the recovery role");
+    }
+  }
+
+  /** Withdraw the connected account's own not-yet-accepted proposal. */
+  async cancelRecoveryKeyProposal() {
+    const module = await this._requireRecoveryModule();
+    try {
+      const tx = await module.cancelRecoveryKeyProposal();
+      await tx.wait();
+      return tx.hash;
+    } catch (error) {
+      throw this._translateRecoveryError(error, "Could not cancel the proposal");
+    }
   }
 
   /** Register the connected account's recovery key (one-time, instant). */

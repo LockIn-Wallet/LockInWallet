@@ -84,7 +84,7 @@ const TimeLockShowcase = () => {
   const vaultStatus = !compromised
     ? "Protected by on-chain time locks + hourly withdrawal limit."
     : rescued
-    ? `🚨 You saw the alert and moved funds to safety. The thief got only ${formatUSD(
+    ? `🚨 You saw the alert, froze the account with your recovery key and moved everything to a fresh address. The thief got only ${formatUSD(
         stolenFromVault,
       )}.`
     : `⏳ Hour ${hoursElapsed + 1}: attacker can only take ${formatUSD(
@@ -178,6 +178,27 @@ const TimeLockShowcase = () => {
         them needs a time-locked proposal — visible on-chain long before it can
         execute, with alerts the moment someone tries.
       </p>
+
+      {/* Recovery protection: how you take the wallet back after a leak */}
+      <p style={homeStyles.blockTitle}>
+        🛟 Take the wallet back with your offline recovery key
+      </p>
+      <div style={homeStyles.demoGrid}>
+        <div style={homeStyles.walletPanel}>
+          <p style={homeStyles.panelTitle}>1. 🧊 Freeze</p>
+          <p style={homeStyles.panelStatus}>
+            One click blocks all withdrawals.
+          </p>
+        </div>
+        <div
+          style={{ ...homeStyles.walletPanel, ...homeStyles.walletPanelSafe }}
+        >
+          <p style={homeStyles.panelTitle}>2. 🔁 Move</p>
+          <p style={homeStyles.panelStatus}>
+            Your savings go to a fresh address; the leaked one is dead.
+          </p>
+        </div>
+      </div>
     </div>
   );
 };

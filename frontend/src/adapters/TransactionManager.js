@@ -248,6 +248,12 @@ export class TransactionManager {
   setRecoveryAddress(recoveryAddress) {
     return this.getAdapter().setRecoveryAddress(recoveryAddress);
   }
+  acceptRecoveryRole(targetAddress) {
+    return this.getAdapter().acceptRecoveryRole(targetAddress);
+  }
+  cancelRecoveryKeyProposal() {
+    return this.getAdapter().cancelRecoveryKeyProposal();
+  }
   freezeAccount(targetAddress) {
     return this.getAdapter().freezeAccount(targetAddress);
   }

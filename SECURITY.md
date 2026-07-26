@@ -34,6 +34,11 @@ the attacker. The recovery system introduces the missing asymmetry: an
 optional **cold recovery key** (hardware wallet or offline seed, registered
 in advance and never used day-to-day).
 
+Registration is a two-step handshake: the account proposes a recovery key,
+and the key activates only after it accepts on-chain — proving the user
+controls it and that it can transact. A typo'd or dead recovery key
+therefore never gains (or blocks) any power.
+
 The rules are ordered so that defensive actions always outrun offensive
 ones:
 

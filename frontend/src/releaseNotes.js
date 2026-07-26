@@ -9,6 +9,21 @@
 
 export const RELEASE_NOTES = [
   {
+    version: "0.3.1",
+    date: "2026-07-26",
+    title: "Clearer recovery story",
+    highlights: [
+      {
+        emoji: "🛟",
+        text: "The home page now walks through exactly what happens if your key is ever stolen — and how a recovery key lets you freeze the account and take your savings back.",
+      },
+      {
+        emoji: "✅",
+        text: "Setting a recovery key is now a two-step handshake: propose it, then confirm once from the recovery wallet itself. This catches typos and proves your backup actually works — before you ever need it.",
+      },
+    ],
+  },
+  {
     version: "0.3.0",
     date: "2026-07-26",
     title: "Recovery protection",

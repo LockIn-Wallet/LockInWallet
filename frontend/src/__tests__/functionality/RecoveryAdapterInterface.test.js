@@ -12,6 +12,8 @@ const { EVMAdapter } = require("../../adapters/EVMAdapter.js");
 const RECOVERY_METHODS = [
   "getRecoveryStatus",
   "setRecoveryAddress",
+  "acceptRecoveryRole",
+  "cancelRecoveryKeyProposal",
   "freezeAccount",
   "unfreezeAccount",
   "requestRecoveryKeyChange",
