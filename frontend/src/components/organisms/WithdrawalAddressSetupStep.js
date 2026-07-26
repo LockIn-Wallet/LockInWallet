@@ -218,11 +218,11 @@ const WithdrawalAddressSetupStep = ({
   return (
     <div
       style={{
-        backgroundColor: "#2d3748",
+        backgroundColor: colors.background.primary,
         borderRadius: "8px",
         padding: "20px",
         margin: "20px 0",
-        border: "1px solid #4a5568",
+        border: `1px solid ${colors.border.default}`,
       }}
     >
       {/* Header */}
@@ -230,7 +230,7 @@ const WithdrawalAddressSetupStep = ({
         <h3
           style={{
             ...stepStyles.step2Title,
-            color: colors.primary?.light || "#63b3ed",
+            color: colors.primary?.light || colors.accent.blue,
           }}
         >
           🔑 Withdrawal Addresses

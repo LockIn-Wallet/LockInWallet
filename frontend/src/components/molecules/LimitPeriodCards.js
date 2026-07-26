@@ -1,5 +1,7 @@
 import React, { useState } from "react";
 
+
+import { colors } from "../../styles";
 const PERIODS = [
   { name: "Daily", icon: "📅" },
   { name: "Weekly", icon: "📊" },
@@ -45,16 +47,16 @@ function LimitPeriodCards({ values, onChange, unit }) {
               borderRadius: "8px",
               backgroundColor: isHighlighted
                 ? isBeingConfigured
-                  ? "#3a5a6a"
-                  : "#5a6578"
+                  ? colors.background.darkBlue
+                  : colors.background.secondary
                 : isBeingConfigured
-                ? "#2a4a5a"
-                : "#4a5568",
+                ? colors.background.darkBlue
+                : colors.background.secondary,
               border: isHighlighted
-                ? "2px solid #9ae6b4"
+                ? `2px solid ${colors.success.border}`
                 : isBeingConfigured
-                ? "2px solid #9ae6b4"
-                : "2px dashed #718096",
+                ? `2px solid ${colors.success.border}`
+                : `2px dashed ${colors.border.default}`,
               opacity: isBeingConfigured ? 0.9 : 0.7,
               transition: "all 0.3s ease",
               boxShadow: isHighlighted
@@ -78,7 +80,7 @@ function LimitPeriodCards({ values, onChange, unit }) {
             >
               <h5
                 style={{
-                  color: isBeingConfigured ? "#e2e8f0" : "#a0aec0",
+                  color: isBeingConfigured ? colors.text.secondary : colors.text.muted,
                   margin: 0,
                   fontSize: "1.1em",
                   fontWeight: "bold",
@@ -92,7 +94,7 @@ function LimitPeriodCards({ values, onChange, unit }) {
                   padding: "2px 8px",
                   borderRadius: "12px",
                   backgroundColor: "rgba(255,255,255,0.08)",
-                  color: "#a0aec0",
+                  color: colors.text.muted,
                 }}
               >
                 {unit}
@@ -109,8 +111,8 @@ function LimitPeriodCards({ values, onChange, unit }) {
                 width: "100%",
                 padding: "10px",
                 borderRadius: "4px",
-                border: "1px solid #4a5568",
-                backgroundColor: "#4a5568",
+                border: `1px solid ${colors.border.default}`,
+                backgroundColor: colors.background.secondary,
                 color: "white",
                 fontSize: "1em",
                 boxSizing: "border-box",

@@ -1,9 +1,13 @@
 import {
   colors,
   spacing,
+  space,
   borderRadius,
   fontSize,
+  type,
+  fontFamily,
   fontWeight,
+  letterSpacing,
   transitions,
 } from "../theme.js";
 
@@ -49,30 +53,29 @@ export const homeStyles = {
     gap: spacing.md,
   },
 
-  // Generic showcase section
+  // Generic showcase panel — the demo apparatus, framed like an instrument
   section: {
     backgroundColor: colors.background.primary,
-    border: `1px solid ${colors.border.default}`,
-    borderRadius: borderRadius.xl,
-    padding: spacing.xxl,
-    marginBottom: spacing.xxxl,
+    border: `1px solid ${colors.border.hairline}`,
+    borderRadius: borderRadius.xxl,
+    padding: space[6],
     textAlign: "left",
     color: colors.text.secondary,
   },
 
   sectionTitle: {
-    fontSize: fontSize.xxxl,
-    fontWeight: fontWeight.bold,
+    fontSize: type.h3,
+    fontWeight: fontWeight.semibold,
     color: colors.text.primary,
-    margin: `0 0 ${spacing.sm} 0`,
-    textAlign: "center",
+    margin: `0 0 ${space[2]} 0`,
+    textAlign: "left",
   },
 
   sectionSubtitle: {
-    fontSize: fontSize.normal,
+    fontSize: type.small,
     color: colors.text.muted,
-    textAlign: "center",
-    margin: `0 auto ${spacing.xxl} auto`,
+    textAlign: "left",
+    margin: `0 0 ${space[5]} 0`,
     maxWidth: "620px",
     lineHeight: 1.6,
   },
@@ -92,7 +95,7 @@ export const homeStyles = {
   // Key-compromise simulation
   attackBanner: {
     textAlign: "center",
-    fontSize: fontSize.lg,
+    fontSize: type.body,
     fontWeight: fontWeight.semibold,
     color: colors.text.primary,
     backgroundColor: colors.background.dark,
@@ -131,7 +134,10 @@ export const homeStyles = {
   },
 
   panelTitle: {
-    fontSize: fontSize.normal,
+    fontFamily: fontFamily.mono,
+    letterSpacing: letterSpacing.wide,
+    textTransform: "uppercase",
+    fontSize: type.micro,
     fontWeight: fontWeight.semibold,
     color: colors.text.muted,
     margin: `0 0 ${spacing.sm} 0`,
@@ -139,7 +145,8 @@ export const homeStyles = {
   },
 
   panelBalance: {
-    fontSize: fontSize.xxxl,
+    fontFamily: fontFamily.mono,
+    fontSize: "26px",
     fontWeight: fontWeight.bold,
     color: colors.text.primary,
     textAlign: "center",
@@ -156,7 +163,7 @@ export const homeStyles = {
   },
 
   barTrack: {
-    height: "14px",
+    height: "6px",
     backgroundColor: colors.background.primary,
     borderRadius: borderRadius.xl,
     overflow: "hidden",
@@ -201,12 +208,12 @@ export const homeStyles = {
   },
 
   captionText: {
-    fontSize: fontSize.sm,
-    color: colors.text.muted,
-    textAlign: "center",
+    fontSize: type.small,
+    color: colors.text.gray,
+    textAlign: "left",
     lineHeight: 1.6,
-    margin: `${spacing.xl} auto 0 auto`,
-    maxWidth: "560px",
+    margin: `${space[5]} 0 0 0`,
+    maxWidth: "620px",
   },
 
   // Prize cards
@@ -275,9 +282,9 @@ export const homeStyles = {
 
   countdownValue: {
     fontSize: fontSize.xl,
-    fontWeight: fontWeight.bold,
+    fontWeight: fontWeight.semibold,
     color: colors.text.primary,
-    fontFamily: "monospace",
+    fontFamily: fontFamily.mono,
   },
 
   countdownUnit: {
@@ -379,11 +386,11 @@ export const homeStyles = {
 
   // Time-lock explainer — shared block heading
   blockTitle: {
-    fontSize: fontSize.xl,
+    fontSize: type.h4,
     fontWeight: fontWeight.semibold,
     color: colors.text.primary,
-    textAlign: "center",
-    margin: `0 0 ${spacing.xs} 0`,
+    textAlign: "left",
+    margin: `0 0 ${space[3]} 0`,
   },
 
   blockSubtitle: {
@@ -468,8 +475,8 @@ export const homeStyles = {
   },
 
   bucketNumbers: {
-    fontSize: fontSize.sm,
-    fontFamily: "monospace",
+    fontSize: type.small,
+    fontFamily: fontFamily.mono,
     color: colors.text.light,
     whiteSpace: "nowrap",
   },
@@ -493,7 +500,7 @@ export const homeStyles = {
   },
 
   bucketClock: {
-    fontFamily: "monospace",
+    fontFamily: fontFamily.mono,
     fontWeight: fontWeight.bold,
     fontSize: fontSize.lg,
   },
@@ -518,9 +525,9 @@ export const homeStyles = {
   },
 
   bypassClock: {
-    fontSize: fontSize.xxl,
-    fontWeight: fontWeight.bold,
-    fontFamily: "monospace",
+    fontSize: type.h3,
+    fontWeight: fontWeight.semibold,
+    fontFamily: fontFamily.mono,
     color: colors.warning.light,
     whiteSpace: "nowrap",
   },

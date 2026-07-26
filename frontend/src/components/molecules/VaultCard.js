@@ -8,7 +8,7 @@ function VaultCard({ vault, onClick, isSelected = false }) {
     ? colors.success.light
     : isPersonal
     ? colors.success.main
-    : "#805ad5";
+    : colors.accent.purple;
   const tokenLabel = getTokenSymbol(vault);
   const isClickable = !!onClick;
 
@@ -49,7 +49,7 @@ function VaultCard({ vault, onClick, isSelected = false }) {
               padding: "2px 8px",
               borderRadius: borderRadius.sm,
               backgroundColor: colors.success.main,
-              color: "#1a202c",
+              color: colors.text.dark,
               fontWeight: "bold",
             }}>
               ✓ Current
@@ -60,7 +60,7 @@ function VaultCard({ vault, onClick, isSelected = false }) {
             padding: "2px 8px",
             borderRadius: borderRadius.sm,
             backgroundColor: isPersonal ? "rgba(72,187,120,0.2)" : "rgba(128,90,213,0.2)",
-            color: isPersonal ? colors.success.light : "#d6bcfa",
+            color: isPersonal ? colors.success.light : colors.accent.purple,
           }}>
             {vault.vaultType}
           </span>
@@ -81,7 +81,7 @@ function VaultCard({ vault, onClick, isSelected = false }) {
           justifyContent: "space-between",
           fontSize: fontSize.xs,
           color: colors.text.secondary,
-          borderTop: `1px solid ${colors.border?.default || "#4a5568"}`,
+          borderTop: `1px solid ${colors.border?.default || "${colors.border.default}"}`,
           paddingTop: spacing.sm,
           marginTop: spacing.sm,
         }}>

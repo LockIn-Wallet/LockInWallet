@@ -9,11 +9,17 @@
 export {
   colors,
   spacing,
+  space,
   borderRadius,
   fontSize,
+  type,
+  fontFamily,
   fontWeight,
+  letterSpacing,
   shadows,
   transitions,
+  // Aliased: `layout` is already taken by the layout style module below
+  layout as layoutTokens,
   commonStyles,
   default as theme,
 } from "./theme.js";
@@ -47,6 +53,18 @@ export {
 export { layoutStyles, default as layout } from "./components/layout.js";
 
 export {
+  appStyles,
+  getAllowanceFill,
+  default as app,
+} from "./components/app.js";
+
+export {
+  landingStyles,
+  getBarFill,
+  default as landing,
+} from "./components/landing.js";
+
+export {
   homeStyles,
   getBarFillStyle,
   getConfettiPieceStyle,
@@ -71,6 +89,8 @@ import * as forms from "./components/forms.js";
 import * as steps from "./components/steps.js";
 import * as layout from "./components/layout.js";
 import * as home from "./components/home.js";
+import * as landing from "./components/landing.js";
+import * as app from "./components/app.js";
 import * as utilities from "./utilities.js";
 
 // =====================================
@@ -92,6 +112,14 @@ export const styles = {
       maxWidth: "1400px",
       margin: "0 auto",
       padding: theme.spacing.xxl,
+      position: "relative",
+    },
+    // The landing page brings its own nav, gutters and footer, so the shell
+    // gets out of its way entirely
+    containerLanding: {
+      width: "100%",
+      margin: 0,
+      padding: 0,
       position: "relative",
     },
     title: {
@@ -203,6 +231,8 @@ export default {
   steps,
   layout,
   home,
+  landing,
+  app,
   utilities,
 
   // Convenience object
@@ -224,5 +254,7 @@ export default {
   stepStyles: steps.stepStyles,
   layoutStyles: layout.layoutStyles,
   homeStyles: home.homeStyles,
+  landingStyles: landing.landingStyles,
+  appStyles: app.appStyles,
   utilityStyles: utilities.utilityStyles,
 };

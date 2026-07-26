@@ -21,7 +21,56 @@ these notes on the in-app **Governance** page before they execute.
 
 ## [Unreleased]
 
-Nothing yet.
+### Changed
+- Design system: `frontend/src/styles/theme.js` is rebuilt on the LockIn
+  tokens — a near-neutral dark surface ramp with a single mint accent
+  reserved for "enforced / verified / active", plus an absolute type scale,
+  `IBM Plex Mono` for machine output (amounts, clocks, addresses, status),
+  and page-level spacing/radius scales. Every existing token key keeps its
+  name, so all screens pick up the new palette without call-site changes.
+  Global element styles in `index.css` were retuned to the same tokens and a
+  visible `:focus-visible` ring plus an `.sr-only` utility were added.
+- Home page rebuilt on the new system: nav, hero, proof strip, wallet
+  comparison table, trust grid, chain rollout, how-it-works and footer, with
+  the existing time-lock, recovery, chain and prize demos restyled into it.
+  Emoji removed from the trust-carrying sections in favour of a line-icon
+  set (`components/atoms/Icon.js`). The logged-out home page now renders in
+  a full-width shell with its own nav and footer.
+- Wallet connect buttons use the accent instead of each wallet's brand
+  colour, so a single accent carries the primary action.
+- Savings Visualiser palette remapped onto the design tokens via
+  `tailwind.config.js`, so the embedded projection matches the rest of the
+  page.
+
+### Fixed
+- Home page copy no longer claims "zero admin keys". The page now states the
+  actual upgrade trust model from [SECURITY.md](SECURITY.md) — upgrades are
+  executed by a single maintainer key today, an on-chain 48h timelock is
+  rolling out, and the guarantee that holds regardless is the 24h emergency
+  bypass. The removed "audits" link is replaced by links to the source, the
+  security model and the Governance page.
+
+- The logged-in app now uses the same design tokens as the home page. All
+  231 remaining hardcoded palette values across 16 component files were
+  converted to token references, mapped by (CSS property, hex) because the
+  same value carried different meanings — `#4a5568` was a border 27 times
+  and a background 18 times.
+- New `AllowanceBar` at the top of the vault view: remaining allowance per
+  active period, in mono, with a reset countdown. Answers "what can I
+  withdraw right now" without scrolling.
+- Once the wallet is locked, **Withdraw funds** sits above **Spending
+  limits** — withdrawing is the routine act, changing a limit is rare and
+  deliberately slow (24h timelock).
+- Collapsible sections use the line-icon set and no longer repeat the
+  heading that the component beneath them already renders.
+
+### Removed
+- The in-app tutorial card shown during setup. It re-sold the product to
+  users who had already connected, duplicating the home page, and claimed
+  compromise resistance was "coming soon" — the recovery system shipped in
+  v0.3.0.
+
+No contract changes; frontend only.
 
 ## [0.3.1] - 2026-07-26
 

@@ -1,38 +1,31 @@
 import React, { Suspense, lazy } from "react";
 
-import bobbyLeeVideo from "../../assets/video/bobby_lee.mp4";
-import lockinWalletImage from "../../assets/images/lockinwallet.jpg";
+import SectionHeading from "../atoms/SectionHeading.js";
+import LandingNav from "../organisms/landing/LandingNav.js";
+import LandingHero from "../organisms/landing/LandingHero.js";
+import ProofStrip from "../organisms/landing/ProofStrip.js";
+import WalletComparison from "../organisms/landing/WalletComparison.js";
+import TrustGrid from "../organisms/landing/TrustGrid.js";
+import HowItWorks from "../organisms/landing/HowItWorks.js";
+import LandingClosing from "../organisms/landing/LandingClosing.js";
+import LandingFooter from "../organisms/landing/LandingFooter.js";
 
-import TypewriterText from "../atoms/TypewriterText.js";
-import WalletConnectButtons from "./WalletConnectButtons.js";
 import TimeLockShowcase from "../organisms/TimeLockShowcase.js";
-import TimeLockExplainer from "../organisms/TimeLockExplainer.js";
 import ChainAvailability from "../organisms/ChainAvailability.js";
 import PrizeSavingsShowcase from "../organisms/PrizeSavingsShowcase.js";
 
-import { homeStyles } from "../../styles";
+import { landingStyles } from "../../styles";
 
 // Shares the lazy chunk with the standalone page, so chart.js still only
 // downloads when this section is actually reached
-const SavingsVisualiser = lazy(() =>
-  import("../pages/SavingsVisualiser.js")
-);
-
-// youtube.com/watch?v=6JwkaLt9pf8
-const YOUTUBE_VIDEO_ID = "6JwkaLt9pf8";
-
-const HERO_TYPEWRITER_WORDS = [
-  "Hackers can't drain it.",
-  "You can't impulse spend it.",
-  "Devs can't steal it.",
-  "Your savings stay yours.",
-  "And it can win prizes.",
-];
+const SavingsVisualiser = lazy(() => import("../pages/SavingsVisualiser.js"));
 
 /**
- * WalletConnectionPrompt - the logged-out homepage. Shows connect options
- * plus a product showcase: the time-lock security demo and the opt-in
- * no-loss prize savings demo.
+ * WalletConnectionPrompt - the logged-out landing page.
+ *
+ * The argument runs in order: the contract refuses a withdrawal (hero), three
+ * checkable facts, then the demos that prove each claim, then the comparison,
+ * the trust model including what we can still do, and finally setup.
  */
 const WalletConnectionPrompt = ({
   provider,
@@ -45,104 +38,78 @@ const WalletConnectionPrompt = ({
   const isEVMDisconnected = !provider && networkType !== "solana";
   const isSolanaDisconnected =
     networkType === "solana" && (!solanaConnected || !solanaWallet);
-  const showPrompt = isEVMDisconnected || isSolanaDisconnected;
 
-  if (!showPrompt) {
+  if (!(isEVMDisconnected || isSolanaDisconnected)) {
     return null;
   }
 
   return (
-    <div style={homeStyles.container}>
-      {/* Hero */}
-      <div style={homeStyles.hero}>
-        <h2 style={homeStyles.heroTitle}>
-          Time-lock your crypto.
-          <br />
-          <TypewriterText
-            words={HERO_TYPEWRITER_WORDS}
-            style={homeStyles.heroTypewriter}
+    <div className="landing-shell" style={landingStyles.page}>
+      <LandingNav onLaunch={connectWallet} />
+
+      <LandingHero onLaunch={connectWallet} />
+
+      <ProofStrip />
+
+      <section style={landingStyles.section}>
+        <div style={landingStyles.inner}>
+          <SectionHeading
+            eyebrow="What a leaked key costs you"
+            title="A stolen key can't empty your wallet"
+            lede="Your limit is the attacker's limit too. That gap is the time you need to notice and take the account back."
           />
-        </h2>
-        <p style={homeStyles.heroSubtitle}>
-          LockInWallet keeps your savings behind on-chain time locks and
-          spending limits you set yourself. Even a stolen private key can only
-          leak a trickle — and your locked funds can join a no-loss prize pool
-          while they sit safe.
-        </p>
-        <WalletConnectButtons
-          networkType={networkType}
-          connectWallet={connectWallet}
-          onConnectPhantom={onConnectPhantom}
-        />
-      </div>
-
-      {/* Feature demo: time-locked funds vs a stolen key */}
-      <TimeLockShowcase />
-
-      {/* Mechanics: withdrawal limits and the 24-hour bypass timelock */}
-      <TimeLockExplainer />
-
-      {/* Chain rollout: Optimism live, Ethereum and Solana underway */}
-      <ChainAvailability />
-
-      {/* Savings Visualiser — compact embed, full dashboard one click away */}
-      <Suspense fallback={null}>
-        <SavingsVisualiser
-          compact
-          title="🔮 Where does this actually get me?"
-          subtitle="Set your split, and watch four decades play out."
-        />
-      </Suspense>
-
-      {/* Feature demo: PoolTogether-style no-loss prize savings */}
-      <PrizeSavingsShowcase />
-
-      {/* Brand media */}
-      <div style={homeStyles.mediaSection}>
-        <img
-          src={lockinWalletImage}
-          alt="LockIn Wallet"
-          style={homeStyles.mediaImage}
-        />
-      </div>
-
-      <div style={homeStyles.mediaSection}>
-        <div style={homeStyles.mediaEmbed}>
-          <iframe
-            src={`https://www.youtube-nocookie.com/embed/${YOUTUBE_VIDEO_ID}`}
-            title="LockIn Wallet"
-            style={homeStyles.mediaEmbedFrame}
-            allow="accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-            referrerPolicy="strict-origin-when-cross-origin"
-            allowFullScreen
-          />
+          <TimeLockShowcase />
         </div>
-      </div>
+      </section>
 
-      <div style={homeStyles.mediaSection}>
-        <video
-          src={bobbyLeeVideo}
-          controls
-          loop
-          playsInline
-          style={homeStyles.mediaVideo}
-        />
-      </div>
+      <WalletComparison />
 
-      <p style={homeStyles.footerTagline}>
-        Fully on chain timelocked wallet that limits the amount you can
-        withdraw to keep you alive and happy.
-      </p>
+      <TrustGrid />
 
-      {/* Closing CTA */}
-      <div style={homeStyles.ctaSection}>
-        <h2 style={homeStyles.ctaTitle}>Ready to lock it in?</h2>
-        <WalletConnectButtons
-          networkType={networkType}
-          connectWallet={connectWallet}
-          onConnectPhantom={onConnectPhantom}
-        />
-      </div>
+      <section style={landingStyles.section}>
+        <div style={landingStyles.inner}>
+          <SectionHeading
+            eyebrow="Chains"
+            title="Live on Optimism, with Ethereum underway"
+            lede="Cheap, fast transactions matter here: an hourly limit only makes sense if using it doesn't cost a fortune in gas."
+          />
+          <ChainAvailability />
+        </div>
+      </section>
+
+      <section style={landingStyles.section}>
+        <div style={landingStyles.inner}>
+          <SectionHeading
+            eyebrow="The long view"
+            title="Where saving at this rate actually gets you"
+            lede="Set your split and watch four decades play out."
+          />
+          <Suspense fallback={null}>
+            <SavingsVisualiser compact title={null} subtitle={null} />
+          </Suspense>
+        </div>
+      </section>
+
+      <section style={landingStyles.section}>
+        <div style={landingStyles.inner}>
+          <SectionHeading
+            eyebrow="Optional"
+            title="Locked funds can earn a shot at a prize"
+            lede="Opt in and your deposit joins a shared pool whose interest is paid out as prizes. Your deposit stays yours either way."
+          />
+          <PrizeSavingsShowcase />
+        </div>
+      </section>
+
+      <HowItWorks />
+
+      <LandingClosing
+        networkType={networkType}
+        connectWallet={connectWallet}
+        onConnectPhantom={onConnectPhantom}
+      />
+
+      <LandingFooter />
     </div>
   );
 };

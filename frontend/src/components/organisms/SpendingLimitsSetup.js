@@ -424,31 +424,29 @@ const SpendingLimitsSetup = ({
     padding: "20px",
     border: !isSetupCommitted
       ? `2px solid ${colors.success.main}`
-      : `2px solid ${colors.border?.light || "#4a5568"}`,
+      : `2px solid ${colors.border?.light || colors.border.default}`,
     borderRadius: "12px",
-    backgroundColor: colors.background?.primary || "#2d3748",
+    backgroundColor: colors.background?.primary || colors.background.primary,
     color: colors.text?.primary || "white",
   };
 
   return (
     <div style={stepContainerStyle}>
-      {/* Header */}
-      <div style={stepStyles.stepHeader}>
-        <h3
-          style={{
-            ...stepStyles.step1Title,
-            color: colors.success?.light || "#9ae6b4",
-          }}
-        >
-          💰 Spending Limits
-        </h3>
-      </div>
+      {/* Header — only during setup. Once committed this component is wrapped
+          in a CollapsibleSection that already names the section. */}
+      {!isSetupCommitted && (
+        <div style={stepStyles.stepHeader}>
+          <h3 style={{ ...stepStyles.step1Title, color: colors.text.primary }}>
+            Spending limits
+          </h3>
+        </div>
+      )}
 
       {/* Description */}
       <p
         style={{
           fontSize: "0.9em",
-          color: "#cbd5e0",
+          color: colors.text.light,
           marginBottom: "15px",
           lineHeight: "1.5",
         }}
@@ -463,12 +461,12 @@ const SpendingLimitsSetup = ({
         <div
           style={{
             fontSize: "0.8em",
-            color: "#a0aec0",
-            backgroundColor: "#1a202c",
+            color: colors.text.muted,
+            backgroundColor: colors.background.dark,
             padding: "10px",
             borderRadius: "4px",
             marginBottom: "15px",
-            borderLeft: "3px solid #f6ad55",
+            borderLeft: `3px solid ${colors.warning.light}`,
           }}
         >
           💡 <strong>Tip:</strong> Set at least one spending limit to
@@ -479,7 +477,7 @@ const SpendingLimitsSetup = ({
 
       {/* Daily/Weekly/Monthly Cards */}
       <div style={layoutStyles.marginBottomLarge}>
-        <h4 style={{ color: "#9ae6b4", margin: "0 0 15px 0" }}>
+        <h4 style={{ color: colors.success.light, margin: "0 0 15px 0" }}>
           🎯 Standard Time Periods
         </h4>
         {!isSetupCommitted ? (
@@ -541,19 +539,19 @@ const SpendingLimitsSetup = ({
               padding: "15px",
               borderRadius: "8px",
               backgroundColor: isActive
-                ? "#1a202c"
+                ? colors.background.dark
                 : isBeingConfigured
-                ? "#2a4a5a"
-                : "#4a5568",
+                ? colors.background.darkBlue
+                : colors.background.secondary,
               border: isActive
                 ? isAtLimit
-                  ? "2px solid #e53e3e"
+                  ? `2px solid ${colors.border.error}`
                   : isNearLimit
-                  ? "2px solid #ed8936"
-                  : "2px solid #48bb78"
+                  ? `2px solid ${colors.border.warning}`
+                  : `2px solid ${colors.border.success}`
                 : isBeingConfigured || hasUnsavedChanges
-                ? "2px solid #9ae6b4"
-                : "2px dashed #718096",
+                ? `2px solid ${colors.success.border}`
+                : `2px dashed ${colors.border.default}`,
               opacity: isActive ? 1 : isBeingConfigured ? 0.9 : 0.7,
               transition: "all 0.3s ease",
               boxShadow:
@@ -572,20 +570,20 @@ const SpendingLimitsSetup = ({
               backgroundColor:
                 (isHovered || isFocused) && isInteractive
                   ? isActive
-                    ? "#2d3748"
+                    ? colors.background.primary
                     : isBeingConfigured
-                    ? "#3a5a6a"
-                    : "#5a6578"
+                    ? colors.background.darkBlue
+                    : colors.background.secondary
                   : cardStyle.backgroundColor,
               border:
                 (isHovered || isFocused) && isInteractive
                   ? isActive
                     ? isAtLimit
-                      ? "2px solid #fc8181"
+                      ? `2px solid ${colors.border.error}`
                       : isNearLimit
-                      ? "2px solid #f6ad55"
-                      : "2px solid #68d391"
-                    : "2px solid #9ae6b4"
+                      ? `2px solid ${colors.warning.light}`
+                      : `2px solid ${colors.border.success}`
+                    : `2px solid ${colors.success.border}`
                   : cardStyle.border,
               boxShadow:
                 (isHovered || isFocused) && isInteractive
@@ -632,8 +630,8 @@ const SpendingLimitsSetup = ({
                       color: isActive
                         ? "white"
                         : isBeingConfigured
-                        ? "#e2e8f0"
-                        : "#a0aec0",
+                        ? colors.text.secondary
+                        : colors.text.muted,
                       margin: 0,
                       fontSize: "1.1em",
                       fontWeight: "bold",
@@ -653,10 +651,10 @@ const SpendingLimitsSetup = ({
                         padding: "4px 8px",
                         borderRadius: "12px",
                         backgroundColor: isAtLimit
-                          ? "#e53e3e"
+                          ? colors.error.main
                           : isNearLimit
-                          ? "#ed8936"
-                          : "#48bb78",
+                          ? colors.warning.main
+                          : colors.success.main,
                         color: "white",
                         fontWeight: "bold",
                       }}
@@ -686,8 +684,8 @@ const SpendingLimitsSetup = ({
                         width: "100%",
                         padding: "10px",
                         borderRadius: "4px",
-                        border: "1px solid #4a5568",
-                        backgroundColor: "#4a5568",
+                        border: `1px solid ${colors.border.default}`,
+                        backgroundColor: colors.background.secondary,
                         color: "white",
                         fontSize: "1em",
                       }}
@@ -703,13 +701,13 @@ const SpendingLimitsSetup = ({
                       }}
                     >
                       <span
-                        style={{ color: "#e2e8f0", fontSize: "0.9em" }}
+                        style={{ color: colors.text.secondary, fontSize: "0.9em" }}
                       >
                         Remaining
                       </span>
                       <span
                         style={{
-                          color: isAtLimit ? "#fc8181" : "#9ae6b4",
+                          color: isAtLimit ? colors.error.light : colors.success.light,
                           fontWeight: "bold",
                           fontSize: "1.1em",
                         }}
@@ -722,7 +720,7 @@ const SpendingLimitsSetup = ({
                         display: "flex",
                         justifyContent: "space-between",
                         fontSize: "0.8em",
-                        color: "#a0aec0",
+                        color: colors.text.muted,
                         marginBottom: "8px",
                       }}
                     >
@@ -734,7 +732,7 @@ const SpendingLimitsSetup = ({
                       style={{
                         width: "100%",
                         height: "6px",
-                        backgroundColor: "#4a5568",
+                        backgroundColor: colors.background.secondary,
                         borderRadius: "3px",
                         overflow: "hidden",
                       }}
@@ -744,10 +742,10 @@ const SpendingLimitsSetup = ({
                           width: `${Math.min(progressPercent, 100)}%`,
                           height: "100%",
                           backgroundColor: isAtLimit
-                            ? "#e53e3e"
+                            ? colors.error.main
                             : isNearLimit
-                            ? "#ed8936"
-                            : "#48bb78",
+                            ? colors.warning.main
+                            : colors.success.main,
                           transition: "width 0.3s ease",
                         }}
                       />
@@ -766,14 +764,14 @@ const SpendingLimitsSetup = ({
                     <div style={layoutStyles.marginBottomSmall}>
                       <div
                         style={{
-                          color: "#a0aec0",
+                          color: colors.text.muted,
                           fontSize: "0.9em",
                           fontStyle: "italic",
                           textAlign: "center",
                           padding: "16px",
-                          backgroundColor: "#2d3748",
+                          backgroundColor: colors.background.primary,
                           borderRadius: "6px",
-                          border: "1px solid #4a5568",
+                          border: `1px solid ${colors.border.default}`,
                         }}
                       >
                         🔒 No {periodName.toLowerCase()} limit set. Use
@@ -797,7 +795,7 @@ const SpendingLimitsSetup = ({
                             padding: "8px",
                             borderRadius: "4px",
                             border: "none",
-                            backgroundColor: "#ed8936",
+                            backgroundColor: colors.warning.main,
                             color: "white",
                             cursor: "pointer",
                             fontSize: "0.9em",
@@ -814,7 +812,7 @@ const SpendingLimitsSetup = ({
                             padding: "8px",
                             borderRadius: "4px",
                             border: "none",
-                            backgroundColor: "#48bb78",
+                            backgroundColor: colors.success.main,
                             color: "white",
                             cursor: "pointer",
                             fontSize: "0.9em",
@@ -830,9 +828,9 @@ const SpendingLimitsSetup = ({
                           flex: 1,
                           padding: "8px",
                           borderRadius: "4px",
-                          border: "1px solid #4a5568",
+                          border: `1px solid ${colors.border.default}`,
                           backgroundColor: "transparent",
-                          color: "#e2e8f0",
+                          color: colors.text.secondary,
                           cursor: "pointer",
                           fontSize: "0.9em",
                           minWidth: "70px",
@@ -873,15 +871,15 @@ const SpendingLimitsSetup = ({
                                 width: "100%",
                                 padding: "8px",
                                 borderRadius: "4px",
-                                border: "1px solid #4a5568",
-                                backgroundColor: "#2d3748",
+                                border: `1px solid ${colors.border.default}`,
+                                backgroundColor: colors.background.primary,
                                 backgroundImage: "none",
                                 color: hasPendingProposalForPeriod(
                                   periodName,
                                   pendingLimitProposals
                                 )
-                                  ? "#555"
-                                  : "#a0aec0",
+                                  ? colors.text.gray
+                                  : colors.text.muted,
                                 cursor: hasPendingProposalForPeriod(
                                   periodName,
                                   pendingLimitProposals
@@ -906,8 +904,8 @@ const SpendingLimitsSetup = ({
                                   )
                                 ) {
                                   e.target.style.opacity = "1";
-                                  e.target.style.color = "#e2e8f0";
-                                  e.target.style.borderColor = "#718096";
+                                  e.target.style.color = colors.text.secondary;
+                                  e.target.style.borderColor = colors.border.default;
                                 }
                               }}
                               onMouseLeave={(e) => {
@@ -918,8 +916,8 @@ const SpendingLimitsSetup = ({
                                   )
                                 ) {
                                   e.target.style.opacity = "0.7";
-                                  e.target.style.color = "#a0aec0";
-                                  e.target.style.borderColor = "#4a5568";
+                                  e.target.style.color = colors.text.muted;
+                                  e.target.style.borderColor = colors.border.default;
                                 }
                               }}
                             >
@@ -953,15 +951,15 @@ const SpendingLimitsSetup = ({
                                   width: "100%",
                                   padding: "8px",
                                   borderRadius: "4px",
-                                  border: "1px solid #4a5568",
-                                  backgroundColor: "#2d3748",
+                                  border: `1px solid ${colors.border.default}`,
+                                  backgroundColor: colors.background.primary,
                                   backgroundImage: "none",
                                   color: hasPendingProposalForPeriod(
                                     periodName,
                                     pendingLimitProposals
                                   )
-                                    ? "#555"
-                                    : "#a0aec0",
+                                    ? colors.text.gray
+                                    : colors.text.muted,
                                   cursor: hasPendingProposalForPeriod(
                                     periodName,
                                     pendingLimitProposals
@@ -986,9 +984,9 @@ const SpendingLimitsSetup = ({
                                     )
                                   ) {
                                     e.target.style.opacity = "1";
-                                    e.target.style.color = "#e2e8f0";
+                                    e.target.style.color = colors.text.secondary;
                                     e.target.style.borderColor =
-                                      "#718096";
+                                      colors.border.default;
                                   }
                                 }}
                                 onMouseLeave={(e) => {
@@ -999,9 +997,9 @@ const SpendingLimitsSetup = ({
                                     )
                                   ) {
                                     e.target.style.opacity = "0.7";
-                                    e.target.style.color = "#a0aec0";
+                                    e.target.style.color = colors.text.muted;
                                     e.target.style.borderColor =
-                                      "#4a5568";
+                                      colors.border.default;
                                   }
                                 }}
                               >
@@ -1013,7 +1011,7 @@ const SpendingLimitsSetup = ({
                       ) : (
                         <div
                           style={{
-                            color: "#a0aec0",
+                            color: colors.text.muted,
                             fontSize: "0.9em",
                             fontStyle: "italic",
                             textAlign: "center",
@@ -1037,7 +1035,7 @@ const SpendingLimitsSetup = ({
         <div
           style={{
             fontSize: "0.8em",
-            color: "#a0aec0",
+            color: colors.text.muted,
             marginBottom: "15px",
           }}
         >
@@ -1056,7 +1054,7 @@ const SpendingLimitsSetup = ({
             marginBottom: "15px",
           }}
         >
-          <h4 style={{ color: "#fbb6ce", margin: 0 }}>
+          <h4 style={{ color: colors.accent.pink, margin: 0 }}>
             ⚙️ Custom Time Periods
           </h4>
           <button
@@ -1064,9 +1062,9 @@ const SpendingLimitsSetup = ({
             style={{
               padding: "8px 16px",
               borderRadius: "4px",
-              border: "1px solid #4a5568",
+              border: `1px solid ${colors.border.default}`,
               backgroundColor: "transparent",
-              color: "#e2e8f0",
+              color: colors.text.secondary,
               cursor: "pointer",
               fontSize: "0.9em",
             }}
@@ -1102,12 +1100,12 @@ const SpendingLimitsSetup = ({
                       style={{
                         padding: "12px",
                         border: isAtLimit
-                          ? "1px solid #e53e3e"
+                          ? `1px solid ${colors.border.error}`
                           : isNearLimit
-                          ? "1px solid #ed8936"
-                          : "1px solid #48bb78",
+                          ? `1px solid ${colors.border.warning}`
+                          : `1px solid ${colors.border.success}`,
                         borderRadius: "6px",
-                        backgroundColor: "#1a202c",
+                        backgroundColor: colors.background.dark,
                         display: "flex",
                         justifyContent: "space-between",
                         alignItems: "center",
@@ -1132,7 +1130,7 @@ const SpendingLimitsSetup = ({
                           </span>
                           <span
                             style={{
-                              color: isAtLimit ? "#fc8181" : "#9ae6b4",
+                              color: isAtLimit ? colors.error.light : colors.success.light,
                               fontWeight: "bold",
                             }}
                           >
@@ -1140,7 +1138,7 @@ const SpendingLimitsSetup = ({
                           </span>
                         </div>
                         <div
-                          style={{ fontSize: "0.8em", color: "#a0aec0" }}
+                          style={{ fontSize: "0.8em", color: colors.text.muted }}
                         >
                           Duration:{" "}
                           {limit.durationDays > 0
@@ -1156,9 +1154,9 @@ const SpendingLimitsSetup = ({
                           marginLeft: "10px",
                           padding: "6px 12px",
                           borderRadius: "4px",
-                          border: "1px solid #e53e3e",
+                          border: `1px solid ${colors.border.error}`,
                           backgroundColor: "transparent",
-                          color: "#e53e3e",
+                          color: colors.error.main,
                           cursor: "pointer",
                           fontSize: "0.8em",
                         }}
@@ -1177,15 +1175,15 @@ const SpendingLimitsSetup = ({
           <div
             style={{
               padding: "15px",
-              backgroundColor: "#1a202c",
+              backgroundColor: colors.background.dark,
               borderRadius: "4px",
-              border: "1px solid #4a5568",
+              border: `1px solid ${colors.border.default}`,
             }}
           >
             <p
               style={{
                 fontSize: "0.8em",
-                color: "#a0aec0",
+                color: colors.text.muted,
                 marginBottom: "15px",
               }}
             >
@@ -1205,7 +1203,7 @@ const SpendingLimitsSetup = ({
                   style={{
                     display: "block",
                     fontSize: "0.9em",
-                    color: "#e2e8f0",
+                    color: colors.text.secondary,
                     marginBottom: "5px",
                   }}
                 >
@@ -1220,8 +1218,8 @@ const SpendingLimitsSetup = ({
                     width: "100%",
                     padding: "8px",
                     borderRadius: "4px",
-                    border: "1px solid #4a5568",
-                    backgroundColor: "#4a5568",
+                    border: `1px solid ${colors.border.default}`,
+                    backgroundColor: colors.background.secondary,
                     color: "white",
                   }}
                 />
@@ -1239,7 +1237,7 @@ const SpendingLimitsSetup = ({
                     style={{
                       display: "block",
                       fontSize: "0.9em",
-                      color: "#e2e8f0",
+                      color: colors.text.secondary,
                       marginBottom: "5px",
                     }}
                   >
@@ -1254,8 +1252,8 @@ const SpendingLimitsSetup = ({
                       width: "100%",
                       padding: "8px",
                       borderRadius: "4px",
-                      border: "1px solid #4a5568",
-                      backgroundColor: "#4a5568",
+                      border: `1px solid ${colors.border.default}`,
+                      backgroundColor: colors.background.secondary,
                       color: "white",
                     }}
                   />
@@ -1265,7 +1263,7 @@ const SpendingLimitsSetup = ({
                     style={{
                       display: "block",
                       fontSize: "0.9em",
-                      color: "#e2e8f0",
+                      color: colors.text.secondary,
                       marginBottom: "5px",
                     }}
                   >
@@ -1280,8 +1278,8 @@ const SpendingLimitsSetup = ({
                       width: "100%",
                       padding: "8px",
                       borderRadius: "4px",
-                      border: "1px solid #4a5568",
-                      backgroundColor: "#4a5568",
+                      border: `1px solid ${colors.border.default}`,
+                      backgroundColor: colors.background.secondary,
                       color: "white",
                     }}
                   >
@@ -1306,7 +1304,7 @@ const SpendingLimitsSetup = ({
                 padding: "10px 20px",
                 borderRadius: "4px",
                 border: "none",
-                backgroundColor: "#ed64a6",
+                backgroundColor: colors.accent.purple,
                 color: "white",
                 cursor: "pointer",
                 fontSize: "0.9em",
@@ -1324,13 +1322,13 @@ const SpendingLimitsSetup = ({
       {/* Pending Limit Proposals Section */}
       {pendingLimitProposals.length > 0 && (
         <div style={layoutStyles.marginBottomLarge}>
-          <h4 style={{ color: "#ed8936", margin: "0 0 15px 0" }}>
+          <h4 style={{ color: colors.warning.main, margin: "0 0 15px 0" }}>
             ⏳ Pending Limit Changes ({pendingLimitProposals.length})
           </h4>
           <p
             style={{
               fontSize: "0.8em",
-              color: "#a0aec0",
+              color: colors.text.muted,
               marginBottom: "15px",
             }}
           >
@@ -1356,10 +1354,10 @@ const SpendingLimitsSetup = ({
                   style={{
                     padding: "12px",
                     border: isReady
-                      ? "1px solid #48bb78"
-                      : "1px solid #ed8936",
+                      ? `1px solid ${colors.border.success}`
+                      : `1px solid ${colors.border.warning}`,
                     borderRadius: "6px",
-                    backgroundColor: "#1a202c",
+                    backgroundColor: colors.background.dark,
                     display: "flex",
                     justifyContent: "space-between",
                     alignItems: "center",
@@ -1392,8 +1390,8 @@ const SpendingLimitsSetup = ({
                           padding: "4px 8px",
                           borderRadius: "12px",
                           backgroundColor: isReady
-                            ? "#48bb78"
-                            : "#ed8936",
+                            ? colors.success.main
+                            : colors.warning.main,
                           color: "white",
                           fontWeight: "bold",
                         }}
@@ -1401,7 +1399,7 @@ const SpendingLimitsSetup = ({
                         {isReady ? "✅ Ready" : `⏰ ${countdownText}`}
                       </span>
                     </div>
-                    <div style={{ fontSize: "0.8em", color: "#a0aec0" }}>
+                    <div style={{ fontSize: "0.8em", color: colors.text.muted }}>
                       {proposal.action === "change" ? (
                         <>New Limit: {proposal.newLimit} {tokenSymbol}</>
                       ) : (
@@ -1432,7 +1430,7 @@ const SpendingLimitsSetup = ({
                           padding: "6px 12px",
                           borderRadius: "4px",
                           border: "none",
-                          backgroundColor: "#48bb78",
+                          backgroundColor: colors.success.main,
                           color: "white",
                           cursor: "pointer",
                           fontSize: "0.8em",
@@ -1447,9 +1445,9 @@ const SpendingLimitsSetup = ({
                       style={{
                         padding: "6px 12px",
                         borderRadius: "4px",
-                        border: "1px solid #e53e3e",
+                        border: `1px solid ${colors.border.error}`,
                         backgroundColor: "transparent",
-                        color: "#e53e3e",
+                        color: colors.error.main,
                         cursor: "pointer",
                         fontSize: "0.8em",
                       }}
@@ -1466,7 +1464,7 @@ const SpendingLimitsSetup = ({
             style={{
               marginTop: "15px",
               fontSize: "0.8em",
-              color: "#a0aec0",
+              color: colors.text.muted,
             }}
           >
             💡 Proposals become executable after the timelock period for

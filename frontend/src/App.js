@@ -64,6 +64,7 @@ import CollapsibleSection from "./components/atoms/CollapsibleSection.js";
 import StatusHeader from "./components/molecules/StatusHeader.js";
 import WalletConnectionPrompt from "./components/molecules/WalletConnectionPrompt.js";
 import BalanceDisplay from "./components/molecules/BalanceDisplay.js";
+import AllowanceBar from "./components/molecules/AllowanceBar.js";
 import DepositInterface from "./components/molecules/DepositInterface.js";
 import TransactionHistory from "./components/molecules/TransactionHistory.js";
 import SpendingLimitsSetup from "./components/organisms/SpendingLimitsSetup.js";
@@ -311,6 +312,16 @@ function MainFlow({
           (balances, deposit address, limits, history) for the new vault. */}
       <div key={currentVaultAddress || "default"}>
 
+      {/* What you can withdraw right now, above everything else. On a
+          single-page app this is the one number worth never scrolling for. */}
+      {isSetupCommitted && (
+        <AllowanceBar
+          transactionManager={transactionManager}
+          userAddress={userAddress}
+          currentTime={currentTime}
+        />
+      )}
+
       {/* Balance Display (only when setup committed) */}
       {isSetupCommitted && (
         <BalanceDisplay
@@ -333,42 +344,9 @@ function MainFlow({
         />
       )}
 
-      {/* Tutorial section during setup */}
-      {!isSetupCommitted && (
-        <div style={{
-          marginBottom: "20px",
-          padding: "16px",
-          backgroundColor: "#1a365d",
-          border: "2px solid #48bb78",
-          borderRadius: "8px",
-          color: "white",
-        }}>
-          <div style={{ display: "flex", alignItems: "center", marginBottom: "12px", gap: "8px" }}>
-            <span style={{ fontSize: "1.25rem" }}>🛡️</span>
-            <h4 style={{ margin: 0, color: "#9ae6b4", fontSize: "1.1em", fontWeight: "600" }}>
-              Protect your Bankroll/Savings/Profits even from yourself
-            </h4>
-          </div>
-          <div style={{ fontSize: "0.9em", lineHeight: "1.6", color: "#e2e8f0" }}>
-            <p style={{ margin: "0 0 8px 0" }}>
-              <strong>🏦 No-trading wallet:</strong> Designed for storing stablecoins for your peace of mind.
-            </p>
-            <p style={{ margin: "0 0 8px 0" }}>
-              <strong>🔐 Set up withdrawal allowance:</strong> Changes to allowance or bypassing withdrawal limits are timelocked to combat spending/risking impulses.
-            </p>
-            <p style={{ margin: "0 0 8px 0" }}>
-              <strong>🛡️ Compromise-Resistant:</strong> Funds are safe even when your private key is compromised (coming soon)
-            </p>
-            <p style={{ margin: "0" }}>
-              <strong>⛓️ Fully On-Chain:</strong> No intermediaries
-            </p>
-          </div>
-        </div>
-      )}
-
       {/* Deposit Interface (only when committed) */}
       {isSetupCommitted && (
-        <CollapsibleSection title="Deposit Funds" icon="📥" defaultExpanded={true}>
+        <CollapsibleSection title="Deposit funds" icon="gift" defaultExpanded={true}>
           <DepositInterface
             transactionManager={transactionManager}
             savingsContract={savingsContract}
@@ -386,9 +364,38 @@ function MainFlow({
         </CollapsibleSection>
       )}
 
+      {/* Withdrawal Interface. Sits above the limits once the wallet is
+          locked: taking money out is the routine act, while reviewing the
+          limits is occasional. During setup it does not render at all. */}
+      {isSetupCommitted && (
+        <CollapsibleSection title="Withdraw funds" icon="arrowRight" defaultExpanded={true}>
+          <WithdrawalInterface
+            transactionManager={transactionManager}
+            activeVaultAddress={currentVaultAddress}
+            savingsContract={savingsContract}
+            signer={signer}
+            connection={connection}
+            networkType={networkType}
+            selectedNetwork={selectedNetwork}
+            getCurrentUserAddress={getCurrentUserAddress}
+            solanaConnected={solanaConnected}
+            solanaPublicKey={solanaPublicKey}
+            userAddress={userAddress}
+            selectedToken={selectedToken}
+            setSelectedToken={setSelectedToken}
+            instantWithdrawableAmount={instantWithdrawableAmount}
+            limitingPeriod={limitingPeriod}
+            spendingLimits={spendingLimits}
+            onBalanceUpdate={refreshBalances}
+            onSpendingLimitsUpdate={fetchSpendingLimits}
+            currentTime={currentTime}
+          />
+        </CollapsibleSection>
+      )}
+
       {/* Spending Limits Setup / Management */}
       {isSetupCommitted ? (
-        <CollapsibleSection title="Spending Limits" icon="⏱️" defaultExpanded={true}>
+        <CollapsibleSection title="Spending limits" icon="clock" defaultExpanded={true}>
           <SpendingLimitsSetup
             isSetupCommitted={isSetupCommitted}
             currentTime={currentTime}
@@ -456,36 +463,9 @@ function MainFlow({
         />
       )}
 
-      {/* Withdrawal Interface (only when committed) */}
-      {isSetupCommitted && (
-        <CollapsibleSection title="Withdraw Funds" icon="💸" defaultExpanded={true}>
-          <WithdrawalInterface
-            transactionManager={transactionManager}
-            activeVaultAddress={currentVaultAddress}
-            savingsContract={savingsContract}
-            signer={signer}
-            connection={connection}
-            networkType={networkType}
-            selectedNetwork={selectedNetwork}
-            getCurrentUserAddress={getCurrentUserAddress}
-            solanaConnected={solanaConnected}
-            solanaPublicKey={solanaPublicKey}
-            userAddress={userAddress}
-            selectedToken={selectedToken}
-            setSelectedToken={setSelectedToken}
-            instantWithdrawableAmount={instantWithdrawableAmount}
-            limitingPeriod={limitingPeriod}
-            spendingLimits={spendingLimits}
-            onBalanceUpdate={refreshBalances}
-            onSpendingLimitsUpdate={fetchSpendingLimits}
-            currentTime={currentTime}
-          />
-        </CollapsibleSection>
-      )}
-
       {/* Transaction History (only when committed) */}
       {isSetupCommitted && (
-        <CollapsibleSection title="Transaction History" icon="📜" defaultExpanded={true}>
+        <CollapsibleSection title="Transaction history" icon="eye" defaultExpanded={true}>
           <TransactionHistory
             savingsContract={savingsContract}
             userAddress={userAddress}
@@ -498,7 +478,7 @@ function MainFlow({
 
       {/* Referral Program (only when committed) */}
       {isSetupCommitted && transactionManager?.supportsReferrals?.() && (
-        <CollapsibleSection title="Invite & Earn" icon="🤝" defaultExpanded={false}>
+        <CollapsibleSection title="Invite and earn" icon="chain" defaultExpanded={false}>
           <ReferralSection
             transactionManager={transactionManager}
             userAddress={getCurrentUserAddress()}
@@ -510,7 +490,7 @@ function MainFlow({
           recovery key can be registered before OR after lock-in and a cold
           key holder can manage a compromised account from here) */}
       {transactionManager?.supportsRecovery?.() && (
-        <CollapsibleSection title="Recovery Protection" icon="🛟" defaultExpanded={false}>
+        <CollapsibleSection title="Recovery protection" icon="key" defaultExpanded={false}>
           <RecoverySection
             transactionManager={transactionManager}
             userAddress={getCurrentUserAddress()}
@@ -847,6 +827,10 @@ function AppContentInner({
     ? (solanaConnected && solanaWallet)
     : !!provider;
 
+  // The logged-out landing page is a full-width page with its own nav and
+  // footer — the app chrome would only duplicate them
+  const isLanding = location.pathname === "/" && !isWalletConnected;
+
   const networkConfig = networkType === "solana"
     ? (NETWORKS.solana?.[selectedNetwork] || NETWORKS.solana?.localhost)
     : (NETWORKS.evm?.[selectedNetwork] || {});
@@ -872,9 +856,18 @@ function AppContentInner({
   };
 
   return (
-    <div style={isWideRoute ? styles.app.containerWide : styles.app.container}>
-      <SocialLinks />
+    <div
+      style={
+        isLanding
+          ? styles.app.containerLanding
+          : isWideRoute
+          ? styles.app.containerWide
+          : styles.app.container
+      }
+    >
+      {!isLanding && <SocialLinks />}
 
+      {!isLanding && (
       <StatusHeader
         provider={provider}
         networkType={networkType}
@@ -889,6 +882,7 @@ function AppContentInner({
         switchNetworkType={switchNetworkType}
         switchNetwork={switchNetwork}
       />
+      )}
 
       <Routes>
         {/* Public — readable with or without a wallet */}
@@ -949,7 +943,7 @@ function AppContentInner({
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
 
-      <Footer />
+      {!isLanding && <Footer />}
     </div>
   );
 }

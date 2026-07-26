@@ -19,7 +19,7 @@ const footerStyles = {
     gap: "2rem",
   },
   colTitle: {
-    color: "#ffffff",
+    color: colors.text.primary,
     marginBottom: "1rem",
     fontSize: "0.95rem",
     fontWeight: "600",

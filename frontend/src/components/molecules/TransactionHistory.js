@@ -64,7 +64,7 @@ const historyStyles = {
     color: colors.error.light,
   },
   amountWinning: {
-    color: "#fbd38d",
+    color: colors.warning.light,
   },
   timestamp: {
     fontSize: fontSize.xs,

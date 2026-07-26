@@ -256,7 +256,7 @@ const BalanceDisplay = ({
                 padding: "12px 24px",
                 borderRadius: "6px",
                 border: "none",
-                backgroundColor: "#3182ce",
+                backgroundColor: colors.background.secondary,
                 color: "white",
                 cursor: "pointer",
                 fontSize: "1em",
@@ -293,9 +293,9 @@ const BalanceDisplay = ({
                   key={key}
                   style={{
                     padding: "12px",
-                    backgroundColor: token.recommended ? "#2f855a" : "#4a5568",
+                    backgroundColor: token.recommended ? colors.success.border : colors.background.secondary,
                     borderRadius: "6px",
-                    border: token.recommended ? "2px solid #48bb78" : "none",
+                    border: token.recommended ? `2px solid ${colors.border.success}` : "none",
                     color: "white",
                   }}
                 >
@@ -310,7 +310,7 @@ const BalanceDisplay = ({
                     <div
                       style={{
                         fontSize: "0.8em",
-                        color: token.recommended ? "#9ae6b4" : "#a0aec0",
+                        color: token.recommended ? colors.success.light : colors.text.muted,
                       }}
                     >
                       {token.symbol}
@@ -337,7 +337,7 @@ const BalanceDisplay = ({
                             width: "32px",
                             height: "16px",
                             borderRadius: "8px",
-                            backgroundColor: (vaultStates[key] && vaultStates[key].inVault) ? "#805ad5" : "#4a5568",
+                            backgroundColor: (vaultStates[key] && vaultStates[key].inVault) ? colors.accent.purple : colors.background.secondary,
                             position: "relative",
                             transition: "background-color 0.2s",
                           }}
@@ -362,17 +362,17 @@ const BalanceDisplay = ({
                     {balances[key] || "0"}
                   </div>
                   {vaultStates[key] && vaultStates[key].inVault && (
-                    <div style={{ fontSize: "0.7em", marginTop: "4px", color: "#d6bcfa" }}>
+                    <div style={{ fontSize: "0.7em", marginTop: "4px", color: colors.accent.purple }}>
                       {"🎰 In vault: "}{parseFloat(vaultStates[key].assets || "0").toFixed(2)}{" "}{token.symbol}
                     </div>
                   )}
                   {vaultAvailable[key] && !(vaultStates[key] && vaultStates[key].inVault) && parseFloat(balances[key] || "0") > 0 && (
-                    <div style={{ fontSize: "0.65em", marginTop: "4px", color: "#a0aec0" }}>
+                    <div style={{ fontSize: "0.65em", marginTop: "4px", color: colors.text.muted }}>
                       {"🎰 Toggle to earn prizes"}
                     </div>
                   )}
                   {vaultAvailable[key] && parseFloat(grandPrizeWeth) > 0 && (
-                    <div style={{ fontSize: "0.65em", marginTop: "2px", color: "#fbd38d" }}>
+                    <div style={{ fontSize: "0.65em", marginTop: "2px", color: colors.warning.light }}>
                       {"🏆 Grand prize: ~$"}{parseFloat(grandPrizeWeth).toFixed(0)}{" / 3 months"}
                     </div>
                   )}
@@ -384,8 +384,8 @@ const BalanceDisplay = ({
                         marginTop: "6px",
                         padding: "4px 10px",
                         fontSize: "0.65em",
-                        backgroundColor: claimLoading ? "#4a5568" : "#d69e2e",
-                        color: "#1a202c",
+                        backgroundColor: claimLoading ? colors.background.secondary : colors.warning.dark,
+                        color: colors.text.dark,
                         border: "none",
                         borderRadius: "4px",
                         cursor: claimLoading ? "wait" : "pointer",

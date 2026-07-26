@@ -317,13 +317,13 @@ const DepositInterface = ({
       style={{
         marginBottom: "20px",
         padding: "15px",
-        backgroundColor: "#2d3748",
+        backgroundColor: colors.background.primary,
         borderRadius: "8px",
-        border: "1px solid #4a5568",
+        border: `1px solid ${colors.border.default}`,
       }}
     >
       <h3 style={{ color: colors.text.primary }}>
-        💰 Deposit from{" "}
+        Deposit from{" "}
         {networkType === "solana"
           ? solanaPublicKey
             ? `${solanaPublicKey
@@ -348,7 +348,7 @@ const DepositInterface = ({
         <p
           style={{
             fontSize: "0.9em",
-            color: "#cbd5e0",
+            color: colors.text.light,
             marginBottom: "15px",
           }}
         >
@@ -370,8 +370,8 @@ const DepositInterface = ({
             style={{
               padding: "8px",
               borderRadius: "4px",
-              border: "1px solid #4a5568",
-              backgroundColor: "#4a5568",
+              border: `1px solid ${colors.border.default}`,
+              backgroundColor: colors.background.secondary,
               color: "white",
               flex: "1",
               minWidth: "150px",
@@ -419,8 +419,8 @@ const DepositInterface = ({
             style={{
               padding: "8px",
               borderRadius: "4px",
-              border: "1px solid #4a5568",
-              backgroundColor: "#4a5568",
+              border: `1px solid ${colors.border.default}`,
+              backgroundColor: colors.background.secondary,
               color: "white",
               flex: "1",
               minWidth: "120px",
@@ -444,8 +444,8 @@ const DepositInterface = ({
                 !depositAmount ||
                 parseFloat(depositAmount) <= 0 ||
                 isDepositing
-                  ? "#718096"
-                  : "#3182ce",
+                  ? colors.background.secondary
+                  : colors.background.secondary,
               color: "white",
               cursor: isDepositing ? "not-allowed" : "pointer",
               minWidth: "100px",
@@ -471,7 +471,7 @@ const DepositInterface = ({
         <p
           style={{
             fontSize: "0.9em",
-            color: "#cbd5e0",
+            color: colors.text.light,
             marginBottom: "15px",
           }}
         >
@@ -483,9 +483,9 @@ const DepositInterface = ({
           <div
             style={{
               padding: "15px",
-              backgroundColor: "#1a202c",
+              backgroundColor: colors.background.dark,
               borderRadius: "4px",
-              border: "1px solid #4a5568",
+              border: `1px solid ${colors.border.default}`,
               textAlign: "center",
             }}
           >
@@ -495,7 +495,7 @@ const DepositInterface = ({
                 padding: "10px 20px",
                 borderRadius: "4px",
                 border: "none",
-                backgroundColor: "#48bb78",
+                backgroundColor: colors.success.main,
                 color: "white",
                 cursor: "pointer",
                 fontWeight: "bold",
@@ -508,7 +508,7 @@ const DepositInterface = ({
               style={{
                 marginTop: "15px",
                 fontSize: "0.8em",
-                color: "#718096",
+                color: colors.text.gray,
               }}
             >
               <p style={{ margin: `${spacing.xs} 0` }}>
@@ -527,19 +527,19 @@ const DepositInterface = ({
           <div
             style={{
               padding: "15px",
-              backgroundColor: "#1a202c",
+              backgroundColor: colors.background.dark,
               borderRadius: "4px",
-              border: "1px solid #4a5568",
+              border: `1px solid ${colors.border.default}`,
               textAlign: "center",
             }}
           >
             <div style={{ marginBottom: "10px" }}>
               <span style={{ fontSize: "24px" }}>⏳</span>
             </div>
-            <p style={{ margin: "0 0 10px 0", color: "#e2e8f0" }}>
+            <p style={{ margin: "0 0 10px 0", color: colors.text.secondary }}>
               Deploying your personal deposit address...
             </p>
-            <p style={{ margin: 0, fontSize: "0.8em", color: "#a0aec0" }}>
+            <p style={{ margin: 0, fontSize: "0.8em", color: colors.text.muted }}>
               This may take 30-60 seconds
             </p>
           </div>
@@ -550,8 +550,8 @@ const DepositInterface = ({
           <div
             style={{
               padding: "15px",
-              backgroundColor: "#1a365d",
-              border: "2px solid #48bb78",
+              backgroundColor: colors.background.darkBlue,
+              border: `2px solid ${colors.border.success}`,
               borderRadius: "4px",
               textAlign: "center",
             }}
@@ -559,7 +559,7 @@ const DepositInterface = ({
             <h5
               style={{
                 margin: "0 0 10px 0",
-                color: "#9ae6b4",
+                color: colors.success.light,
                 fontSize: "1.1em",
               }}
             >
@@ -568,14 +568,14 @@ const DepositInterface = ({
             <div
               style={{
                 padding: "10px",
-                backgroundColor: "#2d3748",
+                backgroundColor: colors.background.primary,
                 borderRadius: "4px",
-                border: "1px solid #4a5568",
+                border: `1px solid ${colors.border.default}`,
                 marginBottom: "15px",
                 wordBreak: "break-all",
                 fontFamily: "monospace",
                 fontSize: "0.9em",
-                color: "#e2e8f0",
+                color: colors.text.secondary,
               }}
             >
               {depositAddress}
@@ -586,7 +586,7 @@ const DepositInterface = ({
                 padding: "8px 16px",
                 borderRadius: "4px",
                 border: "none",
-                backgroundColor: "#3182ce",
+                backgroundColor: colors.background.secondary,
                 color: "white",
                 cursor: "pointer",
                 marginRight: "10px",
@@ -598,7 +598,7 @@ const DepositInterface = ({
               style={{
                 marginTop: "15px",
                 fontSize: "0.8em",
-                color: "#a0aec0",
+                color: colors.text.muted,
               }}
             >
               <p style={{ margin: `${spacing.xs} 0` }}>

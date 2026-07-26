@@ -76,7 +76,7 @@ const TimeLockShowcase = () => {
     : homeStyles.attackBanner;
 
   const regularStatus = drained
-    ? "☠️ Drained in seconds. Everything is gone."
+    ? "Drained in seconds. Everything is gone."
     : compromised
     ? "Attacker is withdrawing everything…"
     : "Protected only by the private key.";
@@ -84,23 +84,22 @@ const TimeLockShowcase = () => {
   const vaultStatus = !compromised
     ? "Protected by on-chain time locks + hourly withdrawal limit."
     : rescued
-    ? `🚨 You saw the alert, froze the account with your recovery key and moved everything to a fresh address. The thief got only ${formatUSD(
+    ? `You saw the alert, froze the account with your recovery key and moved everything to a fresh address. The thief got only ${formatUSD(
         stolenFromVault,
       )}.`
-    : `⏳ Hour ${hoursElapsed + 1}: attacker can only take ${formatUSD(
+    : `Hour ${hoursElapsed + 1}: attacker can only take ${formatUSD(
         DEMO_HOURLY_LIMIT,
       )} — the hourly limit. Everything else is time-locked.`;
 
   return (
     <div style={homeStyles.section}>
-      <h2 style={homeStyles.sectionTitle}>
-        🔐 A stolen key can't empty your wallet
-      </h2>
+      <h3 style={homeStyles.sectionTitle}>
+        The same stolen key, hitting two wallets
+      </h3>
       <p style={homeStyles.sectionSubtitle}>
-        Watch the same attack hit two wallets holding{" "}
-        {formatUSD(DEMO_VAULT_BALANCE)}. Withdrawals above your limit are
-        time-locked on-chain, so a thief can't rush them — you get time to
-        notice and react.
+        Both hold {formatUSD(DEMO_VAULT_BALANCE)}. Withdrawals above your limit
+        are time-locked on-chain, so a thief can&apos;t rush them — which is the
+        time you need to notice and react.
       </p>
 
       <div
@@ -108,8 +107,8 @@ const TimeLockShowcase = () => {
         className={justCompromised ? "home-shake" : undefined}
       >
         {compromised
-          ? "🚨 Private key stolen by malware!"
-          : "🔑 Two wallets, one secret about to leak…"}
+          ? "Private key stolen by malware"
+          : "Two wallets, one secret about to leak…"}
       </div>
 
       <div style={homeStyles.demoGrid}>
@@ -140,7 +139,7 @@ const TimeLockShowcase = () => {
         <div
           style={{ ...homeStyles.walletPanel, ...homeStyles.walletPanelSafe }}
         >
-          <p style={homeStyles.panelTitle}>🔒 LockInWallet</p>
+          <p style={homeStyles.panelTitle}>LockIn Wallet</p>
           <p
             style={{
               ...homeStyles.panelBalance,
