@@ -120,6 +120,13 @@ describe('TransactionManager referral threading', () => {
     localStorage.clear();
   });
 
+  // Setup now takes the full period set, each with its own bypass/change wait
+  const PERIODS = [
+    { name: 'Daily', limit: 10, duration: 86400, unlockDelay: 86400 },
+    { name: 'Weekly', limit: 50, duration: 604800, unlockDelay: 604800 },
+    { name: 'Monthly', limit: 100, duration: 2592000, unlockDelay: 2592000 },
+  ];
+
   function pendingReferrerStored() {
     localStorage.setItem(
       'pending_referrer',
@@ -133,10 +140,10 @@ describe('TransactionManager referral threading', () => {
     tm.networkType = 'evm';
     tm.adapter = { commitSetup: jest.fn().mockResolvedValue('0xhash') };
 
-    const hash = await tm.commitSetup(10, 50, 100, false, null, REFERRER);
+    const hash = await tm.commitSetup(PERIODS, { referrer: REFERRER });
 
     expect(hash).toBe('0xhash');
-    expect(tm.adapter.commitSetup).toHaveBeenCalledWith(10, 50, 100, REFERRER);
+    expect(tm.adapter.commitSetup).toHaveBeenCalledWith(PERIODS, REFERRER);
     expect(getPendingReferrer()).toBeNull();
   });
 
@@ -146,7 +153,7 @@ describe('TransactionManager referral threading', () => {
     tm.networkType = 'evm';
     tm.adapter = { commitSetup: jest.fn().mockRejectedValue(new Error('rejected')) };
 
-    await expect(tm.commitSetup(10, 50, 100, false, null, REFERRER)).rejects.toThrow('rejected');
+    await expect(tm.commitSetup(PERIODS, { referrer: REFERRER })).rejects.toThrow('rejected');
     expect(getPendingReferrer()).toBe(REFERRER);
   });
 
@@ -160,7 +167,7 @@ describe('TransactionManager referral threading', () => {
       userAddress: 'wallet111',
     };
 
-    const sig = await tm.commitSetup(10, 50, 100, false, 'mint111', REFERRER);
+    const sig = await tm.commitSetup(PERIODS, { tokenMint: 'mint111', referrer: REFERRER });
 
     expect(sig).toBe('sig111');
     expect(tm.adapter.createVault).toHaveBeenCalledTimes(1);

@@ -492,6 +492,18 @@ export class TransactionManager {
     if (this._usesLegacyAccount()) return this.getAdapter().proposeLimitChange(periodName, newLimit);
     return this.proposeRuleChange({ [`${periodName.toLowerCase()}Limit`]: newLimit });
   }
+  /**
+   * Add a period that isn't set yet, with its own wait time. Adding a limit
+   * only tightens the wallet, so it applies immediately even after lock-in —
+   * unlike changing an existing one, which is timelocked.
+   */
+  async addSpendingLimit(periodName, limit, unlockDelay = null) {
+    if (this._usesLegacyAccount()) {
+      return this.getAdapter().addSpendingLimit(periodName, limit, unlockDelay);
+    }
+    // Vault rules hold every period at once, so a new one is a rule change
+    return this.proposeLimitChange(periodName, limit);
+  }
   /** Propose a new bypass/limit-change wait for one period. */
   async proposeUnlockDelayChange(periodName, newUnlockDelay) {
     if (!this.supportsCustomUnlockDelays()) {

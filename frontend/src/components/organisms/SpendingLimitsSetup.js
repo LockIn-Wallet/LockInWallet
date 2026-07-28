@@ -366,24 +366,26 @@ const SpendingLimitsSetup = ({
     }
     try {
       const newLimit = parseFloat(edit.value);
+      const isNewPeriod = !spendingLimits.some(
+        (limit) => limit.name === periodName && limit.active !== false,
+      );
 
-      const vault = await transactionManager.getActiveVault();
-      const currentRules = {
-        dailyLimit: vault?.dailyLimit || 0,
-        weeklyLimit: vault?.weeklyLimit || 0,
-        monthlyLimit: vault?.monthlyLimit || 0,
-        penaltyRateBps: vault?.penaltyRateBps || 2000,
-        limitsArePercentage: vault?.limitsArePercentage || false,
-      };
-      const decimals = vault?.tokenDecimals ?? (vault?.isSolVault ? 9 : 6);
-      const factor = 10 ** decimals;
-      const periodKey = periodName.toLowerCase() + "Limit";
-      currentRules[periodKey] = Math.round(newLimit * factor);
-
-      const txHash = await transactionManager.proposeRuleChange(currentRules);
-      console.log("Proposal transaction:", txHash);
-
-      alert(`✅ ${periodName} limit change proposal submitted! It will be executable after the timelock period.`);
+      if (isNewPeriod) {
+        // Adding a limit only tightens the wallet, so it applies immediately
+        // — and it is the one moment the user picks that period's wait time
+        const unlockDelay = edit.unlockDelay ?? getDefaultUnlockDelay(periodName);
+        await transactionManager.addSpendingLimit(periodName, newLimit, unlockDelay);
+        alert(
+          `✅ ${periodName} limit added and active now.\n\nBypassing or changing ` +
+            `it takes ${formatDuration(unlockDelay)} from here on.`,
+        );
+      } else {
+        await transactionManager.proposeLimitChange(periodName, newLimit);
+        alert(
+          `✅ ${periodName} limit change proposed.\n\nIt appears under "Pending ` +
+            `Limit Changes" and you execute it once its countdown reaches zero.`,
+        );
+      }
 
       // Reset edit mode for this specific period
       setLimitEdits((prev) => ({
@@ -754,6 +756,45 @@ const SpendingLimitsSetup = ({
                         fontSize: "1em",
                       }}
                     />
+                    {/* Adding a period is the one moment its wait is chosen —
+                        changing an existing limit leaves its wait alone, and
+                        retuning that goes through its own timelocked proposal */}
+                    {supportsCustomDelays && !isActive && (
+                      <label
+                        style={{
+                          display: "block",
+                          marginTop: "10px",
+                          fontSize: "0.8em",
+                          color: colors.text.muted,
+                        }}
+                      >
+                        Wait to bypass or change this limit
+                        <select
+                          value={edit?.unlockDelay ?? getDefaultUnlockDelay(periodName)}
+                          onChange={(e) =>
+                            updateUnlockDelay(periodName, Number(e.target.value))
+                          }
+                          style={{
+                            width: "100%",
+                            marginTop: "4px",
+                            padding: "8px",
+                            borderRadius: "4px",
+                            border: `1px solid ${colors.border.default}`,
+                            backgroundColor: colors.background.secondary,
+                            color: "white",
+                            fontSize: "0.95em",
+                            boxSizing: "border-box",
+                            cursor: "pointer",
+                          }}
+                        >
+                          {UNLOCK_DELAY_OPTIONS.map((option) => (
+                            <option key={option.seconds} value={option.seconds}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    )}
                   </div>
                 ) : existingLimit ? (
                   <div style={layoutStyles.marginBottomSmall}>
@@ -878,8 +919,9 @@ const SpendingLimitsSetup = ({
                           border: `1px solid ${colors.border.default}`,
                         }}
                       >
-                        🔒 No {periodName.toLowerCase()} limit set. Use
-                        "Edit" to add one via proposal system.
+                        🔒 No {periodName.toLowerCase()} limit set. "Add"
+                        one — a new limit only tightens your wallet, so it
+                        applies immediately.
                       </div>
                     </div>
                   )
