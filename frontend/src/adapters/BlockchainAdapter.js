@@ -131,6 +131,24 @@ export class BlockchainAdapter {
     throw new Error("Recovery protection is not available on this network yet");
   }
 
+  /**
+   * Withdrawals revert on-chain with a bare "Invalid amount" whenever the amount
+   * is zero or exceeds the saved balance, which tells the user nothing — check
+   * first and name the actual shortfall.
+   */
+  _assertSufficientBalance(rawAmount, rawBalance, symbol, decimals) {
+    const amount = BigInt(rawAmount);
+    if (amount <= 0n) throw new Error('Enter an amount greater than zero');
+
+    const available = BigInt(rawBalance);
+    if (amount <= available) return;
+
+    const readable = parseFloat((Number(available) / 10 ** decimals).toFixed(decimals));
+    throw new Error(
+      `Not enough ${symbol} in your savings wallet — you have ${readable} ${symbol} available`
+    );
+  }
+
   // Utility Methods
   formatAmount(amount, decimals) {
     throw new Error('formatAmount must be implemented by subclass');

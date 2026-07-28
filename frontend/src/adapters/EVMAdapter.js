@@ -343,8 +343,14 @@ export class EVMAdapter extends BlockchainAdapter {
     if (!this.savingsContract) throw new Error("Contract not initialized");
 
     const token = !tokenAddress || tokenAddress === this.ETH_ADDRESS ? null : tokenAddress;
-    const { decimals } = await this._resolveTokenMeta(token);
+    const { symbol, decimals } = await this._resolveTokenMeta(token);
     const rawAmount = this._toBaseUnits(amount, decimals);
+
+    const balance = await this.getTokenBalance(
+      this.userAddress,
+      token || this.ETH_ADDRESS,
+    );
+    this._assertSufficientBalance(rawAmount, balance, symbol, decimals);
 
     let tx;
     if (destination) {
@@ -1792,6 +1798,15 @@ export class EVMAdapter extends BlockchainAdapter {
     if (!vault) throw new Error("Vault not found");
 
     const rawAmount = this._toBaseUnits(amount, vault.tokenDecimals);
+    const membership = await this.getVaultMemberInfo(vaultAddress);
+    if (!membership) throw new Error("You are not a member of this vault");
+    this._assertSufficientBalance(
+      rawAmount,
+      membership.balance,
+      vault.tokenSymbol,
+      vault.tokenDecimals,
+    );
+
     const tx = withPenalty
       ? await vaultModule.withdrawWithPenalty(vaultAddress, rawAmount)
       : await vaultModule.withdraw(vaultAddress, rawAmount);

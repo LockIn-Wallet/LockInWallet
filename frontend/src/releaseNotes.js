@@ -45,6 +45,10 @@ export const RELEASE_NOTES = [
         emoji: "🎨",
         text: "The whole app moves to one design system — a dark, near-neutral palette with a single green accent that only ever means 'enforced on-chain', and a monospaced typeface for anything the contract says: amounts, countdowns, addresses.",
       },
+      {
+        emoji: "💬",
+        text: "Trying to withdraw more than you have now says so — it tells you how much is actually in your wallet, instead of the blank 'Invalid amount' the contract used to throw back.",
+      },
     ],
   },
   {

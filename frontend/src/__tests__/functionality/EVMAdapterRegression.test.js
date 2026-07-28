@@ -120,3 +120,59 @@ describe('EVMAdapter dev chain clock refresh', () => {
     await expect(adapter._refreshDevChainClock()).resolves.toBeUndefined();
   });
 });
+
+describe('EVMAdapter withdrawal balance guard', () => {
+  function makeWithdrawFixture(rawBalance) {
+    const adapter = makeAdapter({
+      tokens: { USDT: { address: USDT, symbol: 'USDT', decimals: 6 } },
+    });
+    adapter.savingsContract = {
+      getTokenBalance: jest.fn().mockResolvedValue(rawBalance),
+      withdrawTo: jest.fn().mockResolvedValue(txResult),
+      withdraw: jest.fn().mockResolvedValue(txResult),
+    };
+    return adapter;
+  }
+
+  test('names the shortfall instead of reverting with "Invalid amount"', async () => {
+    const adapter = makeWithdrawFixture(0n);
+
+    await expect(adapter.withdraw(20, USDT, USER)).rejects.toThrow(
+      'Not enough USDT in your savings wallet — you have 0 USDT available'
+    );
+    expect(adapter.savingsContract.withdrawTo).not.toHaveBeenCalled();
+  });
+
+  test('reports the partial balance available', async () => {
+    const adapter = makeWithdrawFixture(5500000n); // 5.5 USDT
+
+    await expect(adapter.withdraw(20, USDT, USER)).rejects.toThrow(
+      'you have 5.5 USDT available'
+    );
+  });
+
+  test('lets a withdrawal within the balance through', async () => {
+    const adapter = makeWithdrawFixture(50000000n); // 50 USDT
+
+    const result = await adapter.withdraw(20, USDT, USER);
+
+    expect(result.success).toBe(true);
+    expect(adapter.savingsContract.withdrawTo).toHaveBeenCalled();
+  });
+
+  test('vault withdrawals check the member balance, not the vault total', async () => {
+    const adapter = makeAdapter();
+    adapter._getVaultModule = jest.fn().mockResolvedValue({
+      withdraw: jest.fn().mockResolvedValue(txResult),
+    });
+    adapter.getVaultInfo = jest.fn().mockResolvedValue({
+      tokenSymbol: 'USDT',
+      tokenDecimals: 6,
+    });
+    adapter.getVaultMemberInfo = jest.fn().mockResolvedValue({ balance: 1000000 }); // 1 USDT
+
+    await expect(adapter.withdrawFromVault('1', 20)).rejects.toThrow(
+      'you have 1 USDT available'
+    );
+  });
+});

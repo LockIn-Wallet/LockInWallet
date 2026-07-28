@@ -905,17 +905,31 @@ export class SolanaAdapter extends BlockchainAdapter {
   }
 
   async withdrawFromVault(vaultAddress, amount) {
-    const vault = await this.getVaultInfo(vaultAddress);
-    if (!vault) throw new Error("Vault not found");
+    const vault = await this._requireWithdrawableVault(vaultAddress, amount);
     if (vault.isNativeToken) return this.withdrawSol(vaultAddress, amount);
     return this.withdrawSpl(vaultAddress, vault.tokenMint, amount, vault.tokenDecimals);
   }
 
   async withdrawFromVaultWithPenalty(vaultAddress, amount) {
-    const vault = await this.getVaultInfo(vaultAddress);
-    if (!vault) throw new Error("Vault not found");
+    const vault = await this._requireWithdrawableVault(vaultAddress, amount);
     if (vault.isNativeToken) return this.withdrawSolWithPenalty(vaultAddress, amount);
     return this.withdrawSplWithPenalty(vaultAddress, vault.tokenMint, amount, vault.tokenDecimals);
+  }
+
+  async _requireWithdrawableVault(vaultAddress, amount) {
+    const vault = await this.getVaultInfo(vaultAddress);
+    if (!vault) throw new Error("Vault not found");
+
+    const membership = await this.getVaultMemberInfo(vaultAddress);
+    if (!membership) throw new Error("You are not a member of this vault");
+
+    this._assertSufficientBalance(
+      Math.round(amount * 10 ** vault.tokenDecimals),
+      membership.balance,
+      vault.tokenSymbol,
+      vault.tokenDecimals
+    );
+    return vault;
   }
 
   async claimVaultPenaltyRewards(vaultAddress) {

@@ -193,3 +193,8 @@ No contract changes; frontend only.
   gas estimation ("Request still in timelock").
 - Executed withdrawal destinations appear in the destinations list.
 - Balance display trailing zeros ("200.0" → "200").
+- Withdrawing more than you hold now names the shortfall ("Not enough USDT
+  in your savings wallet — you have 0 USDT available") instead of surfacing
+  the raw revert "Invalid amount". Both adapters check the saved balance
+  before sending, on the legacy account and vault paths alike. *Frontend
+  only — no contract change.*
