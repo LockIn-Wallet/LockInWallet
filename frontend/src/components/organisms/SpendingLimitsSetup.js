@@ -290,6 +290,34 @@ const SpendingLimitsSetup = ({
   */
 
   /**
+   * How a pending proposal reads in the list. Three kinds share one card, so
+   * the wording is derived here rather than from a change/remove binary — a
+   * wait-time change also carries no new limit and must not read as a removal.
+   */
+  const describeProposal = (proposal) => {
+    const { periodName } = proposal;
+    if (proposal.action === "waitTime") {
+      return {
+        title: `Change wait for ${periodName} Limit Bypass`,
+        detail: `New wait: ${formatDuration(proposal.newUnlockDelay)}`,
+        executedLabel: `${periodName} bypass wait updated`,
+      };
+    }
+    if (proposal.action === "change") {
+      return {
+        title: `Update ${periodName}`,
+        detail: `New Limit: ${proposal.newLimit} ${tokenSymbol}`,
+        executedLabel: `${periodName} limit updated`,
+      };
+    }
+    return {
+      title: `Remove ${periodName}`,
+      detail: "Action: Remove limit entirely",
+      executedLabel: `${periodName} limit removed`,
+    };
+  };
+
+  /**
    * Retune how long a bypass or a change to this limit takes. The change
    * itself serves out the period's current wait first, so it is never instant.
    */
@@ -297,18 +325,22 @@ const SpendingLimitsSetup = ({
     const current = spendingLimits.find((limit) => limit.name === periodName);
     if (current?.unlockDelay === newUnlockDelay) return;
 
+    const currentWait = formatDuration(current?.unlockDelay);
     const confirmed = window.confirm(
       `Change the ${periodName.toLowerCase()} wait time to ${formatDuration(newUnlockDelay)}?\n\n` +
-        `This takes ${formatDuration(current?.unlockDelay)} to go through — the period's current wait.`,
+        `This is a proposal, not an instant change. It sits in the timelock for ` +
+        `${currentWait} — the period's current wait — and only takes effect once ` +
+        `you come back and execute it.`,
     );
     if (!confirmed) return;
 
     try {
       await transactionManager.proposeUnlockDelayChange(periodName, newUnlockDelay);
       alert(
-        `✅ Wait time change submitted. It becomes active in ${formatDuration(
-          current?.unlockDelay,
-        )}.`,
+        `✅ Wait time change proposed.\n\nIt appears under "Pending Limit Changes", ` +
+          `where its countdown shows exactly when it is ready — the period's current ` +
+          `wait of ${currentWait}. You press Execute there to apply it. Until then ` +
+          `nothing has changed, and you can cancel it at any point.`,
       );
       await refreshData();
     } catch (error) {
@@ -380,13 +412,14 @@ const SpendingLimitsSetup = ({
 
     try {
       console.log("🔄 Executing proposal:", proposal);
-      await transactionManager.executeRuleChange();
-      alert(`✅ Executed ${proposal.action} proposal for ${proposal.periodName}!`);
+      // Routes to the account's proposal system or the vault's rule change,
+      // whichever this network uses
+      await transactionManager.executeLimitProposal(proposal.proposalId);
 
       // Refresh data
       await refreshData();
 
-      alert(`✅ ${proposal.action === "change" ? "Limit update" : "Limit removal"} executed successfully!`);
+      alert(`✅ ${describeProposal(proposal).executedLabel}.`);
     } catch (error) {
       console.error("Error executing proposal:", error);
       alert(`Failed to execute proposal: ${error.message}`);
@@ -395,7 +428,7 @@ const SpendingLimitsSetup = ({
 
   const cancelProposal = async (proposal) => {
     try {
-      await transactionManager.cancelRuleChange();
+      await transactionManager.cancelLimitProposal(proposal.proposalId);
 
       // Refresh proposals
       await refreshData();
@@ -1450,11 +1483,7 @@ const SpendingLimitsSetup = ({
                           fontWeight: fontWeight.bold,
                         }}
                       >
-                        📝{" "}
-                        {proposal.action === "change"
-                          ? "Update"
-                          : "Remove"}{" "}
-                        {proposal.periodName}
+                        📝 {describeProposal(proposal).title}
                       </span>
                       <span
                         style={{
@@ -1472,11 +1501,7 @@ const SpendingLimitsSetup = ({
                       </span>
                     </div>
                     <div style={{ fontSize: "0.8em", color: colors.text.muted }}>
-                      {proposal.action === "change" ? (
-                        <>New Limit: {proposal.newLimit} {tokenSymbol}</>
-                      ) : (
-                        <>Action: Remove limit entirely</>
-                      )}
+                      {describeProposal(proposal).detail}
                       {proposal.submittedAt && (
                         <>
                           {" "}
