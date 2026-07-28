@@ -26,6 +26,7 @@ import {
   getDefaultUnlockDelay,
   getPeriod,
   UNLOCK_DELAY_OPTIONS,
+  DEFAULT_UNLOCK_DELAY,
 } from "../../utils/spendingPeriods.js";
 
 import LimitModeToggle from "../molecules/LimitModeToggle.js";
@@ -275,7 +276,7 @@ const SpendingLimitsSetup = ({
       }
     } catch (error) {
       console.error("Error saving limit changes:", error);
-      alert(`Failed to save limit changes: ${error.message}`);
+      alert(error.message);
     }
   }, [networkType, transactionManager, solanaConnected, savingsContract, isSetupCommitted, limitEdits, spendingLimits, refreshData, onSpendingLimitsUpdate]);
 
@@ -345,7 +346,7 @@ const SpendingLimitsSetup = ({
       await refreshData();
     } catch (error) {
       console.error(`Error proposing ${periodName} wait time:`, error);
-      alert(`Failed to change the ${periodName.toLowerCase()} wait time: ${error.message}`);
+      alert(error.message);
     }
   };
 
@@ -373,11 +374,16 @@ const SpendingLimitsSetup = ({
       if (isNewPeriod) {
         // Adding a limit only tightens the wallet, so it applies immediately
         // — and it is the one moment the user picks that period's wait time
-        const unlockDelay = edit.unlockDelay ?? getDefaultUnlockDelay(periodName);
+        // After lock-in the contract forces the standard wait on a new
+        // period, so don't offer or promise anything else here
+        const unlockDelay = isSetupCommitted
+          ? DEFAULT_UNLOCK_DELAY
+          : edit.unlockDelay ?? getDefaultUnlockDelay(periodName);
         await transactionManager.addSpendingLimit(periodName, newLimit, unlockDelay);
         alert(
           `✅ ${periodName} limit added and active now.\n\nBypassing or changing ` +
-            `it takes ${formatDuration(unlockDelay)} from here on.`,
+            `it takes ${formatDuration(unlockDelay)}. You can lengthen that wait ` +
+            `afterwards — the change waits ${formatDuration(unlockDelay)} first.`,
         );
       } else {
         await transactionManager.proposeLimitChange(periodName, newLimit);
@@ -397,7 +403,7 @@ const SpendingLimitsSetup = ({
       await refreshData();
     } catch (error) {
       console.error(`Error proposing ${periodName} limit:`, error);
-      alert(`Failed to submit ${periodName} limit proposal: ${error.message}`);
+      alert(error.message);
     }
   };
 
@@ -424,7 +430,7 @@ const SpendingLimitsSetup = ({
       alert(`✅ ${describeProposal(proposal).executedLabel}.`);
     } catch (error) {
       console.error("Error executing proposal:", error);
-      alert(`Failed to execute proposal: ${error.message}`);
+      alert(error.message);
     }
   };
 
@@ -438,7 +444,7 @@ const SpendingLimitsSetup = ({
       alert(`Proposal for ${proposal.periodName} cancelled successfully`);
     } catch (error) {
       console.error("Error cancelling proposal:", error);
-      alert(`Failed to cancel proposal: ${error.message}`);
+      alert(error.message);
     }
   };
 
@@ -479,7 +485,7 @@ const SpendingLimitsSetup = ({
       await refreshData();
     } catch (error) {
       console.error("Error removing limit:", error);
-      alert(`Failed to remove ${periodName} limit: ${error.message}`);
+      alert(error.message);
     }
   };
 
@@ -759,7 +765,12 @@ const SpendingLimitsSetup = ({
                     {/* Adding a period is the one moment its wait is chosen —
                         changing an existing limit leaves its wait alone, and
                         retuning that goes through its own timelocked proposal */}
-                    {supportsCustomDelays && !isActive && (
+                    {/* Before lock-in the wait is free to choose. After it, a
+                        newly added period always starts at the standard 24
+                        hours — otherwise anyone holding the key could add a
+                        dust-sized limit with a year-long wait and freeze the
+                        wallet for that year. */}
+                    {supportsCustomDelays && !isActive && !isSetupCommitted && (
                       <label
                         style={{
                           display: "block",
@@ -794,6 +805,19 @@ const SpendingLimitsSetup = ({
                           ))}
                         </select>
                       </label>
+                    )}
+                    {supportsCustomDelays && !isActive && isSetupCommitted && (
+                      <div
+                        style={{
+                          marginTop: "10px",
+                          fontSize: "0.8em",
+                          color: colors.text.muted,
+                        }}
+                      >
+                        ⏳ Starts with the standard {formatDuration(DEFAULT_UNLOCK_DELAY)}{" "}
+                        wait to bypass or change it. You can lengthen it
+                        afterwards — that change waits 24 hours first.
+                      </div>
                     )}
                   </div>
                 ) : existingLimit ? (

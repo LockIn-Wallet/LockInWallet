@@ -58,6 +58,35 @@ these notes on the in-app **Governance** page before they execute.
   through a new `usePageSeo` hook (`frontend/src/utils/seo.js`), and both it
   and the visualiser are now listed in `sitemap.xml`.
 
+- **Disconnect** button next to the connected address in the status header,
+  on both EVM and Solana. It clears the session, drops that wallet's cached
+  network and vault entries (`clearNetworkStorage`, `clearVaultCache`) and
+  returns to the logged-out home page. Because neither MetaMask nor the
+  Solana wallet adapter can be told to forget a site, a `wallet_logged_out`
+  flag (`frontend/src/utils/walletSession.js`) suppresses the silent
+  auto-connect and the adapter's `autoConnect` until the user connects
+  again — otherwise a reload would re-attach the same wallet within seconds.
+  Frontend only — no contract change.
+
+### Security
+- A spending period added **after** lock-in now always takes the standard
+  24-hour wait; a caller-supplied value is ignored. Adding a period stays
+  instant because it only tightens the wallet, but the two together let
+  anyone holding the key add a dust-sized hourly limit with a year-long
+  wait and freeze the account for that year — every withdrawal has to clear
+  every active period, and undoing the hostile one waited its own delay.
+  The wait can still be lengthened afterwards through the timelocked
+  proposal, so nothing legitimate is lost. Waits chosen during initial
+  setup are unaffected. **On-chain:** upgrade `TimePeriodLimitsModule` in
+  place; no storage change.
+- The maximum unlock delay drops from 365 days to **90 days**, bounding how
+  long any wait — chosen by mistake or set hostilely — can keep someone out
+  of their own funds. Accounts with no recovery key have no faster way back,
+  so this ceiling is their real worst case. The defaults top out at 30 days,
+  so nothing in normal use changes. **On-chain:** upgrade
+  `TimePeriodLimitsModule` in place; existing delays above the new ceiling
+  are not rewritten, but no path can set one again.
+
 ### Changed
 - The prize pool section was **moved off the home page** onto
   `/prize-savings`. The home page keeps its focus on the withdrawal limits
@@ -198,3 +227,17 @@ No contract changes; frontend only.
   the raw revert "Invalid amount". Both adapters check the saved balance
   before sending, on the legacy account and vault paths alike. *Frontend
   only — no contract change.*
+- Every failed transaction now leaves the adapter as a sentence, not a raw
+  chain failure. EVM revert reasons (~130 of them) and Solana anchor error
+  codes are mapped to plain wording, wallet rejections are no longer reported
+  as errors, and both adapters wrap their write methods from one declarative
+  table so a new method can't silently skip translation. Removes the
+  contract-string matching that had crept into `DepositInterface`,
+  `WithdrawalInterface` and `WithdrawalAddressSetupStep`, and folds the
+  recovery- and limit-specific translators into the shared one. *Frontend
+  only — no contract change.*
+- Depositing more than your wallet holds is refused before the ERC20
+  approval, instead of asking you to sign an approval and then reverting
+  inside the transfer with "Failed to deposit. Please check the token
+  selection and amount." The same check covers the USDT deposit-address fee
+  and Solana deposits. *Frontend only — no contract change.*

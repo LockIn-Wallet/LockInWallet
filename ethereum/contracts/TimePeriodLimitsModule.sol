@@ -32,8 +32,11 @@ contract TimePeriodLimitsModule is Initializable, UUPSUpgradeable, OwnableUpgrad
     uint256 public constant DEFAULT_UNLOCK_DELAY = 24 hours;
     /// @notice A delay shorter than this would make the lock meaningless.
     uint256 public constant MIN_UNLOCK_DELAY = 1 hours;
-    /// @notice Guards against a typo locking a user out for decades.
-    uint256 public constant MAX_UNLOCK_DELAY = 365 days;
+    /// @notice Ceiling on any wait. Bounds how long a mistake — or a hostile
+    ///         setting — can keep someone out of their own funds. Accounts
+    ///         with no recovery key have no faster way back, so this is the
+    ///         real worst case for them.
+    uint256 public constant MAX_UNLOCK_DELAY = 90 days;
     /// @notice Shortest period a limit may cover.
     uint256 public constant MIN_PERIOD_DURATION = 1 hours;
 
@@ -131,21 +134,22 @@ contract TimePeriodLimitsModule is Initializable, UUPSUpgradeable, OwnableUpgrad
         bool guardCommitted
     ) internal {
         require(bytes(periodName).length > 0 && limit > 0 && durationInSeconds >= MIN_PERIOD_DURATION, "Invalid input");
-        _validateUnlockDelay(unlockDelay);
 
         UserSpendingLimits storage userLimits = userSpendingLimits[user];
+        uint256 existingIndex = _findPeriodIndex(user, periodName);
+        bool periodExists = existingIndex < userLimits.periods.length;
 
-        // Check if period already exists
-        bool periodExists = false;
-        uint256 existingIndex = 0;
-
-        for (uint256 i = 0; i < userLimits.periods.length; i++) {
-            if (keccak256(bytes(userLimits.periods[i].name)) == keccak256(bytes(periodName))) {
-                periodExists = true;
-                existingIndex = i;
-                break;
-            }
+        // A period added after lock-in always starts at the default wait.
+        // Adding one is instant because it only tightens the wallet — but if
+        // the caller could also pick the wait, anyone holding the key could
+        // add a dust-sized hourly limit with a long wait and freeze the wallet
+        // for that long. Overridden before validation, so a hostile value is
+        // ignored rather than reverting. Lengthening it afterwards goes
+        // through the timelock like every other change.
+        if (!periodExists && guardCommitted && _isCommitted(user)) {
+            unlockDelay = DEFAULT_UNLOCK_DELAY;
         }
+        _validateUnlockDelay(unlockDelay);
 
         if (periodExists) {
             if (guardCommitted) {

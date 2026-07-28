@@ -7,6 +7,7 @@ const DAY = 86400;
 const WEEK = 604800;
 const MONTH = 30 * DAY;
 const YEAR = 365 * DAY;
+const MAX_DELAY = 90 * DAY;
 
 /**
  * Per-period unlock delays: every spending period carries its own wait, which
@@ -161,7 +162,8 @@ describe("Per-period unlock delays", function () {
           .setPeriodLimits(user1.address, ["Daily"], [limit], [DAY], [delay]);
 
       await expect(setDelay(HOUR - 1)).to.be.revertedWith("Invalid unlock delay");
-      await expect(setDelay(YEAR + 1)).to.be.revertedWith("Invalid unlock delay");
+      await expect(setDelay(MAX_DELAY + 1)).to.be.revertedWith("Invalid unlock delay");
+      await expect(setDelay(MAX_DELAY)).not.to.be.reverted;
       await expect(setDelay(HOUR)).not.to.be.reverted;
     });
 
@@ -194,6 +196,73 @@ describe("Per-period unlock delays", function () {
       expect(await proposalModule.isSetupCommitted(user1.address)).to.be.true;
       expect(await timeLimitsModule.findPeriodLimit(user1.address, "Yearly")).to.equal(limits[4]);
       expect(await timeLimitsModule.getUnlockDelay(user1.address, "Yearly")).to.equal(MONTH);
+    });
+
+    it("forces the default wait on a period added after lock-in", async function () {
+      const { proposalModule, timeLimitsModule, user1 } = await loadFixture(deployFixture);
+      const { names, limits, durations, unlockDelays } = fullPeriodSet();
+
+      await proposalModule
+        .connect(user1)
+        .commitSetupWithPeriods(names, limits, durations, unlockDelays, hre.ethers.ZeroAddress);
+
+      // Anyone holding the key could otherwise add a dust-sized limit with a
+      // year-long wait and freeze the wallet for that year
+      await timeLimitsModule
+        .connect(user1)
+        .setPeriodLimit(user1.address, "Quarterly", 1, 90 * DAY, YEAR);
+
+      expect(await timeLimitsModule.getUnlockDelay(user1.address, "Quarterly")).to.equal(DAY);
+    });
+
+    it("still honours the chosen wait for periods set before lock-in", async function () {
+      const { timeLimitsModule, user1 } = await loadFixture(deployFixture);
+
+      await timeLimitsModule
+        .connect(user1)
+        .setPeriodLimits(
+          user1.address,
+          ["Monthly"],
+          [hre.ethers.parseUnits("1000", 6)],
+          [MONTH],
+          [90 * DAY],
+        );
+
+      expect(await timeLimitsModule.getUnlockDelay(user1.address, "Monthly")).to.equal(90 * DAY);
+    });
+
+    it("caps an added-limit freeze at the default wait, not the attacker's choice", async function () {
+      const { proposalModule, timeLimitsModule, user1 } = await loadFixture(deployFixture);
+
+      await proposalModule
+        .connect(user1)
+        .commitSetupWithPeriods(
+          ["Daily"],
+          [hre.ethers.parseUnits("100", 6)],
+          [DAY],
+          [DAY],
+          hre.ethers.ZeroAddress,
+        );
+
+      // The freeze: a 1-unit hourly cap blocks every meaningful withdrawal
+      await timeLimitsModule
+        .connect(user1)
+        .setPeriodLimit(user1.address, "Hourly", 1, HOUR, YEAR);
+
+      // Undoing it waits a day, not the year the caller asked for
+      const tx = await proposalModule
+        .connect(user1)
+        .proposeLimitChange(user1.address, "Hourly", hre.ethers.parseUnits("100", 6));
+      const proposedAt = await blockTimeOf(tx);
+      const { id, executeAfter } = await latestProposal(proposalModule, user1.address);
+      expect(executeAfter).to.equal(BigInt(proposedAt + DAY));
+
+      await time.increase(DAY + 60);
+      await expect(proposalModule.connect(user1).executeLimitProposal(user1.address, id)).not.to.be
+        .reverted;
+      expect(await timeLimitsModule.findPeriodLimit(user1.address, "Hourly")).to.equal(
+        hre.ethers.parseUnits("100", 6),
+      );
     });
 
     it("blocks rewriting periods once setup is committed", async function () {
@@ -362,7 +431,7 @@ describe("Per-period unlock delays", function () {
         proposalModule.connect(user1).proposeUnlockDelayChange(user1.address, "Daily", HOUR - 1),
       ).to.be.revertedWith("Invalid unlock delay");
       await expect(
-        proposalModule.connect(user1).proposeUnlockDelayChange(user1.address, "Daily", YEAR + 1),
+        proposalModule.connect(user1).proposeUnlockDelayChange(user1.address, "Daily", MAX_DELAY + 1),
       ).to.be.revertedWith("Invalid unlock delay");
       await expect(
         proposalModule.connect(user1).proposeUnlockDelayChange(user1.address, "Daily", DAY),

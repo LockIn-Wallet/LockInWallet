@@ -31,7 +31,7 @@ export const SPENDING_PERIODS = [
 /** Periods shown by default — hourly is opt-in, most people don't want it. */
 export const PRIMARY_PERIOD_NAMES = ["Daily", "Weekly", "Monthly", "Yearly"];
 
-/** Wait times the user can pick from, matching the contract's 1h–365d bounds. */
+/** Wait times the user can pick from, matching the contract's 1h–90d bounds. */
 export const UNLOCK_DELAY_OPTIONS = [
   { seconds: DAY, label: "24 hours" },
   { seconds: 3 * DAY, label: "3 days" },
@@ -39,12 +39,18 @@ export const UNLOCK_DELAY_OPTIONS = [
   { seconds: 2 * WEEK, label: "2 weeks" },
   { seconds: MONTH, label: "1 month" },
   { seconds: 90 * DAY, label: "3 months" },
-  { seconds: 180 * DAY, label: "6 months" },
-  { seconds: YEAR, label: "1 year" },
 ];
 
 export const MIN_UNLOCK_DELAY = HOUR;
-export const MAX_UNLOCK_DELAY = YEAR;
+export const MAX_UNLOCK_DELAY = 90 * DAY;
+
+/**
+ * The wait a period gets when it has none of its own. Also the wait forced on
+ * any period added after lock-in — the contract ignores a caller-chosen value
+ * there, so a stolen key cannot add a dust-sized limit with a year-long wait
+ * and freeze the wallet for that year.
+ */
+export const DEFAULT_UNLOCK_DELAY = DAY;
 
 const periodsByName = new Map(SPENDING_PERIODS.map((period) => [period.name, period]));
 

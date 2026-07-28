@@ -15,7 +15,8 @@ vulnerability.
 | Spending limits (hourly → yearly) | — | An attacker with your key can only drain at your chosen rate |
 | Limit increase / removal | that period's unlock delay (default 24h daily, 7d weekly, 30d monthly/yearly) | Instant raising of your own limits by an attacker |
 | Unlock delay change | that period's **current** unlock delay, in both directions | Shortening your own wait on impulse, or an attacker doing it for you |
-| Post-lock limits freeze | — | All instant limit-override paths revert after lock-in |
+| Post-lock limits freeze | — | All instant limit-*loosening* paths revert after lock-in |
+| New period added after lock-in | forced to the standard 24h wait | A stolen key adding a dust-sized limit with a year-long wait to freeze the account |
 | New withdrawal address | 24h request timelock | An attacker adding their own destination and draining to it |
 | Emergency bypass (full withdrawal) | that period's unlock delay (24h by default) | Guarantees *you* can always exit completely within your chosen wait |
 | Vault penalty withdrawal | instant (penalty applies) | Immediate exit from vaults at a known cost |
@@ -29,7 +30,7 @@ contract upgrade you disagree with — you can start a full exit immediately
 and have your funds out once that period's unlock delay elapses.
 
 **Unlock delays are yours to choose, and they cut both ways.** Each period
-carries its own wait, bounded to 1 hour – 365 days, applied identically to
+carries its own wait, bounded to 1 hour – 90 days, applied identically to
 bypassing that limit and to changing it. Defaults are 24h for hourly and
 daily, 7 days for weekly, and 30 days for monthly and yearly. A longer wait
 buys stronger protection against an attacker holding your key *and* against
@@ -38,7 +39,10 @@ wait on the limit that binds your balance, your exit takes 30 days; the 24h
 guarantee above holds only at the default. Choose deliberately: the wait is
 itself timelocked, so shortening it later costs you the current wait first.
 Delays are per period, so keeping one short-window limit at 24h preserves a
-fast partial exit while longer windows stay firmly locked.
+fast partial exit while longer windows stay firmly locked. The 90-day
+ceiling bounds the worst case: for an account with no recovery key, that is
+the longest anyone — including you, by mistake — can be kept from their own
+funds.
 
 ## Seed-compromise recovery model
 
