@@ -13,6 +13,10 @@ import {
 import { getCurrentNetwork } from "../../utils/walletUtils.js";
 import { getPendingReferrerFor } from "../../services/referral.service.js";
 import { truncateAddress } from "../../utils/addressUtils.js";
+import {
+  toPeriodEntries,
+  validatePeriodEntries,
+} from "../../utils/spendingPeriods.js";
 
 /**
  * SetupCommitStep Component
@@ -90,13 +94,12 @@ const SetupCommitStep = ({
     }
 
     try {
-      // Extract spending limit values from user input
-      const daily = limitEdits.Daily?.value ? parseFloat(limitEdits.Daily.value) : 0;
-      const weekly = limitEdits.Weekly?.value ? parseFloat(limitEdits.Weekly.value) : 0;
-      const monthly = limitEdits.Monthly?.value ? parseFloat(limitEdits.Monthly.value) : 0;
+      // Every period the user filled in, with its own window and wait time
+      const periods = toPeriodEntries(limitEdits);
 
-      if (daily === 0 && weekly === 0 && monthly === 0) {
-        alert("Please set at least one spending limit");
+      const validationError = validatePeriodEntries(periods);
+      if (validationError) {
+        alert(validationError);
         setIsCommitting(false);
         return;
       }
@@ -104,7 +107,7 @@ const SetupCommitStep = ({
       console.log("🔄 Committing setup with spending limits...");
 
       const limitsArePercentage = limitsMode === "percent";
-      if (limitsArePercentage && (daily > 100 || weekly > 100 || monthly > 100)) {
+      if (limitsArePercentage && periods.some((period) => period.limit > 100)) {
         alert("Percentage limits cannot exceed 100%");
         setIsCommitting(false);
         return;
@@ -115,9 +118,11 @@ const SetupCommitStep = ({
       const defaultToken = network?.tokens?.USDT;
       const tokenMint = defaultToken?.address || null;
 
-      const txHash = await transactionManager.commitSetup(
-        daily, weekly, monthly, limitsArePercentage, tokenMint, pendingReferrer
-      );
+      const txHash = await transactionManager.commitSetup(periods, {
+        limitsArePercentage,
+        tokenMint,
+        referrer: pendingReferrer,
+      });
 
       console.log("✅ Setup committed successfully:", txHash);
       alert("Setup locked in successfully! Your savings wallet is now active with spending limit protection.")
@@ -136,13 +141,7 @@ const SetupCommitStep = ({
       setIsCommitting(false);
     } catch (error) {
       console.error("Error committing setup:", error);
-      if (error.message.includes("Daily limit too high")) {
-        alert("Daily limit is too high for the weekly limit");
-      } else if (error.message.includes("Weekly limit too high")) {
-        alert("Weekly limit is too high for the monthly limit");
-      } else {
-        alert(`Failed to lock in setup: ${error.message}`);
-      }
+      alert(`Failed to lock in setup: ${error.message}`);
       setIsCommitting(false);
     }
   };

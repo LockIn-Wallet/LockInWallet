@@ -14,6 +14,18 @@ export const RELEASE_NOTES = [
     title: "A home page you can check",
     highlights: [
       {
+        emoji: "🗓️",
+        text: "You can now cap your spending over a year, not just a day, a week or a month — and an hourly cap is there too if you want one. Set as many as you like; a shorter period can never allow more than a longer one.",
+      },
+      {
+        emoji: "⏳",
+        text: "You choose how long it takes to break or change each limit. Before, everything waited 24 hours. Now a daily cap still unlocks in 24 hours by default, a weekly cap takes a week, and monthly or yearly caps take a month — and you can set your own wait, anywhere from an hour to a year.",
+      },
+      {
+        emoji: "🔒",
+        text: "Changing a wait time is itself subject to the wait. If your weekly limit takes a week to unlock, then shortening that week takes a week too. That is the point: a moment of temptation can't undo a decision you made carefully.",
+      },
+      {
         emoji: "🔍",
         text: "The home page has been rebuilt around one idea: every claim on it should be something you can verify. It opens with a live vault refusing a withdrawal that breaks its own limit, and links straight to the source, the security model and the governance queue.",
       },

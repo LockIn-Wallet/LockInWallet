@@ -21,6 +21,34 @@ these notes on the in-app **Governance** page before they execute.
 
 ## [Unreleased]
 
+### Added
+- Yearly spending limits, plus an hourly window, alongside the existing
+  daily/weekly/monthly. Periods are now defined in one catalog
+  (`frontend/src/utils/spendingPeriods.js`) and passed to the contracts as
+  name/duration/limit/wait tuples, so adding another period (quarterly, a
+  salary cycle) needs no contract change. **On-chain:** upgrade
+  `TimePeriodLimitsModule` in place — new array-based `setPeriodLimits` and
+  `setPeriodLimit` entry points; the existing `setCommonPeriodLimits` and
+  `addTimePeriodLimit` keep working. No storage was reordered.
+- Per-period unlock delays. Each limit carries its own wait, which governs
+  both bypassing that limit and changing it, replacing the fixed 24 hours.
+  Defaults: hourly 24h, daily 24h, weekly 7d, monthly 30d, yearly 30d;
+  the user picks their own at setup, within 1 hour – 365 days.
+  **On-chain:** upgrade `TimePeriodLimitsModule` (delays live in a new
+  appended `mapping(address => mapping(bytes32 => uint256))`, so a period
+  with no stored delay reads back as 24 hours and every limit committed
+  before this upgrade keeps the wait it was committed under),
+  `BypassSystemModule` (bypass timelock now reads the period's delay) and
+  `ProposalSystemModule` (limit-change proposals use the period's delay).
+- Changing a wait time after lock-in goes through the proposal timelock in
+  both directions — lengthening and shortening alike serve out the period's
+  *current* wait first, so a wait can never be shortened on the spot.
+  **On-chain:** `ProposalSystemModule.proposeUnlockDelayChange`, executed
+  through the existing `executeLimitProposal`; `CategoryUpdateProposal`
+  gains two appended fields (safe — the struct is only reached through a
+  mapping). New `commitSetupWithPeriods` commits any set of periods in one
+  transaction.
+
 ### Changed
 - Design system: `frontend/src/styles/theme.js` is rebuilt on the LockIn
   tokens — a near-neutral dark surface ramp with a single mint accent

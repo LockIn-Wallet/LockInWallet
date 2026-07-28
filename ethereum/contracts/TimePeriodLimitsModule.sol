@@ -19,6 +19,24 @@ contract TimePeriodLimitsModule is Initializable, UUPSUpgradeable, OwnableUpgrad
     // total locked value without routing through the core
     IProposalSystemModule public proposalSystemModule;
 
+    // Appended for upgrades — per-period unlock delay (seconds a bypass request
+    // or limit-change proposal for that period must wait). Kept in its own
+    // mapping rather than on TimePeriodLimit because that struct lives in a
+    // dynamic array, where appending a field would shift every later element.
+    // Keyed by keccak256(periodName); 0 means "never set", which reads back as
+    // DEFAULT_UNLOCK_DELAY so periods created before this upgrade keep the
+    // 24-hour wait they were committed under.
+    mapping(address => mapping(bytes32 => uint256)) private periodUnlockDelays;
+
+    /// @notice Wait applied to periods with no explicit delay (legacy data).
+    uint256 public constant DEFAULT_UNLOCK_DELAY = 24 hours;
+    /// @notice A delay shorter than this would make the lock meaningless.
+    uint256 public constant MIN_UNLOCK_DELAY = 1 hours;
+    /// @notice Guards against a typo locking a user out for decades.
+    uint256 public constant MAX_UNLOCK_DELAY = 365 days;
+    /// @notice Shortest period a limit may cover.
+    uint256 public constant MIN_PERIOD_DURATION = 1 hours;
+
     modifier onlyAuthorized() {
         require(
             msg.sender == address(savingsCore) ||
@@ -80,7 +98,40 @@ contract TimePeriodLimitsModule is Initializable, UUPSUpgradeable, OwnableUpgrad
         uint256 limit,
         uint256 durationInSeconds
     ) external onlyAuthorizedOrSelf(user) {
-        require(bytes(periodName).length > 0 && limit > 0 && durationInSeconds >= 3600, "Invalid input");
+        // No delay supplied — keep whatever the period already carries, or fall
+        // back to the 24-hour default for a brand new one
+        _setPeriod(user, periodName, limit, durationInSeconds, getUnlockDelay(user, periodName), true);
+        _syncTotalLockedValue(user);
+    }
+
+    /// @notice Add or retune a period, choosing how long its bypasses and
+    ///         limit-change proposals must wait.
+    function setPeriodLimit(
+        address user,
+        string calldata periodName,
+        uint256 limit,
+        uint256 durationInSeconds,
+        uint256 unlockDelay
+    ) external onlyAuthorizedOrSelf(user) {
+        _setPeriod(user, periodName, limit, durationInSeconds, unlockDelay, true);
+        _syncTotalLockedValue(user);
+    }
+
+    /// @dev Single implementation behind every path that writes a period, so
+    ///      the create/update/commit flows can never drift apart.
+    /// @param guardCommitted When true, overwriting an existing period after
+    ///        lock-in is rejected — that would sidestep the proposal timelock.
+    ///        New (tightening) periods stay allowed either way.
+    function _setPeriod(
+        address user,
+        string memory periodName,
+        uint256 limit,
+        uint256 durationInSeconds,
+        uint256 unlockDelay,
+        bool guardCommitted
+    ) internal {
+        require(bytes(periodName).length > 0 && limit > 0 && durationInSeconds >= MIN_PERIOD_DURATION, "Invalid input");
+        _validateUnlockDelay(unlockDelay);
 
         UserSpendingLimits storage userLimits = userSpendingLimits[user];
 
@@ -97,9 +148,9 @@ contract TimePeriodLimitsModule is Initializable, UUPSUpgradeable, OwnableUpgrad
         }
 
         if (periodExists) {
-            // Overwriting an existing period after lock-in would bypass the
-            // proposal timelock; new (tightening) periods remain allowed
-            require(!_isCommitted(user), "Setup committed - use proposals");
+            if (guardCommitted) {
+                require(!_isCommitted(user), "Setup committed - use proposals");
+            }
             // Update existing period
             TimePeriodLimit storage existing = userLimits.periods[existingIndex];
             existing.limit = limit;
@@ -121,10 +172,15 @@ contract TimePeriodLimitsModule is Initializable, UUPSUpgradeable, OwnableUpgrad
             userLimits.periodCount++;
         }
 
-        emit CategorySet(user, periodName, limit, durationInSeconds);
+        periodUnlockDelays[user][keccak256(bytes(periodName))] = unlockDelay;
 
-        // Keep the committed total locked value in sync (moved here from the
-        // former SavingsCore.addTimePeriodLimit forwarder)
+        emit CategorySet(user, periodName, limit, durationInSeconds);
+        emit UnlockDelaySet(user, periodName, unlockDelay);
+    }
+
+    /// @dev Keep the committed total locked value in sync (moved here from the
+    ///      former SavingsCore.addTimePeriodLimit forwarder).
+    function _syncTotalLockedValue(address user) internal {
         if (
             address(proposalSystemModule) != address(0) &&
             proposalSystemModule.isSetupCommitted(user)
@@ -133,52 +189,51 @@ contract TimePeriodLimitsModule is Initializable, UUPSUpgradeable, OwnableUpgrad
         }
     }
 
-    // Internal version of addTimePeriodLimit without external authorization check
-    function _addTimePeriodLimitInternal(
+    // ========== UNLOCK DELAYS ==========
+
+    /// @notice How long a bypass request or limit-change proposal for this
+    ///         period must wait before it can be executed.
+    function getUnlockDelay(address user, string memory periodName) public view returns (uint256) {
+        uint256 stored = periodUnlockDelays[user][keccak256(bytes(periodName))];
+        return stored == 0 ? DEFAULT_UNLOCK_DELAY : stored;
+    }
+
+    /// @notice Set a period's unlock delay. Reached through the proposal
+    ///         module after its timelock, never instantly by the user — any
+    ///         change to the wait has to serve out the current wait first.
+    function setUnlockDelay(
         address user,
-        string memory periodName,
-        uint256 limit,
-        uint256 durationInSeconds
-    ) internal {
-        require(bytes(periodName).length > 0 && limit > 0 && durationInSeconds >= 3600, "Invalid input");
+        string calldata periodName,
+        uint256 unlockDelay
+    ) external onlyAuthorized {
+        _validateUnlockDelay(unlockDelay);
+        require(_findPeriodIndex(user, periodName) < userSpendingLimits[user].periods.length, "Period not found");
+        periodUnlockDelays[user][keccak256(bytes(periodName))] = unlockDelay;
+        emit UnlockDelaySet(user, periodName, unlockDelay);
+    }
 
+    /// @notice Reverts unless the delay is within the accepted bounds. Exposed
+    ///         so the proposal module validates against the same rule.
+    function validateUnlockDelay(uint256 unlockDelay) external pure {
+        _validateUnlockDelay(unlockDelay);
+    }
+
+    function _validateUnlockDelay(uint256 unlockDelay) internal pure {
+        require(
+            unlockDelay >= MIN_UNLOCK_DELAY && unlockDelay <= MAX_UNLOCK_DELAY,
+            "Invalid unlock delay"
+        );
+    }
+
+    /// @dev Index of `periodName`, or periods.length when absent.
+    function _findPeriodIndex(address user, string memory periodName) internal view returns (uint256) {
         UserSpendingLimits storage userLimits = userSpendingLimits[user];
-
-        // Check if period already exists
-        bool periodExists = false;
-        uint256 existingIndex = 0;
-
         for (uint256 i = 0; i < userLimits.periods.length; i++) {
             if (keccak256(bytes(userLimits.periods[i].name)) == keccak256(bytes(periodName))) {
-                periodExists = true;
-                existingIndex = i;
-                break;
+                return i;
             }
         }
-
-        if (periodExists) {
-            // Update existing period
-            TimePeriodLimit storage existing = userLimits.periods[existingIndex];
-            existing.limit = limit;
-            existing.duration = durationInSeconds;
-            existing.active = true;
-        } else {
-            // Add new period
-            userLimits.periods.push(TimePeriodLimit({
-                limit: limit,
-                spent: 0,
-                lastReset: block.timestamp,
-                duration: durationInSeconds,
-                name: periodName,
-                active: true
-            }));
-
-            // Update index mapping (store actual index)
-            userLimits.periodIndexes[periodName] = userLimits.periods.length - 1;
-            userLimits.periodCount++;
-        }
-
-        emit CategorySet(user, periodName, limit, durationInSeconds);
+        return userLimits.periods.length;
     }
 
     function removeTimePeriodLimit(address user, string calldata periodName) external onlyAuthorized {
@@ -301,7 +356,8 @@ contract TimePeriodLimitsModule is Initializable, UUPSUpgradeable, OwnableUpgrad
             uint256[] memory spent,
             uint256[] memory remaining,
             uint256[] memory durations,
-            bool[] memory active
+            bool[] memory active,
+            uint256[] memory unlockDelays
         )
     {
         UserSpendingLimits storage userLimits = userSpendingLimits[user];
@@ -313,6 +369,7 @@ contract TimePeriodLimitsModule is Initializable, UUPSUpgradeable, OwnableUpgrad
         remaining = new uint256[](length);
         durations = new uint256[](length);
         active = new bool[](length);
+        unlockDelays = new uint256[](length);
 
         for (uint256 i = 0; i < length; i++) {
             TimePeriodLimit storage period = userLimits.periods[i];
@@ -320,6 +377,7 @@ contract TimePeriodLimitsModule is Initializable, UUPSUpgradeable, OwnableUpgrad
             limits[i] = period.limit;
             durations[i] = period.duration;
             active[i] = period.active;
+            unlockDelays[i] = getUnlockDelay(user, period.name);
 
             // Calculate current spent (reset if period expired)
             if (block.timestamp >= period.lastReset + period.duration) {
@@ -336,7 +394,7 @@ contract TimePeriodLimitsModule is Initializable, UUPSUpgradeable, OwnableUpgrad
             }
         }
 
-        return (names, limits, spent, remaining, durations, active);
+        return (names, limits, spent, remaining, durations, active, unlockDelays);
     }
 
     function getTimePeriodLimit(
@@ -429,35 +487,82 @@ contract TimePeriodLimitsModule is Initializable, UUPSUpgradeable, OwnableUpgrad
 
     // ========== HELPER FUNCTIONS FOR COMMON OPERATIONS ==========
 
+    /// @notice Daily/Weekly/Monthly convenience wrapper, kept so existing
+    ///         callers keep working. Each period takes its default wait.
     function setCommonPeriodLimits(
         address user,
         uint256 dailyLimit,
         uint256 weeklyLimit,
         uint256 monthlyLimit
     ) external onlyAuthorizedOrSelf(user) {
-        require(!_isCommitted(user), "Setup committed - use proposals");
-        require(dailyLimit > 0 || weeklyLimit > 0 || monthlyLimit > 0, "At least one limit must be set");
+        uint256 count = (dailyLimit > 0 ? 1 : 0) + (weeklyLimit > 0 ? 1 : 0) + (monthlyLimit > 0 ? 1 : 0);
+        require(count > 0, "At least one limit must be set");
 
-        // Validate basic limit ordering - allow restrictive limits
-        if (dailyLimit > 0 && weeklyLimit > 0) {
-            require(dailyLimit <= weeklyLimit, "Daily limit cannot exceed weekly limit");
-        }
-        if (weeklyLimit > 0 && monthlyLimit > 0) {
-            require(weeklyLimit <= monthlyLimit, "Weekly limit cannot exceed monthly limit");
-        }
-        if (dailyLimit > 0 && monthlyLimit > 0) {
-            require(dailyLimit <= monthlyLimit, "Daily limit cannot exceed monthly limit");
-        }
+        string[] memory names = new string[](count);
+        uint256[] memory limits = new uint256[](count);
+        uint256[] memory durations = new uint256[](count);
+        uint256[] memory unlockDelays = new uint256[](count);
 
-        // Add or update common periods - use internal calls to avoid authorization issues
+        uint256 next = 0;
         if (dailyLimit > 0) {
-            _addTimePeriodLimitInternal(user, "Daily", dailyLimit, 86400); // 1 day
+            (names[next], limits[next], durations[next], unlockDelays[next]) = ("Daily", dailyLimit, 1 days, 24 hours);
+            next++;
         }
         if (weeklyLimit > 0) {
-            _addTimePeriodLimitInternal(user, "Weekly", weeklyLimit, 604800); // 7 days
+            (names[next], limits[next], durations[next], unlockDelays[next]) = ("Weekly", weeklyLimit, 7 days, 7 days);
+            next++;
         }
         if (monthlyLimit > 0) {
-            _addTimePeriodLimitInternal(user, "Monthly", monthlyLimit, 2592000); // 30 days
+            (names[next], limits[next], durations[next], unlockDelays[next]) = ("Monthly", monthlyLimit, 30 days, 30 days);
+        }
+
+        _setPeriodLimits(user, names, limits, durations, unlockDelays);
+    }
+
+    /// @notice Set an arbitrary set of periods in one call — the path used by
+    ///         setup, so hourly through yearly limits all arrive together with
+    ///         their own wait times. Adding a period (quarterly, a salary
+    ///         cycle) needs no contract change.
+    function setPeriodLimits(
+        address user,
+        string[] calldata names,
+        uint256[] calldata limits,
+        uint256[] calldata durations,
+        uint256[] calldata unlockDelays
+    ) external onlyAuthorizedOrSelf(user) {
+        _setPeriodLimits(user, names, limits, durations, unlockDelays);
+    }
+
+    function _setPeriodLimits(
+        address user,
+        string[] memory names,
+        uint256[] memory limits,
+        uint256[] memory durations,
+        uint256[] memory unlockDelays
+    ) internal {
+        require(!_isCommitted(user), "Setup committed - use proposals");
+        require(names.length > 0, "At least one limit must be set");
+        require(
+            names.length == limits.length &&
+            names.length == durations.length &&
+            names.length == unlockDelays.length,
+            "Length mismatch"
+        );
+
+        // A shorter window may never allow more spending than a longer one,
+        // whatever periods the caller picked
+        for (uint256 i = 0; i < names.length; i++) {
+            for (uint256 j = 0; j < names.length; j++) {
+                if (durations[i] < durations[j]) {
+                    require(limits[i] <= limits[j], "Shorter period exceeds longer period");
+                }
+            }
+        }
+
+        for (uint256 i = 0; i < names.length; i++) {
+            // Committed setups were rejected above, so the overwrite guard has
+            // nothing left to catch here
+            _setPeriod(user, names[i], limits[i], durations[i], unlockDelays[i], false);
         }
     }
 

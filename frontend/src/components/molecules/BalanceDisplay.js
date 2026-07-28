@@ -9,6 +9,7 @@ import {
   colors,
   spacing,
   fontSize,
+  borderRadius,
 } from "../../styles";
 
 // Import utility functions
@@ -293,10 +294,17 @@ const BalanceDisplay = ({
                   key={key}
                   style={{
                     padding: "12px",
-                    backgroundColor: token.recommended ? colors.success.border : colors.background.secondary,
-                    borderRadius: "6px",
-                    border: token.recommended ? `2px solid ${colors.border.success}` : "none",
-                    color: "white",
+                    // Recommended tokens sit on the accent wash, not a solid
+                    // green fill — the accent marks a surface here, it is not
+                    // the surface itself
+                    backgroundColor: token.recommended
+                      ? colors.background.darkBlue
+                      : colors.background.secondary,
+                    borderRadius: borderRadius.md,
+                    border: `1px solid ${
+                      token.recommended ? colors.border.accent : colors.border.hairline
+                    }`,
+                    color: colors.text.primary,
                   }}
                 >
                   <div

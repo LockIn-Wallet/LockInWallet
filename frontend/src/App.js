@@ -37,6 +37,7 @@ import {
   getAvailableNetworks,
 } from "./utils/networkFilter.js";
 import { isSolanaEnabled } from "./utils/featureFlags.js";
+import { createEmptyLimitEdits } from "./utils/spendingPeriods.js";
 import {
   ensureCorrectNetwork,
   createProviderAndSigner,
@@ -111,11 +112,7 @@ function MainFlow({
   const [currentTime, setCurrentTime] = useState(Date.now());
 
   const [spendingLimits, setSpendingLimits] = useState([]);
-  const [limitEdits, setLimitEdits] = useState({
-    Daily: { value: "", isActive: false, isEditing: false },
-    Weekly: { value: "", isActive: false, isEditing: false },
-    Monthly: { value: "", isActive: false, isEditing: false },
-  });
+  const [limitEdits, setLimitEdits] = useState(() => createEmptyLimitEdits());
   const [balances, setBalances] = useState({});
   const [selectedToken, setSelectedToken] = useState("USDT");
   const [instantWithdrawableAmount, setInstantWithdrawableAmount] = useState(0);
@@ -265,9 +262,15 @@ function MainFlow({
             display: "flex",
             justifyContent: "space-between",
             alignItems: "center",
+            // Wraps rather than crushing the heading into two words per line
+            // when the column narrows on a phone
+            flexWrap: "wrap",
+            gap: spacing.md,
             marginBottom: spacing.lg,
           }}>
-            <h3 style={{ color: "white", margin: 0 }}>My Vaults</h3>
+            <h3 style={{ color: colors.text.primary, margin: 0, textAlign: "left" }}>
+              My Vaults
+            </h3>
             <div style={{ display: "flex", gap: spacing.sm }}>
               <button style={buttonStyles.primary} onClick={() => navigate("/create")}>
                 + Create Vault

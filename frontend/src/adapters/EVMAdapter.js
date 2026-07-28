@@ -14,6 +14,11 @@ import ReferralModuleABI from "../ReferralModuleABI.json";
 import RecoverySystemModuleABI from "../RecoverySystemModuleABI.json";
 import ERC20ABI from "../ERC20ABI.json";
 import { getTokenMeta } from "../utils/tokenUtils.js";
+import {
+  SPENDING_PERIODS,
+  getPeriodDuration,
+  getDefaultUnlockDelay,
+} from "../utils/spendingPeriods.js";
 
 const VAULT_SYSTEM_MODULE_ID = ethers.keccak256(ethers.toUtf8Bytes("VAULT_SYSTEM"));
 const REFERRAL_MODULE_ID = ethers.keccak256(ethers.toUtf8Bytes("REFERRAL"));
@@ -402,7 +407,7 @@ export class EVMAdapter extends BlockchainAdapter {
 
     const limitsModule = await this._getModuleContract("timePeriodLimits");
     const spendingData = await limitsModule.getUserSpendingLimits(userAddress);
-    const [names, limits, spent, remaining, durations, active] = spendingData;
+    const [names, limits, spent, remaining, durations, active, unlockDelays] = spendingData;
 
     const resetData = await this._fetchLimitResetTimes(userAddress, names, durations, active);
 
@@ -416,6 +421,7 @@ export class EVMAdapter extends BlockchainAdapter {
         duration: durations[i].toString(),
         active: active[i],
         resetAt: resetData[i],
+        unlockDelay: Number(unlockDelays[i]),
       });
     }
 
@@ -479,39 +485,31 @@ export class EVMAdapter extends BlockchainAdapter {
     }
   }
 
-  async addSpendingLimit(periodName, limit) {
+  async addSpendingLimit(periodName, limit, unlockDelay = null) {
     if (!this.savingsContract) throw new Error("Contract not initialized");
 
     const limitWei = ethers.parseUnits(limit.toString(), 6);
 
-    // Determine duration based on period name
-    const durations = {
-      Daily: 86400, // 1 day
-      Weekly: 604800, // 7 days
-      Monthly: 2592000, // 30 days
-    };
-
-    const duration = durations[periodName];
+    const duration = getPeriodDuration(periodName);
     if (!duration) {
-      throw new Error("Invalid period name. Must be Daily, Weekly, or Monthly");
+      const supported = SPENDING_PERIODS.map((period) => period.name).join(", ");
+      throw new Error(`Invalid period name. Must be one of: ${supported}`);
     }
 
     const limitsModule = await this._getModuleContract("timePeriodLimits");
     try {
-      const tx = await limitsModule.addTimePeriodLimit(
+      const tx = await limitsModule.setPeriodLimit(
         this.userAddress,
         periodName,
         limitWei,
         duration,
+        unlockDelay ?? getDefaultUnlockDelay(periodName),
       );
 
       await tx.wait();
       return tx.hash;
     } catch (error) {
-      if (error.message.includes("Setup committed")) {
-        throw new Error("This limit is locked — submit a limit change proposal instead");
-      }
-      throw error;
+      throw new Error(this._describeLimitError(error));
     }
   }
 
@@ -560,6 +558,8 @@ export class EVMAdapter extends BlockchainAdapter {
         newLimits,
         executeAfters,
         isIncreaseFlags,
+        isDelayChangeFlags,
+        newUnlockDelays,
       ] = await (await this._getModuleContract("proposalSystem")).getUserPendingProposals(targetAddress);
 
       console.log(`✅ Found ${proposalIds.length} pending proposals for EVM`);
@@ -576,6 +576,9 @@ export class EVMAdapter extends BlockchainAdapter {
         // Convert Wei to human-readable format
         const limitInTokens = parseFloat(ethers.formatUnits(newLimits[i], 6));
 
+        const isDelayChange = isDelayChangeFlags[i];
+        const newUnlockDelay = Number(newUnlockDelays[i]);
+
         proposals.push({
           proposalId: proposalIds[i], // Keep as bytes32 string
           periodName: categories[i],
@@ -583,8 +586,12 @@ export class EVMAdapter extends BlockchainAdapter {
           executeAfter: executeAfterTimestamp,
           executed: false, // This method only returns pending proposals
           isIncrease: isIncreaseFlags[i],
-          createdAt: executeAfterTimestamp - 24 * 60 * 60, // Estimate created time
-          action: "change",
+          isDelayChange,
+          newUnlockDelay,
+          // The proposal waited out this period's own delay, so that is also
+          // how far back it was created
+          createdAt: executeAfterTimestamp - (await this.getUnlockDelay(categories[i])),
+          action: isDelayChange ? "waitTime" : "change",
           networkType: "evm",
           timeRemaining,
           canExecute,
@@ -696,60 +703,97 @@ export class EVMAdapter extends BlockchainAdapter {
 
   // Setup Operations - Unified Interface
   /**
-   * Unified method that sets spending limits and commits setup in a single transaction
-   * @param {number} dailyLimit Daily spending limit (0 to disable)
-   * @param {number} weeklyLimit Weekly spending limit (0 to disable)
-   * @param {number} monthlyLimit Monthly spending limit (0 to disable)
+   * Sets every spending limit and commits setup in a single transaction.
+   * @param {Array<{name: string, limit: number, duration: number, unlockDelay: number}>} periods
+   *        Periods to activate, in business units. `unlockDelay` is how long a
+   *        bypass or limit change for that period must wait, in seconds.
    * @param {string|null} referrer Wallet address that referred the user (optional)
    * @returns {Promise<string>} Transaction hash
    */
-  async commitSetup(dailyLimit, weeklyLimit, monthlyLimit, referrer = null) {
+  async commitSetup(periods, referrer = null) {
     if (!this.savingsContract) throw new Error("Contract not initialized");
+    if (!Array.isArray(periods) || periods.length === 0) {
+      throw new Error("Please set at least one spending limit");
+    }
 
-    // Convert to Wei (contract expects 6 decimal places for USDT-compatible amounts)
-    const dailyWei =
-      dailyLimit > 0 ? ethers.parseUnits(dailyLimit.toString(), 6) : 0;
-    const weeklyWei =
-      weeklyLimit > 0 ? ethers.parseUnits(weeklyLimit.toString(), 6) : 0;
-    const monthlyWei =
-      monthlyLimit > 0 ? ethers.parseUnits(monthlyLimit.toString(), 6) : 0;
+    // Contract expects 6 decimal places for USDT-compatible amounts
+    const names = periods.map((period) => period.name);
+    const limits = periods.map((period) => ethers.parseUnits(period.limit.toString(), 6));
+    const durations = periods.map((period) => period.duration);
+    const unlockDelays = periods.map((period) => period.unlockDelay);
 
-    // Recording a referrer must never block setup: fall back to the plain
-    // commit whenever the referrer is unusable (invalid, self, or the module
-    // isn't deployed on this network)
+    // Recording a referrer must never block setup: fall back to no referrer
+    // whenever it is unusable (invalid, self, or the module isn't deployed on
+    // this network)
     const validReferrer =
       referrer &&
       ethers.isAddress(referrer) &&
       referrer.toLowerCase() !== this.userAddress?.toLowerCase() &&
       (await this._getReferralModule()) !== null
         ? referrer
-        : null;
+        : ethers.ZeroAddress;
 
     try {
       const proposalModule = await this._getModuleContract("proposalSystem");
-      const tx = validReferrer
-        ? await proposalModule.commitSetupWithReferrer(
-            dailyWei,
-            weeklyWei,
-            monthlyWei,
-            validReferrer,
-          )
-        : await proposalModule.commitSetup(dailyWei, weeklyWei, monthlyWei);
+      const tx = await proposalModule.commitSetupWithPeriods(
+        names,
+        limits,
+        durations,
+        unlockDelays,
+        validReferrer,
+      );
       await tx.wait(); // Wait for transaction confirmation
 
       return tx.hash; // Return consistent format (transaction hash as string)
     } catch (error) {
-      // Translate EVM errors to business-friendly messages
-      if (error.message.includes("Daily limit too high")) {
-        throw new Error("Daily limit exceeds weekly limit");
-      } else if (error.message.includes("Weekly limit too high")) {
-        throw new Error("Weekly limit exceeds monthly limit");
-      } else if (error.code === 4001) {
-        throw new Error("Transaction cancelled by user");
-      } else {
-        throw new Error(`Setup failed: ${error.message}`);
-      }
+      throw new Error(`Setup failed: ${this._describeLimitError(error)}`);
     }
+  }
+
+  /** Translate contract reverts around limits into business-friendly wording. */
+  _describeLimitError(error) {
+    if (error.code === 4001) return "Transaction cancelled by user";
+    if (error.message?.includes("Shorter period exceeds longer period")) {
+      return "A shorter period cannot allow more spending than a longer one";
+    }
+    if (error.message?.includes("Invalid unlock delay")) {
+      return "Wait time must be between 1 hour and 1 year";
+    }
+    if (error.message?.includes("Setup committed")) {
+      return "Limits are locked — submit a limit change proposal instead";
+    }
+    return error.message;
+  }
+
+  /**
+   * Propose a new wait time for a period. The change itself serves out the
+   * period's current wait before it can be executed.
+   * @param {string} periodName Period to retune ("Weekly", "Yearly", ...)
+   * @param {number} newUnlockDelay New wait in seconds
+   * @returns {Promise<string>} Transaction hash
+   */
+  async proposeUnlockDelayChange(periodName, newUnlockDelay) {
+    if (!this.savingsContract) throw new Error("Contract not initialized");
+
+    try {
+      const proposalModule = await this._getModuleContract("proposalSystem");
+      const tx = await proposalModule.proposeUnlockDelayChange(
+        this.userAddress,
+        periodName,
+        newUnlockDelay,
+      );
+      await tx.wait();
+      return tx.hash;
+    } catch (error) {
+      throw new Error(`Wait time change failed: ${this._describeLimitError(error)}`);
+    }
+  }
+
+  /** Current wait time for a period, in seconds. */
+  async getUnlockDelay(periodName) {
+    const limitsModule = await this._getModuleContract("timePeriodLimits");
+    const delay = await limitsModule.getUnlockDelay(this.userAddress, periodName);
+    return Number(delay);
   }
 
   // ========== GOVERNANCE ==========

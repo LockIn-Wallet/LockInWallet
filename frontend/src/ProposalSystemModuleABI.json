@@ -253,6 +253,68 @@
       {
         "indexed": true,
         "internalType": "address",
+        "name": "user",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "string",
+        "name": "category",
+        "type": "string"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "newUnlockDelay",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "executeAfter",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "bytes32",
+        "name": "proposalId",
+        "type": "bytes32"
+      }
+    ],
+    "name": "UnlockDelayChangeProposed",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "user",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "string",
+        "name": "category",
+        "type": "string"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "newUnlockDelay",
+        "type": "uint256"
+      }
+    ],
+    "name": "UnlockDelayChanged",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "address",
         "name": "implementation",
         "type": "address"
       }
@@ -404,6 +466,39 @@
   {
     "inputs": [
       {
+        "internalType": "string[]",
+        "name": "names",
+        "type": "string[]"
+      },
+      {
+        "internalType": "uint256[]",
+        "name": "limits",
+        "type": "uint256[]"
+      },
+      {
+        "internalType": "uint256[]",
+        "name": "durations",
+        "type": "uint256[]"
+      },
+      {
+        "internalType": "uint256[]",
+        "name": "unlockDelays",
+        "type": "uint256[]"
+      },
+      {
+        "internalType": "address",
+        "name": "referrer",
+        "type": "address"
+      }
+    ],
+    "name": "commitSetupWithPeriods",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
         "internalType": "uint256",
         "name": "dailyLimit",
         "type": "uint256"
@@ -515,6 +610,16 @@
         "internalType": "bool",
         "name": "exists",
         "type": "bool"
+      },
+      {
+        "internalType": "bool",
+        "name": "isDelayChange",
+        "type": "bool"
+      },
+      {
+        "internalType": "uint256",
+        "name": "newUnlockDelay",
+        "type": "uint256"
       }
     ],
     "stateMutability": "view",
@@ -593,6 +698,16 @@
         "internalType": "bool[]",
         "name": "isIncreaseFlags",
         "type": "bool[]"
+      },
+      {
+        "internalType": "bool[]",
+        "name": "isDelayChangeFlags",
+        "type": "bool[]"
+      },
+      {
+        "internalType": "uint256[]",
+        "name": "newUnlockDelays",
+        "type": "uint256[]"
       }
     ],
     "stateMutability": "view",
@@ -744,6 +859,35 @@
       }
     ],
     "name": "proposeLimitRemoval",
+    "outputs": [
+      {
+        "internalType": "bytes32",
+        "name": "proposalId",
+        "type": "bytes32"
+      }
+    ],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "user",
+        "type": "address"
+      },
+      {
+        "internalType": "string",
+        "name": "periodName",
+        "type": "string"
+      },
+      {
+        "internalType": "uint256",
+        "name": "newUnlockDelay",
+        "type": "uint256"
+      }
+    ],
+    "name": "proposeUnlockDelayChange",
     "outputs": [
       {
         "internalType": "bytes32",

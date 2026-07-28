@@ -25,13 +25,18 @@ struct CategoryUpdateProposal {
     bool executed;
     bool isIncrease;         // Track if increase or decrease
     bool exists;            // Track if proposal exists
+    // Appended for upgrades — proposals that change the period's own unlock
+    // delay rather than its spending limit. Safe to append: the struct is only
+    // ever reached through a mapping, so elements never share slot ranges.
+    bool isDelayChange;      // True when this proposal retunes the unlock delay
+    uint256 newUnlockDelay;  // Requested unlock delay, in seconds
 }
 
 struct BypassRequest {
     uint256 amount;           // Amount to withdraw
     string skipPeriod;        // Which limit to bypass ("Daily", "Weekly")
     address token;            // Token to withdraw
-    uint256 executeAfter;     // When request can be executed (24h later)
+    uint256 executeAfter;     // When request can be executed (after the period's unlock delay)
     bool executed;            // Whether already processed
     bool exists;              // Track if request exists
 }
@@ -97,7 +102,20 @@ interface ITimePeriodLimitsModule {
     function removeTimePeriodLimit(address user, string calldata periodName) external;
     function updateTimePeriodLimit(address user, string calldata periodName, uint256 newLimit) external;
     function setCommonPeriodLimits(address user, uint256 dailyLimit, uint256 weeklyLimit, uint256 monthlyLimit) external;
+    function setPeriodLimits(
+        address user,
+        string[] calldata names,
+        uint256[] calldata limits,
+        uint256[] calldata durations,
+        uint256[] calldata unlockDelays
+    ) external;
     function setProposalSystemModule(address _proposalSystemModule) external;
+
+    // Unlock delays — how long a bypass request or limit-change proposal must
+    // wait before it can be executed, tuned per period
+    function getUnlockDelay(address user, string calldata periodName) external view returns (uint256);
+    function setUnlockDelay(address user, string calldata periodName, uint256 unlockDelay) external;
+    function validateUnlockDelay(uint256 unlockDelay) external pure;
 
     // Limit checking and spending
     function checkAllTimePeriodLimits(address user, uint256 amount) external;
@@ -111,7 +129,8 @@ interface ITimePeriodLimitsModule {
         uint256[] memory spent,
         uint256[] memory remaining,
         uint256[] memory durations,
-        bool[] memory active
+        bool[] memory active,
+        uint256[] memory unlockDelays
     );
     function getTimePeriodLimit(address user, string calldata periodName) external view returns (
         uint256 limit,
@@ -129,12 +148,14 @@ interface ITimePeriodLimitsModule {
     // Events
     event CategorySet(address indexed user, string category, uint256 limit, uint256 period);
     event CategoryDeleted(address indexed user, string category);
+    event UnlockDelaySet(address indexed user, string category, uint256 unlockDelay);
 }
 
 interface IProposalSystemModule {
     // Proposal management
     function proposeLimitChange(address user, string calldata periodName, uint256 newLimit) external returns (bytes32 proposalId);
     function proposeLimitRemoval(address user, string calldata periodName) external returns (bytes32 proposalId);
+    function proposeUnlockDelayChange(address user, string calldata periodName, uint256 newUnlockDelay) external returns (bytes32 proposalId);
     function executeLimitProposal(address user, bytes32 proposalId) external;
     function cancelLimitProposal(address user, bytes32 proposalId) external;
 
@@ -142,6 +163,13 @@ interface IProposalSystemModule {
     function commitInitialSetup(address user) external;
     function commitSetup(uint256 dailyLimit, uint256 weeklyLimit, uint256 monthlyLimit) external;
     function commitSetupWithReferrer(uint256 dailyLimit, uint256 weeklyLimit, uint256 monthlyLimit, address referrer) external;
+    function commitSetupWithPeriods(
+        string[] calldata names,
+        uint256[] calldata limits,
+        uint256[] calldata durations,
+        uint256[] calldata unlockDelays,
+        address referrer
+    ) external;
     function recalculateTotalLockedValue(address user) external;
     function setTimePeriodLimitsModule(address _timePeriodLimitsModule) external;
     function setReferralModule(address _referralModule) external;
@@ -153,7 +181,9 @@ interface IProposalSystemModule {
         uint256 executeAfter,
         bool executed,
         bool isIncrease,
-        bool exists
+        bool exists,
+        bool isDelayChange,
+        uint256 newUnlockDelay
     );
     function isSetupCommitted(address user) external view returns (bool);
     function getSetupInfo(address user) external view returns (
@@ -168,12 +198,16 @@ interface IProposalSystemModule {
         string[] memory categories,
         uint256[] memory newLimits,
         uint256[] memory executeAfters,
-        bool[] memory isIncreaseFlags
+        bool[] memory isIncreaseFlags,
+        bool[] memory isDelayChangeFlags,
+        uint256[] memory newUnlockDelays
     );
 
     // Events
     event SetupCommitted(address indexed user, uint256 timestamp);
     event CategoryIncreaseProposed(address indexed user, string category, uint256 newLimit, uint256 executeAfter, bytes32 proposalId);
+    event UnlockDelayChangeProposed(address indexed user, string category, uint256 newUnlockDelay, uint256 executeAfter, bytes32 proposalId);
+    event UnlockDelayChanged(address indexed user, string category, uint256 newUnlockDelay);
     event CategoryIncreaseExecuted(address indexed user, string category, uint256 newLimit, bytes32 proposalId);
     event CategoryDecreased(address indexed user, string category, uint256 newLimit);
     event CategoryDeleted(address indexed user, string category);

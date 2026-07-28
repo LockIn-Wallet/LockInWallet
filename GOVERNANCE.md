@@ -23,9 +23,18 @@ timing is free, and the Safe can cancel any queued operation during the
 delay.
 
 The one inviolable invariant: **the governance delay must always be at
-least 2× the emergency bypass delay (24h)**, so any user who disagrees with
-a queued change can fully exit before it executes. That exit right — not
-the signer set — is the ultimate user protection.
+least 2× the minimum emergency bypass delay (24h)**, so any user who
+disagrees with a queued change can fully exit before it executes. That exit
+right — not the signer set — is the ultimate user protection.
+
+Since unlock delays became per-period and user-chosen (1 hour – 365 days),
+the invariant is anchored to the 24h *default*, not to whatever any
+individual user picked. A user who deliberately sets a longer wait has
+chosen a slower exit for themselves and may not clear a queued upgrade in
+time; that is the trade they made when locking in, and it is stated
+plainly in [SECURITY.md](SECURITY.md). Governance must never raise the
+minimum unlock delay above 24h without raising the governance delay to
+keep the 2× margin intact.
 
 Tooling: `ethereum/scripts/deploy-governance.js` (timelock deploy +
 ownership handover; pass the Safe as `GOV_PROPOSER`) and

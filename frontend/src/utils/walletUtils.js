@@ -2,6 +2,7 @@
 // Extracted from App.js for better organization and reusability
 
 import networkConfig from "../networkConfig.json";
+import { getPeriodDuration } from "./spendingPeriods.js";
 
 // Network configuration - supports both EVM and Solana
 const NETWORKS = {
@@ -116,16 +117,15 @@ const detectExceedingPeriod = (amount, spendingLimits) => {
     return null;
   }
 
-  // Find the first period that would be exceeded, prioritizing shorter periods
-  const periodPriority = { Daily: 1, Weekly: 2, Monthly: 3 };
+  // Find the first period that would be exceeded, prioritizing shorter periods.
+  // Ordering comes from the period's own window, so a custom period sorts
+  // correctly alongside the standard ones.
+  const windowOf = (limit) =>
+    Number(limit.duration) || getPeriodDuration(limit.name) || Number.MAX_SAFE_INTEGER;
 
   const exceedingPeriods = spendingLimits
     .filter((limit) => limit.active && numericAmount > limit.remaining)
-    .sort((a, b) => {
-      const aPriority = periodPriority[a.name] || 999;
-      const bPriority = periodPriority[b.name] || 999;
-      return aPriority - bPriority;
-    });
+    .sort((a, b) => windowOf(a) - windowOf(b));
 
   return exceedingPeriods.length > 0 ? exceedingPeriods[0].name : null;
 };

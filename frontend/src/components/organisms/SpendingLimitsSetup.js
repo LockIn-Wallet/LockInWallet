@@ -18,6 +18,16 @@ import {
   fetchPendingLimitProposals as fetchPendingLimitProposalsService,
 } from "../../services";
 
+import {
+  createEmptyLimitEdits,
+  toPeriodEntries,
+  validatePeriodEntries,
+  formatDuration,
+  getDefaultUnlockDelay,
+  getPeriod,
+  UNLOCK_DELAY_OPTIONS,
+} from "../../utils/spendingPeriods.js";
+
 import LimitModeToggle from "../molecules/LimitModeToggle.js";
 import LimitPeriodCards from "../molecules/LimitPeriodCards.js";
 
@@ -77,12 +87,17 @@ const SpendingLimitsSetup = ({
     }
   }, [spendingLimits, limitsLoaded, onSpendingLimitsUpdate]);
 
+  // Which windows this network can enforce, and whether the user gets to pick
+  // their own wait times — asked of the adapter rather than branched on network
+  const supportedPeriods = transactionManager?.getSupportedSpendingPeriods?.() || [
+    "Daily",
+    "Weekly",
+    "Monthly",
+  ];
+  const supportsCustomDelays = transactionManager?.supportsCustomUnlockDelays?.() || false;
+
   // Internal state for card interactions (hover and focus)
-  const [cardStates, setCardStates] = useState({
-    Daily: { isHovered: false, isFocused: false },
-    Weekly: { isHovered: false, isFocused: false },
-    Monthly: { isHovered: false, isFocused: false },
-  });
+  const [cardStates, setCardStates] = useState({});
 
   // Internal state for custom period form
   const [showCustomPeriod, setShowCustomPeriod] = useState(false);
@@ -131,11 +146,7 @@ const SpendingLimitsSetup = ({
   };
 
   // Internal state for limit edits
-  const [limitEdits, setLimitEdits] = useState({
-    Daily: { value: "", isActive: false, isEditing: false },
-    Weekly: { value: "", isActive: false, isEditing: false },
-    Monthly: { value: "", isActive: false, isEditing: false },
-  });
+  const [limitEdits, setLimitEdits] = useState(() => createEmptyLimitEdits(supportedPeriods));
 
   // Internal limit editing functions
   const updateLimitEdit = (periodName, value) => {
@@ -146,6 +157,13 @@ const SpendingLimitsSetup = ({
         value: value,
         isActive: value && parseFloat(value) > 0,
       },
+    }));
+  };
+
+  const updateUnlockDelay = (periodName, unlockDelay) => {
+    setLimitEdits((prev) => ({
+      ...prev,
+      [periodName]: { ...prev[periodName], unlockDelay },
     }));
   };
 
@@ -211,15 +229,11 @@ const SpendingLimitsSetup = ({
     }
 
     try {
-      // Extract limits from limitEdits - check for any valid input
-      const daily = limitEdits.Daily.value ? parseFloat(limitEdits.Daily.value) : 0;
-      const weekly = limitEdits.Weekly.value ? parseFloat(limitEdits.Weekly.value) : 0;
-      const monthly = limitEdits.Monthly.value ? parseFloat(limitEdits.Monthly.value) : 0;
+      // Every period the user actually filled in
+      const periodEntries = toPeriodEntries(limitEdits);
 
-      // Check if user has entered any spending limit values
-      if (daily === 0 && weekly === 0 && monthly === 0) {
-        console.error("🚨 saveLimitChanges called with all zero values!", {
-          daily, weekly, monthly,
+      if (periodEntries.length === 0) {
+        console.error("🚨 saveLimitChanges called with no limits set!", {
           limitEdits: limitEdits,
           isUserInitiated,
           callStack: new Error().stack
@@ -231,17 +245,11 @@ const SpendingLimitsSetup = ({
         return;
       }
 
-      // Validate basic limit ordering - allow restrictive limits
-      if (daily > 0 && weekly > 0 && daily > weekly) {
-        alert("Daily limit cannot exceed weekly limit");
-        return;
-      }
-      if (weekly > 0 && monthly > 0 && weekly > monthly) {
-        alert("Weekly limit cannot exceed monthly limit");
-        return;
-      }
-      if (daily > 0 && monthly > 0 && daily > monthly) {
-        alert("Daily limit cannot exceed monthly limit");
+      // Same ordering rule the contracts enforce: a shorter window may never
+      // allow more spending than a longer one
+      const orderingError = validatePeriodEntries(periodEntries);
+      if (orderingError) {
+        alert(orderingError);
         return;
       }
 
@@ -267,13 +275,7 @@ const SpendingLimitsSetup = ({
       }
     } catch (error) {
       console.error("Error saving limit changes:", error);
-      if (error.message.includes("Daily limit too high")) {
-        alert("Daily limit is too high for the weekly limit");
-      } else if (error.message.includes("Weekly limit too high")) {
-        alert("Weekly limit is too high for the monthly limit");
-      } else {
-        alert(`Failed to save limit changes: ${error.message}`);
-      }
+      alert(`Failed to save limit changes: ${error.message}`);
     }
   }, [networkType, transactionManager, solanaConnected, savingsContract, isSetupCommitted, limitEdits, spendingLimits, refreshData, onSpendingLimitsUpdate]);
 
@@ -286,6 +288,34 @@ const SpendingLimitsSetup = ({
     }
   }, [onSetSaveCallback]);
   */
+
+  /**
+   * Retune how long a bypass or a change to this limit takes. The change
+   * itself serves out the period's current wait first, so it is never instant.
+   */
+  const submitUnlockDelayProposal = async (periodName, newUnlockDelay) => {
+    const current = spendingLimits.find((limit) => limit.name === periodName);
+    if (current?.unlockDelay === newUnlockDelay) return;
+
+    const confirmed = window.confirm(
+      `Change the ${periodName.toLowerCase()} wait time to ${formatDuration(newUnlockDelay)}?\n\n` +
+        `This takes ${formatDuration(current?.unlockDelay)} to go through — the period's current wait.`,
+    );
+    if (!confirmed) return;
+
+    try {
+      await transactionManager.proposeUnlockDelayChange(periodName, newUnlockDelay);
+      alert(
+        `✅ Wait time change submitted. It becomes active in ${formatDuration(
+          current?.unlockDelay,
+        )}.`,
+      );
+      await refreshData();
+    } catch (error) {
+      console.error(`Error proposing ${periodName} wait time:`, error);
+      alert(`Failed to change the ${periodName.toLowerCase()} wait time: ${error.message}`);
+    }
+  };
 
   const submitIndividualProposal = async (periodName) => {
     // Check connection for both networks
@@ -470,8 +500,8 @@ const SpendingLimitsSetup = ({
           }}
         >
           💡 <strong>Tip:</strong> Set at least one spending limit to
-          continue. You can add multiple periods (daily + weekly +
-          monthly) for layered protection.
+          continue. You can stack several periods (daily + weekly +
+          monthly + yearly) for layered protection.
         </div>
       )}
 
@@ -486,12 +516,18 @@ const SpendingLimitsSetup = ({
               <LimitModeToggle mode={limitsMode} onChange={onLimitsModeChange} />
             )}
             <LimitPeriodCards
-              values={{
-                Daily: limitEdits.Daily?.value || "",
-                Weekly: limitEdits.Weekly?.value || "",
-                Monthly: limitEdits.Monthly?.value || "",
-              }}
+              periodNames={supportedPeriods}
+              values={Object.fromEntries(
+                supportedPeriods.map((name) => [name, limitEdits[name]?.value || ""]),
+              )}
               onChange={updateLimitEdit}
+              delays={Object.fromEntries(
+                supportedPeriods.map((name) => [
+                  name,
+                  limitEdits[name]?.unlockDelay ?? getDefaultUnlockDelay(name),
+                ]),
+              )}
+              onDelayChange={supportsCustomDelays ? updateUnlockDelay : undefined}
               unit={limitsMode === "percent" ? "%" : tokenSymbol}
             />
           </>
@@ -504,7 +540,7 @@ const SpendingLimitsSetup = ({
             marginBottom: "15px",
           }}
         >
-          {["Daily", "Weekly", "Monthly"].map((periodName) => {
+          {supportedPeriods.map((periodName) => {
             const edit = limitEdits[periodName];
             const existingLimit = spendingLimits.find(
               (limit) => limit.name === periodName
@@ -637,12 +673,7 @@ const SpendingLimitsSetup = ({
                       fontWeight: "bold",
                     }}
                   >
-                    {periodName === "Daily"
-                      ? "📅"
-                      : periodName === "Weekly"
-                      ? "📊"
-                      : "📈"}{" "}
-                    {periodName}
+                    {getPeriod(periodName)?.icon} {periodName}
                   </h5>
                   {isActive && existingLimit && (
                     <span
@@ -755,6 +786,46 @@ const SpendingLimitsSetup = ({
                         <span style={cardStyles.limitResetText}>
                           Resets in {formatTimeRemaining(liveTimeRemaining)}
                         </span>
+                      </div>
+                    )}
+                    {supportsCustomDelays && existingLimit.unlockDelay > 0 && (
+                      <div
+                        style={{
+                          marginTop: "10px",
+                          paddingTop: "10px",
+                          borderTop: `1px solid ${colors.border.default}`,
+                          fontSize: "0.8em",
+                          color: colors.text.muted,
+                        }}
+                      >
+                        <div style={{ marginBottom: "6px" }}>
+                          🔒 Bypassing or changing this limit takes{" "}
+                          <strong style={{ color: colors.text.secondary }}>
+                            {formatDuration(existingLimit.unlockDelay)}
+                          </strong>
+                        </div>
+                        <select
+                          value={existingLimit.unlockDelay}
+                          onChange={(e) =>
+                            submitUnlockDelayProposal(periodName, Number(e.target.value))
+                          }
+                          style={{
+                            width: "100%",
+                            padding: "6px",
+                            borderRadius: "4px",
+                            border: `1px solid ${colors.border.default}`,
+                            backgroundColor: colors.background.secondary,
+                            color: "white",
+                            fontSize: "0.95em",
+                            cursor: "pointer",
+                          }}
+                        >
+                          {UNLOCK_DELAY_OPTIONS.map((option) => (
+                            <option key={option.seconds} value={option.seconds}>
+                              Change wait to {option.label}
+                            </option>
+                          ))}
+                        </select>
                       </div>
                     )}
                   </div>
@@ -1039,7 +1110,8 @@ const SpendingLimitsSetup = ({
             marginBottom: "15px",
           }}
         >
-          💡 Tip: Daily ≤ Weekly ≤ Monthly for logical spending control
+          💡 Tip: a shorter period may never allow more spending than a longer
+          one — daily ≤ weekly ≤ monthly ≤ yearly
         </div>
       </div>
 
@@ -1075,14 +1147,14 @@ const SpendingLimitsSetup = ({
 
         {/* Custom Periods List */}
         {spendingLimits.filter(
-          (limit) => !["Daily", "Weekly", "Monthly"].includes(limit.name)
+          (limit) => !supportedPeriods.includes(limit.name)
         ).length > 0 && (
           <div style={layoutStyles.marginBottom}>
             <div style={{ display: "grid", gap: "10px" }}>
               {spendingLimits
                 .filter(
                   (limit) =>
-                    !["Daily", "Weekly", "Monthly"].includes(limit.name)
+                    !supportedPeriods.includes(limit.name)
                 )
                 .map((limit, index) => {
                   const progressPercent =

@@ -97,8 +97,12 @@ contract BypassSystemModule is Initializable, UUPSUpgradeable, OwnableUpgradeabl
         requestId = keccak256(abi.encodePacked(user, skipPeriod, amount, token, block.timestamp));
         require(!userBypassRequests[user][requestId].exists, "Request exists");
 
-        // Use development mode timing (10 seconds in dev mode, 24 hours in production)
-        uint256 timelockDuration = savingsCore.getDevelopmentMode() ? 10 seconds : 24 hours;
+        // Each period carries its own wait — bypassing a weekly cap costs a
+        // week by default, a daily cap 24 hours. Dev mode collapses it to 10
+        // seconds so local flows stay testable.
+        uint256 timelockDuration = savingsCore.getDevelopmentMode()
+            ? 10 seconds
+            : timePeriodLimitsModule.getUnlockDelay(user, skipPeriod);
         userBypassRequests[user][requestId] = BypassRequest({
             amount: amount,
             skipPeriod: skipPeriod,

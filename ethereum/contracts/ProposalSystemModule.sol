@@ -101,10 +101,12 @@ contract ProposalSystemModule is Initializable, UUPSUpgradeable, OwnableUpgradea
         userProposals[user][proposalId] = CategoryUpdateProposal({
             category: periodName,
             newLimit: newLimit,
-            executeAfter: block.timestamp + (savingsCore.getDevelopmentMode() ? 30 : 24 hours),
+            executeAfter: _executeAfter(user, periodName),
             executed: false,
             isIncrease: isIncrease,
-            exists: true
+            exists: true,
+            isDelayChange: false,
+            newUnlockDelay: 0
         });
 
         // Add to proposal tracking
@@ -112,6 +114,56 @@ contract ProposalSystemModule is Initializable, UUPSUpgradeable, OwnableUpgradea
 
         emit CategoryIncreaseProposed(user, periodName, newLimit, userProposals[user][proposalId].executeAfter, proposalId);
         return proposalId;
+    }
+
+    /// @notice Propose a new wait time for a period. Both lengthening and
+    ///         shortening serve out the period's *current* wait first, so a
+    ///         user can never shorten their way out of a lock on the spot.
+    function proposeUnlockDelayChange(
+        address user,
+        string calldata periodName,
+        uint256 newUnlockDelay
+    ) external onlyAuthorizedOrSelf(user) returns (bytes32 proposalId) {
+        require(bytes(periodName).length > 0, "Period name cannot be empty");
+        require(userSetupData[user].hasCommittedSetup, "Setup must be committed for proposals");
+        require(timePeriodLimitsModule.findPeriodLimit(user, periodName) > 0, "Period not found or inactive");
+
+        // Same bounds the limits module enforces on write, checked up front so
+        // an out-of-range value fails now rather than after the wait
+        timePeriodLimitsModule.validateUnlockDelay(newUnlockDelay);
+        require(
+            newUnlockDelay != timePeriodLimitsModule.getUnlockDelay(user, periodName),
+            "Unlock delay unchanged"
+        );
+
+        proposalId = keccak256(abi.encodePacked(user, periodName, newUnlockDelay, block.timestamp, "DELAY"));
+        require(!userProposals[user][proposalId].exists, "Proposal already exists");
+
+        uint256 executeAfter = _executeAfter(user, periodName);
+        userProposals[user][proposalId] = CategoryUpdateProposal({
+            category: periodName,
+            newLimit: 0,
+            executeAfter: executeAfter,
+            executed: false,
+            isIncrease: false,
+            exists: true,
+            isDelayChange: true,
+            newUnlockDelay: newUnlockDelay
+        });
+
+        userProposalIds[user].push(proposalId);
+
+        emit UnlockDelayChangeProposed(user, periodName, newUnlockDelay, executeAfter, proposalId);
+        return proposalId;
+    }
+
+    /// @dev When a proposal becomes executable: the period's own unlock delay,
+    ///      collapsed to 30 seconds in development mode.
+    function _executeAfter(address user, string calldata periodName) internal view returns (uint256) {
+        if (savingsCore.getDevelopmentMode()) {
+            return block.timestamp + 30;
+        }
+        return block.timestamp + timePeriodLimitsModule.getUnlockDelay(user, periodName);
     }
 
     function proposeLimitRemoval(address user, string calldata periodName) external onlyAuthorizedOrSelf(user) returns (bytes32 proposalId) {
@@ -130,7 +182,9 @@ contract ProposalSystemModule is Initializable, UUPSUpgradeable, OwnableUpgradea
             executeAfter: block.timestamp,
             executed: false,
             isIncrease: false,
-            exists: true
+            exists: true,
+            isDelayChange: false,
+            newUnlockDelay: 0
         });
 
         // Add to proposal tracking
@@ -149,7 +203,10 @@ contract ProposalSystemModule is Initializable, UUPSUpgradeable, OwnableUpgradea
 
         proposal.executed = true;
 
-        if (proposal.newLimit == 0) {
+        if (proposal.isDelayChange) {
+            timePeriodLimitsModule.setUnlockDelay(user, proposal.category, proposal.newUnlockDelay);
+            emit UnlockDelayChanged(user, proposal.category, proposal.newUnlockDelay);
+        } else if (proposal.newLimit == 0) {
             timePeriodLimitsModule.removeTimePeriodLimit(user, proposal.category);
             emit CategoryDeleted(user, proposal.category);
         } else {
@@ -206,6 +263,28 @@ contract ProposalSystemModule is Initializable, UUPSUpgradeable, OwnableUpgradea
         _commitSetupWithLimits(msg.sender, dailyLimit, weeklyLimit, monthlyLimit);
     }
 
+    /**
+     * @dev One-transaction setup over any set of periods — hourly through
+     *      yearly, each with its own limit, window and unlock delay. Adding a
+     *      period later (quarterly, a salary cycle) needs no contract change.
+     * @param referrer Address that referred the user (address(0) to skip)
+     */
+    function commitSetupWithPeriods(
+        string[] calldata names,
+        uint256[] calldata limits,
+        uint256[] calldata durations,
+        uint256[] calldata unlockDelays,
+        address referrer
+    ) external {
+        require(address(timePeriodLimitsModule) != address(0), "TimePeriodLimitsModule not set");
+        if (referrer != address(0)) {
+            require(address(referralModule) != address(0), "ReferralModule not set");
+            referralModule.recordReferral(msg.sender, referrer);
+        }
+        timePeriodLimitsModule.setPeriodLimits(msg.sender, names, limits, durations, unlockDelays);
+        _commitInitialSetup(msg.sender);
+    }
+
     function _commitSetupWithLimits(
         address user,
         uint256 dailyLimit,
@@ -223,7 +302,7 @@ contract ProposalSystemModule is Initializable, UUPSUpgradeable, OwnableUpgradea
         require(address(timePeriodLimitsModule) != address(0), "TimePeriodLimitsModule not set");
 
         // Calculate maximum spending limit across all time periods
-        (,uint256[] memory limits,,,,bool[] memory active) = timePeriodLimitsModule.getUserSpendingLimits(user);
+        (,uint256[] memory limits,,,,bool[] memory active,) = timePeriodLimitsModule.getUserSpendingLimits(user);
 
         uint256 totalValue = 0;
         for (uint256 i = 0; i < limits.length; i++) {
@@ -246,7 +325,7 @@ contract ProposalSystemModule is Initializable, UUPSUpgradeable, OwnableUpgradea
         require(userData.hasCommittedSetup, "Setup not committed yet");
 
         // Recalculate using the new logic (maximum limit instead of sum)
-        (,uint256[] memory limits,,,,bool[] memory active) = timePeriodLimitsModule.getUserSpendingLimits(user);
+        (,uint256[] memory limits,,,,bool[] memory active,) = timePeriodLimitsModule.getUserSpendingLimits(user);
 
         uint256 maxValue = 0;
         for (uint256 i = 0; i < limits.length; i++) {
@@ -267,7 +346,9 @@ contract ProposalSystemModule is Initializable, UUPSUpgradeable, OwnableUpgradea
         uint256 executeAfter,
         bool executed,
         bool isIncrease,
-        bool exists
+        bool exists,
+        bool isDelayChange,
+        uint256 newUnlockDelay
     ) {
         CategoryUpdateProposal storage proposal = userProposals[user][proposalId];
         return (
@@ -276,7 +357,9 @@ contract ProposalSystemModule is Initializable, UUPSUpgradeable, OwnableUpgradea
             proposal.executeAfter,
             proposal.executed,
             proposal.isIncrease,
-            proposal.exists
+            proposal.exists,
+            proposal.isDelayChange,
+            proposal.newUnlockDelay
         );
     }
 
@@ -345,7 +428,9 @@ contract ProposalSystemModule is Initializable, UUPSUpgradeable, OwnableUpgradea
         string[] memory categories,
         uint256[] memory newLimits,
         uint256[] memory executeAfters,
-        bool[] memory isIncreaseFlags
+        bool[] memory isIncreaseFlags,
+        bool[] memory isDelayChangeFlags,
+        uint256[] memory newUnlockDelays
     ) {
         bytes32[] memory allProposalIds = userProposalIds[user];
         uint256 pendingCount = 0;
@@ -364,6 +449,8 @@ contract ProposalSystemModule is Initializable, UUPSUpgradeable, OwnableUpgradea
         newLimits = new uint256[](pendingCount);
         executeAfters = new uint256[](pendingCount);
         isIncreaseFlags = new bool[](pendingCount);
+        isDelayChangeFlags = new bool[](pendingCount);
+        newUnlockDelays = new uint256[](pendingCount);
 
         uint256 pendingIndex = 0;
         for (uint256 i = 0; i < allProposalIds.length; i++) {
@@ -374,6 +461,8 @@ contract ProposalSystemModule is Initializable, UUPSUpgradeable, OwnableUpgradea
                 newLimits[pendingIndex] = proposal.newLimit;
                 executeAfters[pendingIndex] = proposal.executeAfter;
                 isIncreaseFlags[pendingIndex] = proposal.isIncrease;
+                isDelayChangeFlags[pendingIndex] = proposal.isDelayChange;
+                newUnlockDelays[pendingIndex] = proposal.newUnlockDelay;
                 pendingIndex++;
             }
         }

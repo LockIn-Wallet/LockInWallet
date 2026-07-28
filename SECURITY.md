@@ -12,11 +12,12 @@ vulnerability.
 
 | Mechanism | Delay | What it protects against |
 |---|---|---|
-| Spending limits (daily/weekly/monthly) | — | An attacker with your key can only drain at your chosen rate |
-| Limit increase / removal | 24h proposal timelock | Instant raising of your own limits by an attacker |
+| Spending limits (hourly → yearly) | — | An attacker with your key can only drain at your chosen rate |
+| Limit increase / removal | that period's unlock delay (default 24h daily, 7d weekly, 30d monthly/yearly) | Instant raising of your own limits by an attacker |
+| Unlock delay change | that period's **current** unlock delay, in both directions | Shortening your own wait on impulse, or an attacker doing it for you |
 | Post-lock limits freeze | — | All instant limit-override paths revert after lock-in |
 | New withdrawal address | 24h request timelock | An attacker adding their own destination and draining to it |
-| Emergency bypass (full withdrawal) | 24h request timelock | Guarantees *you* can always exit completely within a day |
+| Emergency bypass (full withdrawal) | that period's unlock delay (24h by default) | Guarantees *you* can always exit completely within your chosen wait |
 | Vault penalty withdrawal | instant (penalty applies) | Immediate exit from vaults at a known cost |
 | Referral record | written once at lock-in, immutable | Retroactive tampering with attribution |
 | Account freeze (recovery key or account key) | instant | Stops every outgoing path the moment a compromise is noticed |
@@ -25,7 +26,19 @@ vulnerability.
 
 The emergency bypass is the cornerstone: whatever happens — including a
 contract upgrade you disagree with — you can start a full exit immediately
-and have your funds out in 24 hours.
+and have your funds out once that period's unlock delay elapses.
+
+**Unlock delays are yours to choose, and they cut both ways.** Each period
+carries its own wait, bounded to 1 hour – 365 days, applied identically to
+bypassing that limit and to changing it. Defaults are 24h for hourly and
+daily, 7 days for weekly, and 30 days for monthly and yearly. A longer wait
+buys stronger protection against an attacker holding your key *and* against
+your own impulses — at the cost of your own fast exit. If you set a 30-day
+wait on the limit that binds your balance, your exit takes 30 days; the 24h
+guarantee above holds only at the default. Choose deliberately: the wait is
+itself timelocked, so shortening it later costs you the current wait first.
+Delays are per period, so keeping one short-window limit at 24h preserves a
+fast partial exit while longer windows stay firmly locked.
 
 ## Seed-compromise recovery model
 

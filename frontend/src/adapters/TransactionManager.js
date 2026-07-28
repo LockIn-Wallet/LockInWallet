@@ -2,6 +2,7 @@ import { EVMAdapter } from "./EVMAdapter.js";
 import { SolanaAdapter } from "./SolanaAdapter.js";
 import { getTokenMeta } from "../utils/tokenUtils.js";
 import { clearPendingReferrer } from "../services/referral.service.js";
+import { SPENDING_PERIODS, getPeriodDuration } from "../utils/spendingPeriods.js";
 
 const PERSONAL_VAULT_KEY = "personal_vault_address";
 const ACTIVE_VAULT_KEY = "active_vault_address";
@@ -189,12 +190,43 @@ export class TransactionManager {
 
   // ---- Compatibility layer (old UI flow) ----
 
-  async commitSetup(daily, weekly, monthly, limitsArePercentage = false, tokenMint = null, referrer = null) {
+  /**
+   * Which spending periods this network can enforce. Networks that store
+   * limits in fixed account fields (Solana's vault program) support only the
+   * classic three until those programs gain the extra windows.
+   */
+  getSupportedSpendingPeriods() {
+    if (this.networkType === "evm" && !this.activeVaultAddress) {
+      return SPENDING_PERIODS.map((period) => period.name);
+    }
+    return ["Daily", "Weekly", "Monthly"];
+  }
+
+  /** True when the user can choose their own bypass/limit-change wait times. */
+  supportsCustomUnlockDelays() {
+    return this.networkType === "evm" && !this.activeVaultAddress;
+  }
+
+  /**
+   * @param {Array<{name, limit, duration, unlockDelay}>} periods Periods to
+   *        activate, in business units.
+   */
+  async commitSetup(periods, { limitsArePercentage = false, tokenMint = null, referrer = null } = {}) {
+    const supported = this.getSupportedSpendingPeriods();
+    const unsupported = periods.filter((period) => !supported.includes(period.name));
+    if (unsupported.length > 0) {
+      const names = unsupported.map((period) => period.name).join(", ");
+      throw new Error(`This network does not support ${names} limits yet`);
+    }
+
     if (this.networkType === "evm") {
-      const hash = await this.getAdapter().commitSetup(daily, weekly, monthly, referrer);
+      const hash = await this.getAdapter().commitSetup(periods, referrer);
       clearPendingReferrer();
       return hash;
     }
+
+    const limitOf = (name) => periods.find((period) => period.name === name)?.limit || 0;
+    const [daily, weekly, monthly] = ["Daily", "Weekly", "Monthly"].map(limitOf);
 
     if (limitsArePercentage && (daily > 100 || weekly > 100 || monthly > 100)) {
       throw new Error("Percentage values must be between 0 and 100");
@@ -341,10 +373,10 @@ export class TransactionManager {
     const limits = [];
 
     const periods = [
-      { name: "Daily", limitRaw: vault.dailyLimit, spent: membership.dailySpent, lastReset: membership.dailyLastReset, duration: 86400 },
-      { name: "Weekly", limitRaw: vault.weeklyLimit, spent: membership.weeklySpent, lastReset: membership.weeklyLastReset, duration: 604800 },
-      { name: "Monthly", limitRaw: vault.monthlyLimit, spent: membership.monthlySpent, lastReset: membership.monthlyLastReset, duration: 2592000 },
-    ];
+      { name: "Daily", limitRaw: vault.dailyLimit, spent: membership.dailySpent, lastReset: membership.dailyLastReset },
+      { name: "Weekly", limitRaw: vault.weeklyLimit, spent: membership.weeklySpent, lastReset: membership.weeklyLastReset },
+      { name: "Monthly", limitRaw: vault.monthlyLimit, spent: membership.monthlySpent, lastReset: membership.monthlyLastReset },
+    ].map((period) => ({ ...period, duration: getPeriodDuration(period.name) }));
 
     for (const p of periods) {
       let limitAmt;
@@ -459,6 +491,13 @@ export class TransactionManager {
   async proposeLimitChange(periodName, newLimit) {
     if (this._usesLegacyAccount()) return this.getAdapter().proposeLimitChange(periodName, newLimit);
     return this.proposeRuleChange({ [`${periodName.toLowerCase()}Limit`]: newLimit });
+  }
+  /** Propose a new bypass/limit-change wait for one period. */
+  async proposeUnlockDelayChange(periodName, newUnlockDelay) {
+    if (!this.supportsCustomUnlockDelays()) {
+      throw new Error("Custom wait times are not available for this vault yet");
+    }
+    return this.getAdapter().proposeUnlockDelayChange(periodName, newUnlockDelay);
   }
   async fetchPendingProposals(userAddress) {
     if (this._usesLegacyAccount()) return this.getAdapter().fetchPendingProposals(userAddress);
