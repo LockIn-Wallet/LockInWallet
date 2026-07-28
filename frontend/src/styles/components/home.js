@@ -362,6 +362,64 @@ export const homeStyles = {
     fontWeight: fontWeight.bold,
   },
 
+  // ---- Prize savings page (/prize-savings) ------------------------------
+  // Its own document rather than a homepage section, so it carries a page
+  // heading and a readable FAQ underneath the demos.
+  pageTitle: {
+    fontSize: type.h1,
+    fontWeight: fontWeight.semibold,
+    letterSpacing: letterSpacing.tight,
+    color: colors.text.primary,
+    lineHeight: 1.1,
+    margin: `0 0 ${space[4]} 0`,
+    textAlign: "center",
+  },
+
+  pageLede: {
+    fontSize: type.lead,
+    color: colors.text.muted,
+    lineHeight: 1.6,
+    maxWidth: "720px",
+    margin: "0 auto",
+    textAlign: "center",
+  },
+
+  faqList: {
+    display: "grid",
+    gap: space[4],
+    maxWidth: "820px",
+    margin: "0 auto",
+  },
+
+  faqItem: {
+    backgroundColor: colors.background.primary,
+    border: `1px solid ${colors.border.hairline}`,
+    borderRadius: borderRadius.xxl,
+    padding: space[5],
+    textAlign: "left",
+  },
+
+  faqQuestion: {
+    fontSize: type.h4,
+    fontWeight: fontWeight.semibold,
+    color: colors.text.primary,
+    margin: `0 0 ${space[2]} 0`,
+  },
+
+  faqAnswer: {
+    fontSize: type.body,
+    color: colors.text.muted,
+    lineHeight: 1.65,
+    margin: 0,
+  },
+
+  pageCtaRow: {
+    display: "flex",
+    flexWrap: "wrap",
+    gap: space[3],
+    justifyContent: "center",
+  },
+
   // How-it-works steps
   stepsRow: {
     display: "flex",

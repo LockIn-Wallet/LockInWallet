@@ -2,34 +2,21 @@ import React from "react";
 
 import PrizeCountdownCard from "../molecules/PrizeCountdownCard.js";
 import WinnerTicker from "../molecules/WinnerTicker.js";
-import DepositOutcomeSlider from "../molecules/DepositOutcomeSlider.js";
 
 import { homeStyles } from "../../styles";
 
 import { PRIZE_TIERS } from "../../utils/homeDemo.js";
-
-const HOW_IT_WORKS_STEPS = [
-  {
-    emoji: "🔒",
-    text: "Lock your savings, then opt in to the prize pool with one click.",
-  },
-  {
-    emoji: "🌱",
-    text: "Pooled deposits earn yield. The yield — not your money — becomes the prizes.",
-  },
-  {
-    emoji: "🎉",
-    text: "Winners are drawn hourly, daily and weekly. Don't win? You lose nothing.",
-  },
-];
+import { HOW_IT_WORKS_STEPS } from "../../utils/prizeSavingsContent.js";
 
 const grandTier = PRIZE_TIERS.find((tier) => tier.grand);
 const regularTiers = PRIZE_TIERS.filter((tier) => !tier.grand);
 
 /**
  * PrizeSavingsShowcase - explains the opt-in PoolTogether-style no-loss
- * prize savings with live countdowns, a simulated winner feed, and an
- * interactive deposit slider.
+ * prize savings with live countdowns and a simulated winner feed.
+ *
+ * The "what if I locked $X" simulation is a section of its own on the prize
+ * savings page, so it is not rendered here.
  */
 const PrizeSavingsShowcase = () => (
   <div style={homeStyles.section}>
@@ -56,8 +43,6 @@ const PrizeSavingsShowcase = () => (
     </div>
 
     <WinnerTicker />
-
-    <DepositOutcomeSlider />
 
     <p style={homeStyles.captionText}>
       Prize figures are a simulated demo for illustration. Real draws are

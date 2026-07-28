@@ -3,6 +3,8 @@
 // contracts — see the note on each block. Nothing on this page may promise a
 // protection the contracts do not enforce.
 
+import { PRIZE_SAVINGS_PATH } from "./prizeSavingsContent.js";
+
 export const GITHUB_URL = "https://github.com/LockIn-Wallet/LockInWallet";
 export const SECURITY_URL = `${GITHUB_URL}/blob/main/SECURITY.md`;
 export const GOVERNANCE_DOC_URL = `${GITHUB_URL}/blob/main/GOVERNANCE.md`;
@@ -13,6 +15,7 @@ export const NAV_LINKS = [
   { label: "How it works", href: "#how-it-works" },
   { label: "Compare", href: "#compare" },
   { label: "Security", href: "#security" },
+  { label: "Prize pool", href: PRIZE_SAVINGS_PATH, internal: true },
   { label: "Governance", href: "/governance", internal: true },
 ];
 

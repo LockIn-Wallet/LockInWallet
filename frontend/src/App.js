@@ -38,6 +38,7 @@ import {
 } from "./utils/networkFilter.js";
 import { isSolanaEnabled } from "./utils/featureFlags.js";
 import { createEmptyLimitEdits } from "./utils/spendingPeriods.js";
+import { PRIZE_SAVINGS_PATH } from "./utils/prizeSavingsContent.js";
 import {
   ensureCorrectNetwork,
   createProviderAndSigner,
@@ -84,6 +85,11 @@ import CreateVault from "./components/pages/CreateVault.js";
 const SavingsVisualiser = lazy(() =>
   import("./components/pages/SavingsVisualiser.js")
 );
+
+const PrizeSavings = lazy(() => import("./components/pages/PrizeSavings.js"));
+
+// Content pages that need the full width — the 800px app column cramps them
+const WIDE_ROUTES = ["/savings-visualiser", PRIZE_SAVINGS_PATH];
 
 function MainFlow({
   transactionManager,
@@ -555,8 +561,7 @@ function AppContentInner({
   const navigate = useNavigate();
   const location = useLocation();
 
-  // The visualiser is a full dashboard — the 800px app column cramps it
-  const isWideRoute = location.pathname === "/savings-visualiser";
+  const isWideRoute = WIDE_ROUTES.includes(location.pathname);
 
   // Capture a ?ref= referral link once on load, before any wallet connects
   useEffect(() => {
@@ -894,6 +899,14 @@ function AppContentInner({
           element={
             <Suspense fallback={<div />}>
               <SavingsVisualiser />
+            </Suspense>
+          }
+        />
+        <Route
+          path={PRIZE_SAVINGS_PATH}
+          element={
+            <Suspense fallback={<div />}>
+              <PrizeSavings />
             </Suspense>
           }
         />

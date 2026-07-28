@@ -2,6 +2,7 @@ import React from "react";
 import { Link } from "react-router-dom";
 
 import { styles, colors, fontSize, fontWeight, spacing } from "../../styles";
+import { PRIZE_SAVINGS_PATH } from "../../utils/prizeSavingsContent.js";
 
 const textLinkStyle = {
   color: colors.text.muted,
@@ -22,6 +23,11 @@ const TEXT_LINKS = [
     href: "/savings-visualiser",
     label: "Savings Visualiser",
     title: "Savings Visualiser — project your savings strategy",
+  },
+  {
+    href: PRIZE_SAVINGS_PATH,
+    label: "Prize Pool",
+    title: "No-loss prize pool — win prizes without risking your savings",
   },
   {
     href: "/governance",

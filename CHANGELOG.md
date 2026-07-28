@@ -49,7 +49,20 @@ these notes on the in-app **Governance** page before they execute.
   mapping). New `commitSetupWithPeriods` commits any set of periods in one
   transaction.
 
+- Dedicated **no-loss prize pool page** at `/prize-savings`, linked from the
+  home nav and from the in-app links next to the Savings Visualiser. It
+  explains the opt-in prize pool, keeps the live draw countdowns and winner
+  feed, and gives the "what if I locked $X" simulation a section of its own.
+  Frontend only — no contract change. The page manages its own title,
+  description, canonical URL, Open Graph tags and `FAQPage` structured data
+  through a new `usePageSeo` hook (`frontend/src/utils/seo.js`), and both it
+  and the visualiser are now listed in `sitemap.xml`.
+
 ### Changed
+- The prize pool section was **moved off the home page** onto
+  `/prize-savings`. The home page keeps its focus on the withdrawal limits
+  and the trust model; prize savings is an optional add-on and now reads as
+  one.
 - Design system: `frontend/src/styles/theme.js` is rebuilt on the LockIn
   tokens — a near-neutral dark surface ramp with a single mint accent
   reserved for "enforced / verified / active", plus an absolute type scale,

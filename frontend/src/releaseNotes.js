@@ -38,6 +38,10 @@ export const RELEASE_NOTES = [
         text: "The wallet screen now opens with what you can actually withdraw right now — each of your limits, how much is left in it, and when it resets. Withdrawing moved above the limits themselves, since taking money out is the everyday action and changing a limit is the rare one.",
       },
       {
+        emoji: "🎁",
+        text: "The no-loss prize pool now has a page of its own — find it as 'Prize pool' in the menu, next to the Savings Visualiser. You can opt in to a shared pool where only the interest is drawn as prizes: win and you gain, don't win and you lose nothing, because your deposit is never at stake. The page keeps the live draw countdowns and lets you simulate what any deposit could win.",
+      },
+      {
         emoji: "🎨",
         text: "The whole app moves to one design system — a dark, near-neutral palette with a single green accent that only ever means 'enforced on-chain', and a monospaced typeface for anything the contract says: amounts, countdowns, addresses.",
       },

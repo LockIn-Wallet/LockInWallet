@@ -12,7 +12,6 @@ import LandingFooter from "../organisms/landing/LandingFooter.js";
 
 import TimeLockShowcase from "../organisms/TimeLockShowcase.js";
 import ChainAvailability from "../organisms/ChainAvailability.js";
-import PrizeSavingsShowcase from "../organisms/PrizeSavingsShowcase.js";
 
 import { landingStyles } from "../../styles";
 
@@ -87,17 +86,6 @@ const WalletConnectionPrompt = ({
           <Suspense fallback={null}>
             <SavingsVisualiser compact title={null} subtitle={null} />
           </Suspense>
-        </div>
-      </section>
-
-      <section style={landingStyles.section}>
-        <div style={landingStyles.inner}>
-          <SectionHeading
-            eyebrow="Optional"
-            title="Locked funds can earn a shot at a prize"
-            lede="Opt in and your deposit joins a shared pool whose interest is paid out as prizes. Your deposit stays yours either way."
-          />
-          <PrizeSavingsShowcase />
         </div>
       </section>
 
