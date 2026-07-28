@@ -476,6 +476,20 @@ When adding new UI elements:
 - Use 'npm run test' to verify all tests pass before making commits
 - Tests should cover both happy path and edge cases for new functionality
 
+#### What NOT to test
+Tests cover **wallet functionality only** — contracts, adapters, transaction
+flows, and the business logic behind them.
+
+**Do not write tests for marketing, SEO or demo code.** That includes the
+logged-out home page and its sections, the standalone content pages
+(`/prize-savings`, `/savings-visualiser`), landing copy and nav data, SEO
+helpers and metadata, and the illustrative demo/simulation utilities behind
+them (e.g. `utils/homeDemo.js`, `utils/futureMirror.js`, `utils/seo.js`,
+`utils/landingContent.js`, `utils/prizeSavingsContent.js`, and the
+`components/organisms/landing/` tree). None of it touches user funds — the
+numbers are illustrative, the copy changes often, and tests there only slow
+iteration down. Verify those changes by looking at the page.
+
 ### Common Commands Reference
 ```bash
 # Project setup
