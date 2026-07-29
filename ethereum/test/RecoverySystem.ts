@@ -466,6 +466,65 @@ describe("RecoverySystemModule", function () {
       ).to.be.revertedWith("Exceeds limit");
     });
 
+    it("Should refuse to recover into an address that is already locked in", async function () {
+      const { savingsCore, proposalModule, recoveryModule, user1, recoveryKey, newOwner, attackerKey } =
+        await loadFixture(deployWithRecoverySetFixture);
+
+      await proposalModule
+        .connect(user1)
+        .commitSetupWithPeriods(
+          ["Daily"], [hre.ethers.parseEther("0.1")], [86400], [86400], hre.ethers.ZeroAddress,
+        );
+
+      // A wallet already locked in under a far looser limit. Letting the funds
+      // land here would swap the tight limits for these ones — an escape, not
+      // a recovery.
+      await proposalModule
+        .connect(newOwner)
+        .commitSetupWithPeriods(
+          ["Daily"], [hre.ethers.parseEther("1000")], [86400], [86400], hre.ethers.ZeroAddress,
+        );
+
+      await expect(
+        recoveryModule
+          .connect(recoveryKey)
+          .recoverOwnership(user1.address, newOwner.address, [hre.ethers.ZeroAddress]),
+      ).to.be.revertedWith("Target already has limits");
+
+      // The funds stayed put
+      expect(await savingsCore.getTokenBalance(newOwner.address, hre.ethers.ZeroAddress)).to.equal(0);
+      expect(await savingsCore.getTokenBalance(user1.address, hre.ethers.ZeroAddress)).to.be.gt(0);
+      void attackerKey;
+    });
+
+    it("Should keep a repeat recovery on the same address, for the remaining tokens", async function () {
+      const { savingsCore, proposalModule, recoveryModule, user1, recoveryKey, newOwner, attackerKey } =
+        await loadFixture(deployWithRecoverySetFixture);
+
+      await proposalModule
+        .connect(user1)
+        .commitSetupWithPeriods(
+          ["Daily"], [hre.ethers.parseEther("0.1")], [86400], [86400], hre.ethers.ZeroAddress,
+        );
+
+      // First call moves ETH; a later call collects whatever was left behind
+      await recoveryModule
+        .connect(recoveryKey)
+        .recoverOwnership(user1.address, newOwner.address, [hre.ethers.ZeroAddress]);
+      await expect(
+        recoveryModule
+          .connect(recoveryKey)
+          .recoverOwnership(user1.address, newOwner.address, []),
+      ).not.to.be.reverted;
+
+      // ...but never to a different address
+      await expect(
+        recoveryModule
+          .connect(recoveryKey)
+          .recoverOwnership(user1.address, attackerKey.address, []),
+      ).to.be.revertedWith("Already recovered elsewhere");
+    });
+
     it("Should not let anyone but a registered module migrate spending rules", async function () {
       const { timeLimitsModule, proposalModule, user1, attackerKey, newOwner } =
         await loadFixture(deployWithRecoverySetFixture);

@@ -79,6 +79,14 @@ these notes on the in-app **Governance** page before they execute.
   `TimePeriodLimitsModule` (new `migratePeriodsTo`), `ProposalSystemModule`
   (new `migrateSetupTo`) and `RecoverySystemModule`; both migrations are
   module-only and refuse a target that already carries rules.
+- Recovery into an address that is already locked in is rejected outright.
+  The rules cannot migrate onto a wallet that has its own, so the balances
+  would otherwise have arrived subject to *that* wallet's limits — letting
+  anyone with the recovery key move funds into a second wallet locked under
+  looser terms and walk straight out of the tighter ones. An account can now
+  only ever be recovered to a single address; repeat calls for the remaining
+  tokens must name that same address. **On-chain:** `RecoverySystemModule`
+  gains an appended `recoveredTo` mapping.
 
 
 - A spending period added **after** lock-in now always takes the standard

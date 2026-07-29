@@ -44,6 +44,10 @@ contract RecoverySystemModule is Initializable, UUPSUpgradeable, OwnableUpgradea
     // turn any freeze into a permanent lock.
     mapping(address => address) private pendingRecoveryKeys;
 
+    // Appended for upgrades — where each recovered account was moved to, so a
+    // repeat call for the remaining tokens cannot redirect them elsewhere.
+    mapping(address => address) private recoveredTo;
+
     modifier onlyRecoveryKey(address user) {
         address recovery = userRecovery[user].recoveryAddress;
         require(recovery != address(0) && msg.sender == recovery, "Only recovery key");
@@ -211,6 +215,19 @@ contract RecoverySystemModule is Initializable, UUPSUpgradeable, OwnableUpgradea
         require(!userRecovery[newOwner].recovered, "New owner was recovered");
 
         RecoveryConfig storage config = userRecovery[user];
+        bool firstRecovery = !config.recovered;
+
+        // The account may only ever land on one address. Without this, funds
+        // could be recovered into a *different* wallet that was already locked
+        // in under looser limits — the rules below would refuse to migrate and
+        // the balances would arrive subject to that wallet's limits instead,
+        // turning recovery into an escape from the lock.
+        if (firstRecovery) {
+            recoveredTo[user] = newOwner;
+        } else {
+            require(recoveredTo[user] == newOwner, "Already recovered elsewhere");
+        }
+
         config.recovered = true;
         config.frozen = true;
         delete pendingKeyChanges[user];
@@ -225,9 +242,12 @@ contract RecoverySystemModule is Initializable, UUPSUpgradeable, OwnableUpgradea
         // Carry the spending rules across before the funds. Recovery replaces
         // the key that controls an account — it is not a way out of the limits
         // that account committed to, so the new address inherits them, spent
-        // counters and all. Only the first call migrates; later calls for the
-        // remaining tokens find the rules already in place.
-        _migrateSpendingRules(user, newOwner);
+        // counters and all. Only the first call migrates; a repeat call for the
+        // remaining tokens goes to the same address, whose rules are already in
+        // place.
+        if (firstRecovery) {
+            _migrateSpendingRules(user, newOwner);
+        }
 
         for (uint256 i = 0; i < tokens.length; i++) {
             uint256 balance = savingsCore.getTokenBalance(user, tokens[i]);
@@ -241,17 +261,19 @@ contract RecoverySystemModule is Initializable, UUPSUpgradeable, OwnableUpgradea
     }
 
     /// @dev Copy the spending periods and the committed-setup flag onto the
-    ///      recovered address. Tolerant of modules that are not registered on
-    ///      this deployment, and of a repeat call for the remaining tokens —
-    ///      both migrations reject a target that already carries rules.
+    ///      recovered address. Deliberately not wrapped in try/catch: both
+    ///      migrations refuse a target that already carries its own rules, and
+    ///      that refusal is the point — recovering into a wallet locked under
+    ///      looser limits must fail loudly, not quietly move the funds there.
+    ///      Skipped only where a module is absent from this deployment.
     function _migrateSpendingRules(address user, address newOwner) internal {
         address limits = savingsCore.getModule(ModuleIds.TIME_PERIOD_LIMITS);
         if (limits != address(0)) {
-            try ITimePeriodLimitsModule(limits).migratePeriodsTo(user, newOwner) {} catch {}
+            ITimePeriodLimitsModule(limits).migratePeriodsTo(user, newOwner);
         }
         address proposals = savingsCore.getModule(ModuleIds.PROPOSAL_SYSTEM);
         if (proposals != address(0)) {
-            try IProposalSystemModule(proposals).migrateSetupTo(user, newOwner) {} catch {}
+            IProposalSystemModule(proposals).migrateSetupTo(user, newOwner);
         }
     }
 
