@@ -8,8 +8,11 @@
  *
  *   npx hardhat run scripts/upgrade-unlock-delays.js --network optimism
  *
- * Storage layout is validated for all three before anything is sent, so a
- * bad upgrade fails without spending gas or leaving the system half-upgraded.
+ * Storage layout is validated for all three before anything is sent, so an
+ * incompatible upgrade costs no gas. That does NOT make the run atomic: each
+ * module is its own transaction, and one failing part-way leaves the rest on
+ * the old code. Re-running is safe and picks up where it stopped — upgrading
+ * a module that already runs the new implementation is a no-op.
  */
 const hre = require("hardhat");
 const fs = require("fs");
@@ -71,10 +74,31 @@ async function main() {
 
   console.log("\nUpgrading...");
   for (const { name, proxy, factory } of targets) {
-    const upgraded = await upgrades.upgradeProxy(proxy, factory, { kind: "uups" });
-    await upgraded.waitForDeployment();
+    const before = await upgrades.erc1967.getImplementationAddress(proxy);
+    // Public RPC endpoints sit behind load balancers whose nodes disagree
+    // about the account nonce, which fails the send with "nonce too low"
+    // while the chain itself is fine. Refresh and retry rather than abandon
+    // the run half-done.
+    let lastError;
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        const upgraded = await upgrades.upgradeProxy(proxy, factory, { kind: "uups" });
+        await upgraded.waitForDeployment();
+        lastError = null;
+        break;
+      } catch (error) {
+        lastError = error;
+        if (!/nonce|replacement|timeout|already known/i.test(error.message)) throw error;
+        console.log(`  retry ${name} after: ${error.message.split("\n")[0]}`);
+        await ethers.provider.getTransactionCount(deployer.address, "pending");
+        await new Promise((resolve) => setTimeout(resolve, 4000 * attempt));
+      }
+    }
+    if (lastError) throw lastError;
+
     const impl = await upgrades.erc1967.getImplementationAddress(proxy);
-    console.log(`  done ${name}: proxy ${proxy} -> impl ${impl}`);
+    const note = impl === before ? "already current" : `impl ${impl}`;
+    console.log(`  done ${name}: proxy ${proxy} -> ${note}`);
   }
 
   // Prove the new code is actually live rather than trusting the receipts
