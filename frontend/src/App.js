@@ -53,7 +53,13 @@ import {
   getNetworkErrorMessage,
   getDevErrorDetails,
 } from "./utils/errorHandling.js";
-import { TransactionManager } from "./adapters/TransactionManager.js";
+import { TransactionManager, clearVaultCache } from "./adapters/TransactionManager.js";
+import { clearNetworkStorage } from "./utils/networkIsolation.js";
+import {
+  isWalletLoggedOut,
+  markWalletLoggedOut,
+  clearWalletLoggedOut,
+} from "./utils/walletSession.js";
 import {
   fetchSpendingLimits as fetchSpendingLimitsService,
   captureReferrerFromUrl,
@@ -577,6 +583,33 @@ function AppContentInner({
     setTransactionManager(null);
   }, []);
 
+  // Log out of the connected wallet and return to the logged-out home page.
+  // Neither MetaMask nor the Solana adapter can be told to forget the site, so
+  // the flag is what actually keeps the user logged out across a reload.
+  const disconnectWallet = useCallback(async () => {
+    const address =
+      networkType === "solana" ? solanaPublicKey?.toString() : evmUserAddress;
+
+    markWalletLoggedOut();
+
+    if (networkType === "solana") {
+      try {
+        await solanaDisconnect();
+      } catch (error) {
+        console.warn("Solana disconnect failed:", error.message);
+      }
+      // The adapter's own key — left behind, it boots the app back into Solana
+      localStorage.removeItem("walletName");
+    }
+
+    clearAllState();
+    walletOperationInProgress.current = false;
+    clearNetworkStorage(networkType);
+    clearVaultCache(address);
+
+    navigate("/");
+  }, [networkType, solanaPublicKey, evmUserAddress, solanaDisconnect, clearAllState, navigate]);
+
   const {
     detectCurrentNetwork,
     initializeTransactionManager,
@@ -647,12 +680,7 @@ function AppContentInner({
     const handleAccountsChanged = (accounts) => {
       if (networkType !== "evm") return;
       if (accounts.length === 0) {
-        setProvider(null);
-        setSigner(null);
-        setSavingsContract(null);
-        setEvmUserAddress("");
-        setIsSetupCommitted(false);
-        setTransactionManager(null);
+        clearAllState();
         walletOperationInProgress.current = false;
       } else {
         autoConnectWallet();
@@ -764,6 +792,8 @@ function AppContentInner({
   };
 
   const autoConnectWallet = debounce(async () => {
+    // A user who logged out stays logged out until they connect again
+    if (isWalletLoggedOut()) return;
     if (!window.ethereum || walletOperationInProgress.current) return;
     walletOperationInProgress.current = true;
     try {
@@ -788,6 +818,7 @@ function AppContentInner({
   }, 2000);
 
   const connectWallet = debounce(async () => {
+    clearWalletLoggedOut();
     if (window.ethereum && !walletOperationInProgress.current) {
       walletOperationInProgress.current = true;
       try {
@@ -817,11 +848,13 @@ function AppContentInner({
   }, 1000);
 
   const handleConnectPhantom = useCallback(async () => {
+    clearWalletLoggedOut();
     const defaultSolana = getDefaultNetwork("solana");
     await switchNetworkType("solana", defaultSolana);
   }, [switchNetworkType]);
 
   const handleConnectMetaMask = useCallback(async () => {
+    clearWalletLoggedOut();
     if (networkType !== "evm") {
       const defaultEvm = getDefaultNetwork("evm");
       await switchNetworkType("evm", defaultEvm);
@@ -889,6 +922,7 @@ function AppContentInner({
         isSetupCommitted={isSetupCommitted}
         switchNetworkType={switchNetworkType}
         switchNetwork={switchNetwork}
+        disconnectWallet={disconnectWallet}
       />
       )}
 

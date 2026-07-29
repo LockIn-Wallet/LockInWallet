@@ -47,6 +47,7 @@ const StatusHeader = ({
   // Functions
   switchNetworkType,
   switchNetwork,
+  disconnectWallet,
 }) => {
   // Local wrapper functions using imported utilities
   const getNetworkInfo = () => getCurrentNetwork(networkType, selectedNetwork);
@@ -119,9 +120,9 @@ const StatusHeader = ({
             {/* Wallet Connection Info */}
             <WalletConnector
               networkType={networkType}
-              solanaConnected={solanaConnected}
               solanaPublicKey={solanaPublicKey}
               userAddress={userAddress}
+              onDisconnect={disconnectWallet}
             />
           </div>
 

@@ -14,6 +14,7 @@ import {
 
 // Import utility functions
 import { NETWORKS } from "../utils/walletUtils.js";
+import { isWalletLoggedOut } from "../utils/walletSession.js";
 
 function SolanaWalletProvider({ children, networkType, selectedNetwork }) {
   const network =
@@ -51,7 +52,8 @@ function SolanaWalletProvider({ children, networkType, selectedNetwork }) {
 
   return (
     <ConnectionProvider key={`${networkType}-${selectedNetwork}`} endpoint={endpoint}>
-      <WalletProvider wallets={wallets} autoConnect>
+      {/* Don't re-attach a wallet the user explicitly disconnected from */}
+      <WalletProvider wallets={wallets} autoConnect={!isWalletLoggedOut()}>
         <WalletModalProvider>{children}</WalletModalProvider>
       </WalletProvider>
     </ConnectionProvider>

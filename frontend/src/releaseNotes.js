@@ -49,6 +49,18 @@ export const RELEASE_NOTES = [
         emoji: "💬",
         text: "Trying to withdraw more than you have now says so — it tells you how much is actually in your wallet, instead of the blank 'Invalid amount' the contract used to throw back.",
       },
+      {
+        emoji: "🗣️",
+        text: "Every error in the app now reads as a sentence. Where you used to get a wall of transaction data, or an error code like '0x1771', you get what actually went wrong and what to do: you are not a member of this vault, the waiting period is not over yet, that address is already on your list. Cancelling a transaction in your wallet is no longer reported as a failure.",
+      },
+      {
+        emoji: "🛑",
+        text: "Depositing more than your wallet holds is caught before anything is signed. Previously you approved the tokens first, paid the fee for it, and only then watched the deposit fail.",
+      },
+      {
+        emoji: "🚪",
+        text: "You can log out. A Disconnect button now sits next to your address at the top of the app — it takes you back to the home page and stays logged out when you reload, so you can hand over the screen or connect a different wallet. Your savings are untouched; only this browser forgets the connection.",
+      },
     ],
   },
   {

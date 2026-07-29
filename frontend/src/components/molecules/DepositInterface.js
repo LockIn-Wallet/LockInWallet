@@ -210,22 +210,8 @@ const DepositInterface = ({
       }
     } catch (error) {
       console.error(`${networkType.toUpperCase()} deposit error:`, error);
-
-      // Provide user-friendly error messages
-      let errorMessage = "Failed to deposit. ";
-      if (error.message.includes("User rejected")) {
-        errorMessage += "Transaction was rejected.";
-      } else if (error.message.includes("insufficient funds")) {
-        errorMessage += "Insufficient funds.";
-      } else if (error.message.includes("network")) {
-        errorMessage += "Network error. Please check your connection.";
-      } else if (error.message.includes("not connected")) {
-        errorMessage += "Wallet not connected.";
-      } else {
-        errorMessage += "Please check the token selection and amount.";
-      }
-
-      alert(errorMessage);
+      // The adapter already phrased this for the user
+      alert(error.message);
     } finally {
       // Always reset loading state
       setIsDepositing(false);
@@ -262,11 +248,7 @@ const DepositInterface = ({
         );
       } catch (error) {
         console.error("Error deploying EVM proxy:", error);
-        if (error.message.includes("user rejected") || error.code === 4001) {
-          alert("Transaction cancelled by user");
-        } else {
-          alert(`Failed to deploy proxy: ${error.message}`);
-        }
+        alert(error.message);
       } finally {
         setIsDeploying(false);
       }

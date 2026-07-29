@@ -141,7 +141,7 @@ const SetupCommitStep = ({
       setIsCommitting(false);
     } catch (error) {
       console.error("Error committing setup:", error);
-      alert(`Failed to lock in setup: ${error.message}`);
+      alert(error.message);
       setIsCommitting(false);
     }
   };

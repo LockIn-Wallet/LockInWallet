@@ -1,13 +1,11 @@
 import React from "react";
 
 // Import Solana wallet components
-import {
-  WalletMultiButton,
-  WalletDisconnectButton,
-} from "@solana/wallet-adapter-react-ui";
+import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 
 // Import styles
 import {
+  buttonStyles,
   layoutStyles,
   utilityStyles,
   colors,
@@ -21,9 +19,9 @@ import {
  */
 const WalletConnector = ({
   networkType,
-  solanaConnected,
   solanaPublicKey,
   userAddress,
+  onDisconnect,
 }) => {
   return (
     <>
@@ -56,13 +54,20 @@ const WalletConnector = ({
         </span>
       </div>
 
-      {/* Wallet Buttons for Solana */}
-      {networkType === "solana" && (
-        <div style={layoutStyles.flexGap}>
-          <WalletMultiButton />
-          {solanaConnected && <WalletDisconnectButton />}
-        </div>
-      )}
+      <div style={layoutStyles.flexGap}>
+        {/* Wallet picker for Solana */}
+        {networkType === "solana" && <WalletMultiButton />}
+
+        {/* Logging out works the same on every chain */}
+        <button
+          type="button"
+          style={buttonStyles.small}
+          onClick={onDisconnect}
+          title="Disconnect this wallet and return to the home page"
+        >
+          Disconnect
+        </button>
+      </div>
     </>
   );
 };

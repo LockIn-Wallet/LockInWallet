@@ -180,7 +180,7 @@ const WithdrawalInterface = ({
       await fetchWithdrawalData();
     } catch (error) {
       console.error("Penalty withdrawal error:", error);
-      alert(`Penalty withdrawal failed: ${error.message}`);
+      alert(error.message);
     } finally {
       setIsLoading(false);
     }
@@ -258,7 +258,7 @@ const WithdrawalInterface = ({
 
     } catch (error) {
       console.error(`${networkType.toUpperCase()} withdrawal error:`, error);
-      alert(`Failed to withdraw ${selectedToken}: ${error.message}`);
+      alert(error.message);
     } finally {
       setIsLoading(false);
     }
@@ -322,7 +322,7 @@ const WithdrawalInterface = ({
 
     } catch (error) {
       console.error(`${networkType.toUpperCase()} bypass request error:`, error);
-      alert(`Failed to request bypass: ${error.message}`);
+      alert(error.message);
     } finally {
       setIsLoading(false);
     }
@@ -353,7 +353,7 @@ const WithdrawalInterface = ({
 
     } catch (error) {
       console.error(`${networkType.toUpperCase()} remove address error:`, error);
-      alert(`Failed to remove withdrawal address: ${error.message}`);
+      alert(error.message);
     } finally {
       setIsLoading(false);
     }
@@ -383,7 +383,7 @@ const WithdrawalInterface = ({
 
     } catch (error) {
       console.error(`${networkType.toUpperCase()} execute bypass error:`, error);
-      alert(`Failed to execute bypass request: ${error.message}`);
+      alert(error.message);
     } finally {
       setIsLoading(false);
     }
@@ -409,7 +409,7 @@ const WithdrawalInterface = ({
 
     } catch (error) {
       console.error(`${networkType.toUpperCase()} cancel bypass error:`, error);
-      alert(`Failed to cancel bypass request: ${error.message}`);
+      alert(error.message);
     } finally {
       setIsLoading(false);
     }
@@ -436,7 +436,7 @@ const WithdrawalInterface = ({
 
     } catch (error) {
       console.error(`${networkType.toUpperCase()} execute withdrawal request error:`, error);
-      alert(`Failed to execute withdrawal request: ${error.message}`);
+      alert(error.message);
     } finally {
       setIsLoading(false);
     }
@@ -463,7 +463,7 @@ const WithdrawalInterface = ({
 
     } catch (error) {
       console.error(`${networkType.toUpperCase()} cancel withdrawal request error:`, error);
-      alert(`Failed to cancel withdrawal address request: ${error.message}`);
+      alert(error.message);
     } finally {
       setIsLoading(false);
     }
@@ -518,15 +518,8 @@ const WithdrawalInterface = ({
       await fetchWithdrawalData();
     } catch (error) {
       console.error(`Error requesting ${networkType} withdrawal address:`, error);
-
-      // Network-aware error handling
-      if (error.message.includes("already exists")) {
-        alert("This address is already in your withdrawal destinations");
-      } else if (error.message.includes("own address")) {
-        alert("You cannot add your own wallet address as a withdrawal destination");
-      } else {
-        alert(`Failed to add withdrawal address: ${error.message}`);
-      }
+      // The adapter already phrased this for the user
+      alert(error.message);
     }
   };
 

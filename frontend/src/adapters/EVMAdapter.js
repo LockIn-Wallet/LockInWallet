@@ -55,6 +55,170 @@ const SAFE_ABI = [
   "function getOwners() view returns (address[])",
 ];
 
+// Contract revert reasons the user can actually hit, paired with what they
+// should read instead. Matched as substrings in order, so a longer reason must
+// come before any shorter one it contains.
+const REVERT_MESSAGES = [
+  // Recovery
+  ["Recovery key already set - use timelocked change", "A recovery key is already set — replacing it takes the 30-day change request"],
+  ["Recovery key must differ from account key", "The recovery key must be a different address from your account"],
+  ["Not the proposed recovery key", "This wallet is not the proposed recovery key for that account"],
+  ["Account was recovered", "This account was already recovered to a new address"],
+  ["New owner was recovered", "That address has already received a recovered account"],
+  ["Only recovery key", "Only the account's recovery key can do this"],
+  ["No recovery key set", "Set a recovery key first"],
+  ["No pending proposal", "There is no recovery key proposal to cancel"],
+  ["No pending change", "There is no pending recovery key change"],
+  ["Already frozen", "This account is already frozen"],
+  ["Not frozen", "This account is not frozen"],
+  ["Account is frozen", "This account is frozen — its recovery key can unfreeze it"],
+
+  // Timelocks and requests
+  ["Request still in timelock", "The waiting period is not over yet"],
+  ["Still in timelock", "The waiting period is not over yet"],
+  ["Request already executed", "This request has already been executed"],
+  ["Request does not exist", "That request no longer exists"],
+  ["Request exists", "You already have a request waiting for this"],
+  ["Full withdrawal not approved", "A full withdrawal needs approval from your approvers first"],
+  ["Not approved", "This action has not been approved yet"],
+  ["Not authorized approver", "This wallet is not one of your approvers"],
+
+  // Spending limits and setup
+  ["Setup already committed - use timelock method", "Your setup is locked in — changes go through the waiting period"],
+  ["Setup committed - use proposals", "Your setup is locked in — changing a limit takes a proposal"],
+  ["Setup must be committed for proposals", "Lock in your setup before proposing changes"],
+  ["Setup not committed", "Lock in your setup first"],
+  ["Already committed", "Your setup is already locked in"],
+  ["Shorter period exceeds longer period", "A shorter period can never allow more than a longer one"],
+  ["Monthly below weekly", "The monthly limit must be at least the weekly limit"],
+  ["Monthly below daily", "The monthly limit must be at least the daily limit"],
+  ["Weekly below daily", "The weekly limit must be at least the daily limit"],
+  ["At least one limit must be set", "Set at least one spending limit"],
+  ["No limits set", "Set at least one spending limit"],
+  ["Limit exceeds 100%", "A percentage limit cannot be above 100%"],
+  ["Period not found or inactive", "That spending period is not active on your account"],
+  ["Period not found", "That spending period is not set on your account"],
+  ["Period name cannot be empty", "Give the spending period a name"],
+  ["Proposal already exists", "You already have a proposal waiting for this period"],
+  ["Invalid proposal", "That proposal no longer exists"],
+  ["Invalid timelock duration", "Choose a waiting period between 1 hour and 365 days"],
+  ["Invalid unlock delay", "The wait time must be between 1 hour and 1 year"],
+  ["Daily limit exceeded", "This is over your daily limit — request a bypass to withdraw it"],
+  ["Weekly limit exceeded", "This is over your weekly limit — request a bypass to withdraw it"],
+  ["Monthly limit exceeded", "This is over your monthly limit — request a bypass to withdraw it"],
+  ["Exceeds limit", "This is over your spending limit — request a bypass to withdraw it"],
+
+  // Withdrawal destinations and approvals
+  ["Cannot set own address as destination", "Your own address is always available — no need to add it"],
+  ["Address already exists", "That address is already on your list"],
+  ["Duplicate approval address", "That approver is already on your list"],
+  ["Cannot approve yourself", "You cannot add your own address as an approver"],
+  ["Approval address not found", "That approver is not on your list"],
+  ["Invalid destination address", "That destination address is not valid"],
+  ["Invalid destination", "That destination is not on your approved list"],
+  ["Invalid title length", "Give the address a name between 1 and 32 characters"],
+  ["Too many approvals at once", "Add fewer approvers at a time"],
+  ["Too many revocations at once", "Remove fewer approvers at a time"],
+  ["No approvals provided", "Choose at least one approver"],
+
+  // Balances and amounts
+  ["Deposit must be greater than zero", "Enter a deposit greater than zero"],
+  ["Amount must be greater than zero", "Enter an amount greater than zero"],
+  ["Amount must be > 0", "Enter an amount greater than zero"],
+  ["Insufficient ETH for fee", "Not enough ETH in your wallet to cover the fee"],
+  ["Incorrect ETH amount", "The ETH sent does not match the amount requested"],
+  ["Insufficient balance", "That is more than your balance"],
+  ["Insufficient shares", "That is more than you have in the prize pool"],
+  ["Invalid amount", "That is more than your balance"],
+  ["No funds", "There is nothing to withdraw"],
+  ["Nothing to sweep", "There is nothing waiting at your deposit address"],
+  ["No tokens to sweep", "There is nothing waiting at your deposit address"],
+  ["ERC20: transfer amount exceeds balance", "That is more than your wallet holds"],
+  ["ERC20InsufficientBalance", "That is more than your wallet holds"],
+  ["transfer amount exceeds allowance", "The token approval did not go through — try again"],
+  ["ERC20InsufficientAllowance", "The token approval did not go through — try again"],
+
+  // Vaults
+  ["Community rules immutable", "A community vault's rules cannot be changed after it is created"],
+  ["Creator cannot leave", "The creator cannot leave their own vault"],
+  ["Balance not zero", "Withdraw your balance before leaving the vault"],
+  ["Already a member", "You are already a member of this vault"],
+  ["Not a vault member", "You are not a member of this vault"],
+  ["Not in member list", "You are not a member of this vault"],
+  ["Vault not active", "This vault is no longer active"],
+  ["Vault not found", "That vault no longer exists"],
+  ["Vault asset mismatch", "That token does not match this vault"],
+  ["Personal vault", "A personal vault cannot be joined"],
+  ["Only creator", "Only the vault's creator can do this"],
+  ["Invalid penalty rate", "The penalty rate must be between 0.01% and 50%"],
+  ["Invalid vault type", "Choose a valid vault type"],
+  ["Invalid name", "Give the vault a name"],
+  ["Invalid description", "The vault description is too long"],
+
+  // Prize pool
+  ["No vault for token", "The prize pool does not accept this token"],
+  ["Prize pool underfunded", "The prize pool cannot cover this prize right now"],
+  ["PrizePool not configured", "The prize pool is not available on this network"],
+  ["No prize for tier", "There is no prize to claim at this tier"],
+  ["No prize to claim", "You have no prize to claim"],
+  ["Nothing to claim", "You have nothing to claim"],
+  ["Invalid tier", "That prize tier does not exist"],
+  ["Zero redeem", "There is nothing to withdraw from the prize pool"],
+  ["Zero deposit", "Enter a deposit greater than zero"],
+
+  // Referrals and proxies
+  ["Cannot refer yourself", "You cannot refer yourself"],
+  ["Referrer already recorded", "A referrer is already recorded for this account"],
+  ["Invalid referrer", "That referral link is not valid"],
+  ["Already deployed", "Your deposit address is already deployed"],
+  ["Already registered", "This account is already registered"],
+];
+
+// Every write path, with the sentence prefixed when nothing above matches
+const WRITE_FALLBACKS = {
+  deposit: "Deposit failed",
+  withdraw: "Withdrawal failed",
+  deployProxy: "Could not create your deposit address",
+  sweepProxy: "Could not move funds from your deposit address",
+  commitSetup: "Could not lock in your setup",
+  setSpendingLimits: "Could not save your spending limits",
+  addSpendingLimit: "Could not add the spending limit",
+  proposeLimitChange: "Could not propose the limit change",
+  proposeUnlockDelayChange: "Could not propose the wait time change",
+  executeLimitProposal: "Could not execute the proposal",
+  cancelLimitProposal: "Could not cancel the proposal",
+  requestLimitBypass: "Could not request the bypass",
+  executeBypassWithdrawal: "Could not execute the bypass",
+  cancelBypassRequest: "Could not cancel the bypass request",
+  addWithdrawalDestination: "Could not add the withdrawal address",
+  requestWithdrawalDestinationAddition: "Could not request the withdrawal address",
+  addWithdrawalDestinationDirect: "Could not add the withdrawal address",
+  executeWithdrawalAddressRequest: "Could not execute the request",
+  cancelWithdrawalAddressRequest: "Could not cancel the request",
+  removeWithdrawalAddress: "Could not remove the withdrawal address",
+  setRecoveryAddress: "Could not set the recovery key",
+  acceptRecoveryRole: "Could not accept the recovery role",
+  cancelRecoveryKeyProposal: "Could not cancel the recovery key proposal",
+  requestRecoveryKeyChange: "Could not request the recovery key change",
+  executeRecoveryKeyChange: "Could not change the recovery key",
+  cancelRecoveryKeyChange: "Could not cancel the recovery key change",
+  freezeAccount: "Could not freeze the account",
+  unfreezeAccount: "Could not unfreeze the account",
+  recoverAccount: "Could not recover the account",
+  depositToPoolTogether: "Could not join the prize pool",
+  withdrawFromPoolTogether: "Could not leave the prize pool",
+  claimPoolTogetherPrize: "Could not claim the prize",
+  createVault: "Could not create the vault",
+  joinVault: "Could not join the vault",
+  leaveVault: "Could not leave the vault",
+  updateVaultRules: "Could not update the vault rules",
+  depositToVault: "Deposit failed",
+  withdrawFromVault: "Withdrawal failed",
+  withdrawFromVaultWithPenalty: "Withdrawal failed",
+  claimVaultPenaltyRewards: "Could not claim your rewards",
+  deployVaultDepositAddress: "Could not create the vault deposit address",
+};
+
 /**
  * EVM Blockchain Adapter for MetaMask and ethers.js integration
  */
@@ -68,6 +232,33 @@ export class EVMAdapter extends BlockchainAdapter {
     this.vaultModule = null;
     this.userAddress = null;
     this.ETH_ADDRESS = "0x0000000000000000000000000000000000000000";
+    this._installErrorTranslation(WRITE_FALLBACKS);
+  }
+
+  /**
+   * Find the revert reason inside the ethers error — it can sit in `reason`,
+   * in the short message, or only in the nested provider payload.
+   */
+  _chainErrorMessage(error) {
+    const haystack = [
+      error?.reason,
+      error?.shortMessage,
+      error?.message,
+      error?.info?.error?.message,
+      error?.error?.message,
+      error?.data?.message,
+    ]
+      .filter(Boolean)
+      .join(" | ");
+
+    const match = REVERT_MESSAGES.find(([reason]) => haystack.includes(reason));
+    if (match) return match[1];
+
+    // MetaMask reports a gas shortfall before the contract is ever reached
+    if (/insufficient funds for (intrinsic transaction cost|gas)/i.test(haystack)) {
+      return "Not enough ETH in your wallet to pay the network fee";
+    }
+    return null;
   }
 
   // Wallet Management
@@ -295,6 +486,11 @@ export class EVMAdapter extends BlockchainAdapter {
 
     const amountWei = this.parseAmount(amount, tokenDecimals);
 
+    // Check before approving — approve() succeeds regardless of balance, so an
+    // unaffordable deposit would otherwise cost a signature and gas before
+    // reverting inside the token transfer
+    await this._assertWalletBalance(tokenAddress, amountWei);
+
     // Handle ERC20 approval if not ETH
     if (tokenAddress !== this.ETH_ADDRESS) {
       await this.approveToken(
@@ -394,6 +590,7 @@ export class EVMAdapter extends BlockchainAdapter {
     const fee = await proxyModule.getProxyDeploymentFee();
     if (fee > 0n) {
       const paymentTokenAddress = await proxyModule.paymentToken();
+      await this._assertWalletBalance(paymentTokenAddress, fee, "to cover the fee");
       await this.approveToken(paymentTokenAddress, proxyModule.target, fee);
     }
 
@@ -503,20 +700,16 @@ export class EVMAdapter extends BlockchainAdapter {
     }
 
     const limitsModule = await this._getModuleContract("timePeriodLimits");
-    try {
-      const tx = await limitsModule.setPeriodLimit(
-        this.userAddress,
-        periodName,
-        limitWei,
-        duration,
-        unlockDelay ?? getDefaultUnlockDelay(periodName),
-      );
+    const tx = await limitsModule.setPeriodLimit(
+      this.userAddress,
+      periodName,
+      limitWei,
+      duration,
+      unlockDelay ?? getDefaultUnlockDelay(periodName),
+    );
 
-      await tx.wait();
-      return tx.hash;
-    } catch (error) {
-      throw new Error(this._describeLimitError(error));
-    }
+    await tx.wait();
+    return tx.hash;
   }
 
   // Proposal Management
@@ -739,36 +932,17 @@ export class EVMAdapter extends BlockchainAdapter {
         ? referrer
         : ethers.ZeroAddress;
 
-    try {
-      const proposalModule = await this._getModuleContract("proposalSystem");
-      const tx = await proposalModule.commitSetupWithPeriods(
-        names,
-        limits,
-        durations,
-        unlockDelays,
-        validReferrer,
-      );
-      await tx.wait(); // Wait for transaction confirmation
+    const proposalModule = await this._getModuleContract("proposalSystem");
+    const tx = await proposalModule.commitSetupWithPeriods(
+      names,
+      limits,
+      durations,
+      unlockDelays,
+      validReferrer,
+    );
+    await tx.wait(); // Wait for transaction confirmation
 
-      return tx.hash; // Return consistent format (transaction hash as string)
-    } catch (error) {
-      throw new Error(`Setup failed: ${this._describeLimitError(error)}`);
-    }
-  }
-
-  /** Translate contract reverts around limits into business-friendly wording. */
-  _describeLimitError(error) {
-    if (error.code === 4001) return "Transaction cancelled by user";
-    if (error.message?.includes("Shorter period exceeds longer period")) {
-      return "A shorter period cannot allow more spending than a longer one";
-    }
-    if (error.message?.includes("Invalid unlock delay")) {
-      return "Wait time must be between 1 hour and 1 year";
-    }
-    if (error.message?.includes("Setup committed")) {
-      return "Limits are locked — submit a limit change proposal instead";
-    }
-    return error.message;
+    return tx.hash; // Return consistent format (transaction hash as string)
   }
 
   /**
@@ -781,18 +955,14 @@ export class EVMAdapter extends BlockchainAdapter {
   async proposeUnlockDelayChange(periodName, newUnlockDelay) {
     if (!this.savingsContract) throw new Error("Contract not initialized");
 
-    try {
-      const proposalModule = await this._getModuleContract("proposalSystem");
-      const tx = await proposalModule.proposeUnlockDelayChange(
-        this.userAddress,
-        periodName,
-        newUnlockDelay,
-      );
-      await tx.wait();
-      return tx.hash;
-    } catch (error) {
-      throw new Error(`Wait time change failed: ${this._describeLimitError(error)}`);
-    }
+    const proposalModule = await this._getModuleContract("proposalSystem");
+    const tx = await proposalModule.proposeUnlockDelayChange(
+      this.userAddress,
+      periodName,
+      newUnlockDelay,
+    );
+    await tx.wait();
+    return tx.hash;
   }
 
   /** Current wait time for a period, in seconds. */
@@ -986,44 +1156,8 @@ export class EVMAdapter extends BlockchainAdapter {
 
   async _requireRecoveryModule() {
     const module = await this._getRecoveryModule();
-    if (!module) throw new Error("Recovery protection is not available on this network yet");
+    if (!module) throw this._userError("Recovery protection is not available on this network yet");
     return module;
-  }
-
-  // Translate contract revert reasons into business-friendly messages
-  _translateRecoveryError(error, fallback) {
-    const message = error?.message || "";
-    if (error?.code === 4001 || error?.code === "ACTION_REJECTED") {
-      return new Error("Transaction cancelled by user");
-    }
-    if (message.includes("Only recovery key")) {
-      return new Error("Only the account's recovery key can do this");
-    }
-    if (message.includes("Account was recovered")) {
-      return new Error("This account was already recovered to a new address");
-    }
-    if (message.includes("Account is frozen")) {
-      return new Error("This account is frozen");
-    }
-    if (message.includes("Still in timelock")) {
-      return new Error("The waiting period is not over yet");
-    }
-    if (message.includes("Recovery key already set")) {
-      return new Error("A recovery key is already set — replacing it requires the 30-day change request");
-    }
-    if (message.includes("No recovery key set")) {
-      return new Error("Set a recovery key first");
-    }
-    if (message.includes("No pending change")) {
-      return new Error("There is no pending recovery key change");
-    }
-    if (message.includes("Not the proposed recovery key")) {
-      return new Error("This wallet is not the proposed recovery key for that account");
-    }
-    if (message.includes("No pending proposal")) {
-      return new Error("There is no recovery key proposal to cancel");
-    }
-    return new Error(`${fallback}: ${message}`);
   }
 
   // All token addresses the savings account can hold on this network —
@@ -1076,101 +1210,69 @@ export class EVMAdapter extends BlockchainAdapter {
   /** Confirm this wallet as the recovery key someone proposed (activates protection). */
   async acceptRecoveryRole(targetAddress) {
     const module = await this._requireRecoveryModule();
-    if (!ethers.isAddress(targetAddress)) throw new Error("Invalid account address");
-    try {
-      const tx = await module.acceptRecoveryRole(targetAddress);
-      await tx.wait();
-      return tx.hash;
-    } catch (error) {
-      throw this._translateRecoveryError(error, "Could not accept the recovery role");
-    }
+    if (!ethers.isAddress(targetAddress)) throw this._userError("Invalid account address");
+    const tx = await module.acceptRecoveryRole(targetAddress);
+    await tx.wait();
+    return tx.hash;
   }
 
   /** Withdraw the connected account's own not-yet-accepted proposal. */
   async cancelRecoveryKeyProposal() {
     const module = await this._requireRecoveryModule();
-    try {
-      const tx = await module.cancelRecoveryKeyProposal();
-      await tx.wait();
-      return tx.hash;
-    } catch (error) {
-      throw this._translateRecoveryError(error, "Could not cancel the proposal");
-    }
+    const tx = await module.cancelRecoveryKeyProposal();
+    await tx.wait();
+    return tx.hash;
   }
 
   /** Register the connected account's recovery key (one-time, instant). */
   async setRecoveryAddress(recoveryAddress) {
     const module = await this._requireRecoveryModule();
-    if (!ethers.isAddress(recoveryAddress)) throw new Error("Invalid recovery address");
-    try {
-      const tx = await module.setRecoveryAddress(recoveryAddress);
-      await tx.wait();
-      return tx.hash;
-    } catch (error) {
-      throw this._translateRecoveryError(error, "Could not set recovery key");
-    }
+    if (!ethers.isAddress(recoveryAddress)) throw this._userError("Invalid recovery address");
+    const tx = await module.setRecoveryAddress(recoveryAddress);
+    await tx.wait();
+    return tx.hash;
   }
 
   /** Freeze an account (own account, or one this wallet is the recovery key for). */
   async freezeAccount(targetAddress = null) {
     const module = await this._requireRecoveryModule();
-    try {
-      const tx = await module.freeze(targetAddress || this.userAddress);
-      await tx.wait();
-      return tx.hash;
-    } catch (error) {
-      throw this._translateRecoveryError(error, "Could not freeze account");
-    }
+    const tx = await module.freeze(targetAddress || this.userAddress);
+    await tx.wait();
+    return tx.hash;
   }
 
   /** Unfreeze an account — recovery key only. */
   async unfreezeAccount(targetAddress = null) {
     const module = await this._requireRecoveryModule();
-    try {
-      const tx = await module.unfreeze(targetAddress || this.userAddress);
-      await tx.wait();
-      return tx.hash;
-    } catch (error) {
-      throw this._translateRecoveryError(error, "Could not unfreeze account");
-    }
+    const tx = await module.unfreeze(targetAddress || this.userAddress);
+    await tx.wait();
+    return tx.hash;
   }
 
   /** Start the 30-day recovery key change (null removes the key). */
   async requestRecoveryKeyChange(newRecoveryAddress = null) {
     const module = await this._requireRecoveryModule();
     if (newRecoveryAddress && !ethers.isAddress(newRecoveryAddress)) {
-      throw new Error("Invalid recovery address");
+      throw this._userError("Invalid recovery address");
     }
-    try {
-      const tx = await module.requestRecoveryAddressChange(newRecoveryAddress || ethers.ZeroAddress);
-      await tx.wait();
-      return tx.hash;
-    } catch (error) {
-      throw this._translateRecoveryError(error, "Could not request recovery key change");
-    }
+    const tx = await module.requestRecoveryAddressChange(newRecoveryAddress || ethers.ZeroAddress);
+    await tx.wait();
+    return tx.hash;
   }
 
   async executeRecoveryKeyChange() {
     const module = await this._requireRecoveryModule();
-    try {
-      const tx = await module.executeRecoveryAddressChange();
-      await tx.wait();
-      return tx.hash;
-    } catch (error) {
-      throw this._translateRecoveryError(error, "Could not execute recovery key change");
-    }
+    const tx = await module.executeRecoveryAddressChange();
+    await tx.wait();
+    return tx.hash;
   }
 
   /** Veto a pending recovery key change (own account or as recovery key). */
   async cancelRecoveryKeyChange(targetAddress = null) {
     const module = await this._requireRecoveryModule();
-    try {
-      const tx = await module.cancelRecoveryAddressChange(targetAddress || this.userAddress);
-      await tx.wait();
-      return tx.hash;
-    } catch (error) {
-      throw this._translateRecoveryError(error, "Could not cancel recovery key change");
-    }
+    const tx = await module.cancelRecoveryAddressChange(targetAddress || this.userAddress);
+    await tx.wait();
+    return tx.hash;
   }
 
   /**
@@ -1180,19 +1282,15 @@ export class EVMAdapter extends BlockchainAdapter {
    */
   async recoverAccount(targetAddress, newOwnerAddress) {
     const module = await this._requireRecoveryModule();
-    if (!ethers.isAddress(targetAddress)) throw new Error("Invalid account address");
-    if (!ethers.isAddress(newOwnerAddress)) throw new Error("Invalid new owner address");
-    try {
-      const tx = await module.recoverOwnership(
-        targetAddress,
-        newOwnerAddress,
-        this._recoveryTokenAddresses(),
-      );
-      await tx.wait();
-      return tx.hash;
-    } catch (error) {
-      throw this._translateRecoveryError(error, "Could not recover account");
-    }
+    if (!ethers.isAddress(targetAddress)) throw this._userError("Invalid account address");
+    if (!ethers.isAddress(newOwnerAddress)) throw this._userError("Invalid new owner address");
+    const tx = await module.recoverOwnership(
+      targetAddress,
+      newOwnerAddress,
+      this._recoveryTokenAddresses(),
+    );
+    await tx.wait();
+    return tx.hash;
   }
 
   // Private Methods
@@ -1667,6 +1765,30 @@ export class EVMAdapter extends BlockchainAdapter {
     return ethers.parseUnits(Number(amount).toFixed(decimals), decimals);
   }
 
+  /**
+   * What the connected wallet actually holds, as opposed to what it has saved.
+   * Deposits fail inside the ERC20 transfer otherwise, which reads as a
+   * contract bug rather than "you don't have that much".
+   */
+  async _assertWalletBalance(tokenAddress, rawAmount, suffix = "") {
+    const isNative = !tokenAddress || tokenAddress === this.ETH_ADDRESS;
+    const { symbol, decimals } = await this._resolveTokenMeta(isNative ? null : tokenAddress);
+
+    const balance = isNative
+      ? await this.provider.getBalance(this.userAddress)
+      : await new ethers.Contract(tokenAddress, ERC20ABI, this.provider).balanceOf(
+          this.userAddress,
+        );
+
+    this._assertSufficientBalance(
+      rawAmount,
+      balance,
+      symbol,
+      decimals,
+      suffix ? `your wallet ${suffix}` : "your wallet",
+    );
+  }
+
   _toRawLimit(value, limitsArePercentage, decimals) {
     if (!value || value <= 0) return 0n;
     if (limitsArePercentage) return BigInt(Math.round(value * 100)); // percent -> bps
@@ -1744,7 +1866,7 @@ export class EVMAdapter extends BlockchainAdapter {
     ) {
       // Stored raw limits are meaningless under the other mode, so a mode
       // switch must respecify every limit
-      throw new Error("Provide daily, weekly and monthly limits when changing the limit type");
+      throw this._userError("Provide daily, weekly and monthly limits when changing the limit type");
     }
     const token = current.token === ethers.ZeroAddress ? null : current.token;
     const { decimals } = await this._resolveTokenMeta(token);
@@ -1766,7 +1888,7 @@ export class EVMAdapter extends BlockchainAdapter {
   async depositToVault(vaultAddress, amount) {
     const vaultModule = await this._getVaultModule();
     const vault = await this.getVaultInfo(vaultAddress);
-    if (!vault) throw new Error("Vault not found");
+    if (!vault) throw this._userError("Vault not found");
 
     const rawAmount = this._toBaseUnits(amount, vault.tokenDecimals);
     if (vault.isNativeToken) {
@@ -1795,11 +1917,11 @@ export class EVMAdapter extends BlockchainAdapter {
   async _withdrawFromVault(vaultAddress, amount, withPenalty) {
     const vaultModule = await this._getVaultModule();
     const vault = await this.getVaultInfo(vaultAddress);
-    if (!vault) throw new Error("Vault not found");
+    if (!vault) throw this._userError("Vault not found");
 
     const rawAmount = this._toBaseUnits(amount, vault.tokenDecimals);
     const membership = await this.getVaultMemberInfo(vaultAddress);
-    if (!membership) throw new Error("You are not a member of this vault");
+    if (!membership) throw this._userError("You are not a member of this vault");
     this._assertSufficientBalance(
       rawAmount,
       membership.balance,

@@ -72,12 +72,15 @@ describe("Recovery adapter interface", () => {
     const adapter = new EVMAdapter({});
     const cases = [
       [{ message: "execution reverted: Only recovery key" }, "Only the account's recovery key can do this"],
-      [{ message: "execution reverted: Account is frozen" }, "This account is frozen"],
+      [
+        { message: "execution reverted: Account is frozen" },
+        "This account is frozen — its recovery key can unfreeze it",
+      ],
       [{ message: "execution reverted: Still in timelock" }, "The waiting period is not over yet"],
-      [{ code: 4001, message: "user rejected" }, "Transaction cancelled by user"],
+      [{ code: 4001, message: "user rejected" }, "Transaction cancelled in your wallet"],
     ];
     for (const [input, expected] of cases) {
-      expect(adapter._translateRecoveryError(input, "fallback").message).toBe(expected);
+      expect(adapter._translateError(input, "fallback").message).toBe(expected);
     }
   });
 });

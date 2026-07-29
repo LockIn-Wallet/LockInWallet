@@ -156,31 +156,8 @@ const WithdrawalAddressSetupStep = ({
         error
       );
 
-      // Network-aware error handling
-      if (networkType === "solana") {
-        if (error.message.includes("already exists")) {
-          alert(
-            "This Solana address is already in your withdrawal destinations"
-          );
-        } else if (error.message.includes("own address")) {
-          alert(
-            "You cannot add your own Solana wallet address as a withdrawal destination"
-          );
-        } else {
-          alert(`Failed to add Solana withdrawal address: ${error.message}`);
-        }
-      } else {
-        // EVM error handling
-        if (error.message.includes("Address already exists")) {
-          alert("This address is already in your withdrawal addresses");
-        } else if (error.message.includes("Cannot set own address")) {
-          alert(
-            "You cannot add your own wallet address as a withdrawal destination"
-          );
-        } else {
-          alert(`Failed to request withdrawal address: ${error.message}`);
-        }
-      }
+      // The adapter already phrased this for the user, identically on both chains
+      alert(error.message);
     }
   };
 
@@ -197,7 +174,7 @@ const WithdrawalAddressSetupStep = ({
       await fetchWithdrawalData();
     } catch (error) {
       console.error("Error removing withdrawal address:", error);
-      alert(`Failed to remove withdrawal address: ${error.message}`);
+      alert(error.message);
     }
   };
 

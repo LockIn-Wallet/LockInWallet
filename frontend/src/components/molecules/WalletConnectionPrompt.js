@@ -80,7 +80,7 @@ const WalletConnectionPrompt = ({
         <div style={landingStyles.inner}>
           <SectionHeading
             eyebrow="The long view"
-            title="Where saving at this rate actually gets you"
+            title="Where will locking your savings get you"
             lede="Set your split and watch four decades play out."
           />
           <Suspense fallback={null}>

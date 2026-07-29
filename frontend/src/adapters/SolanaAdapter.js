@@ -356,6 +356,69 @@ function encodeBool(value) {
   return Buffer.from([value ? 1 : 0]);
 }
 
+// savings-core's ErrorCode enum, in declaration order — anchor numbers the
+// first variant 6000. Keep in step with solana/programs/savings-core/src/error.rs.
+const ANCHOR_FIRST_ERROR_CODE = 6000;
+const PROGRAM_ERROR_MESSAGES = [
+  "Enter an amount greater than zero",
+  "The amount is too large to process",
+  "That is more than your balance",
+  "This is over your spending limit — request a bypass to withdraw it",
+  "Give the vault a name of 1-64 characters",
+  "The vault description is too long",
+  "A percentage limit must be between 0% and 100%",
+  "The penalty rate must be between 0.01% and 50%",
+  "Set at least one withdrawal limit",
+  "A community vault's rules cannot be changed after it is created",
+  "A personal vault cannot be joined",
+  "This vault is no longer active",
+  "You are already a member of this vault",
+  "Withdraw your balance before leaving the vault",
+  "You have no penalty rewards to claim",
+  "That token does not match this vault",
+  "Only the program admin can do this",
+  "This is a SOL vault — use the SOL action instead",
+  "This is a token vault — use the token action instead",
+  "The weekly limit must be at least the daily limit",
+  "The monthly limit must be at least the weekly limit",
+  "The waiting period is not over yet",
+  "Give the address a name of 1-32 characters",
+  "Your own address is always available — no need to add it",
+  "You already have a bypass request waiting",
+  "You already have a rule change waiting",
+];
+
+// Every write path, with the sentence prefixed when nothing else matches
+const WRITE_FALLBACKS = {
+  depositSol: "Deposit failed",
+  depositSpl: "Deposit failed",
+  depositToVault: "Deposit failed",
+  withdrawSol: "Withdrawal failed",
+  withdrawSpl: "Withdrawal failed",
+  withdrawFromVault: "Withdrawal failed",
+  withdrawSolWithPenalty: "Withdrawal failed",
+  withdrawSplWithPenalty: "Withdrawal failed",
+  withdrawFromVaultWithPenalty: "Withdrawal failed",
+  createVault: "Could not create the vault",
+  joinVault: "Could not join the vault",
+  leaveVault: "Could not leave the vault",
+  updateVaultRules: "Could not update the vault rules",
+  proposeRuleChange: "Could not propose the change",
+  executeRuleChange: "Could not execute the change",
+  cancelRuleChange: "Could not cancel the change",
+  requestBypass: "Could not request the bypass",
+  executeBypassSol: "Could not execute the bypass",
+  executeBypassSpl: "Could not execute the bypass",
+  cancelBypass: "Could not cancel the bypass request",
+  addWithdrawalDestination: "Could not add the withdrawal address",
+  requestWithdrawalDestination: "Could not request the withdrawal address",
+  executeDestinationRequest: "Could not execute the request",
+  cancelDestinationRequest: "Could not cancel the request",
+  removeWithdrawalDestination: "Could not remove the withdrawal address",
+  claimPenaltyRewards: "Could not claim your rewards",
+  claimVaultPenaltyRewards: "Could not claim your rewards",
+};
+
 // ========================================
 // SolanaAdapter
 // ========================================
@@ -370,6 +433,52 @@ export class SolanaAdapter extends BlockchainAdapter {
     if (this.wallet?.connected && this.wallet?.publicKey) {
       this.userAddress = this.wallet.publicKey.toString();
     }
+
+    this._installErrorTranslation(WRITE_FALLBACKS);
+  }
+
+  /**
+   * A failed instruction surfaces as "custom program error: 0x1771" — decode it
+   * back to the program's own message. Anchor also prints that message into the
+   * transaction logs, which is the more reliable source when it is there: the
+   * numbering restarts at 6000 in every program, so the same code means
+   * different things in savings-core and deposit-proxy.
+   */
+  _chainErrorMessage(error) {
+    const logs = (error?.logs || error?.transactionLogs || []).join("\n");
+    const logged = logs.match(/Error Message: (.+?)\.?$/m);
+    if (logged) return logged[1];
+
+    const code = this._extractProgramErrorCode(error, logs);
+    if (code === null) {
+      const message = error?.message || "";
+      if (/insufficient lamports|debit an account but found no record/i.test(message)) {
+        return "Not enough SOL in your wallet to pay the network fee";
+      }
+      if (/blockhash not found|block height exceeded/i.test(message)) {
+        return "The transaction expired before it was confirmed — please try again";
+      }
+      return null;
+    }
+
+    return PROGRAM_ERROR_MESSAGES[code - ANCHOR_FIRST_ERROR_CODE] || null;
+  }
+
+  _extractProgramErrorCode(error, logs) {
+    // confirmTransaction hands back the structured instruction error
+    const instructionError =
+      error?.InstructionError || error?.err?.InstructionError || null;
+    const custom = Array.isArray(instructionError) ? instructionError[1]?.Custom : null;
+    if (typeof custom === "number") return custom;
+
+    const haystack = `${error?.message || ""}\n${logs}`;
+    const hex = haystack.match(/custom program error: (0x[0-9a-fA-F]+)/);
+    if (hex) return parseInt(hex[1], 16);
+
+    const numbered = haystack.match(/Error Number: (\d+)/);
+    if (numbered) return parseInt(numbered[1], 10);
+
+    return null;
   }
 
   // ---- Wallet management ----
@@ -379,7 +488,7 @@ export class SolanaAdapter extends BlockchainAdapter {
   }
 
   async connect() {
-    if (!this.wallet) throw new Error("No Solana wallet available");
+    if (!this.wallet) throw this._userError("No Solana wallet available");
     await this.wallet.connect();
     this.userAddress = this.wallet.publicKey.toString();
     return this.userAddress;
@@ -458,7 +567,7 @@ export class SolanaAdapter extends BlockchainAdapter {
   // ---- Transaction helpers ----
 
   async sendTransaction(transaction) {
-    if (!this.wallet?.publicKey) throw new Error("Wallet not connected");
+    if (!this.wallet?.publicKey) throw this._userError("Wallet not connected");
     const { blockhash, lastValidBlockHeight } =
       await this.connection.getLatestBlockhash();
     transaction.recentBlockhash = blockhash;
@@ -857,7 +966,7 @@ export class SolanaAdapter extends BlockchainAdapter {
     // Limits arrive in business units (percent or token amounts); omitted
     // fields (undefined) keep their current on-chain value.
     const vault = await this.getVaultInfo(vaultAddress);
-    if (!vault) throw new Error("Vault not found");
+    if (!vault) throw this._userError("Vault not found");
     const pctMode = limitsArePercentage ?? vault.limitsArePercentage;
     if (
       pctMode !== vault.limitsArePercentage &&
@@ -865,7 +974,7 @@ export class SolanaAdapter extends BlockchainAdapter {
     ) {
       // Stored raw limits are meaningless under the other mode, so a mode
       // switch must respecify every limit
-      throw new Error("Provide daily, weekly and monthly limits when changing the limit type");
+      throw this._userError("Provide daily, weekly and monthly limits when changing the limit type");
     }
     const toRawLimit = (value) => {
       if (value == null) return undefined;
@@ -899,9 +1008,40 @@ export class SolanaAdapter extends BlockchainAdapter {
 
   async depositToVault(vaultAddress, amount) {
     const vault = await this.getVaultInfo(vaultAddress);
-    if (!vault) throw new Error("Vault not found");
+    if (!vault) throw this._userError("Vault not found");
+
+    await this._assertWalletBalance(vault, amount);
     if (vault.isNativeToken) return this.depositSol(vaultAddress, amount);
     return this.depositSpl(vaultAddress, vault.tokenMint, amount, vault.tokenDecimals);
+  }
+
+  /**
+   * What the connected wallet holds, as opposed to what it has saved — a
+   * deposit over that fails deep inside the transfer with a bare error code.
+   */
+  async _assertWalletBalance(vault, amount) {
+    const rawAmount = Math.round(amount * 10 ** vault.tokenDecimals);
+
+    let balance = 0;
+    if (vault.isNativeToken) {
+      balance = await this.connection.getBalance(this.wallet.publicKey);
+    } else {
+      const ata = await getAssociatedTokenAddress(
+        new PublicKey(vault.tokenMint),
+        this.wallet.publicKey
+      );
+      // No token account at all means nothing has ever arrived — balance zero
+      const account = await this.connection.getTokenAccountBalance(ata).catch(() => null);
+      balance = Number(account?.value?.amount || 0);
+    }
+
+    this._assertSufficientBalance(
+      rawAmount,
+      balance,
+      vault.tokenSymbol,
+      vault.tokenDecimals,
+      "your wallet"
+    );
   }
 
   async withdrawFromVault(vaultAddress, amount) {
@@ -918,10 +1058,10 @@ export class SolanaAdapter extends BlockchainAdapter {
 
   async _requireWithdrawableVault(vaultAddress, amount) {
     const vault = await this.getVaultInfo(vaultAddress);
-    if (!vault) throw new Error("Vault not found");
+    if (!vault) throw this._userError("Vault not found");
 
     const membership = await this.getVaultMemberInfo(vaultAddress);
-    if (!membership) throw new Error("You are not a member of this vault");
+    if (!membership) throw this._userError("You are not a member of this vault");
 
     this._assertSufficientBalance(
       Math.round(amount * 10 ** vault.tokenDecimals),
@@ -934,7 +1074,7 @@ export class SolanaAdapter extends BlockchainAdapter {
 
   async claimVaultPenaltyRewards(vaultAddress) {
     const vault = await this.getVaultInfo(vaultAddress);
-    if (!vault) throw new Error("Vault not found");
+    if (!vault) throw this._userError("Vault not found");
     return this.claimPenaltyRewards(
       vaultAddress,
       !vault.isNativeToken,

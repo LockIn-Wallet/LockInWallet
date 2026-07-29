@@ -131,21 +131,95 @@ export class BlockchainAdapter {
     throw new Error("Recovery protection is not available on this network yet");
   }
 
+  // ---- User-facing errors ----
+  //
+  // Raw chain failures are unreadable: EVM hands back a page-long ethers blob
+  // wrapped around a require() string, Solana hands back "custom program error:
+  // 0x1771". Nothing below the adapter should ever reach the UI untranslated.
+
+  /**
+   * Build an error whose message is written for the user. The flag stops any
+   * outer handler from re-wrapping it as if it were a raw chain failure.
+   */
+  _userError(message, cause) {
+    const error = new Error(message);
+    error.isUserFacing = true;
+    if (cause) error.cause = cause;
+    return error;
+  }
+
+  /**
+   * Turn any failure into something worth showing. Shared handling lives here;
+   * the chain-specific lookup is _chainErrorMessage() in the subclass.
+   */
+  _translateError(error, fallback = 'Transaction failed') {
+    if (error?.isUserFacing) return error;
+
+    if (this._isUserRejection(error)) {
+      return this._userError('Transaction cancelled in your wallet', error);
+    }
+
+    const known = this._chainErrorMessage(error);
+    if (known) return this._userError(known, error);
+
+    // Nothing matched — keep the fallback readable rather than dumping the
+    // full provider payload the user can't act on anyway.
+    const detail = error?.shortMessage || error?.reason || error?.message || String(error);
+    return this._userError(`${fallback}: ${detail}`, error);
+  }
+
+  _isUserRejection(error) {
+    const message = (error?.message || '').toLowerCase();
+    return (
+      error?.code === 4001 ||
+      error?.code === 'ACTION_REJECTED' ||
+      message.includes('user rejected') ||
+      message.includes('user denied') ||
+      message.includes('rejected the request')
+    );
+  }
+
+  /** Subclass hook: map a chain failure to a plain sentence, or null. */
+  _chainErrorMessage(error) {
+    return null;
+  }
+
+  /**
+   * Wrap the adapter's write methods so every failure leaves the adapter
+   * already translated. Subclasses call this once from their constructor with
+   * `{ methodName: fallbackMessage }` — a table beats a try/catch in each of
+   * the forty-odd write paths, and can't be forgotten when one is added.
+   */
+  _installErrorTranslation(fallbacks) {
+    for (const [method, fallback] of Object.entries(fallbacks)) {
+      const original = this[method];
+      if (typeof original !== 'function') continue;
+
+      this[method] = async (...args) => {
+        try {
+          return await original.apply(this, args);
+        } catch (error) {
+          throw this._translateError(error, fallback);
+        }
+      };
+    }
+  }
+
   /**
    * Withdrawals revert on-chain with a bare "Invalid amount" whenever the amount
    * is zero or exceeds the saved balance, which tells the user nothing — check
    * first and name the actual shortfall.
    */
-  _assertSufficientBalance(rawAmount, rawBalance, symbol, decimals) {
+  _assertSufficientBalance(rawAmount, rawBalance, symbol, decimals, location = 'your savings wallet') {
     const amount = BigInt(rawAmount);
-    if (amount <= 0n) throw new Error('Enter an amount greater than zero');
+    if (amount <= 0n) throw this._userError('Enter an amount greater than zero');
 
     const available = BigInt(rawBalance);
     if (amount <= available) return;
 
     const readable = parseFloat((Number(available) / 10 ** decimals).toFixed(decimals));
-    throw new Error(
-      `Not enough ${symbol} in your savings wallet — you have ${readable} ${symbol} available`
+    throw this._userError(
+      `Not enough ${symbol} in ${location} — you have ${readable} ${symbol} available`
     );
   }
 

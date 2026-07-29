@@ -7,6 +7,13 @@ import { SPENDING_PERIODS, getPeriodDuration } from "../utils/spendingPeriods.js
 const PERSONAL_VAULT_KEY = "personal_vault_address";
 const ACTIVE_VAULT_KEY = "active_vault_address";
 
+/** Drop the cached vault selection for one wallet (used when logging out). */
+export const clearVaultCache = (walletAddress) => {
+  if (!walletAddress) return;
+  localStorage.removeItem(`${PERSONAL_VAULT_KEY}_${walletAddress}`);
+  localStorage.removeItem(`${ACTIVE_VAULT_KEY}_${walletAddress}`);
+};
+
 export class TransactionManager {
   constructor() {
     this.adapter = null;
