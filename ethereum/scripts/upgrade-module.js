@@ -12,17 +12,17 @@ const MODULE_IDS = {
 };
 
 async function main() {
-  // Get command line arguments
-  const args = process.argv.slice(2);
-  if (args.length !== 2) {
-    console.log("Usage: npx hardhat run scripts/upgrade-module.js --network localhost <module-name> <core-address>");
+  // `hardhat run` swallows positional arguments (HH308), so the module and
+  // core come in through the environment instead.
+  const moduleName = process.env.MODULE;
+  const coreAddress = process.env.CORE;
+
+  if (!moduleName || !coreAddress) {
+    console.log("Usage: MODULE=<module-name> CORE=<core-address> npx hardhat run scripts/upgrade-module.js --network <network>");
     console.log("Available modules: TimePeriodLimitsModule, ProposalSystemModule, BypassSystemModule, ApprovalSystemModule");
-    console.log("Example: npx hardhat run scripts/upgrade-module.js --network localhost TimePeriodLimitsModule 0x1234...");
+    console.log("Example: MODULE=TimePeriodLimitsModule CORE=0x1234... npx hardhat run scripts/upgrade-module.js --network optimism");
     process.exit(1);
   }
-
-  const moduleName = args[0];
-  const coreAddress = args[1];
 
   if (!MODULE_IDS[moduleName]) {
     console.log(`❌ Unknown module: ${moduleName}`);
