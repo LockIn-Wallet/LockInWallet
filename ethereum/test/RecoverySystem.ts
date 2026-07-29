@@ -409,5 +409,73 @@ describe("RecoverySystemModule", function () {
       // Funds are safe on the fresh key
       expect(await savingsCore.getTokenBalance(newOwner.address, hre.ethers.ZeroAddress)).to.equal(depositAmount);
     });
+
+    it("Should carry the spending limits onto the recovered address", async function () {
+      const { savingsCore, timeLimitsModule, proposalModule, recoveryModule, user1, recoveryKey, newOwner } =
+        await loadFixture(deployWithRecoverySetFixture);
+
+      const dailyLimit = hre.ethers.parseUnits("1.0", 6);
+      await proposalModule
+        .connect(user1)
+        .commitSetupWithPeriods(["Daily"], [dailyLimit], [86400], [86400], hre.ethers.ZeroAddress);
+
+      await recoveryModule
+        .connect(recoveryKey)
+        .recoverOwnership(user1.address, newOwner.address, [hre.ethers.ZeroAddress]);
+
+      // Recovery replaces the key that controls the account — it is not a way
+      // out of the limits that account committed to
+      expect(await timeLimitsModule.findPeriodLimit(newOwner.address, "Daily")).to.equal(dailyLimit);
+      expect(await timeLimitsModule.getUnlockDelay(newOwner.address, "Daily")).to.equal(86400);
+      expect(await proposalModule.isSetupCommitted(newOwner.address)).to.be.true;
+
+      // The whole balance must not be withdrawable in one go
+      const balance = await savingsCore.getTokenBalance(newOwner.address, hre.ethers.ZeroAddress);
+      await expect(
+        savingsCore.connect(newOwner)["withdraw(uint256,address)"](balance, hre.ethers.ZeroAddress)
+      ).to.be.revertedWith("Exceeds limit");
+
+      // ...and the recovered address cannot simply overwrite the limit either
+      await expect(
+        timeLimitsModule
+          .connect(newOwner)
+          .setPeriodLimit(newOwner.address, "Daily", hre.ethers.parseUnits("999.0", 6), 86400, 86400)
+      ).to.be.revertedWith("Setup committed - use proposals");
+    });
+
+    it("Should carry the amount already spent, so recovery cannot reset a used-up window", async function () {
+      const { savingsCore, timeLimitsModule, proposalModule, recoveryModule, user1, recoveryKey, newOwner } =
+        await loadFixture(deployWithRecoverySetFixture);
+
+      const dailyLimit = hre.ethers.parseEther("1.0");
+      await proposalModule
+        .connect(user1)
+        .commitSetupWithPeriods(["Daily"], [dailyLimit], [86400], [86400], hre.ethers.ZeroAddress);
+
+      // Use the whole daily allowance before recovering
+      await savingsCore.connect(user1)["withdraw(uint256,address)"](dailyLimit, hre.ethers.ZeroAddress);
+
+      await recoveryModule
+        .connect(recoveryKey)
+        .recoverOwnership(user1.address, newOwner.address, [hre.ethers.ZeroAddress]);
+
+      const spent = (await timeLimitsModule.getTimePeriodLimit(newOwner.address, "Daily")).spent;
+      expect(spent).to.equal(dailyLimit);
+      await expect(
+        savingsCore.connect(newOwner)["withdraw(uint256,address)"](1n, hre.ethers.ZeroAddress)
+      ).to.be.revertedWith("Exceeds limit");
+    });
+
+    it("Should not let anyone but a registered module migrate spending rules", async function () {
+      const { timeLimitsModule, proposalModule, user1, attackerKey, newOwner } =
+        await loadFixture(deployWithRecoverySetFixture);
+
+      await expect(
+        timeLimitsModule.connect(attackerKey).migratePeriodsTo(user1.address, newOwner.address)
+      ).to.be.revertedWith("Not authorized");
+      await expect(
+        proposalModule.connect(attackerKey).migrateSetupTo(user1.address, newOwner.address)
+      ).to.be.revertedWith("Not authorized");
+    });
   });
 });

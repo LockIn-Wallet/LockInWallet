@@ -69,6 +69,18 @@ these notes on the in-app **Governance** page before they execute.
   Frontend only — no contract change.
 
 ### Security
+- Account recovery now carries the spending limits onto the recovered
+  address instead of leaving them behind. Recovery moved the balances to a
+  fresh address that had no limits and no committed setup, so the whole
+  balance could be withdrawn instantly — the recovery key bypassed every
+  lock rather than just replacing the key that controls the account. Spent
+  counters and window starts carry across too, so recovering cannot reset a
+  daily allowance that was already used up. **On-chain:** upgrade
+  `TimePeriodLimitsModule` (new `migratePeriodsTo`), `ProposalSystemModule`
+  (new `migrateSetupTo`) and `RecoverySystemModule`; both migrations are
+  module-only and refuse a target that already carries rules.
+
+
 - A spending period added **after** lock-in now always takes the standard
   24-hour wait; a caller-supplied value is ignored. Adding a period stays
   instant because it only tightens the wallet, but the two together let

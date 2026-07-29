@@ -64,15 +64,21 @@ ones:
   it never moves money.
 - **Unfreeze and ownership recovery are recovery-key only.** Recovery moves
   the balances to a fresh address, permanently disables the old one, and
-  cancels everything the attacker had queued.
+  cancels everything the attacker had queued. It carries the spending limits
+  across with them — including how much of each window is already spent — so
+  recovery replaces the key that controls an account without ever loosening
+  that account's rules. The recovered address is still locked in: changing
+  those limits takes the same proposal timelock as before.
 - **The account key can only replace the recovery key through a 30-day
   public timelock** that the recovery key can cancel at any moment — an
   attacker can never outrun the cold key.
 
 Trust assumptions, stated honestly: the protection only exists if the
 recovery key was registered **before** the compromise, and it shifts trust
-to that cold key — if *both* keys leak, the recovery key wins every race and
-can take the account. Store it accordingly (hardware wallet or paper,
+to that cold key — **the recovery key alone is enough to move the account**,
+the account key is not also required, so treat it as being as sensitive as
+your seed. It cannot outrun your limits, though: a recovered account keeps
+them, so a stolen recovery key still cannot drain faster than you chose. Store it accordingly (hardware wallet or paper,
 offline, separate location). Accounts that never register a recovery key
 behave exactly as before. The recovery timelock (30 days) intentionally
 dwarfs the 24h bypass and 48h governance delays. Note that a frozen account

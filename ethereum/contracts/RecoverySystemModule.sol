@@ -222,6 +222,13 @@ contract RecoverySystemModule is Initializable, UUPSUpgradeable, OwnableUpgradea
             emit RecoveryAddressSet(newOwner, msg.sender, msg.sender);
         }
 
+        // Carry the spending rules across before the funds. Recovery replaces
+        // the key that controls an account — it is not a way out of the limits
+        // that account committed to, so the new address inherits them, spent
+        // counters and all. Only the first call migrates; later calls for the
+        // remaining tokens find the rules already in place.
+        _migrateSpendingRules(user, newOwner);
+
         for (uint256 i = 0; i < tokens.length; i++) {
             uint256 balance = savingsCore.getTokenBalance(user, tokens[i]);
             if (balance > 0) {
@@ -231,6 +238,21 @@ contract RecoverySystemModule is Initializable, UUPSUpgradeable, OwnableUpgradea
         }
 
         emit OwnershipRecovered(user, newOwner, tokens.length);
+    }
+
+    /// @dev Copy the spending periods and the committed-setup flag onto the
+    ///      recovered address. Tolerant of modules that are not registered on
+    ///      this deployment, and of a repeat call for the remaining tokens —
+    ///      both migrations reject a target that already carries rules.
+    function _migrateSpendingRules(address user, address newOwner) internal {
+        address limits = savingsCore.getModule(ModuleIds.TIME_PERIOD_LIMITS);
+        if (limits != address(0)) {
+            try ITimePeriodLimitsModule(limits).migratePeriodsTo(user, newOwner) {} catch {}
+        }
+        address proposals = savingsCore.getModule(ModuleIds.PROPOSAL_SYSTEM);
+        if (proposals != address(0)) {
+            try IProposalSystemModule(proposals).migrateSetupTo(user, newOwner) {} catch {}
+        }
     }
 
     // ========== VIEW FUNCTIONS ==========

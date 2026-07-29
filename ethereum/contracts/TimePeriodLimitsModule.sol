@@ -193,6 +193,38 @@ contract TimePeriodLimitsModule is Initializable, UUPSUpgradeable, OwnableUpgrad
         }
     }
 
+    /// @notice Copy every spending period, including how much is already spent
+    ///         in the current window, onto another address.
+    /// @dev Used by account recovery: moving the balances to a fresh address
+    ///      must not hand that address an unlimited wallet. Spent counters and
+    ///      window starts carry over deliberately — otherwise recovering would
+    ///      reset a limit that was already used up this period.
+    function migratePeriodsTo(address from, address to) external onlyAuthorized {
+        require(to != address(0) && to != from, "Invalid target");
+        UserSpendingLimits storage source = userSpendingLimits[from];
+        UserSpendingLimits storage target = userSpendingLimits[to];
+        require(target.periods.length == 0, "Target already has limits");
+
+        for (uint256 i = 0; i < source.periods.length; i++) {
+            TimePeriodLimit storage period = source.periods[i];
+            target.periods.push(TimePeriodLimit({
+                limit: period.limit,
+                spent: period.spent,
+                lastReset: period.lastReset,
+                duration: period.duration,
+                name: period.name,
+                active: period.active
+            }));
+            target.periodIndexes[period.name] = target.periods.length - 1;
+
+            bytes32 nameHash = keccak256(bytes(period.name));
+            periodUnlockDelays[to][nameHash] = periodUnlockDelays[from][nameHash];
+        }
+        target.periodCount = source.periodCount;
+
+        emit PeriodsMigrated(from, to, source.periods.length);
+    }
+
     // ========== UNLOCK DELAYS ==========
 
     /// @notice How long a bypass request or limit-change proposal for this

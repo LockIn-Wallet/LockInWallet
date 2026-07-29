@@ -114,6 +114,7 @@ interface ITimePeriodLimitsModule {
     // Unlock delays — how long a bypass request or limit-change proposal must
     // wait before it can be executed, tuned per period
     function getUnlockDelay(address user, string calldata periodName) external view returns (uint256);
+    function migratePeriodsTo(address from, address to) external;
     function setUnlockDelay(address user, string calldata periodName, uint256 unlockDelay) external;
     function validateUnlockDelay(uint256 unlockDelay) external pure;
 
@@ -149,6 +150,7 @@ interface ITimePeriodLimitsModule {
     event CategorySet(address indexed user, string category, uint256 limit, uint256 period);
     event CategoryDeleted(address indexed user, string category);
     event UnlockDelaySet(address indexed user, string category, uint256 unlockDelay);
+    event PeriodsMigrated(address indexed from, address indexed to, uint256 periodCount);
 }
 
 interface IProposalSystemModule {
@@ -171,6 +173,7 @@ interface IProposalSystemModule {
         address referrer
     ) external;
     function recalculateTotalLockedValue(address user) external;
+    function migrateSetupTo(address from, address to) external;
     function setTimePeriodLimitsModule(address _timePeriodLimitsModule) external;
     function setReferralModule(address _referralModule) external;
 

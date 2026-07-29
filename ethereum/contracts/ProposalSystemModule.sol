@@ -320,6 +320,25 @@ contract ProposalSystemModule is Initializable, UUPSUpgradeable, OwnableUpgradea
         emit SetupCommitted(user, block.timestamp);
     }
 
+    /// @notice Carry the committed-setup state onto another address.
+    /// @dev Used by account recovery alongside migratePeriodsTo. Without it the
+    ///      recovered address would count as never having locked in, so its
+    ///      limits could be overwritten instantly instead of through proposals.
+    function migrateSetupTo(address from, address to) external onlyAuthorized {
+        require(to != address(0) && to != from, "Invalid target");
+        UserSetupData storage source = userSetupData[from];
+        UserSetupData storage target = userSetupData[to];
+        require(!target.hasCommittedSetup, "Target already committed");
+
+        target.hasCommittedSetup = source.hasCommittedSetup;
+        target.totalLockedValue = source.totalLockedValue;
+        target.commitTimestamp = source.commitTimestamp;
+        target.lastIncreaseTimestamp = source.lastIncreaseTimestamp;
+        target.increasesInPeriod = source.increasesInPeriod;
+
+        emit SetupCommitted(to, source.commitTimestamp);
+    }
+
     function recalculateTotalLockedValue(address user) external onlyAuthorizedOrSelf(user) {
         UserSetupData storage userData = userSetupData[user];
         require(userData.hasCommittedSetup, "Setup not committed yet");

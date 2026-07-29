@@ -14,6 +14,10 @@ export const RELEASE_NOTES = [
     title: "A home page you can check",
     highlights: [
       {
+        emoji: "🛟",
+        text: "Recovering your account to a new address now brings your spending limits with it. Before, recovery handed the new address the money with no limits at all — so a stolen recovery key could empty everything at once. Now the new address inherits the same limits, including how much you have already spent today, and changing them still takes the same waiting period.",
+      },
+      {
         emoji: "🗓️",
         text: "You can now cap your spending over a year, not just a day, a week or a month — and an hourly cap is there too if you want one. Set as many as you like; a shorter period can never allow more than a longer one.",
       },
