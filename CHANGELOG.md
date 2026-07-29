@@ -69,6 +69,14 @@ these notes on the in-app **Governance** page before they execute.
   Frontend only — no contract change.
 
 ### Security
+- Removing a spending limit now serves that period's unlock delay instead of
+  executing immediately. `proposeLimitRemoval` wrote an `executeAfter` of
+  `block.timestamp`, so the timelock check in `executeLimitProposal` could
+  never fail — anyone holding the account key could strip every limit in two
+  transactions and drain the account, defeating the whole point of locking
+  in. Its sibling `proposeLimitChange` had always set a real delay.
+  **On-chain:** upgrade `ProposalSystemModule` in place; no storage change.
+
 - Account recovery now carries the spending limits onto the recovered
   address instead of leaving them behind. Recovery moved the balances to a
   fresh address that had no limits and no committed setup, so the whole

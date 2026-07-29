@@ -362,6 +362,60 @@ describe("Per-period unlock delays", function () {
     });
   });
 
+  describe("Removing a limit", function () {
+    async function committedFixture() {
+      const ctx = await loadFixture(deployFixture);
+      const { names, limits, durations, unlockDelays } = fullPeriodSet();
+      await ctx.proposalModule
+        .connect(ctx.user1)
+        .commitSetupWithPeriods(names, limits, durations, unlockDelays, hre.ethers.ZeroAddress);
+      return ctx;
+    }
+
+    it("waits the period's own delay, rather than executing immediately", async function () {
+      const { proposalModule, timeLimitsModule, user1 } = await committedFixture();
+
+      const tx = await proposalModule.connect(user1).proposeLimitRemoval(user1.address, "Weekly");
+      const proposedAt = await blockTimeOf(tx);
+      const { id, executeAfter } = await latestProposal(proposalModule, user1.address);
+      expect(executeAfter).to.equal(BigInt(proposedAt + WEEK));
+
+      await expect(
+        proposalModule.connect(user1).executeLimitProposal(user1.address, id),
+      ).to.be.revertedWith("Still in timelock");
+      expect(await timeLimitsModule.findPeriodLimit(user1.address, "Weekly")).to.be.gt(0);
+
+      await time.increase(WEEK + 60);
+      await proposalModule.connect(user1).executeLimitProposal(user1.address, id);
+      expect(await timeLimitsModule.findPeriodLimit(user1.address, "Weekly")).to.equal(0);
+    });
+
+    it("cannot strip every limit in one go and drain the account", async function () {
+      const { savingsCore, proposalModule, timeLimitsModule, user1 } = await committedFixture();
+      const { names } = fullPeriodSet();
+
+      // A stolen key proposing removal of everything it can
+      for (const period of names) {
+        await proposalModule.connect(user1).proposeLimitRemoval(user1.address, period);
+      }
+      const [ids] = await proposalModule.getUserPendingProposals(user1.address);
+      for (const id of ids) {
+        await expect(
+          proposalModule.connect(user1).executeLimitProposal(user1.address, id),
+        ).to.be.revertedWith("Still in timelock");
+      }
+
+      // Every limit is still standing, so the balance is not drainable
+      for (const period of names) {
+        expect(await timeLimitsModule.findPeriodLimit(user1.address, period)).to.be.gt(0);
+      }
+      const balance = await savingsCore.getTokenBalance(user1.address, hre.ethers.ZeroAddress);
+      await expect(
+        savingsCore.connect(user1)["withdraw(uint256,address)"](balance, hre.ethers.ZeroAddress),
+      ).to.be.revertedWith("Exceeds limit");
+    });
+  });
+
   describe("Changing the wait itself", function () {
     async function committedFixture() {
       const ctx = await loadFixture(deployFixture);

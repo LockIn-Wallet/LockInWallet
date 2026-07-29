@@ -14,6 +14,10 @@ export const RELEASE_NOTES = [
     title: "A home page you can check",
     highlights: [
       {
+        emoji: "🔐",
+        text: "Removing a spending limit now waits, exactly like changing one does. It used to take effect the moment you asked — which meant anyone who got hold of your wallet key could delete every limit and empty the account in two steps. Now a removal sits in the open for that limit's waiting period, where you can see it and cancel it.",
+      },
+      {
         emoji: "🛟",
         text: "Recovering your account to a new address now brings your spending limits with it. Before, recovery handed the new address the money with no limits at all — so a stolen recovery key could empty everything at once. Now the new address inherits the same limits, including how much you have already spent today, and changing them still takes the same waiting period.",
       },

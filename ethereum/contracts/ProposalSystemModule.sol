@@ -176,10 +176,16 @@ contract ProposalSystemModule is Initializable, UUPSUpgradeable, OwnableUpgradea
         proposalId = keccak256(abi.encodePacked(user, periodName, uint256(0), block.timestamp, "REMOVE"));
         require(!userProposals[user][proposalId].exists, "Proposal already exists");
 
+        // Removing a limit loosens the wallet, so it serves the period's own
+        // wait like every other loosening change. This used to execute
+        // immediately — the field was written but set to a value the timelock
+        // check could never fail — which let anyone holding the key strip
+        // every limit in two transactions and drain the account.
+        uint256 executeAfter = _executeAfter(user, periodName);
         userProposals[user][proposalId] = CategoryUpdateProposal({
             category: periodName,
             newLimit: 0,
-            executeAfter: block.timestamp,
+            executeAfter: executeAfter,
             executed: false,
             isIncrease: false,
             exists: true,
@@ -190,7 +196,7 @@ contract ProposalSystemModule is Initializable, UUPSUpgradeable, OwnableUpgradea
         // Add to proposal tracking
         userProposalIds[user].push(proposalId);
 
-        emit CategoryIncreaseProposed(user, periodName, 0, block.timestamp, proposalId);
+        emit CategoryIncreaseProposed(user, periodName, 0, executeAfter, proposalId);
         return proposalId;
     }
 
