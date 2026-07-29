@@ -5316,7 +5316,7 @@
             "label": "savingsCore",
             "offset": 0,
             "slot": "0",
-            "type": "t_contract(ISavingsCore)11339",
+            "type": "t_contract(ISavingsCore)11756",
             "contract": "RecoverySystemModule",
             "src": "contracts/RecoverySystemModule.sol:36"
           },
@@ -5324,7 +5324,7 @@
             "label": "userRecovery",
             "offset": 0,
             "slot": "1",
-            "type": "t_mapping(t_address,t_struct(RecoveryConfig)7525_storage)",
+            "type": "t_mapping(t_address,t_struct(RecoveryConfig)7829_storage)",
             "contract": "RecoverySystemModule",
             "src": "contracts/RecoverySystemModule.sol:38"
           },
@@ -5332,7 +5332,7 @@
             "label": "pendingKeyChanges",
             "offset": 0,
             "slot": "2",
-            "type": "t_mapping(t_address,t_struct(RecoveryKeyChangeRequest)7532_storage)",
+            "type": "t_mapping(t_address,t_struct(RecoveryKeyChangeRequest)7836_storage)",
             "contract": "RecoverySystemModule",
             "src": "contracts/RecoverySystemModule.sol:39"
           },
@@ -5388,7 +5388,7 @@
             "label": "uint64",
             "numberOfBytes": "8"
           },
-          "t_contract(ISavingsCore)11339": {
+          "t_contract(ISavingsCore)11756": {
             "label": "contract ISavingsCore",
             "numberOfBytes": "20"
           },
@@ -5396,15 +5396,15 @@
             "label": "mapping(address => address)",
             "numberOfBytes": "32"
           },
-          "t_mapping(t_address,t_struct(RecoveryConfig)7525_storage)": {
+          "t_mapping(t_address,t_struct(RecoveryConfig)7829_storage)": {
             "label": "mapping(address => struct RecoverySystemModule.RecoveryConfig)",
             "numberOfBytes": "32"
           },
-          "t_mapping(t_address,t_struct(RecoveryKeyChangeRequest)7532_storage)": {
+          "t_mapping(t_address,t_struct(RecoveryKeyChangeRequest)7836_storage)": {
             "label": "mapping(address => struct RecoverySystemModule.RecoveryKeyChangeRequest)",
             "numberOfBytes": "32"
           },
-          "t_struct(RecoveryConfig)7525_storage": {
+          "t_struct(RecoveryConfig)7829_storage": {
             "label": "struct RecoverySystemModule.RecoveryConfig",
             "members": [
               {
@@ -5428,7 +5428,7 @@
             ],
             "numberOfBytes": "32"
           },
-          "t_struct(RecoveryKeyChangeRequest)7532_storage": {
+          "t_struct(RecoveryKeyChangeRequest)7836_storage": {
             "label": "struct RecoverySystemModule.RecoveryKeyChangeRequest",
             "members": [
               {
@@ -6005,7 +6005,7 @@
             "label": "savingsCore",
             "offset": 0,
             "slot": "0",
-            "type": "t_contract(ISavingsCore)11756",
+            "type": "t_contract(ISavingsCore)11935",
             "contract": "BypassSystemModule",
             "src": "contracts/BypassSystemModule.sol:11"
           },
@@ -6013,7 +6013,7 @@
             "label": "timePeriodLimitsModule",
             "offset": 0,
             "slot": "1",
-            "type": "t_contract(ITimePeriodLimitsModule)10552",
+            "type": "t_contract(ITimePeriodLimitsModule)10724",
             "contract": "BypassSystemModule",
             "src": "contracts/BypassSystemModule.sol:14"
           },
@@ -6021,7 +6021,7 @@
             "label": "userBypassRequests",
             "offset": 0,
             "slot": "2",
-            "type": "t_mapping(t_address,t_mapping(t_bytes32,t_struct(BypassRequest)10262_storage))",
+            "type": "t_mapping(t_address,t_mapping(t_bytes32,t_struct(BypassRequest)10419_storage))",
             "contract": "BypassSystemModule",
             "src": "contracts/BypassSystemModule.sol:17"
           },
@@ -6101,11 +6101,11 @@
             "label": "bytes32",
             "numberOfBytes": "32"
           },
-          "t_contract(ISavingsCore)11756": {
+          "t_contract(ISavingsCore)11935": {
             "label": "contract ISavingsCore",
             "numberOfBytes": "20"
           },
-          "t_contract(ITimePeriodLimitsModule)10552": {
+          "t_contract(ITimePeriodLimitsModule)10724": {
             "label": "contract ITimePeriodLimitsModule",
             "numberOfBytes": "20"
           },
@@ -6113,11 +6113,11 @@
             "label": "mapping(address => bytes32[])",
             "numberOfBytes": "32"
           },
-          "t_mapping(t_address,t_mapping(t_bytes32,t_struct(BypassRequest)10262_storage))": {
+          "t_mapping(t_address,t_mapping(t_bytes32,t_struct(BypassRequest)10419_storage))": {
             "label": "mapping(address => mapping(bytes32 => struct BypassRequest))",
             "numberOfBytes": "32"
           },
-          "t_mapping(t_bytes32,t_struct(BypassRequest)10262_storage)": {
+          "t_mapping(t_bytes32,t_struct(BypassRequest)10419_storage)": {
             "label": "mapping(bytes32 => struct BypassRequest)",
             "numberOfBytes": "32"
           },
@@ -6125,7 +6125,7 @@
             "label": "string",
             "numberOfBytes": "32"
           },
-          "t_struct(BypassRequest)10262_storage": {
+          "t_struct(BypassRequest)10419_storage": {
             "label": "struct BypassRequest",
             "members": [
               {
@@ -6166,6 +6166,703 @@
               }
             ],
             "numberOfBytes": "160"
+          },
+          "t_uint256": {
+            "label": "uint256",
+            "numberOfBytes": "32"
+          }
+        },
+        "namespaces": {
+          "erc7201:openzeppelin.storage.Ownable": [
+            {
+              "contract": "OwnableUpgradeable",
+              "label": "_owner",
+              "type": "t_address",
+              "src": "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol:24",
+              "offset": 0,
+              "slot": "0"
+            }
+          ],
+          "erc7201:openzeppelin.storage.Initializable": [
+            {
+              "contract": "Initializable",
+              "label": "_initialized",
+              "type": "t_uint64",
+              "src": "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol:69",
+              "offset": 0,
+              "slot": "0"
+            },
+            {
+              "contract": "Initializable",
+              "label": "_initializing",
+              "type": "t_bool",
+              "src": "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol:73",
+              "offset": 8,
+              "slot": "0"
+            }
+          ]
+        }
+      }
+    },
+    "396c4786dbd3107a0baf5b7577fe22627ac9bede8664d14d9aea9d932a4a385e": {
+      "address": "0x10350707b19465c2aE1f16Def43eA897780eBc31",
+      "txHash": "0xa549755b30396f00c8b5f879c730bb32dbb6dd3ea0d3242d701c2a356b792b7d",
+      "layout": {
+        "solcVersion": "0.8.28",
+        "storage": [
+          {
+            "label": "savingsCore",
+            "offset": 0,
+            "slot": "0",
+            "type": "t_contract(ISavingsCore)11935",
+            "contract": "TimePeriodLimitsModule",
+            "src": "contracts/TimePeriodLimitsModule.sol:10"
+          },
+          {
+            "label": "userSpendingLimits",
+            "offset": 0,
+            "slot": "1",
+            "type": "t_mapping(t_address,t_struct(UserSpendingLimits)10389_storage)",
+            "contract": "TimePeriodLimitsModule",
+            "src": "contracts/TimePeriodLimitsModule.sol:13"
+          },
+          {
+            "label": "migrationComplete",
+            "offset": 0,
+            "slot": "2",
+            "type": "t_bool",
+            "contract": "TimePeriodLimitsModule",
+            "src": "contracts/TimePeriodLimitsModule.sol:16"
+          },
+          {
+            "label": "proposalSystemModule",
+            "offset": 1,
+            "slot": "2",
+            "type": "t_contract(IProposalSystemModule)10967",
+            "contract": "TimePeriodLimitsModule",
+            "src": "contracts/TimePeriodLimitsModule.sol:20"
+          },
+          {
+            "label": "periodUnlockDelays",
+            "offset": 0,
+            "slot": "3",
+            "type": "t_mapping(t_address,t_mapping(t_bytes32,t_uint256))",
+            "contract": "TimePeriodLimitsModule",
+            "src": "contracts/TimePeriodLimitsModule.sol:29"
+          }
+        ],
+        "types": {
+          "t_address": {
+            "label": "address",
+            "numberOfBytes": "20"
+          },
+          "t_bool": {
+            "label": "bool",
+            "numberOfBytes": "1"
+          },
+          "t_struct(InitializableStorage)73_storage": {
+            "label": "struct Initializable.InitializableStorage",
+            "members": [
+              {
+                "label": "_initialized",
+                "type": "t_uint64",
+                "offset": 0,
+                "slot": "0"
+              },
+              {
+                "label": "_initializing",
+                "type": "t_bool",
+                "offset": 8,
+                "slot": "0"
+              }
+            ],
+            "numberOfBytes": "32"
+          },
+          "t_struct(OwnableStorage)13_storage": {
+            "label": "struct OwnableUpgradeable.OwnableStorage",
+            "members": [
+              {
+                "label": "_owner",
+                "type": "t_address",
+                "offset": 0,
+                "slot": "0"
+              }
+            ],
+            "numberOfBytes": "32"
+          },
+          "t_uint64": {
+            "label": "uint64",
+            "numberOfBytes": "8"
+          },
+          "t_array(t_struct(TimePeriodLimit)10378_storage)dyn_storage": {
+            "label": "struct TimePeriodLimit[]",
+            "numberOfBytes": "32"
+          },
+          "t_bytes32": {
+            "label": "bytes32",
+            "numberOfBytes": "32"
+          },
+          "t_contract(IProposalSystemModule)10967": {
+            "label": "contract IProposalSystemModule",
+            "numberOfBytes": "20"
+          },
+          "t_contract(ISavingsCore)11935": {
+            "label": "contract ISavingsCore",
+            "numberOfBytes": "20"
+          },
+          "t_mapping(t_address,t_mapping(t_bytes32,t_uint256))": {
+            "label": "mapping(address => mapping(bytes32 => uint256))",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_address,t_struct(UserSpendingLimits)10389_storage)": {
+            "label": "mapping(address => struct UserSpendingLimits)",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_bytes32,t_uint256)": {
+            "label": "mapping(bytes32 => uint256)",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_string_memory_ptr,t_uint256)": {
+            "label": "mapping(string => uint256)",
+            "numberOfBytes": "32"
+          },
+          "t_string_memory_ptr": {
+            "label": "string",
+            "numberOfBytes": "32"
+          },
+          "t_string_storage": {
+            "label": "string",
+            "numberOfBytes": "32"
+          },
+          "t_struct(TimePeriodLimit)10378_storage": {
+            "label": "struct TimePeriodLimit",
+            "members": [
+              {
+                "label": "limit",
+                "type": "t_uint256",
+                "offset": 0,
+                "slot": "0"
+              },
+              {
+                "label": "spent",
+                "type": "t_uint256",
+                "offset": 0,
+                "slot": "1"
+              },
+              {
+                "label": "lastReset",
+                "type": "t_uint256",
+                "offset": 0,
+                "slot": "2"
+              },
+              {
+                "label": "duration",
+                "type": "t_uint256",
+                "offset": 0,
+                "slot": "3"
+              },
+              {
+                "label": "name",
+                "type": "t_string_storage",
+                "offset": 0,
+                "slot": "4"
+              },
+              {
+                "label": "active",
+                "type": "t_bool",
+                "offset": 0,
+                "slot": "5"
+              }
+            ],
+            "numberOfBytes": "192"
+          },
+          "t_struct(UserSpendingLimits)10389_storage": {
+            "label": "struct UserSpendingLimits",
+            "members": [
+              {
+                "label": "periods",
+                "type": "t_array(t_struct(TimePeriodLimit)10378_storage)dyn_storage",
+                "offset": 0,
+                "slot": "0"
+              },
+              {
+                "label": "periodIndexes",
+                "type": "t_mapping(t_string_memory_ptr,t_uint256)",
+                "offset": 0,
+                "slot": "1"
+              },
+              {
+                "label": "periodCount",
+                "type": "t_uint256",
+                "offset": 0,
+                "slot": "2"
+              }
+            ],
+            "numberOfBytes": "96"
+          },
+          "t_uint256": {
+            "label": "uint256",
+            "numberOfBytes": "32"
+          }
+        },
+        "namespaces": {
+          "erc7201:openzeppelin.storage.Ownable": [
+            {
+              "contract": "OwnableUpgradeable",
+              "label": "_owner",
+              "type": "t_address",
+              "src": "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol:24",
+              "offset": 0,
+              "slot": "0"
+            }
+          ],
+          "erc7201:openzeppelin.storage.Initializable": [
+            {
+              "contract": "Initializable",
+              "label": "_initialized",
+              "type": "t_uint64",
+              "src": "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol:69",
+              "offset": 0,
+              "slot": "0"
+            },
+            {
+              "contract": "Initializable",
+              "label": "_initializing",
+              "type": "t_bool",
+              "src": "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol:73",
+              "offset": 8,
+              "slot": "0"
+            }
+          ]
+        }
+      }
+    },
+    "f6f494c8a6a2b295e18b2e4ec5e76bec11146845563a16d736760004178c5c8c": {
+      "address": "0xa41248988cC85454BEE5a93010a6563f55f595E1",
+      "txHash": "0x5769349378527dd9e75756e52db75f95fa51ba8c968417ad42e18d3d3141c876",
+      "layout": {
+        "solcVersion": "0.8.28",
+        "storage": [
+          {
+            "label": "savingsCore",
+            "offset": 0,
+            "slot": "0",
+            "type": "t_contract(ISavingsCore)4836",
+            "contract": "ProposalSystemModule",
+            "src": "contracts/ProposalSystemModule.sol:10"
+          },
+          {
+            "label": "timePeriodLimitsModule",
+            "offset": 0,
+            "slot": "1",
+            "type": "t_contract(ITimePeriodLimitsModule)3625",
+            "contract": "ProposalSystemModule",
+            "src": "contracts/ProposalSystemModule.sol:13"
+          },
+          {
+            "label": "userSetupData",
+            "offset": 0,
+            "slot": "2",
+            "type": "t_mapping(t_address,t_struct(UserSetupData)3406_storage)",
+            "contract": "ProposalSystemModule",
+            "src": "contracts/ProposalSystemModule.sol:16"
+          },
+          {
+            "label": "userProposals",
+            "offset": 0,
+            "slot": "3",
+            "type": "t_mapping(t_address,t_mapping(t_bytes32,t_struct(CategoryUpdateProposal)3307_storage))",
+            "contract": "ProposalSystemModule",
+            "src": "contracts/ProposalSystemModule.sol:17"
+          },
+          {
+            "label": "userProposalIds",
+            "offset": 0,
+            "slot": "4",
+            "type": "t_mapping(t_address,t_array(t_bytes32)dyn_storage)",
+            "contract": "ProposalSystemModule",
+            "src": "contracts/ProposalSystemModule.sol:20"
+          },
+          {
+            "label": "migrationComplete",
+            "offset": 0,
+            "slot": "5",
+            "type": "t_bool",
+            "contract": "ProposalSystemModule",
+            "src": "contracts/ProposalSystemModule.sol:23"
+          },
+          {
+            "label": "referralModule",
+            "offset": 1,
+            "slot": "5",
+            "type": "t_contract(IReferralModule)4655",
+            "contract": "ProposalSystemModule",
+            "src": "contracts/ProposalSystemModule.sol:26"
+          }
+        ],
+        "types": {
+          "t_address": {
+            "label": "address",
+            "numberOfBytes": "20"
+          },
+          "t_bool": {
+            "label": "bool",
+            "numberOfBytes": "1"
+          },
+          "t_struct(InitializableStorage)73_storage": {
+            "label": "struct Initializable.InitializableStorage",
+            "members": [
+              {
+                "label": "_initialized",
+                "type": "t_uint64",
+                "offset": 0,
+                "slot": "0"
+              },
+              {
+                "label": "_initializing",
+                "type": "t_bool",
+                "offset": 8,
+                "slot": "0"
+              }
+            ],
+            "numberOfBytes": "32"
+          },
+          "t_struct(OwnableStorage)13_storage": {
+            "label": "struct OwnableUpgradeable.OwnableStorage",
+            "members": [
+              {
+                "label": "_owner",
+                "type": "t_address",
+                "offset": 0,
+                "slot": "0"
+              }
+            ],
+            "numberOfBytes": "32"
+          },
+          "t_uint64": {
+            "label": "uint64",
+            "numberOfBytes": "8"
+          },
+          "t_array(t_bytes32)dyn_storage": {
+            "label": "bytes32[]",
+            "numberOfBytes": "32"
+          },
+          "t_bytes32": {
+            "label": "bytes32",
+            "numberOfBytes": "32"
+          },
+          "t_contract(IReferralModule)4655": {
+            "label": "contract IReferralModule",
+            "numberOfBytes": "20"
+          },
+          "t_contract(ISavingsCore)4836": {
+            "label": "contract ISavingsCore",
+            "numberOfBytes": "20"
+          },
+          "t_contract(ITimePeriodLimitsModule)3625": {
+            "label": "contract ITimePeriodLimitsModule",
+            "numberOfBytes": "20"
+          },
+          "t_mapping(t_address,t_array(t_bytes32)dyn_storage)": {
+            "label": "mapping(address => bytes32[])",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_address,t_mapping(t_bytes32,t_struct(CategoryUpdateProposal)3307_storage))": {
+            "label": "mapping(address => mapping(bytes32 => struct CategoryUpdateProposal))",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_address,t_struct(UserSetupData)3406_storage)": {
+            "label": "mapping(address => struct UserSetupData)",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_bytes32,t_struct(CategoryUpdateProposal)3307_storage)": {
+            "label": "mapping(bytes32 => struct CategoryUpdateProposal)",
+            "numberOfBytes": "32"
+          },
+          "t_string_storage": {
+            "label": "string",
+            "numberOfBytes": "32"
+          },
+          "t_struct(CategoryUpdateProposal)3307_storage": {
+            "label": "struct CategoryUpdateProposal",
+            "members": [
+              {
+                "label": "category",
+                "type": "t_string_storage",
+                "offset": 0,
+                "slot": "0"
+              },
+              {
+                "label": "newLimit",
+                "type": "t_uint256",
+                "offset": 0,
+                "slot": "1"
+              },
+              {
+                "label": "executeAfter",
+                "type": "t_uint256",
+                "offset": 0,
+                "slot": "2"
+              },
+              {
+                "label": "executed",
+                "type": "t_bool",
+                "offset": 0,
+                "slot": "3"
+              },
+              {
+                "label": "isIncrease",
+                "type": "t_bool",
+                "offset": 1,
+                "slot": "3"
+              },
+              {
+                "label": "exists",
+                "type": "t_bool",
+                "offset": 2,
+                "slot": "3"
+              },
+              {
+                "label": "isDelayChange",
+                "type": "t_bool",
+                "offset": 3,
+                "slot": "3"
+              },
+              {
+                "label": "newUnlockDelay",
+                "type": "t_uint256",
+                "offset": 0,
+                "slot": "4"
+              }
+            ],
+            "numberOfBytes": "160"
+          },
+          "t_struct(UserSetupData)3406_storage": {
+            "label": "struct UserSetupData",
+            "members": [
+              {
+                "label": "hasCommittedSetup",
+                "type": "t_bool",
+                "offset": 0,
+                "slot": "0"
+              },
+              {
+                "label": "totalLockedValue",
+                "type": "t_uint256",
+                "offset": 0,
+                "slot": "1"
+              },
+              {
+                "label": "lastIncreaseTimestamp",
+                "type": "t_uint256",
+                "offset": 0,
+                "slot": "2"
+              },
+              {
+                "label": "increasesInPeriod",
+                "type": "t_uint256",
+                "offset": 0,
+                "slot": "3"
+              },
+              {
+                "label": "commitTimestamp",
+                "type": "t_uint256",
+                "offset": 0,
+                "slot": "4"
+              }
+            ],
+            "numberOfBytes": "160"
+          },
+          "t_uint256": {
+            "label": "uint256",
+            "numberOfBytes": "32"
+          }
+        },
+        "namespaces": {
+          "erc7201:openzeppelin.storage.Ownable": [
+            {
+              "contract": "OwnableUpgradeable",
+              "label": "_owner",
+              "type": "t_address",
+              "src": "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol:24",
+              "offset": 0,
+              "slot": "0"
+            }
+          ],
+          "erc7201:openzeppelin.storage.Initializable": [
+            {
+              "contract": "Initializable",
+              "label": "_initialized",
+              "type": "t_uint64",
+              "src": "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol:69",
+              "offset": 0,
+              "slot": "0"
+            },
+            {
+              "contract": "Initializable",
+              "label": "_initializing",
+              "type": "t_bool",
+              "src": "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol:73",
+              "offset": 8,
+              "slot": "0"
+            }
+          ]
+        }
+      }
+    },
+    "239186feca5e30f092532e173a9b6597e05fb94858268f4b36b27d8abdf778ba": {
+      "address": "0xc09B9000d3E4F4c9caCd479774F49A52a2f68180",
+      "txHash": "0xf53dcf4de4f5aad7ec03e299a4bfe30f1f6a793c6c61fd138755dbdc9e457569",
+      "layout": {
+        "solcVersion": "0.8.28",
+        "storage": [
+          {
+            "label": "savingsCore",
+            "offset": 0,
+            "slot": "0",
+            "type": "t_contract(ISavingsCore)3974",
+            "contract": "RecoverySystemModule",
+            "src": "contracts/RecoverySystemModule.sol:36"
+          },
+          {
+            "label": "userRecovery",
+            "offset": 0,
+            "slot": "1",
+            "type": "t_mapping(t_address,t_struct(RecoveryConfig)1453_storage)",
+            "contract": "RecoverySystemModule",
+            "src": "contracts/RecoverySystemModule.sol:38"
+          },
+          {
+            "label": "pendingKeyChanges",
+            "offset": 0,
+            "slot": "2",
+            "type": "t_mapping(t_address,t_struct(RecoveryKeyChangeRequest)1460_storage)",
+            "contract": "RecoverySystemModule",
+            "src": "contracts/RecoverySystemModule.sol:39"
+          },
+          {
+            "label": "pendingRecoveryKeys",
+            "offset": 0,
+            "slot": "3",
+            "type": "t_mapping(t_address,t_address)",
+            "contract": "RecoverySystemModule",
+            "src": "contracts/RecoverySystemModule.sol:45"
+          },
+          {
+            "label": "recoveredTo",
+            "offset": 0,
+            "slot": "4",
+            "type": "t_mapping(t_address,t_address)",
+            "contract": "RecoverySystemModule",
+            "src": "contracts/RecoverySystemModule.sol:49"
+          }
+        ],
+        "types": {
+          "t_address": {
+            "label": "address",
+            "numberOfBytes": "20"
+          },
+          "t_bool": {
+            "label": "bool",
+            "numberOfBytes": "1"
+          },
+          "t_struct(InitializableStorage)73_storage": {
+            "label": "struct Initializable.InitializableStorage",
+            "members": [
+              {
+                "label": "_initialized",
+                "type": "t_uint64",
+                "offset": 0,
+                "slot": "0"
+              },
+              {
+                "label": "_initializing",
+                "type": "t_bool",
+                "offset": 8,
+                "slot": "0"
+              }
+            ],
+            "numberOfBytes": "32"
+          },
+          "t_struct(OwnableStorage)13_storage": {
+            "label": "struct OwnableUpgradeable.OwnableStorage",
+            "members": [
+              {
+                "label": "_owner",
+                "type": "t_address",
+                "offset": 0,
+                "slot": "0"
+              }
+            ],
+            "numberOfBytes": "32"
+          },
+          "t_uint64": {
+            "label": "uint64",
+            "numberOfBytes": "8"
+          },
+          "t_contract(ISavingsCore)3974": {
+            "label": "contract ISavingsCore",
+            "numberOfBytes": "20"
+          },
+          "t_mapping(t_address,t_address)": {
+            "label": "mapping(address => address)",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_address,t_struct(RecoveryConfig)1453_storage)": {
+            "label": "mapping(address => struct RecoverySystemModule.RecoveryConfig)",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_address,t_struct(RecoveryKeyChangeRequest)1460_storage)": {
+            "label": "mapping(address => struct RecoverySystemModule.RecoveryKeyChangeRequest)",
+            "numberOfBytes": "32"
+          },
+          "t_struct(RecoveryConfig)1453_storage": {
+            "label": "struct RecoverySystemModule.RecoveryConfig",
+            "members": [
+              {
+                "label": "recoveryAddress",
+                "type": "t_address",
+                "offset": 0,
+                "slot": "0"
+              },
+              {
+                "label": "frozen",
+                "type": "t_bool",
+                "offset": 20,
+                "slot": "0"
+              },
+              {
+                "label": "recovered",
+                "type": "t_bool",
+                "offset": 21,
+                "slot": "0"
+              }
+            ],
+            "numberOfBytes": "32"
+          },
+          "t_struct(RecoveryKeyChangeRequest)1460_storage": {
+            "label": "struct RecoverySystemModule.RecoveryKeyChangeRequest",
+            "members": [
+              {
+                "label": "newRecovery",
+                "type": "t_address",
+                "offset": 0,
+                "slot": "0"
+              },
+              {
+                "label": "executeAfter",
+                "type": "t_uint256",
+                "offset": 0,
+                "slot": "1"
+              },
+              {
+                "label": "exists",
+                "type": "t_bool",
+                "offset": 0,
+                "slot": "2"
+              }
+            ],
+            "numberOfBytes": "96"
           },
           "t_uint256": {
             "label": "uint256",
