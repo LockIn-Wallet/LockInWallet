@@ -22,6 +22,9 @@ const MODULES = [
   { name: "TimePeriodLimitsModule", id: "TIME_PERIOD_LIMITS" },
   { name: "ProposalSystemModule", id: "PROPOSAL_SYSTEM" },
   { name: "BypassSystemModule", id: "BYPASS_SYSTEM" },
+  // Recovery carries the spending limits onto the recovered address, which
+  // needs the two migration entry points the modules above gained
+  { name: "RecoverySystemModule", id: "RECOVERY_SYSTEM" },
 ];
 
 const NETWORK_CONFIG_PATH = path.join(__dirname, "../../frontend/src/networkConfig.json");
