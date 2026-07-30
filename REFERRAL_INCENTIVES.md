@@ -3,9 +3,12 @@
 Status: **design proposal** (nothing here is implemented yet). On-chain referral
 *recording* is live: every user who locks in their wallet through a
 `?ref=<address>` link has their referrer and signup timestamp permanently
-stored in the EVM `ReferralModule` and surfaced via the `ReferralRecorded`
-event. This document designs what we can offer referrers — especially crypto
-influencers — on top of that record.
+stored in the EVM `ReferralModule`, with the referrer's running total surfaced
+via the `ReferralRecorded` event. This document designs what we can offer
+referrers — especially crypto influencers — on top of that record.
+
+Referrers see a **count, never a list** — see [§8](#8-invitee-privacy), which
+constrains which of the reward schemes below we can actually ship.
 
 ## 1. Principles
 
@@ -134,4 +137,78 @@ the fee") — conversion on the referee side is usually the binding constraint.
   some jurisdictions (e.g. UK FCA financial-promotions regime, US state MTL
   angles) — needs counsel before public launch.
 - Do we publicly display a referrer leaderboard (growth lever) or keep
-  referral stats private to each referrer (privacy-first)?
+  referral stats private to each referrer (privacy-first)? A leaderboard of
+  *referrers* is compatible with §8 — a leaderboard that exposes referred
+  volume per referrer is not, at small referral counts.
+
+## 8. Invitee privacy
+
+Every balance on a public chain is readable by anyone who knows the address.
+So handing a referrer their invitee list hands them those people's savings —
+"I invited you" must not become "I can watch your money."
+
+### What's implemented
+
+The `ReferralModule` exposes the referral relationship as narrowly as a
+transparent chain allows:
+
+- **No invitee list.** `getReferredUsers(referrer, offset, limit)` — a
+  paginated dump of every invitee address — has been removed. `getReferralCount`
+  is the only referrer-side view.
+- **No invitee in the event.** `ReferralRecorded(referrer, referralCount,
+  timestamp)` no longer carries the invitee, so the mapping can't be rebuilt
+  with a single `getLogs` call.
+- **Self-only reverse lookup.** `getReferrer(user)` answers for `msg.sender ==
+  user` or for an authorized module (fee hooks resolve the referrer at
+  collection time), so the public ABI can't be pointed at the list of known
+  signups to rebuild a referrer's invitees one probe at a time.
+- **Nothing new is stored.** The invitee list is no longer written. It stays
+  *declared* for storage-layout compatibility, and `getReferralCount` adds its
+  length to the new counter so pre-upgrade referrals still count.
+
+### What this does not protect against
+
+State this plainly wherever we describe it as private, because it is
+**friction, not cryptography**:
+
+- Contract storage is world-readable by slot. `referralOf[user]` still holds
+  the link, and lists written before the upgrade are still in storage —
+  removing the getter stopped new writes, it did not erase old ones.
+- `eth_call` lets the caller choose `from`, so the self-only guard on
+  `getReferrer` is trivially bypassed by anyone who knows that.
+- The lock-in transaction is sent by the invitee with the referrer in its
+  calldata. That single fact is enough for a chain analyst, and no
+  transparent-storage design can remove it.
+
+### Incentive designs this rules out
+
+Percentage revenue share on a referred user's activity (§4b, §4c) leaks that
+activity back to the referrer by construction — with a single referral,
+"you accrued 3.2 USDT" inverts to that person's exact penalty or fee. To keep
+§4 compatible with the above:
+
+- Prefer flat bounties (§4a) and banded points (§4d) over percentages;
+- Gate epoch payouts on **k-anonymity** — no payout until a referrer has ≥ k
+  activated referrals — and round amounts to bands;
+- Never publish per-referrer referred-volume figures at low counts.
+
+### Roadmap to real privacy
+
+1. **Blinded attribution (next).** Move links to `?ref=<code>` (the vanity-code
+   registry in §6, which also hides the *referrer's* address from the invitee).
+   The lock-in transaction stores `H(code, salt)` with a fresh 256-bit salt plus
+   `(code, salt)` encrypted to an attestor key; the attestor tallies activations
+   and publishes a merkle root of `(referrer, amount)` that referrers claim
+   against — the same payout rail §4d already assumes. The chain reveals
+   nothing linkable; the attestor learns the mapping (reducible with a TEE or a
+   threshold committee, but still a trusted party).
+2. **Zero-knowledge attribution (later).** Invitees insert a commitment
+   `H(code, r)` into an incremental merkle tree with a proof that `code` is in
+   the registered set, submitted via a relayer so `msg.sender` doesn't re-link
+   it; referrers claim one reward per invitee by proving knowledge of the code
+   secret and spending a nullifier. Removes the attestor. The hard part is
+   activation (§3): proving "≥ 25 USDT held 30 days" about an address the proof
+   must not reveal needs either a second invitee-side commitment or signed
+   activation attestations — the latter puts a trusted party back in the loop.
+   The commitment tree can be added to `ReferralModule` without migration,
+   since records are append-only.

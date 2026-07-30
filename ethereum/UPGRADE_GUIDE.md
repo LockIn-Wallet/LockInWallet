@@ -74,6 +74,44 @@ npx hardhat run scripts/upgrade-module.js --network polygon \
 3. Module registration is updated in SavingsCore (`registerModule`)
 4. Frontend ABIs are updated
 
+### 2b. Upgrade a Module **In Place** (keeps the proxy)
+
+Required for modules that hold state or custody funds — `VaultSystemModule`,
+`ReferralModule`, `RecoverySystemModule`. This upgrades the implementation
+behind the existing proxy, so the proxy address and all its storage survive.
+
+```bash
+cd ethereum
+
+MODULE=<ModuleName> npx hardhat run scripts/upgrade-module-proxy.js --network optimism
+```
+
+The module name comes from `MODULE=`, not a positional argument — `hardhat run`
+rejects extra positionals (`HH308`). The proxy address is read from the
+SavingsCore registry, so there is nothing to paste.
+
+**What happens:**
+1. The new implementation is deployed and its storage layout validated against
+   the deployed one (`prepareUpgrade`) — an incompatible layout aborts here,
+   before anything is sent
+2. If the deployed bytecode already matches, it stops with "nothing to upgrade"
+3. `upgradeToAndCall` points the proxy at the new implementation
+4. The ERC-1967 implementation slot is re-read until it matches the address we
+   deployed, and the script **fails** if it never does
+5. Frontend ABIs are updated
+
+**Public RPC endpoints are a real hazard here.** `mainnet.optimism.io` is load
+balanced across backends that disagree about the pending nonce (which rejects
+the transaction outright) and will serve pre-transaction state immediately
+after returning a receipt (which is why step 4 polls). Set `OPTIMISM_RPC_URL`
+to a single consistent endpoint before upgrading, and if the script dies
+between steps 1 and 3, just re-run it: the implementation from step 1 is
+recorded in `.openzeppelin/<network>.json` and gets reused rather than
+redeployed.
+
+**Commit `.openzeppelin/<network>.json` after every upgrade** — it is the
+layout record that makes the *next* upgrade's safety check possible.
+
 ### 3. Register Modules (Without Redeploying)
 
 Use when modules are already deployed but need to be registered with SavingsCore (e.g., after a partial deployment).

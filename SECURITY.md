@@ -21,6 +21,7 @@ vulnerability.
 | Emergency bypass (full withdrawal) | that period's unlock delay (24h by default) | Guarantees *you* can always exit completely within your chosen wait |
 | Vault penalty withdrawal | instant (penalty applies) | Immediate exit from vaults at a known cost |
 | Referral record | written once at lock-in, immutable | Retroactive tampering with attribution |
+| Referral views | count only; no invitee list, no invitee in the event | A referrer using their invite link to find and watch invitees' balances — friction only, not cryptographic ([design](REFERRAL_INCENTIVES.md#8-invitee-privacy)) |
 | Account freeze (recovery key or account key) | instant | Stops every outgoing path the moment a compromise is noticed |
 | Unfreeze / ownership recovery | instant, **recovery key only** | Moving the account to a fresh key that the attacker never held |
 | Recovery key change from the account key | 30-day cancellable timelock | An attacker with your seed rotating out your recovery key |

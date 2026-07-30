@@ -3603,25 +3603,25 @@
             "label": "savingsCore",
             "offset": 0,
             "slot": "0",
-            "type": "t_contract(ISavingsCore)11339",
-            "contract": "ReferralModule",
-            "src": "contracts/ReferralModule.sol:10"
+            "type": "t_contract(ISavingsCore)3319",
+            "contract": "LegacyReferralModule",
+            "src": "contracts/LegacyReferralModule.sol:12"
           },
           {
             "label": "referralOf",
             "offset": 0,
             "slot": "1",
-            "type": "t_mapping(t_address,t_struct(ReferralRecord)8402_storage)",
-            "contract": "ReferralModule",
-            "src": "contracts/ReferralModule.sol:18"
+            "type": "t_mapping(t_address,t_struct(ReferralRecord)1459_storage)",
+            "contract": "LegacyReferralModule",
+            "src": "contracts/LegacyReferralModule.sol:20"
           },
           {
             "label": "referredUsers",
             "offset": 0,
             "slot": "2",
             "type": "t_mapping(t_address,t_array(t_address)dyn_storage)",
-            "contract": "ReferralModule",
-            "src": "contracts/ReferralModule.sol:21"
+            "contract": "LegacyReferralModule",
+            "src": "contracts/LegacyReferralModule.sol:23"
           }
         ],
         "types": {
@@ -3671,7 +3671,7 @@
             "label": "address[]",
             "numberOfBytes": "32"
           },
-          "t_contract(ISavingsCore)11339": {
+          "t_contract(ISavingsCore)3319": {
             "label": "contract ISavingsCore",
             "numberOfBytes": "20"
           },
@@ -3679,12 +3679,12 @@
             "label": "mapping(address => address[])",
             "numberOfBytes": "32"
           },
-          "t_mapping(t_address,t_struct(ReferralRecord)8402_storage)": {
-            "label": "mapping(address => struct ReferralModule.ReferralRecord)",
+          "t_mapping(t_address,t_struct(ReferralRecord)1459_storage)": {
+            "label": "mapping(address => struct LegacyReferralModule.ReferralRecord)",
             "numberOfBytes": "32"
           },
-          "t_struct(ReferralRecord)8402_storage": {
-            "label": "struct ReferralModule.ReferralRecord",
+          "t_struct(ReferralRecord)1459_storage": {
+            "label": "struct LegacyReferralModule.ReferralRecord",
             "members": [
               {
                 "label": "referrer",
@@ -6863,6 +6863,164 @@
               }
             ],
             "numberOfBytes": "96"
+          },
+          "t_uint256": {
+            "label": "uint256",
+            "numberOfBytes": "32"
+          }
+        },
+        "namespaces": {
+          "erc7201:openzeppelin.storage.Ownable": [
+            {
+              "contract": "OwnableUpgradeable",
+              "label": "_owner",
+              "type": "t_address",
+              "src": "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol:24",
+              "offset": 0,
+              "slot": "0"
+            }
+          ],
+          "erc7201:openzeppelin.storage.Initializable": [
+            {
+              "contract": "Initializable",
+              "label": "_initialized",
+              "type": "t_uint64",
+              "src": "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol:69",
+              "offset": 0,
+              "slot": "0"
+            },
+            {
+              "contract": "Initializable",
+              "label": "_initializing",
+              "type": "t_bool",
+              "src": "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol:73",
+              "offset": 8,
+              "slot": "0"
+            }
+          ]
+        }
+      }
+    },
+    "8dea653fbbb17871ebe2992ad68076601b665cf5aaa0544314a160e6f9183d63": {
+      "address": "0x31E14c27F8E8ad7f86E7b0B72F14D4174eE84c12",
+      "txHash": "0xf19a4201b452cf4d9b1587655c8737ee4be3dc0ebd0a7c96eb5fb05f005e5552",
+      "layout": {
+        "solcVersion": "0.8.28",
+        "storage": [
+          {
+            "label": "savingsCore",
+            "offset": 0,
+            "slot": "0",
+            "type": "t_contract(ISavingsCore)3241",
+            "contract": "ReferralModule",
+            "src": "contracts/ReferralModule.sol:25"
+          },
+          {
+            "label": "referralOf",
+            "offset": 0,
+            "slot": "1",
+            "type": "t_mapping(t_address,t_struct(ReferralRecord)1454_storage)",
+            "contract": "ReferralModule",
+            "src": "contracts/ReferralModule.sol:33"
+          },
+          {
+            "label": "legacyReferredUsers",
+            "offset": 0,
+            "slot": "2",
+            "type": "t_mapping(t_address,t_array(t_address)dyn_storage)",
+            "contract": "ReferralModule",
+            "src": "contracts/ReferralModule.sol:41",
+            "renamedFrom": "referredUsers"
+          },
+          {
+            "label": "referralCountOf",
+            "offset": 0,
+            "slot": "3",
+            "type": "t_mapping(t_address,t_uint256)",
+            "contract": "ReferralModule",
+            "src": "contracts/ReferralModule.sol:44"
+          }
+        ],
+        "types": {
+          "t_address": {
+            "label": "address",
+            "numberOfBytes": "20"
+          },
+          "t_bool": {
+            "label": "bool",
+            "numberOfBytes": "1"
+          },
+          "t_struct(InitializableStorage)73_storage": {
+            "label": "struct Initializable.InitializableStorage",
+            "members": [
+              {
+                "label": "_initialized",
+                "type": "t_uint64",
+                "offset": 0,
+                "slot": "0"
+              },
+              {
+                "label": "_initializing",
+                "type": "t_bool",
+                "offset": 8,
+                "slot": "0"
+              }
+            ],
+            "numberOfBytes": "32"
+          },
+          "t_struct(OwnableStorage)13_storage": {
+            "label": "struct OwnableUpgradeable.OwnableStorage",
+            "members": [
+              {
+                "label": "_owner",
+                "type": "t_address",
+                "offset": 0,
+                "slot": "0"
+              }
+            ],
+            "numberOfBytes": "32"
+          },
+          "t_uint64": {
+            "label": "uint64",
+            "numberOfBytes": "8"
+          },
+          "t_array(t_address)dyn_storage": {
+            "label": "address[]",
+            "numberOfBytes": "32"
+          },
+          "t_contract(ISavingsCore)3241": {
+            "label": "contract ISavingsCore",
+            "numberOfBytes": "20"
+          },
+          "t_mapping(t_address,t_array(t_address)dyn_storage)": {
+            "label": "mapping(address => address[])",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_address,t_struct(ReferralRecord)1454_storage)": {
+            "label": "mapping(address => struct ReferralModule.ReferralRecord)",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_address,t_uint256)": {
+            "label": "mapping(address => uint256)",
+            "numberOfBytes": "32"
+          },
+          "t_struct(ReferralRecord)1454_storage": {
+            "label": "struct ReferralModule.ReferralRecord",
+            "members": [
+              {
+                "label": "referrer",
+                "type": "t_address",
+                "offset": 0,
+                "slot": "0"
+              },
+              {
+                "label": "referredAt",
+                "type": "t_uint64",
+                "offset": 20,
+                "slot": "0"
+              }
+            ],
+            "numberOfBytes": "32"
           },
           "t_uint256": {
             "label": "uint256",

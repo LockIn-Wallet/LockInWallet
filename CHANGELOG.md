@@ -116,6 +116,31 @@ these notes on the in-app **Governance** page before they execute.
   are not rewritten, but no path can set one again.
 
 ### Changed
+- Referrers can no longer see **which** wallets they invited — only how many.
+  `ReferralModule.getReferredUsers()` (a paginated dump of every invitee
+  address) is gone, the invitee no longer appears in the `ReferralRecorded`
+  event, and `getReferrer()` now answers only for the caller's own address or
+  for an authorized module (fee hooks resolve the referrer at collection time).
+  Without this, anyone handing out a referral link could list their invitees and
+  read those people's savings balances straight off the chain.
+  **On-chain:** in-place `ReferralModule` upgrade (`upgrade-module-proxy.js`),
+  no proxy replacement — executed on Optimism, implementation
+  `0x31E14c27F8E8ad7f86E7b0B72F14D4174eE84c12`, proxy
+  `0x3aa6Df41E3dB7CeeeA335352724B2FE963A2ba06` unchanged. Storage stays
+  layout-compatible: the invitee list remains declared but is never written
+  again, and `getReferralCount()` sums the new counter with the retired list's
+  length, so referrals recorded before the upgrade still count (a full log scan
+  of the proxy found none — nothing had to migrate). **Event signature change**
+  — `ReferralRecorded(address indexed user, address indexed referrer, uint256
+  timestamp)` becomes `ReferralRecorded(address indexed referrer, uint256
+  referralCount, uint256 timestamp)`; any indexer reading the old signature must
+  be updated.
+  This is deliberate friction, not cryptographic privacy — contract storage and
+  the lock-in transaction's calldata remain public, so a chain analyst can still
+  reconstruct the link. See
+  [REFERRAL_INCENTIVES.md](REFERRAL_INCENTIVES.md#8-invitee-privacy) for what is
+  and isn't protected, and for the blinded-attribution design that closes the
+  rest.
 - The prize pool section was **moved off the home page** onto
   `/prize-savings`. The home page keeps its focus on the withdrawal limits
   and the trust model; prize savings is an optional add-on and now reads as

@@ -14,6 +14,10 @@ export const RELEASE_NOTES = [
     title: "A home page you can check",
     highlights: [
       {
+        emoji: "🕵️",
+        text: "Inviting someone no longer lets you watch their money. Before, anyone who shared a referral link could pull up the list of wallets that joined through it — and every balance on this chain is public, so that was a window into what those people had saved. Now you only ever see a number: how many people locked in through your link. Being paid for a referral and being able to spy on that person are two different things, and only one of them is part of the deal.",
+      },
+      {
         emoji: "🔐",
         text: "Removing a spending limit now waits, exactly like changing one does. It used to take effect the moment you asked — which meant anyone who got hold of your wallet key could delete every limit and empty the account in two steps. Now a removal sits in the open for that limit's waiting period, where you can see it and cancel it.",
       },

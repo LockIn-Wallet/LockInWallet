@@ -122,14 +122,14 @@
       {
         "indexed": true,
         "internalType": "address",
-        "name": "user",
+        "name": "referrer",
         "type": "address"
       },
       {
-        "indexed": true,
-        "internalType": "address",
-        "name": "referrer",
-        "type": "address"
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "referralCount",
+        "type": "uint256"
       },
       {
         "indexed": false,
@@ -181,40 +181,6 @@
         "internalType": "uint256",
         "name": "",
         "type": "uint256"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "address",
-        "name": "referrer",
-        "type": "address"
-      },
-      {
-        "internalType": "uint256",
-        "name": "offset",
-        "type": "uint256"
-      },
-      {
-        "internalType": "uint256",
-        "name": "limit",
-        "type": "uint256"
-      }
-    ],
-    "name": "getReferredUsers",
-    "outputs": [
-      {
-        "internalType": "address[]",
-        "name": "users",
-        "type": "address[]"
-      },
-      {
-        "internalType": "uint256[]",
-        "name": "joinedAt",
-        "type": "uint256[]"
       }
     ],
     "stateMutability": "view",

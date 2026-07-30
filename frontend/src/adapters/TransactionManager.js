@@ -272,8 +272,8 @@ export class TransactionManager {
   getReferralInfo(userAddress) {
     return this.getAdapter().getReferralInfo(userAddress);
   }
-  getReferredUsers(userAddress) {
-    return this.getAdapter().getReferredUsers(userAddress);
+  getReferralCount(userAddress) {
+    return this.getAdapter().getReferralCount(userAddress);
   }
 
   // ---- Recovery protection ----

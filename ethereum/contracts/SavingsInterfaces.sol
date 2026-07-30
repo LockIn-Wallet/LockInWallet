@@ -385,14 +385,14 @@ interface IReferralModule {
     // Referral recording
     function recordReferral(address user, address referrer) external;
 
-    // View functions
+    // View functions — a referrer only ever learns how many invitees they have,
+    // never which wallets, so referral rewards can't double as a window into
+    // an invitee's savings
     function getReferrer(address user) external view returns (address referrer, uint256 referredAt);
     function getReferralCount(address referrer) external view returns (uint256);
-    function getReferredUsers(address referrer, uint256 offset, uint256 limit)
-        external view returns (address[] memory users, uint256[] memory joinedAt);
 
     // Events
-    event ReferralRecorded(address indexed user, address indexed referrer, uint256 timestamp);
+    event ReferralRecorded(address indexed referrer, uint256 referralCount, uint256 timestamp);
 }
 
 interface IProxyDeploymentModule {

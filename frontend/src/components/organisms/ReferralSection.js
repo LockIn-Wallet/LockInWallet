@@ -9,18 +9,18 @@ import {
   spacing,
 } from "../../styles";
 import { buildReferralLink } from "../../services/referral.service.js";
-import { truncateAddress } from "../../utils/addressUtils.js";
 
 /**
  * ReferralSection Component
  *
  * Shown after setup is committed:
  * - The user's shareable referral link with a copy button
- * - An anonymized list of users they invited (truncated addresses + join dates
- *   only — full invitee addresses are never displayed)
+ * - How many users they invited — a count only. Invitee wallet addresses are
+ *   not exposed on-chain, so referral rewards can never double as a window
+ *   into what an invitee has saved.
  */
 const ReferralSection = ({ transactionManager, userAddress }) => {
-  const [referrals, setReferrals] = useState({ count: 0, users: [] });
+  const [referralCount, setReferralCount] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [copied, setCopied] = useState(false);
 
@@ -30,11 +30,10 @@ const ReferralSection = ({ transactionManager, userAddress }) => {
     if (!transactionManager || !userAddress) return;
     setIsLoading(true);
     try {
-      const result = await transactionManager.getReferredUsers(userAddress);
-      setReferrals(result || { count: 0, users: [] });
+      setReferralCount(await transactionManager.getReferralCount(userAddress));
     } catch (error) {
       console.error("Error loading referrals:", error);
-      setReferrals({ count: 0, users: [] });
+      setReferralCount(0);
     } finally {
       setIsLoading(false);
     }
@@ -78,30 +77,26 @@ const ReferralSection = ({ transactionManager, userAddress }) => {
 
       <div style={layoutStyles.section}>
         <h4 style={{ ...utilityStyles.textPrimary, marginBottom: spacing.md }}>
-          Invited users {referrals.count > 0 && `(${referrals.count})`}
+          Invited users
         </h4>
 
         {isLoading ? (
           <p style={utilityStyles.loadingText}>Loading your referrals...</p>
-        ) : referrals.users.length === 0 ? (
+        ) : referralCount === 0 ? (
           <p style={utilityStyles.textMuted}>
             No one yet — share your link to invite savers.
           </p>
         ) : (
-          referrals.users.map((user) => (
-            <div
-              key={user.address}
-              style={{ ...layoutStyles.flexBetween, marginBottom: spacing.sm }}
-            >
-              <span style={{ ...utilityStyles.addressText, ...utilityStyles.textSecondary }}>
-                {truncateAddress(user.address)}
-              </span>
-              <span style={utilityStyles.textMuted}>
-                joined {user.joinedAt.toLocaleDateString()}
-              </span>
-            </div>
-          ))
+          <p style={utilityStyles.textSecondary}>
+            {referralCount} {referralCount === 1 ? "person has" : "people have"}{" "}
+            locked in a wallet through your link.
+          </p>
         )}
+
+        <p style={{ ...utilityStyles.textMuted, marginTop: spacing.md }}>
+          You see the count only — invitee addresses are never listed on-chain,
+          so a referral can't become a view into someone else's savings.
+        </p>
       </div>
     </div>
   );

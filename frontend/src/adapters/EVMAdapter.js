@@ -23,7 +23,6 @@ import {
 const VAULT_SYSTEM_MODULE_ID = ethers.keccak256(ethers.toUtf8Bytes("VAULT_SYSTEM"));
 const REFERRAL_MODULE_ID = ethers.keccak256(ethers.toUtf8Bytes("REFERRAL"));
 const RECOVERY_SYSTEM_MODULE_ID = ethers.keccak256(ethers.toUtf8Bytes("RECOVERY_SYSTEM"));
-const REFERRAL_PAGE_SIZE = 100;
 
 // User-facing modules are called directly (Pattern B): each authenticates the
 // caller via msg.sender, so no calls route through SavingsCore forwarders
@@ -1111,30 +1110,16 @@ export class EVMAdapter extends BlockchainAdapter {
   }
 
   /**
-   * Users the given address has referred.
-   * @returns {Promise<{count: number, users: {address: string, joinedAt: Date}[]}>}
+   * How many users the given address has referred. Only the count is available
+   * on-chain — invitee addresses are not exposed, so a referrer can't use their
+   * rewards as a window into an invitee's savings.
+   * @returns {Promise<number>}
    */
-  async getReferredUsers(userAddress = null) {
+  async getReferralCount(userAddress = null) {
     const module = await this._getReferralModule();
-    if (!module) return { count: 0, users: [] };
+    if (!module) return 0;
 
-    const targetAddress = userAddress || this.userAddress;
-    const count = Number(await module.getReferralCount(targetAddress));
-    const users = [];
-    for (let offset = 0; offset < count; offset += REFERRAL_PAGE_SIZE) {
-      const [addresses, joinedAt] = await module.getReferredUsers(
-        targetAddress,
-        offset,
-        REFERRAL_PAGE_SIZE,
-      );
-      for (let i = 0; i < addresses.length; i++) {
-        users.push({
-          address: addresses[i],
-          joinedAt: new Date(Number(joinedAt[i]) * 1000),
-        });
-      }
-    }
-    return { count, users };
+    return Number(await module.getReferralCount(userAddress || this.userAddress));
   }
 
   // ========== RECOVERY PROTECTION ==========

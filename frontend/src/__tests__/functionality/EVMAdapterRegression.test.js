@@ -1,4 +1,7 @@
 const { EVMAdapter } = require('../../adapters/EVMAdapter.js');
+const { BlockchainAdapter } = require('../../adapters/BlockchainAdapter.js');
+const { TransactionManager } = require('../../adapters/TransactionManager.js');
+const ReferralModuleABI = require('../../ReferralModuleABI.json');
 
 /**
  * EVMAdapter regression tests
@@ -13,6 +16,8 @@ const { EVMAdapter } = require('../../adapters/EVMAdapter.js');
  * 3. Timelock-gated executes must refresh the local dev chain clock first —
  *    Hardhat only mines on transactions, so gas estimation on an idle chain
  *    fails elapsed timelocks with "Request still in timelock".
+ * 4. Referrals must never expose invitee addresses — balances are public, so
+ *    an invitee list is a window into what those people have saved.
  */
 
 const USER = '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266';
@@ -174,5 +179,42 @@ describe('EVMAdapter withdrawal balance guard', () => {
     await expect(adapter.withdrawFromVault('1', 20)).rejects.toThrow(
       'you have 1 USDT available'
     );
+  });
+});
+
+describe('Referral invitee privacy', () => {
+  test('exposes the referral count and nothing that lists invitees', async () => {
+    const adapter = makeAdapter();
+    adapter._getReferralModule = jest.fn().mockResolvedValue({
+      getReferralCount: jest.fn().mockResolvedValue(3n),
+    });
+
+    await expect(adapter.getReferralCount()).resolves.toBe(3);
+    expect(adapter.getReferredUsers).toBeUndefined();
+    expect(TransactionManager.prototype.getReferredUsers).toBeUndefined();
+    expect(BlockchainAdapter.prototype.getReferredUsers).toBeUndefined();
+  });
+
+  test('reports zero when the referral module is not registered', async () => {
+    const adapter = makeAdapter();
+    adapter._getReferralModule = jest.fn().mockResolvedValue(null);
+
+    await expect(adapter.getReferralCount()).resolves.toBe(0);
+  });
+
+  test('ships an ABI with no invitee-listing view', () => {
+    const names = ReferralModuleABI.map((entry) => entry.name);
+
+    expect(names).toContain('getReferralCount');
+    expect(names).not.toContain('getReferredUsers');
+
+    // The invitee must not be an event field — an indexed invitee turns the
+    // referrer => invitee mapping into a one-call log query
+    const recorded = ReferralModuleABI.find((entry) => entry.name === 'ReferralRecorded');
+    expect(recorded.inputs.map((input) => input.name)).toEqual([
+      'referrer',
+      'referralCount',
+      'timestamp',
+    ]);
   });
 });

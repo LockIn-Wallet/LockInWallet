@@ -78,9 +78,9 @@ describe("ReferralModule", function () {
 
       await expect(tx)
         .to.emit(referralModule, "ReferralRecorded")
-        .withArgs(user1.address, referrer.address, block!.timestamp);
+        .withArgs(referrer.address, 1, block!.timestamp);
 
-      const [recordedReferrer, referredAt] = await referralModule.getReferrer(user1.address);
+      const [recordedReferrer, referredAt] = await referralModule.connect(user1).getReferrer(user1.address);
       expect(recordedReferrer).to.equal(referrer.address);
       expect(referredAt).to.equal(block!.timestamp);
 
@@ -95,7 +95,7 @@ describe("ReferralModule", function () {
       await proposalModule.connect(user1).commitSetup(dailyLimit, weeklyLimit, monthlyLimit);
 
       expect(await proposalModule.isSetupCommitted(user1.address)).to.be.true;
-      const [recordedReferrer] = await referralModule.getReferrer(user1.address);
+      const [recordedReferrer] = await referralModule.connect(user1).getReferrer(user1.address);
       expect(recordedReferrer).to.equal(hre.ethers.ZeroAddress);
     });
 
@@ -106,7 +106,7 @@ describe("ReferralModule", function () {
       await proposalModule.connect(user1).commitSetupWithReferrer(dailyLimit, weeklyLimit, monthlyLimit, hre.ethers.ZeroAddress);
 
       expect(await proposalModule.isSetupCommitted(user1.address)).to.be.true;
-      const [recordedReferrer] = await referralModule.getReferrer(user1.address);
+      const [recordedReferrer] = await referralModule.connect(user1).getReferrer(user1.address);
       expect(recordedReferrer).to.equal(hre.ethers.ZeroAddress);
     });
 
@@ -127,7 +127,7 @@ describe("ReferralModule", function () {
 
       await proposalModule.connect(user1).commitSetupWithReferrer(dailyLimit, weeklyLimit, monthlyLimit, referrer.address);
 
-      const [recordedReferrer] = await referralModule.getReferrer(user1.address);
+      const [recordedReferrer] = await referralModule.connect(user1).getReferrer(user1.address);
       expect(recordedReferrer).to.equal(referrer.address);
     });
   });
@@ -143,7 +143,7 @@ describe("ReferralModule", function () {
         proposalModule.connect(user1).commitSetupWithReferrer(dailyLimit, weeklyLimit, monthlyLimit, user2.address)
       ).to.be.revertedWith("Referrer already recorded");
 
-      const [recordedReferrer] = await referralModule.getReferrer(user1.address);
+      const [recordedReferrer] = await referralModule.connect(user1).getReferrer(user1.address);
       expect(recordedReferrer).to.equal(referrer.address);
       expect(await referralModule.getReferralCount(user2.address)).to.equal(0);
     });
@@ -160,7 +160,7 @@ describe("ReferralModule", function () {
         proposalModule.connect(user1).commitSetupWithReferrer(dailyLimit, weeklyLimit, monthlyLimit, referrer.address)
       ).to.be.revertedWith("Setup committed - use proposals");
 
-      const [recordedReferrer] = await referralModule.getReferrer(user1.address);
+      const [recordedReferrer] = await referralModule.connect(user1).getReferrer(user1.address);
       expect(recordedReferrer).to.equal(hre.ethers.ZeroAddress);
       expect(await referralModule.getReferralCount(referrer.address)).to.equal(0);
     });
@@ -174,9 +174,9 @@ describe("ReferralModule", function () {
     });
   });
 
-  describe("Referral list views", function () {
-    it("Should return referred users with join timestamps and support pagination", async function () {
-      const { savingsCore, proposalModule, referralModule, user1, user2, user3, referrer, dailyLimit, weeklyLimit, monthlyLimit } =
+  describe("Invitee privacy", function () {
+    it("Should count referrals without exposing which wallets they are", async function () {
+      const { proposalModule, referralModule, user1, user2, user3, referrer, dailyLimit, weeklyLimit, monthlyLimit } =
         await loadFixture(deployReferralFixture);
 
       for (const user of [user1, user2, user3]) {
@@ -185,39 +185,88 @@ describe("ReferralModule", function () {
 
       expect(await referralModule.getReferralCount(referrer.address)).to.equal(3);
 
-      const [users, joinedAt] = await referralModule.getReferredUsers(referrer.address, 0, 100);
-      expect(users).to.deep.equal([user1.address, user2.address, user3.address]);
-      expect(joinedAt.length).to.equal(3);
-      for (const ts of joinedAt) {
-        expect(ts).to.be.greaterThan(0);
-      }
-
-      const [page, pageJoinedAt] = await referralModule.getReferredUsers(referrer.address, 1, 1);
-      expect(page).to.deep.equal([user2.address]);
-      expect(pageJoinedAt.length).to.equal(1);
-
-      const [beyond, beyondJoinedAt] = await referralModule.getReferredUsers(referrer.address, 5, 10);
-      expect(beyond.length).to.equal(0);
-      expect(beyondJoinedAt.length).to.equal(0);
+      // No invitee list is exposed at all — the count is the whole story
+      expect((referralModule as any).getReferredUsers).to.be.undefined;
     });
 
-    it("Should return empty results for an address with no referrals", async function () {
+    it("Should not let a referrer look up who they referred", async function () {
+      const { proposalModule, referralModule, user1, referrer, dailyLimit, weeklyLimit, monthlyLimit } =
+        await loadFixture(deployReferralFixture);
+
+      await proposalModule.connect(user1).commitSetupWithReferrer(dailyLimit, weeklyLimit, monthlyLimit, referrer.address);
+
+      await expect(
+        referralModule.connect(referrer).getReferrer(user1.address)
+      ).to.be.revertedWith("Referral lookup is self-only");
+    });
+
+    it("Should keep the invitee out of the ReferralRecorded event", async function () {
+      const { proposalModule, referralModule, user1, referrer, dailyLimit, weeklyLimit, monthlyLimit } =
+        await loadFixture(deployReferralFixture);
+
+      const tx = await proposalModule.connect(user1).commitSetupWithReferrer(dailyLimit, weeklyLimit, monthlyLimit, referrer.address);
+      const receipt = await tx.wait();
+
+      const logs = receipt!.logs.filter((log) => log.address === referralModule.target);
+      expect(logs.length).to.equal(1);
+
+      const encodedUser = user1.address.slice(2).toLowerCase().padStart(64, "0");
+      const encoded = (logs[0].topics.join("") + logs[0].data).toLowerCase();
+      expect(encoded).to.not.include(encodedUser);
+    });
+
+    it("Should report a zero count for an address with no referrals", async function () {
       const { referralModule, referrer } = await loadFixture(deployReferralFixture);
 
       expect(await referralModule.getReferralCount(referrer.address)).to.equal(0);
-      const [users, joinedAt] = await referralModule.getReferredUsers(referrer.address, 0, 100);
-      expect(users.length).to.equal(0);
-      expect(joinedAt.length).to.equal(0);
     });
   });
 
   describe("Upgrade safety", function () {
+    it("Should keep the storage layout compatible with the pre-privacy module", async function () {
+      const legacy = await hre.ethers.getContractFactory("LegacyReferralModule");
+      const next = await hre.ethers.getContractFactory("ReferralModule");
+
+      await hre.upgrades.validateUpgrade(legacy, next, { kind: "uups" });
+    });
+
+    it("Should still count referrals recorded before the invitee list was retired", async function () {
+      const { savingsCore, proposalModule, referralModuleId, user1, user2, referrer, dailyLimit, weeklyLimit, monthlyLimit } =
+        await loadFixture(deployReferralFixture);
+
+      // Stand up the pre-privacy module so the referral lands in `referredUsers`
+      const LegacyReferralModule = await hre.ethers.getContractFactory("LegacyReferralModule");
+      const legacyModule = await hre.upgrades.deployProxy(LegacyReferralModule, [savingsCore.target], { initializer: "initialize" });
+      await legacyModule.waitForDeployment();
+
+      await savingsCore.registerModule(referralModuleId, legacyModule.target);
+      await savingsCore.setupModuleCrossReferences();
+
+      await proposalModule.connect(user1).commitSetupWithReferrer(dailyLimit, weeklyLimit, monthlyLimit, referrer.address);
+      expect(await legacyModule.getReferralCount(referrer.address)).to.equal(1);
+
+      const ReferralModule = await hre.ethers.getContractFactory("ReferralModule");
+      const newImpl = await ReferralModule.deploy();
+      await newImpl.waitForDeployment();
+      await legacyModule.upgradeToAndCall(newImpl.target, "0x");
+
+      const upgraded = ReferralModule.attach(legacyModule.target);
+      expect(await upgraded.getReferralCount(referrer.address)).to.equal(1);
+
+      const [recordedReferrer] = await upgraded.connect(user1).getReferrer(user1.address);
+      expect(recordedReferrer).to.equal(referrer.address);
+
+      // A referral recorded after the upgrade adds to the legacy count
+      await proposalModule.connect(user2).commitSetupWithReferrer(dailyLimit, weeklyLimit, monthlyLimit, referrer.address);
+      expect(await upgraded.getReferralCount(referrer.address)).to.equal(2);
+    });
+
     it("Should preserve referral records across an in-place module upgrade", async function () {
       const { savingsCore, proposalModule, referralModule, user1, referrer, dailyLimit, weeklyLimit, monthlyLimit } =
         await loadFixture(deployReferralFixture);
 
       await proposalModule.connect(user1).commitSetupWithReferrer(dailyLimit, weeklyLimit, monthlyLimit, referrer.address);
-      const [referrerBefore, referredAtBefore] = await referralModule.getReferrer(user1.address);
+      const [referrerBefore, referredAtBefore] = await referralModule.connect(user1).getReferrer(user1.address);
 
       // Upgrade manually (new implementation + upgradeToAndCall) — the OZ
       // plugin's manifest mis-associates reused snapshot addresses across
@@ -229,7 +278,7 @@ describe("ReferralModule", function () {
       const upgraded = referralModule;
 
       expect(await hre.upgrades.erc1967.getImplementationAddress(referralModule.target as string)).to.equal(newImpl.target);
-      const [referrerAfter, referredAtAfter] = await upgraded.getReferrer(user1.address);
+      const [referrerAfter, referredAtAfter] = await upgraded.connect(user1).getReferrer(user1.address);
       expect(referrerAfter).to.equal(referrerBefore);
       expect(referredAtAfter).to.equal(referredAtBefore);
       expect(await upgraded.getReferralCount(referrer.address)).to.equal(1);

@@ -85,8 +85,8 @@ export class BlockchainAdapter {
     return null;
   }
 
-  async getReferredUsers(userAddress) {
-    return { count: 0, users: [] };
+  async getReferralCount(userAddress) {
+    return 0;
   }
 
   // Recovery protection — default for chains without the recovery module,
