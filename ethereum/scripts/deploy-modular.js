@@ -27,6 +27,17 @@ const PROXY_ADDRESS = getExistingProxyAddress();
 // Check for production mode flag (dev mode disabled for production)
 const isProduction = process.env.PRODUCTION === 'true';
 
+// Mock tokens and mock prize vaults belong to localhost only. Gating them on
+// the network rather than on the PRODUCTION flag means forgetting the flag on a
+// live chain can no longer deploy a worthless MockUSDT and write its address
+// into the frontend as if it were real USDT.
+const isLocalNetwork = TARGET_NETWORK === "localhost";
+
+// Deposit-address fee on a live chain, charged in native ETH (paymentToken
+// address(0)) so a brand-new user needs no ERC20 to get started. Mirrors the
+// live Optimism setting; override with PROXY_FEE_ETH for a different chain.
+const LIVE_PROXY_FEE_ETH = process.env.PROXY_FEE_ETH || "0.001";
+
 async function main() {
   console.log(`🔄 Starting modular savings wallet deployment${isProduction ? ' (PRODUCTION MODE)' : ' (DEVELOPMENT MODE)'}...\n`);
 
@@ -169,9 +180,10 @@ async function main() {
     console.log("   ✅ Essential functions available directly in SavingsCore");
     console.log("   ✅ Frontend compatibility maintained for core functions");
 
-    // Deploy MockUSDT only if it's a fresh deployment or if needed
+    // Deploy MockUSDT only on localhost. Every other network already has real
+    // token addresses in the frontend config and must keep them.
     let usdtAddress;
-    if (!isUpgrade) {
+    if (!isUpgrade && isLocalNetwork) {
       console.log("\n📄 Deploying MockUSDT...");
       const MockUSDT = await ethers.getContractFactory("MockUSDT");
       const mockUSDT = await MockUSDT.deploy();
@@ -182,7 +194,8 @@ async function main() {
       console.log(`✅ MockUSDT deployed to: ${usdtAddress}`);
       console.log(`   Deployer USDT balance: ${ethers.formatUnits(usdtBalance, 6)} USDT`);
     } else {
-      // For upgrades, reuse the existing token address from the network config
+      // Upgrades, and every fresh deployment on a live chain, reuse the token
+      // address already recorded in the network config
       try {
         usdtAddress = readNetworkConfig().evm?.[TARGET_NETWORK]?.tokens?.USDT?.address;
         if (usdtAddress) {
@@ -195,26 +208,44 @@ async function main() {
       }
     }
 
-    // Configure proxy deployment fee via module (3 USDT).
-    // Fresh deployments only — upgrades must never overwrite the live fee
-    // model (production charges native ETH with its own treasury settings)
-    if (!isUpgrade && usdtAddress) {
-      console.log("\n💰 Configuring proxy deployment fee...");
-      tx = await proxyDeploymentModule.setPaymentToken(usdtAddress);
-      await tx.wait();
-      console.log(`   ✅ Payment token set to: ${usdtAddress}`);
+    // Configure the deposit-address fee. Fresh deployments only — upgrades must
+    // never overwrite a live fee model. Localhost charges the mock ERC20 so the
+    // approve-then-pay path gets exercised; live chains charge native ETH, which
+    // a user arriving with nothing but a card can actually pay.
+    if (!isUpgrade) {
+      console.log("\n💰 Configuring deposit-address fee...");
 
-      tx = await proxyDeploymentModule.setTreasuryAddress(deployer.address);
-      await tx.wait();
-      console.log(`   ✅ Treasury address set to: ${deployer.address}`);
+      if (isLocalNetwork && usdtAddress) {
+        tx = await proxyDeploymentModule.setPaymentToken(usdtAddress);
+        await tx.wait();
+        console.log(`   ✅ Payment token set to: ${usdtAddress}`);
 
-      tx = await proxyDeploymentModule.setProxyDeploymentFee(3_000_000); // 3 USDT (6 decimals)
-      await tx.wait();
-      console.log("   ✅ Proxy deployment fee set to: 3 USDT");
+        tx = await proxyDeploymentModule.setTreasuryAddress(deployer.address);
+        await tx.wait();
+        console.log(`   ✅ Treasury address set to: ${deployer.address}`);
+
+        tx = await proxyDeploymentModule.setProxyDeploymentFee(3_000_000); // 3 USDT (6 decimals)
+        await tx.wait();
+        console.log("   ✅ Deposit-address fee set to: 3 USDT");
+      } else {
+        // address(0) selects native ETH payment
+        tx = await proxyDeploymentModule.setPaymentToken(ethers.ZeroAddress);
+        await tx.wait();
+        console.log("   ✅ Payment token set to: native ETH");
+
+        tx = await proxyDeploymentModule.setTreasuryAddress(deployer.address);
+        await tx.wait();
+        console.log(`   ✅ Treasury address set to: ${deployer.address}`);
+
+        const fee = ethers.parseEther(LIVE_PROXY_FEE_ETH);
+        tx = await proxyDeploymentModule.setProxyDeploymentFee(fee);
+        await tx.wait();
+        console.log(`   ✅ Deposit-address fee set to: ${LIVE_PROXY_FEE_ETH} ETH`);
+      }
     }
 
     // Deploy and configure mock PoolTogether vaults for localhost testing
-    if (!isUpgrade && !isProduction && usdtAddress) {
+    if (!isUpgrade && isLocalNetwork && !isProduction && usdtAddress) {
       console.log("\n🎰 Deploying mock PoolTogether contracts...");
 
       const MockPrizeVault = await ethers.getContractFactory("MockPrizeVault");

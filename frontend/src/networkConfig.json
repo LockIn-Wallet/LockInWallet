@@ -67,7 +67,7 @@
           "recommended": true
         },
         "USDC": {
-          "address": "0xA0b86a33E6B6c3c3A3B8DBbc81b2B4C98B25C96f",
+          "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
           "symbol": "USDC",
           "name": "USD Coin",
           "decimals": 6,
@@ -114,6 +114,45 @@
         },
         "DAI": {
           "address": "0xDA10009cBd5D07dd0CeCc66161FC93D7c9000da1",
+          "symbol": "DAI",
+          "name": "Dai Stablecoin",
+          "decimals": 18,
+          "recommended": true
+        }
+      }
+    },
+    "base": {
+      "chainId": 8453,
+      "name": "Base",
+      "nativeCurrency": {
+        "name": "Ethereum",
+        "symbol": "ETH",
+        "decimals": 18
+      },
+      "rpcUrls": [
+        "https://mainnet.base.org"
+      ],
+      "blockExplorerUrls": [
+        "https://basescan.org"
+      ],
+      "savingsContract": "0xA827CDB73b986e987fA88B8f5471ECa25E8b9d63",
+      "tokens": {
+        "USDT": {
+          "address": "0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2",
+          "symbol": "USDT",
+          "name": "Tether USD",
+          "decimals": 6,
+          "recommended": true
+        },
+        "USDC": {
+          "address": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+          "symbol": "USDC",
+          "name": "USD Coin",
+          "decimals": 6,
+          "recommended": true
+        },
+        "DAI": {
+          "address": "0x50c5725949A6F0c72E6C4a641F24049A917DB0Cb",
           "symbol": "DAI",
           "name": "Dai Stablecoin",
           "decimals": 18,
