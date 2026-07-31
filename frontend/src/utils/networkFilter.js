@@ -120,7 +120,7 @@ export const getNetworkDisplayName = (networkType, networkKey, showStatus = fals
  * Production network constants - networks that should be available when deployed
  */
 export const PRODUCTION_NETWORKS = {
-  evm: ["ethereum", "optimism"],
+  evm: ["ethereum", "optimism", "base"],
   solana: [] // Solana networks excluded from production (devnet/mainnet removed)
 };
 
@@ -145,8 +145,10 @@ export const getDefaultNetwork = (networkType) => {
 
   if (deployedNetworks.length > 0) {
     // Priority order for deployed networks
+    // Optimism stays first: existing savings live there, and a default that
+    // moved would point returning users at an empty wallet
     const priorities = {
-      evm: ["optimism", "ethereum"],
+      evm: ["optimism", "base", "ethereum"],
       solana: ["localhost", "mainnet", "devnet"]
     };
 
