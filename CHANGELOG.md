@@ -22,6 +22,38 @@ these notes on the in-app **Governance** page before they execute.
 ## [Unreleased]
 
 ### Added
+- Card purchases (Transak) that pay out **directly into the locked wallet**.
+  The provider delivers USDC to the user's permanent deposit address with the
+  payout address form disabled server-side, so bought funds land inside savings
+  under the existing spending limits and never pass through a wallet the user
+  can spend from; the `UserProxy` sweep credits them on the next balance
+  refresh. **On-chain:** no contract change — this reuses the deterministic
+  deposit address and `sweepERC20` already deployed. Needs the serverless
+  endpoint `frontend/api/transak/session.js`, because Transak mints widget URLs
+  server-side from an API secret; without `TRANSAK_API_KEY`,
+  `TRANSAK_API_SECRET` and `REACT_APP_ENABLE_ONRAMP=true` the feature is absent
+  from the UI. Offered only where the provider sells USDC **and** our contracts
+  are deployed, and disabled outright if the provider's token address disagrees
+  with `networkConfig.json` (a mismatch would strand the purchase at an address
+  the contracts do not sweep).
+- **Base (chain 8453) deployed** — `SavingsCore` at `0xA827CDB73b986e987fA88B8f5471ECa25E8b9d63` with all nine modules registered, `developmentMode` off, and the deposit-address fee set to 0.001 ETH in native ETH (matching Optimism). Also added: `hardhat.config.ts` network entry,
+  a frontend `networkConfig.json` entry with on-chain verified native
+  USDC/USDT/DAI addresses, and inclusion in the production network list. Base
+  is what makes card purchases possible — Transak sells no stablecoin on
+  Optimism, only ETH. **On-chain:** fresh deployment, not an upgrade; Optimism
+  is untouched and stays the default network, so existing users are unaffected.
+  Base's core happens to share Optimism's address because the deployer's nonce
+  sequence lined up across the two chains — they are independent deployments
+  with their own storage. Upgrades on Base still run off the single deployer key
+  until governance is deployed there.
+- `deploy-modular.js` gates mock contracts on the network being localhost
+  rather than on the `PRODUCTION` env flag. A fresh deploy to any live chain
+  previously deployed `MockUSDT` and wrote that address into the frontend as
+  real USDT, and set the deposit-address fee to 3 of those unobtainable mock
+  tokens — with or without `PRODUCTION=true`. Live chains now keep the token
+  addresses already in `networkConfig.json` and charge the fee in native ETH
+  (`PROXY_FEE_ETH`, default 0.001), which a user arriving with only a card can
+  actually pay.
 - Yearly spending limits, plus an hourly window, alongside the existing
   daily/weekly/monthly. Periods are now defined in one catalog
   (`frontend/src/utils/spendingPeriods.js`) and passed to the contracts as
@@ -166,6 +198,10 @@ these notes on the in-app **Governance** page before they execute.
   page.
 
 ### Fixed
+- The Ethereum mainnet USDC address in `networkConfig.json` was not USDC
+  (`0xA0b86a33…C96f`); corrected to
+  `0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48`. Ethereum has no deployed core
+  contract, so no user funds were ever routed through the wrong address.
 - Home page copy no longer claims "zero admin keys". The page now states the
   actual upgrade trust model from [SECURITY.md](SECURITY.md) — upgrades are
   executed by a single maintainer key today, an on-chain 48h timelock is

@@ -518,6 +518,9 @@ cd frontend && npm run *   # Work directly in frontend folder
 - **ethereum/CLAUDE.md**: Detailed EVM development guide (contracts, deployment, modules)
 - **solana/CLAUDE.md**: Detailed Solana development guide (programs, deployment, Anchor)
 - **frontend/**: React app documentation for multi-blockchain UI
+- **ONRAMP.md**: Card purchases (Transak) — why the flow needs a serverless
+  endpoint, its environment variables, and the rules that decide which chains
+  offer it
 
 ### Release documentation rules
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import PropTypes from "prop-types";
 import { ethers } from "ethers";
 
@@ -8,6 +8,7 @@ import {
   layoutStyles,
   formStyles,
   buttonStyles,
+  utilityStyles,
   colors,
   spacing,
   fontSize,
@@ -16,6 +17,11 @@ import {
 
 // Import utility functions
 import { getCurrentNetwork } from "../../utils/walletUtils.js";
+import {
+  getOnrampToken,
+  startOnrampPurchase,
+  closeOnramp,
+} from "../../services/onramp.service.js";
 
 // Network configuration constants
 const ETH_ADDRESS = "0x0000000000000000000000000000000000000000";
@@ -57,6 +63,14 @@ const DepositInterface = ({
   const [isDeploying, setIsDeploying] = useState(false);
   const [depositAddress, setDepositAddress] = useState("");
   const [isProxyDeployed, setIsProxyDeployed] = useState(false);
+  const [isBuying, setIsBuying] = useState(false);
+
+  // The card provider only sells the stablecoin on some chains, so the whole
+  // section is absent where a purchase could not be delivered
+  const onrampToken = useMemo(
+    () => getOnrampToken(networkType, selectedNetwork),
+    [networkType, selectedNetwork]
+  );
 
   // Proxy status checking — the transaction manager resolves the deposit
   // address for the legacy account or the currently selected vault
@@ -290,6 +304,31 @@ const DepositInterface = ({
     }
   };
 
+  // Buy with a card, paid out to the permanent deposit address so the bought
+  // funds land inside the locked wallet instead of a spendable one
+  const handleBuyWithCard = async () => {
+    setIsBuying(true);
+    try {
+      await startOnrampPurchase({
+        transactionManager,
+        networkType,
+        selectedNetwork,
+        onPurchase: async () => {
+          // Funds arrive at the deposit address; refreshing sweeps them into savings
+          if (onBalanceUpdate) await onBalanceUpdate();
+        },
+      });
+    } catch (error) {
+      console.error("Card purchase could not start:", error);
+      alert(error.message);
+    } finally {
+      setIsBuying(false);
+    }
+  };
+
+  // Never leave the widget behind when the user navigates away mid-purchase
+  useEffect(() => closeOnramp, []);
+
   // Wrapper function to call internal deposit function with local amount
   const handleDeposit = () => {
     deposit(selectedToken, depositAmount);
@@ -439,6 +478,58 @@ const DepositInterface = ({
           </button>
         </div>
       </div>
+
+      {/* Card purchase, delivered straight into the locked wallet */}
+      {onrampToken && (
+        <div style={layoutStyles.marginBottomLarge}>
+          <h4
+            style={{
+              color: colors.success.light,
+              margin: `0 0 ${spacing.md} 0`,
+            }}
+          >
+            💳 Buy {onrampToken.symbol} with a card
+          </h4>
+          <p
+            style={{
+              ...utilityStyles.bodyTextSmall,
+              marginBottom: spacing.xl,
+            }}
+          >
+            {onrampToken.symbol} you buy is paid out to your permanent deposit
+            address, so it lands in your locked savings under the same spending
+            limits — it never passes through a wallet you can spend from.
+          </p>
+
+          <div style={cardStyles.proxyCardPending}>
+            <button
+              onClick={handleBuyWithCard}
+              disabled={!isProxyDeployed || isBuying}
+              style={
+                !isProxyDeployed || isBuying
+                  ? buttonStyles.disabled
+                  : buttonStyles.primary
+              }
+            >
+              {isBuying
+                ? "⏳ Opening..."
+                : `💳 Buy ${onrampToken.symbol} with a card`}
+            </button>
+
+            <p
+              style={{
+                ...utilityStyles.caption,
+                marginTop: spacing.xl,
+                marginBottom: 0,
+              }}
+            >
+              {isProxyDeployed
+                ? "🔒 Handled by Transak — payment methods, identity checks and fees are theirs. Whatever you buy settles to your deposit address."
+                : "Generate your permanent deposit address below first — that's where a card purchase is delivered."}
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Direct Deposit from Exchange/Other Wallet */}
       <div>

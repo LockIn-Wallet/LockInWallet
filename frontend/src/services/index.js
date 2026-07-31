@@ -10,6 +10,7 @@ export * from './withdrawalRequests.service.js';
 export * from './bypassRequests.service.js';
 export * from './transactionHistory.service.js';
 export * from './referral.service.js';
+export * from './onramp.service.js';
 
 // Utility functions
 export * from './utils/addressValidation.js';

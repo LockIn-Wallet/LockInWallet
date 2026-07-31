@@ -14,6 +14,10 @@ export const RELEASE_NOTES = [
     title: "A home page you can check",
     highlights: [
       {
+        emoji: "💳",
+        text: "The wallet now runs on Base as well as Optimism, and on Base you can top up with a bank card — the money goes straight into your locked savings. You buy USDC through Transak and it is paid out to your permanent deposit address, never to a wallet you can spend from, so it arrives already under your spending limits. The card option stays hidden on Optimism because no stablecoin can be bought there. Transak runs the payment and its own identity checks, and charges its own fee. Your existing Optimism savings are untouched and Optimism is still the network you land on by default.",
+      },
+      {
         emoji: "🕵️",
         text: "Inviting someone no longer lets you watch their money. Before, anyone who shared a referral link could pull up the list of wallets that joined through it — and every balance on this chain is public, so that was a window into what those people had saved. Now you only ever see a number: how many people locked in through your link. Being paid for a referral and being able to spy on that person are two different things, and only one of them is part of the deal.",
       },

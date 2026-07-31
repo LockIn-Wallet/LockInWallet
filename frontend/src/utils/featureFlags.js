@@ -6,3 +6,11 @@
  */
 export const isSolanaEnabled = () =>
   process.env.REACT_APP_ENABLE_SOLANA === "true";
+
+/**
+ * Card purchases need the Transak credentials configured on the serverless
+ * function, which the browser cannot see. This flag is how a deployment
+ * declares that the backend half is in place.
+ */
+export const isOnrampEnabled = () =>
+  process.env.REACT_APP_ENABLE_ONRAMP === "true";

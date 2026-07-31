@@ -10,6 +10,7 @@
     "@solana/wallet-adapter-react-ui": "^0.9.35",
     "@solana/wallet-adapter-wallets": "^0.19.32",
     "@solana/web3.js": "^1.78.9",
+    "@transak/ui-js-sdk": "^1.0.0",
     "ajv": "^8.17.1",
     "borsh": "^2.0.0",
     "chart.js": "^4.5.1",
