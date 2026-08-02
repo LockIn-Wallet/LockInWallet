@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 
 import { styles, colors, fontSize, fontWeight, spacing } from "../../styles";
 import { PRIZE_SAVINGS_PATH } from "../../utils/prizeSavingsContent.js";
+import { isLinkVisible, isPrizePoolEnabled } from "../../utils/featureFlags.js";
 
 const textLinkStyle = {
   color: colors.text.muted,
@@ -28,6 +29,7 @@ const TEXT_LINKS = [
     href: PRIZE_SAVINGS_PATH,
     label: "Prize Pool",
     title: "No-loss prize pool — win prizes without risking your savings",
+    flag: isPrizePoolEnabled,
   },
   {
     href: "/governance",
@@ -48,7 +50,7 @@ const SocialLinks = () => {
 
   return (
     <div style={styles.socialLinks.container}>
-      {TEXT_LINKS.map((link) => {
+      {TEXT_LINKS.filter(isLinkVisible).map((link) => {
         const linkProps = {
           style: textLinkStyle,
           title: link.title,

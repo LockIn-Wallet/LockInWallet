@@ -7,6 +7,7 @@ import logo from "../../../assets/images/logo-mint-nav.png";
 import { landingStyles } from "../../../styles";
 
 import { NAV_LINKS, GITHUB_URL } from "../../../utils/landingContent.js";
+import { isLinkVisible } from "../../../utils/featureFlags.js";
 
 /**
  * LandingNav - top bar for the logged-out page. The GitHub link is set in
@@ -20,7 +21,7 @@ const LandingNav = ({ onLaunch }) => (
     </LandingLink>
 
     <div className="landing-nav-links" style={landingStyles.navLinks}>
-      {NAV_LINKS.map((link) => (
+      {NAV_LINKS.filter(isLinkVisible).map((link) => (
         <LandingLink
           key={link.label}
           href={link.href}

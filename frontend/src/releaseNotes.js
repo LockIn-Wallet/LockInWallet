@@ -51,7 +51,7 @@ export const RELEASE_NOTES = [
       },
       {
         emoji: "🎁",
-        text: "The no-loss prize pool now has a page of its own — find it as 'Prize pool' in the menu, next to the Savings Visualiser. You can opt in to a shared pool where only the interest is drawn as prizes: win and you gain, don't win and you lose nothing, because your deposit is never at stake. The page keeps the live draw countdowns and lets you simulate what any deposit could win.",
+        text: "The no-loss prize pool is hidden for now. It isn't finished, and we would rather show you nothing than a page of numbers that don't mean anything yet — so the 'Prize pool' menu entry and the prize controls in your balance list are gone until the real thing works. Nothing you hold is affected: no money was ever in it.",
       },
       {
         emoji: "🎨",

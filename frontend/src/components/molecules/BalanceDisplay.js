@@ -14,6 +14,7 @@ import {
 
 // Import utility functions
 import { getCurrentNetwork } from "../../utils/walletUtils.js";
+import { isPrizePoolEnabled } from "../../utils/featureFlags.js";
 
 // Import services
 import {
@@ -61,8 +62,11 @@ const BalanceDisplay = ({
   const [vaultAvailable, setVaultAvailable] = useState({});
   const [claimLoading, setClaimLoading] = useState(false);
 
+  // With the prize pool flagged off nothing is loaded, so `vaultAvailable` and
+  // `vaultStates` stay empty and every prize control below stays unrendered
   const loadPoolTogetherData = useCallback(async () => {
-    if (networkType !== "evm" || !transactionManager) return;
+    if (!isPrizePoolEnabled() || networkType !== "evm" || !transactionManager)
+      return;
     try {
       const network = getCurrentNetwork(networkType, selectedNetwork);
       const tokens = Object.entries(network.tokens).filter(([, t]) => t.recommended);

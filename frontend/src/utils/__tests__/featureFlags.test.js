@@ -1,5 +1,9 @@
 // Unit tests for feature flags and their effect on network availability
-const { isSolanaEnabled } = require("../featureFlags.js");
+const {
+  isSolanaEnabled,
+  isPrizePoolEnabled,
+  isLinkVisible,
+} = require("../featureFlags.js");
 const { getAvailableNetworks } = require("../networkFilter.js");
 
 const ORIGINAL_ENV = process.env.REACT_APP_ENABLE_SOLANA;
@@ -29,6 +33,31 @@ describe("isSolanaEnabled", () => {
   test("is on when set to 'true'", () => {
     process.env.REACT_APP_ENABLE_SOLANA = "true";
     expect(isSolanaEnabled()).toBe(true);
+  });
+});
+
+describe("isPrizePoolEnabled", () => {
+  // Hardcoded off in featureFlags.js — this test is the tripwire that fails
+  // if the prize pool is switched back on without the feature being ready
+  test("is off while the feature is unfinished", () => {
+    expect(isPrizePoolEnabled()).toBe(false);
+  });
+});
+
+describe("isLinkVisible", () => {
+  test("keeps links that carry no flag", () => {
+    expect(isLinkVisible({ label: "Governance", href: "/governance" })).toBe(true);
+  });
+
+  test("follows the flag when a link carries one", () => {
+    expect(isLinkVisible({ label: "On", flag: () => true })).toBe(true);
+    expect(isLinkVisible({ label: "Off", flag: () => false })).toBe(false);
+  });
+
+  test("hides the prize pool link while its flag is off", () => {
+    expect(isLinkVisible({ label: "Prize pool", flag: isPrizePoolEnabled })).toBe(
+      false
+    );
   });
 });
 

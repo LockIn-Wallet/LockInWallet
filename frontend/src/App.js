@@ -36,7 +36,7 @@ import {
   getDefaultNetwork,
   getAvailableNetworks,
 } from "./utils/networkFilter.js";
-import { isSolanaEnabled } from "./utils/featureFlags.js";
+import { isSolanaEnabled, isPrizePoolEnabled } from "./utils/featureFlags.js";
 import { createEmptyLimitEdits } from "./utils/spendingPeriods.js";
 import { PRIZE_SAVINGS_PATH } from "./utils/prizeSavingsContent.js";
 import {
@@ -936,14 +936,18 @@ function AppContentInner({
             </Suspense>
           }
         />
-        <Route
-          path={PRIZE_SAVINGS_PATH}
-          element={
-            <Suspense fallback={<div />}>
-              <PrizeSavings />
-            </Suspense>
-          }
-        />
+        {/* Prize pool is feature-flagged off until it ships — with the flag
+            off the catch-all below sends /prize-savings back home */}
+        {isPrizePoolEnabled() && (
+          <Route
+            path={PRIZE_SAVINGS_PATH}
+            element={
+              <Suspense fallback={<div />}>
+                <PrizeSavings />
+              </Suspense>
+            }
+          />
+        )}
         <Route
           path="/governance"
           element={

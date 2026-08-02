@@ -188,6 +188,16 @@ these notes on the in-app **Governance** page before they execute.
   heading that the component beneath them already renders.
 
 ### Removed
+- The prize pool is hidden behind a feature flag until it is finished: the
+  `/prize-savings` page (route dropped from the sitemap and redirected home),
+  its entries in the landing nav and the in-app top-right links, and the
+  PoolTogether vault toggle, grand-prize line and claim button in the balance
+  list. The switch is `PRIZE_POOL_ENABLED` in
+  `frontend/src/utils/featureFlags.js` — hardcoded off rather than
+  environment-driven, since it is off for every environment until it ships. The
+  `PoolTogetherModule` contract and the adapter methods are untouched — this
+  is UI visibility only, so any funds already in a vault stay withdrawable
+  once the flag is on. No contract changes.
 - The in-app tutorial card shown during setup. It re-sold the product to
   users who had already connected, duplicating the home page, and claimed
   compromise resistance was "coming soon" — the recovery system shipped in
