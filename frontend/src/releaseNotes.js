@@ -50,6 +50,10 @@ export const RELEASE_NOTES = [
         text: "The wallet screen now opens with what you can actually withdraw right now — each of your limits, how much is left in it, and when it resets. Withdrawing moved above the limits themselves, since taking money out is the everyday action and changing a limit is the rare one.",
       },
       {
+        emoji: "🦊",
+        text: "If you've never done this before, pressing connect now explains it instead of telling you off. What MetaMask is, why there's no password here, what a chain is and why ours is Optimism — four short paragraphs, then the download link. It used to be a pop-up box reading 'Please install MetaMask!', which helps nobody who doesn't already know what that means.",
+      },
+      {
         emoji: "🎁",
         text: "The no-loss prize pool is hidden for now. It isn't finished, and we would rather show you nothing than a page of numbers that don't mean anything yet — so the 'Prize pool' menu entry and the prize controls in your balance list are gone until the real thing works. Nothing you hold is affected: no money was ever in it.",
       },

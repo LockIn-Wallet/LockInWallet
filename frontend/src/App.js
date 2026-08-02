@@ -71,6 +71,7 @@ import Footer from "./components/atoms/Footer.js";
 import CollapsibleSection from "./components/atoms/CollapsibleSection.js";
 import StatusHeader from "./components/molecules/StatusHeader.js";
 import WalletConnectionPrompt from "./components/molecules/WalletConnectionPrompt.js";
+import WalletOnboardingModal from "./components/molecules/WalletOnboardingModal.js";
 import BalanceDisplay from "./components/molecules/BalanceDisplay.js";
 import AllowanceBar from "./components/molecules/AllowanceBar.js";
 import DepositInterface from "./components/molecules/DepositInterface.js";
@@ -531,6 +532,8 @@ function AppContentInner({
   const [evmUserAddress, setEvmUserAddress] = useState("");
   const [currentChainId, setCurrentChainId] = useState(null);
   const [isNetworkSwitching, setIsNetworkSwitching] = useState(false);
+  // Raised when someone presses connect with no wallet extension installed
+  const [showWalletOnboarding, setShowWalletOnboarding] = useState(false);
 
   // Solana wallet state
   let solanaConnected = false;
@@ -843,7 +846,9 @@ function AppContentInner({
         walletOperationInProgress.current = false;
       }
     } else if (!window.ethereum) {
-      alert("Please install MetaMask!");
+      // No extension at all — this is someone's first time, so explain what a
+      // wallet is rather than barking an instruction at them
+      setShowWalletOnboarding(true);
     }
   }, 1000);
 
@@ -906,6 +911,11 @@ function AppContentInner({
           : styles.app.container
       }
     >
+      <WalletOnboardingModal
+        open={showWalletOnboarding}
+        onClose={() => setShowWalletOnboarding(false)}
+      />
+
       {!isLanding && <SocialLinks />}
 
       {!isLanding && (

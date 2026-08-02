@@ -114,6 +114,14 @@ these notes on the in-app **Governance** page before they execute.
   so nothing in normal use changes. **On-chain:** upgrade
   `TimePeriodLimitsModule` in place; existing delays above the new ceiling
   are not rewritten, but no path can set one again.
+- Pressing connect with no wallet extension installed now opens an onboarding
+  dialog instead of `alert("Please install MetaMask!")`. It explains, in plain
+  words, what MetaMask is, that it is the login, what a chain is, and why this
+  one is Optimism — then links to the download and warns that the 12-word
+  phrase is the money. The connect button also stays visible without an
+  extension (it used to render nothing at all, leaving a first-time visitor
+  with nothing to press). Copy lives in
+  `frontend/src/utils/walletOnboardingContent.js`. Frontend only.
 
 ### Changed
 - Referrers can no longer see **which** wallets they invited — only how many.

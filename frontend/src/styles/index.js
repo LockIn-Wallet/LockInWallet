@@ -52,6 +52,8 @@ export {
 
 export { layoutStyles, default as layout } from "./components/layout.js";
 
+export { modalStyles, default as modal } from "./components/modal.js";
+
 export {
   appStyles,
   getAllowanceFill,

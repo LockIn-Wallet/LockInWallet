@@ -21,18 +21,21 @@ const hasSolanaNetworks = () =>
  * Phantom / Solana wallet modal), reusable anywhere on the homepage.
  */
 const WalletConnectButtons = ({ networkType, connectWallet, onConnectPhantom }) => {
-  const canUseMetaMask = hasMetaMaskInstalled() && hasEvmNetworks();
+  const metaMaskInstalled = hasMetaMaskInstalled();
   const canUsePhantom = hasPhantomInstalled() && hasSolanaNetworks();
   const isInSolanaMode = networkType === "solana" && isSolanaEnabled();
 
-  const metaMaskButton = canUseMetaMask && (
+  // Without the extension the button still shows — pressing it opens the
+  // onboarding dialog. Hiding it left first-time visitors on a page whose
+  // whole purpose is the connect step, with nothing to press.
+  const metaMaskButton = hasEvmNetworks() && (
     <button
       onClick={connectWallet}
       style={buttonStyles.metamask}
       onMouseEnter={buttonHoverEffects.metamaskHover}
       onMouseLeave={buttonHoverEffects.metamaskReset}
     >
-      Connect MetaMask
+      {metaMaskInstalled ? "Connect MetaMask" : "Connect wallet"}
     </button>
   );
 
