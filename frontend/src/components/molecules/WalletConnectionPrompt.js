@@ -80,8 +80,8 @@ const WalletConnectionPrompt = ({
         <div style={landingStyles.inner}>
           <SectionHeading
             eyebrow="The long view"
-            title="Where will locking your savings get you"
-            lede="Set your split and watch four decades play out."
+            title="Where will locking your savings take you"
+            lede="Set your spending split and watch four decades play out."
           />
           <Suspense fallback={null}>
             <SavingsVisualiser compact title={null} subtitle={null} />
