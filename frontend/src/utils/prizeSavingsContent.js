@@ -59,7 +59,7 @@ export const PRIZE_FAQ = [
   {
     question: "Can I still withdraw while I am in the prize pool?",
     answer:
-      "Yes. Your withdrawal limits, approved destinations and the 24-hour emergency bypass all work unchanged. Leaving the pool takes one transaction and does not lock your funds for any extra period.",
+      "Yes. Your withdrawal limits, approved destinations and the emergency bypass all work unchanged. Leaving the pool takes one transaction and does not lock your funds for any extra period.",
   },
 ];
 

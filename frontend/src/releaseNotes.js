@@ -43,7 +43,7 @@ export const RELEASE_NOTES = [
       },
       {
         emoji: "📋",
-        text: "We removed the claim that there are 'zero admin keys' — it wasn't true. Upgrades are still executed by a single maintainer key today, and the page now says so plainly, alongside the protection that does hold: you can always start a full exit and be out within 24 hours.",
+        text: "We removed the claim that there are 'zero admin keys' — it wasn't true. Upgrades are still executed by a single maintainer key today, and the page now says so plainly, alongside the protection that does hold: you can always start withdrawing everything, and nobody can make you wait longer than the delay you picked yourself.",
       },
       {
         emoji: "📊",

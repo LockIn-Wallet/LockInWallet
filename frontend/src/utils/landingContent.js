@@ -36,16 +36,16 @@ export const PROOF_POINTS = [
     note: "Every contract that governs your vault is on GitHub.",
   },
   {
-    label: "TIME TO FULL EXIT",
-    value: "24 hours",
+    label: "TIME TO EXIT",
+    value: "24h–3 months",
     accent: true,
-    note: "The emergency bypass always gets you completely out within a day.",
+    note: "You set the wait when you set each limit. The emergency bypass then gets you completely out in exactly that time — nobody can extend it.",
   },
   {
     label: "LIVE ON",
     value: "Optimism",
     accent: false,
-    note: "Ethereum mainnet is underway. Same rules on both.",
+    note: "An Ethereum layer 2: it settles onto Ethereum itself, so it inherits Ethereum's security, but a transaction costs cents instead of dollars.",
   },
 ];
 
@@ -107,8 +107,8 @@ export const TRUST_POINTS = [
   },
   {
     icon: "clock",
-    title: "You can always leave in 24 hours",
-    body: "The emergency bypass is the cornerstone: whatever happens — including an upgrade you disagree with — you can start a full exit immediately and have everything out within a day.",
+    title: "You can always leave, on your own clock",
+    body: "The emergency bypass is the cornerstone: whatever happens — including an upgrade you disagree with — you can start withdrawing everything immediately. The wait is the one you chose for that limit, anywhere from 24 hours to 3 months, and nobody can lengthen it afterwards.",
   },
   {
     icon: "lock",
@@ -146,7 +146,7 @@ export const HOW_IT_WORKS = [
   },
   {
     title: "Spend under the cap",
-    body: "Anything within your limits clears instantly. Anything over waits 24 hours in the open.",
+    body: "Anything within your limits clears instantly. Anything over waits in the open for the delay you set — 24 hours at the shortest, up to 3 months.",
   },
 ];
 

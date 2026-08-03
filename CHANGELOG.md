@@ -124,6 +124,13 @@ these notes on the in-app **Governance** page before they execute.
   `frontend/src/utils/walletOnboardingContent.js`. Frontend only.
 
 ### Changed
+- The home page no longer states a flat "24 hours" time to full exit. Since
+  each limit carries its own wait, the proof strip, the trust card and the
+  "how it works" step now say the exit takes the delay the user chose —
+  24 hours to 3 months — and that nobody can lengthen it after the fact.
+  The "Live on Optimism" note now explains what Optimism is: an Ethereum
+  layer 2 that settles onto Ethereum for its security while costing cents
+  per transaction. Copy only, no contract change.
 - Referrers can no longer see **which** wallets they invited — only how many.
   `ReferralModule.getReferredUsers()` (a paginated dump of every invitee
   address) is gone, the invitee no longer appears in the `ReferralRecorded`
