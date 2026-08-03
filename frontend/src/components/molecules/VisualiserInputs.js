@@ -79,7 +79,7 @@ const VisualiserInputs = ({ inputs, onInputsChange }) => {
             className="block text-sm font-medium text-slate-300 mb-2"
             htmlFor="visualiser-income"
           >
-            Monthly income
+            Monthly savings
           </label>
           <input
             id="visualiser-income"
