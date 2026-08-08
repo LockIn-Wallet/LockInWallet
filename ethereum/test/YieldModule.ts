@@ -459,6 +459,9 @@ describe("YieldModule", function () {
       await ctx.vaultModule
         .connect(ctx.user1)
         .createVault(usdtVaultParams({ token: ctx.usdt.target, vaultType: VAULT_TYPE_COMMUNITY }));
+      // Community vaults never default into earning, so the creator opts in
+      // while still the only member — before anyone joins under those terms.
+      await ctx.vaultModule.connect(ctx.user1).setVaultYieldMode(1, MODE_STABLE);
       const vaultId = 1n;
 
       await ctx.usdt.connect(ctx.user1).approve(ctx.vaultModule.target, usdt6("3000"));
@@ -496,6 +499,9 @@ describe("YieldModule", function () {
       await ctx.vaultModule
         .connect(ctx.user1)
         .createVault(usdtVaultParams({ token: ctx.usdt.target, vaultType: VAULT_TYPE_COMMUNITY }));
+      // Community vaults never default into earning, so the creator opts in
+      // while still the only member — before anyone joins under those terms.
+      await ctx.vaultModule.connect(ctx.user1).setVaultYieldMode(1, MODE_STABLE);
 
       await ctx.usdt.connect(ctx.user1).approve(ctx.vaultModule.target, usdt6("1000"));
       await ctx.vaultModule.connect(ctx.user1).deposit(1, usdt6("1000"));
@@ -601,6 +607,9 @@ describe("YieldModule", function () {
       await ctx.vaultModule
         .connect(ctx.user1)
         .createVault(usdtVaultParams({ token: ctx.usdt.target, vaultType: VAULT_TYPE_COMMUNITY }));
+      // Community vaults never default into earning, so the creator opts in
+      // while still the only member — before anyone joins under those terms.
+      await ctx.vaultModule.connect(ctx.user1).setVaultYieldMode(1, MODE_STABLE);
 
       await ctx.usdt.connect(ctx.user1).approve(ctx.vaultModule.target, usdt6("1000"));
       await ctx.vaultModule.connect(ctx.user1).deposit(1, usdt6("1000"));
@@ -629,6 +638,9 @@ describe("YieldModule", function () {
       await ctx.vaultModule
         .connect(ctx.user1)
         .createVault(usdtVaultParams({ token: ctx.usdt.target, vaultType: VAULT_TYPE_COMMUNITY }));
+      // Community vaults never default into earning, so the creator opts in
+      // while still the only member — before anyone joins under those terms.
+      await ctx.vaultModule.connect(ctx.user1).setVaultYieldMode(1, MODE_STABLE);
 
       await ctx.usdt.connect(ctx.user1).approve(ctx.vaultModule.target, usdt6("1000"));
       await ctx.vaultModule.connect(ctx.user1).deposit(1, usdt6("1000"));
@@ -706,15 +718,46 @@ describe("YieldModule", function () {
       expect((await ctx.vaultModule.getVaultMember(vaultId, ctx.user1.address)).balance).to.equal(0);
     });
 
-    it("keeps a community vault's earning setting fixed", async function () {
+    it("never defaults a community vault into earning", async function () {
+      // A community vault holds other people's money under rules fixed at
+      // creation. Defaulting it into an outside protocol would commit members
+      // who never agreed and leave them no way out.
       const ctx = await loadFixture(deployYieldFixture);
       await ctx.vaultModule
         .connect(ctx.user1)
         .createVault(usdtVaultParams({ token: ctx.usdt.target, vaultType: VAULT_TYPE_COMMUNITY }));
 
+      expect(await ctx.yieldModule.effectiveMode(1)).to.equal(MODE_OFF);
+
+      await ctx.usdt.connect(ctx.user1).approve(ctx.vaultModule.target, usdt6("1000"));
+      await ctx.vaultModule.connect(ctx.user1).deposit(1, usdt6("1000"));
+      expect(await ctx.yieldModule.investedPrincipal(1)).to.equal(0);
+      expect(await ctx.usdt.balanceOf(ctx.vaultModule.target)).to.equal(usdt6("1000"));
+    });
+
+    it("lets a community creator opt in only while they are the only member", async function () {
+      const ctx = await loadFixture(deployYieldFixture);
+      await ctx.vaultModule
+        .connect(ctx.user1)
+        .createVault(usdtVaultParams({ token: ctx.usdt.target, vaultType: VAULT_TYPE_COMMUNITY }));
+
+      // Alone: allowed, so members can see the setting before they join.
+      await ctx.vaultModule.connect(ctx.user1).setVaultYieldMode(1, MODE_STABLE);
+      expect(await ctx.yieldModule.effectiveMode(1)).to.equal(MODE_STABLE);
+
+      // Once someone else has joined, the terms are fixed like every other rule.
+      await ctx.vaultModule.connect(ctx.user2).joinVault(1);
       await expect(
         ctx.vaultModule.connect(ctx.user1).setVaultYieldMode(1, MODE_OFF),
       ).to.be.revertedWith("Community yield immutable");
+    });
+
+    it("lets a personal vault owner switch off at any time", async function () {
+      const ctx = await loadFixture(deployYieldFixture);
+      const vaultId = await createAndDeposit(ctx, ctx.user1, usdt6("1000"));
+      expect(await ctx.yieldModule.effectiveMode(vaultId)).to.equal(MODE_STABLE);
+      await ctx.vaultModule.connect(ctx.user1).setVaultYieldMode(vaultId, MODE_OFF);
+      expect(await ctx.yieldModule.effectiveMode(vaultId)).to.equal(MODE_OFF);
     });
 
     it("lets only the creator change the mode, and rejects a no-op change", async function () {

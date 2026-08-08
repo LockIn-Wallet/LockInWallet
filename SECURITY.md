@@ -113,9 +113,14 @@ why signers are chosen by role and independence, not by token holdings).
 
 ## Third-party protocol exposure (earning on savings)
 
-Earning is **opt-out, and off by default for any vault that existed before the
-feature shipped.** While it is on, that vault's balance is supplied to an
-outside lending protocol (Aave v3). This is the one place where the wallet's
+Earning is **opt-out, off by default for any vault that existed before the
+feature shipped, and never on by default for a community vault at all.** A
+community vault holds other people's money under rules fixed at creation, so
+defaulting it into an outside protocol would commit members who never agreed and
+— since those rules cannot change afterwards — leave them no way out. Its creator
+opts in explicitly while still its only member, so anyone joining can see the
+setting first. While earning is on, the vault's balance is supplied to an outside
+lending protocol (Aave v3). This is the one place where the wallet's
 safety no longer depends only on our own contracts, so the honest statement of
 the risk:
 

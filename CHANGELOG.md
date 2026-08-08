@@ -125,6 +125,24 @@ these notes on the in-app **Governance** page before they execute.
   recorded as a deficit and repaid by the first interest, never taken from a
   member's balance. `MockAavePool.setSupplyShortfall` reproduces both this and a
   lossy token in the offline suite.
+- **Community vaults are never defaulted into earning.** The watermark applies to
+  personal vaults only. A community vault holds other people's money under rules
+  fixed at creation, so defaulting it into Aave would commit members who never
+  agreed and leave them no way out — `setVaultYieldMode` rejects community vaults
+  once anyone else has joined. Its creator now opts in while still the only
+  member, so members see the setting before joining, exactly as they do the
+  penalty rate and the limits.
+- Earning applies **regardless of balance or deposit size** — there is no minimum
+  anywhere, by design. An amount too small to buy a single strategy share is left
+  idle and swept in with the next deposit rather than stranded.
+- `YieldDeficit` is only emitted once the shortfall exceeds a millionth of the
+  vault's principal, so Aave's routine one-unit rounding no longer reads as a
+  protocol loss in monitoring. The deficit itself is still recorded in full.
+- Prize-savings plumbing (`harvestPrize`, `prizeFeeBps`) is **not** in this
+  release. It was untested and unreachable — no prize strategy exists yet — so it
+  is pure audit surface; `setStrategy` accepts stable strategies only. It returns
+  with `PoolTogetherStrategy`, where it can be tested. The dialog still shows the
+  prize option, disabled, so the choice is visible.
 - Escape hatches for the new third-party dependency: `pauseStrategies` stops new
   investment without affecting withdrawals, and `emergencyExitVault` /
   `emergencyExitToken` divest everything back into `VaultSystemModule` and set

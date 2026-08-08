@@ -38,14 +38,12 @@ contract YieldModule is Initializable, UUPSUpgradeable, OwnableUpgradeable, IYie
     bool private locked; // slot 4 (packed)
     bool public strategiesPaused; // slot 4 (packed)
     uint256 public strategyChangeDelay; // slot 5
-    uint256 public prizeFeeBps; // slot 6 — flat share of each claimed prize
-    uint256 public minInvestAmount; // slot 7 — dust stays idle rather than burning gas
 
-    mapping(address => mapping(uint8 => address)) private strategies; // slot 8  token => mode => strategy
-    mapping(uint256 => VaultYieldState) private vaultYield; // slot 9
-    mapping(uint256 => mapping(address => uint256)) private memberYieldDebt; // slot 10
-    mapping(address => uint256) public pendingFees; // slot 11 — fee assets held here, awaiting sweep
-    mapping(bytes32 => uint256) private strategyChangeReadyAt; // slot 12
+    mapping(address => mapping(uint8 => address)) private strategies; // slot 6  token => mode => strategy
+    mapping(uint256 => VaultYieldState) private vaultYield; // slot 7
+    mapping(uint256 => mapping(address => uint256)) private memberYieldDebt; // slot 8
+    mapping(address => uint256) public pendingFees; // slot 9 — fee assets held here, awaiting sweep
+    mapping(bytes32 => uint256) private strategyChangeReadyAt; // slot 10
 
     // ==== APPEND NEW STATE BELOW THIS LINE ONLY ====
 
@@ -55,9 +53,16 @@ contract YieldModule is Initializable, UUPSUpgradeable, OwnableUpgradeable, IYie
     /// harvest to zero and loses it permanently. Do not "unify" these.
     uint256 private constant YIELD_PRECISION = 1e18;
     uint256 private constant MAX_FEE_BPS = 200; // the owner can never charge more than 2 pp
-    uint256 private constant MAX_PRIZE_FEE_BPS = 2000;
     uint256 private constant MAX_BPS = 10000;
     uint256 private constant SECONDS_PER_YEAR = 365 days;
+    uint8 private constant VAULT_TYPE_PERSONAL = 0;
+
+    /// @dev Aave's scaled-balance rounding leaves a position a unit or two short
+    /// of what was supplied, which lands here as a deficit. That is real and is
+    /// accounted for, but it is not a protocol loss and should not page anyone.
+    /// Only emit the event once the shortfall is worth more than a millionth of
+    /// the vault's principal, which scales with both size and token decimals.
+    uint256 private constant DEFICIT_EVENT_THRESHOLD = 1e6;
 
     modifier nonReentrant() {
         require(!locked, "Reentrant call");
@@ -86,7 +91,6 @@ contract YieldModule is Initializable, UUPSUpgradeable, OwnableUpgradeable, IYie
         __UUPSUpgradeable_init();
         savingsCore = ISavingsCore(_savingsCore);
         managementFeeBps = 100; // one percentage point of the rate
-        prizeFeeBps = 1000;
         strategyChangeDelay = 7 days;
     }
 
@@ -105,18 +109,8 @@ contract YieldModule is Initializable, UUPSUpgradeable, OwnableUpgradeable, IYie
         emit ManagementFeeSet(feeBps);
     }
 
-    function setPrizeFeeBps(uint256 feeBps) external onlyOwner {
-        require(feeBps <= MAX_PRIZE_FEE_BPS, "Fee above maximum");
-        prizeFeeBps = feeBps;
-        emit PrizeFeeSet(feeBps);
-    }
-
     function setStrategyChangeDelay(uint256 delay) external onlyOwner {
         strategyChangeDelay = delay;
-    }
-
-    function setMinInvestAmount(uint256 amount) external onlyOwner {
-        minInvestAmount = amount;
     }
 
     function pauseStrategies(bool paused) external onlyOwner {
@@ -139,7 +133,10 @@ contract YieldModule is Initializable, UUPSUpgradeable, OwnableUpgradeable, IYie
     /// a token+mode is immediate, since no funds are parked there yet.
     function setStrategy(address token, uint8 mode, address strategy) external onlyOwner {
         require(token != address(0), "Invalid token");
-        require(mode == MODE_STABLE || mode == MODE_PRIZE, "Invalid mode");
+        // MODE_PRIZE lands with PoolTogetherStrategy. Until then there is no
+        // code here to turn a claimed prize into member yield, so accepting a
+        // prize strategy would take deposits it could never pay a return on.
+        require(mode == MODE_STABLE, "Invalid mode");
         require(strategy != address(0), "Invalid strategy");
         require(IYieldStrategy(strategy).asset() == token, "Strategy asset mismatch");
         require(IYieldStrategy(strategy).mode() == mode, "Strategy mode mismatch");
@@ -182,8 +179,12 @@ contract YieldModule is Initializable, UUPSUpgradeable, OwnableUpgradeable, IYie
     /// @notice Invest `amount` of `token` for `vaultId`. A third-party protocol
     /// must never be able to block a user's deposit, so every failure path here
     /// returns the tokens and leaves them idle instead of reverting.
+    /// @dev There is deliberately no minimum. Earning applies whatever the
+    /// balance or the deposit — a small saver is exactly who this is for. An
+    /// amount too small to buy a single share is simply left idle and swept in
+    /// with the next deposit, never stranded.
     function onDeposit(uint256 vaultId, address token, uint256 amount) external onlyVaultModule {
-        if (strategiesPaused || token == address(0) || amount == 0 || amount < minInvestAmount) return;
+        if (strategiesPaused || token == address(0) || amount == 0) return;
 
         uint8 mode = effectiveMode(vaultId);
         if (mode != MODE_STABLE && mode != MODE_PRIZE) return;
@@ -348,15 +349,20 @@ contract YieldModule is Initializable, UUPSUpgradeable, OwnableUpgradeable, IYie
             y.deficit -= repay;
             gross = surplus - repay;
         } else {
-            // Realized loss. Record it; never haircut a member's balance.
+            // Realized loss. Record it in full; never haircut a member's balance.
+            uint256 previous = y.deficit;
             y.deficit = accounted - value;
-            emit YieldDeficit(vaultId, y.deficit);
+            // Announce it only when it is material — see DEFICIT_EVENT_THRESHOLD.
+            uint256 added = y.deficit - previous;
+            if (added * DEFICIT_EVENT_THRESHOLD > y.principal) {
+                emit YieldDeficit(vaultId, y.deficit);
+            }
         }
 
         uint256 feeTaken;
         // A prize strategy earns nothing between claims, so a time-weighted fee
         // there would only ever accrue debt. Its fee comes out of each claimed
-        // prize in harvestPrize instead.
+        // prize, so its fee will come out of each claimed prize in Phase 2.
         if (IYieldStrategy(y.strategy).mode() == MODE_STABLE && managementFeeBps > 0) {
             uint256 elapsed = block.timestamp - y.lastAccrualAt;
             uint256 feeTarget = (y.principal * managementFeeBps * elapsed) / (MAX_BPS * SECONDS_PER_YEAR);
@@ -388,41 +394,6 @@ contract YieldModule is Initializable, UUPSUpgradeable, OwnableUpgradeable, IYie
 
         y.lastAccrualAt = block.timestamp;
         if (gross > 0 || feeTaken > 0) emit YieldAccrued(vaultId, gross, feeTaken, net);
-    }
-
-    /// @notice PRIZE mode: claim a prize, take the flat fee, and hand the rest
-    /// to the vault's members through the yield accumulator.
-    function harvestPrize(uint256 vaultId, bytes calldata data) external nonReentrant returns (uint256 net) {
-        VaultYieldState storage y = vaultYield[vaultId];
-        require(y.strategy != address(0), "No strategy for token");
-        IYieldStrategy strategy = IYieldStrategy(y.strategy);
-        require(strategy.mode() == MODE_PRIZE, "Not a prize strategy");
-
-        address token = strategy.asset();
-        uint256 claimed = strategy.harvestRewards(data);
-        if (claimed == 0) return 0;
-
-        uint256 fee = (claimed * prizeFeeBps) / MAX_BPS;
-        net = claimed - fee;
-        pendingFees[token] += fee;
-
-        uint256 totalBalance = vaultModule.getVault(vaultId).totalBalance;
-        if (totalBalance == 0) {
-            pendingFees[token] += net;
-            return 0;
-        }
-
-        // Put the winnings back to work in the same position so they compound
-        // like any other yield.
-        IERC20(token).forceApprove(address(strategy), net);
-        uint256 shares = strategy.deposit(net);
-        y.shares += shares;
-        y.owedYield += net;
-        y.lifetimeYield += net;
-        y.lifetimeFees += fee;
-        y.accYieldPerShare += (net * YIELD_PRECISION) / totalBalance;
-
-        emit YieldAccrued(vaultId, claimed, fee, net);
     }
 
     // ========== FEES ==========
@@ -485,11 +456,19 @@ contract YieldModule is Initializable, UUPSUpgradeable, OwnableUpgradeable, IYie
     function effectiveMode(uint256 vaultId) public view returns (uint8) {
         uint8 stored = vaultYield[vaultId].mode;
         if (stored != MODE_UNSET) return stored;
+
         // Default-on, but only from the watermark forward, so nothing already in
         // custody moves without an explicit deposit.
         uint256 from = yieldEnabledFromVaultId;
-        if (from != 0 && vaultId >= from) return MODE_STABLE;
-        return MODE_OFF;
+        if (from == 0 || vaultId < from) return MODE_OFF;
+
+        // And only for personal vaults. A community vault holds other people's
+        // money under rules fixed at creation; defaulting it into an outside
+        // protocol would commit members who never agreed to that and, since its
+        // rules cannot change afterwards, leave them no way out. Its creator
+        // opts in explicitly while still its only member.
+        if (vaultModule.getVault(vaultId).vaultType != VAULT_TYPE_PERSONAL) return MODE_OFF;
+        return MODE_STABLE;
     }
 
     function investedPrincipal(uint256 vaultId) external view returns (uint256) {

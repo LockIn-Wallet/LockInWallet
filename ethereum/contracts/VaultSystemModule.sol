@@ -332,14 +332,21 @@ contract VaultSystemModule is Initializable, UUPSUpgradeable, OwnableUpgradeable
 
     // ========== EARNING ==========
 
-    /// @notice Choose how this vault's balance earns. Personal vaults only:
-    /// community rules are immutable by design, and one member must not be able
-    /// to route everyone else's funds into an outside protocol.
+    /// @notice Choose how this vault's balance earns.
+    ///
+    /// A personal vault's owner can change this whenever they like. A community
+    /// vault's creator can only set it while they are still its only member —
+    /// the same principle as its other rules: members join under terms they can
+    /// see, and nobody else can route their funds into an outside protocol after
+    /// the fact.
     function setVaultYieldMode(uint256 vaultId, uint8 mode) external nonReentrant {
         require(address(yieldModule) != address(0), "Yield module not configured");
         VaultInfo storage vault = _activeVault(vaultId);
         require(msg.sender == vault.creator, "Only creator");
-        require(vault.vaultType == VAULT_TYPE_PERSONAL, "Community yield immutable");
+        require(
+            vault.vaultType == VAULT_TYPE_PERSONAL || vault.memberCount == 1,
+            "Community yield immutable"
+        );
 
         VaultMemberInfo storage member = vaultMembers[vaultId][msg.sender];
         _settleYield(vaultId, vault, member, msg.sender);

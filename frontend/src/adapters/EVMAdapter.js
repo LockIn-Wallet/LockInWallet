@@ -244,7 +244,6 @@ const WRITE_FALLBACKS = {
   deployVaultDepositAddress: "Could not create the vault deposit address",
   setYieldMode: "Could not change how your savings earn",
   compoundVaultYield: "Could not add your earnings to your balance",
-  harvestVaultPrize: "Could not claim the prize",
 };
 
 /**
@@ -2228,11 +2227,7 @@ export class EVMAdapter extends BlockchainAdapter {
     return tx.hash;
   }
 
-  /** Claim a prize for a prize-savings vault and share it with the members. */
-  async harvestVaultPrize(vaultAddress, claimData = "0x") {
-    const module = await this._requireYieldModule();
-    const tx = await module.harvestPrize(vaultAddress, claimData);
-    await tx.wait();
-    return tx.hash;
-  }
+  // harvestVaultPrize is inherited from the base adapter until prize savings
+  // ships: the yield module has no prize plumbing yet, so the base's "not
+  // available on this network yet" is the honest answer.
 }

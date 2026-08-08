@@ -580,7 +580,6 @@ export class TransactionManager {
   async getYieldOptions(tokenAddress) { return this.getAdapter().getYieldOptions?.(tokenAddress) ?? []; }
   async setYieldMode(mode) { return this.getAdapter().setYieldMode?.(this._requireActiveVault(), mode); }
   async compoundActiveVaultYield() { return this.getAdapter().compoundVaultYield?.(this._requireActiveVault()); }
-  async harvestActiveVaultPrize(claimData) { return this.getAdapter().harvestVaultPrize?.(this._requireActiveVault(), claimData); }
 
   // ---- EVM withdraw ----
   async withdraw(amount, tokenAddress, destination) {

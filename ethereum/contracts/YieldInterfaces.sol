@@ -170,7 +170,6 @@ interface IYieldModule {
     event MemberYieldSettled(uint256 indexed vaultId, address indexed member, uint256 credited);
     event FeesSwept(address indexed token, address indexed treasury, uint256 amount);
     event ManagementFeeSet(uint256 feeBps);
-    event PrizeFeeSet(uint256 feeBps);
     event StrategiesPaused(bool paused);
     event YieldWatermarkSet(uint256 fromVaultId);
     event EmergencyExit(uint256 indexed vaultId, address indexed token, uint256 assets);
