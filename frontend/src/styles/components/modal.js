@@ -205,6 +205,17 @@ export const modalStyles = {
     color: colors.text.gray,
     margin: `${space[4]} 0 0 0`,
   },
+
+  // ---- Option grid --------------------------------------------------------
+  //
+  // A one-per-row stack rather than side-by-side columns: these options are
+  // read and compared, not scanned, and the panel is only 560px wide.
+  optionGrid: {
+    display: "grid",
+    gridTemplateColumns: "1fr",
+    gap: space[3],
+    margin: `${space[4]} 0 0 0`,
+  },
 };
 
 export default modalStyles;

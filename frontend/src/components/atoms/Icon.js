@@ -38,6 +38,15 @@ const PATHS = {
       <path d="M12 7v5l3.5 2" />
     </>
   ),
+  // A seedling: growth, for earning on savings. `gift` is already the deposit
+  // section, so earning needs its own mark.
+  sprout: (
+    <>
+      <path d="M12 21v-9" />
+      <path d="M12 12C12 8 9 5 5 5c0 4 3 7 7 7z" />
+      <path d="M12 12c0-3.3 2.7-6 6-6 0 3.3-2.7 6-6 6z" />
+    </>
+  ),
   key: (
     <>
       <circle cx="8" cy="8" r="4" />

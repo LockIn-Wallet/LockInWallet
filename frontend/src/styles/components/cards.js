@@ -250,6 +250,50 @@ export const layoutStyles = {
     gap: spacing.lg,
   },
 
+  // ---- Earning on savings -------------------------------------------------
+
+  // One selectable option inside the earning dialog. Dashed while unselected and
+  // solid mint once chosen, matching how LimitPeriodCards signals "configured".
+  yieldOptionCard: {
+    padding: spacing.xl,
+    borderRadius: borderRadius.lg,
+    backgroundColor: colors.background.secondary,
+    border: `2px dashed ${colors.border.default}`,
+    cursor: 'pointer',
+    textAlign: 'left',
+    width: '100%',
+    display: 'block',
+    transition: 'all 0.2s ease',
+  },
+
+  yieldOptionCardSelected: {
+    backgroundColor: colors.background.darkBlue,
+    border: `2px solid ${colors.success.border}`,
+    boxShadow: `0 0 0 1px ${colors.success.border}`,
+  },
+
+  // An option whose protocol is not configured on this network. Still readable —
+  // greyed out, not hidden, so the user can see what is coming.
+  yieldOptionCardDisabled: {
+    opacity: 0.55,
+    cursor: 'not-allowed',
+  },
+
+  // The figures row on the earning section: rate, invested, earned so far.
+  yieldStatRow: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
+    gap: spacing.lg,
+    marginBottom: spacing.xl,
+  },
+
+  yieldStat: {
+    padding: spacing.lg,
+    borderRadius: borderRadius.md,
+    backgroundColor: colors.background.dark,
+    border: `1px solid ${colors.border.default}`,
+  },
+
   // Section margins
   sectionMargin: {
     marginBottom: spacing.xxl,

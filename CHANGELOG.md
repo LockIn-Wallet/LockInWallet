@@ -67,6 +67,54 @@ these notes on the in-app **Governance** page before they execute.
   auto-connect and the adapter's `autoConnect` until the user connects
   again — otherwise a reload would re-attach the same wallet within seconds.
   Frontend only — no contract change.
+- **Earning on vault balances.** A vault holding a supported stablecoin can
+  supply its idle balance to Aave v3 and share the interest across its members.
+  The owner picks stable earning, prize savings or off from the new "Earn on your
+  savings" section; the whole feature ships behind `isYieldEnabled()` in
+  `frontend/src/utils/featureFlags.js`, currently off.
+  **On-chain:** a **new** `YieldModule` proxy registered as `YIELD_SYSTEM`, plus
+  a non-upgradeable `AaveV3Strategy` per token per mode. Strategies are
+  owner-set, and *replacing* a live one must be queued and wait out
+  `strategyChangeDelay` (7 days) first, so users can exit before their funds are
+  pointed at a different protocol. `VaultSystemModule` is upgraded **in place**
+  with exactly one appended storage slot (`yieldModule`) — nothing reordered, no
+  struct changed, and custodied vault funds untouched. Deposits and withdrawals
+  now route through the module: a deposit invests that vault's idle balance, a
+  withdrawal redeems only the shortfall it cannot cover from that vault's own
+  idle share (so one vault can never spend another's), and penalties awaiting a
+  claim are never invested at all.
+- **Yield fee: one percentage point of the rate, and never more than what was
+  earned.** `managementFeeBps` (100, capped at 200 in code) accrues
+  time-weighted on principal and is routed to the existing
+  `VaultSystemModule.treasury` — no second treasury address. The cap is
+  structural, not just arithmetic: the fee is funded exclusively from the
+  surplus above principal, so there is no code path from a user's deposit to a
+  fee. A period that earns nothing charges nothing; the shortfall waits in
+  `feeDebt` and settles out of later yield. A realized protocol loss is recorded
+  as a `deficit` and repaid from future yield **before** any fee, and never
+  reduces a member's recorded balance.
+- Yield is distributed per vault through an `accYieldPerShare` accumulator
+  mirroring the existing penalty accumulator, at `1e18` precision (deliberately
+  not the penalty accumulator's `1e12`, which would truncate a small harvest on a
+  6-decimal stablecoin to zero and lose it). Settled yield becomes principal
+  inside the same position, so it compounds with no extra transfer.
+  `compoundYield(vaultId, member)` is permissionless.
+- **Earning is on by default only for vaults created from the on-chain watermark
+  forward** (`yieldEnabledFromVaultId`). Locking in does not create a vault on
+  EVM, so there is no vault at that moment to attach a preference to; the
+  watermark is what makes "on by default" possible without touching anything
+  already in custody. Vaults that predate it stay off until their owner opts in,
+  and in every case funds only move on the next deposit.
+- Percentage spending limits now apply to compounded yield, because settled yield
+  lands in `member.balance` — a 10% daily limit on a balance that grew to 1100 is
+  110, not 100.
+- Escape hatches for the new third-party dependency: `pauseStrategies` stops new
+  investment without affecting withdrawals, and `emergencyExitVault` /
+  `emergencyExitToken` divest everything back into `VaultSystemModule` and set
+  the vault to off. A withdrawal that the protocol cannot fund reverts
+  ("Insufficient strategy liquidity") rather than paying out short, and a
+  protocol that refuses a deposit leaves the funds idle rather than failing the
+  user's deposit.
 
 - **Base (chain 8453) as a deployment target**, selectable in the network
   dropdown alongside Optimism. The reason is the card on-ramp: Transak sells

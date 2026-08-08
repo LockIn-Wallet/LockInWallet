@@ -151,10 +151,13 @@ async function main() {
       vaultSystem: await deployOrUpgradeModule("VaultSystemModule", "VAULT_SYSTEM", "🏦"),
       referral: await deployOrUpgradeModule("ReferralModule", "REFERRAL", "🤝"),
       recoverySystem: await deployOrUpgradeModule("RecoverySystemModule", "RECOVERY_SYSTEM", "🛟"),
+      yieldSystem: await deployOrUpgradeModule("YieldModule", "YIELD_SYSTEM", "🌱"),
     };
     for (const [key, m] of Object.entries(modules)) moduleAddresses[key] = m.address;
     const proxyDeploymentModule = modules.proxyDeployment.contract;
     const poolTogetherModule = modules.poolTogether.contract;
+    const vaultSystemModule = modules.vaultSystem.contract;
+    const yieldModule = modules.yieldSystem.contract;
 
     // Register newly deployed modules with the core contract (upgraded-in-place
     // modules keep their existing registration)
@@ -276,6 +279,62 @@ async function main() {
       tx = await poolTogetherModule.setPrizePool(prizePoolAddress);
       await tx.wait();
       console.log(`   ✅ Prize pool set: ${prizePoolAddress}`);
+    }
+
+    // Deploy a mock Aave reserve for localhost so the earning UI has a live rate
+    // to show and deposits actually get invested. Production points the same
+    // strategy at the real Aave v3 pool via add-yield-module.js.
+    if (!isUpgrade && !isProduction && usdtAddress) {
+      console.log("\n🌱 Deploying mock Aave reserve for earning...");
+
+      const MockAavePool = await ethers.getContractFactory("MockAavePool");
+      const mockAavePool = await MockAavePool.deploy();
+      await mockAavePool.waitForDeployment();
+      const aavePoolAddress = await mockAavePool.getAddress();
+      console.log(`   ✅ MockAavePool deployed to: ${aavePoolAddress}`);
+
+      const MockAToken = await ethers.getContractFactory("MockAToken");
+      const mockAToken = await MockAToken.deploy("Aave USDT", "aUSDT", usdtAddress, aavePoolAddress, 6);
+      await mockAToken.waitForDeployment();
+      const aTokenAddress = await mockAToken.getAddress();
+      console.log(`   ✅ MockAToken deployed to: ${aTokenAddress}`);
+
+      tx = await mockAavePool.registerReserve(usdtAddress, aTokenAddress);
+      await tx.wait();
+
+      // 5% a year, expressed the way Aave does (annual rate in rays)
+      const fivePercentRay = (5n * 10n ** 27n) / 100n;
+      tx = await mockAavePool.setLiquidityRate(usdtAddress, fivePercentRay);
+      await tx.wait();
+      console.log("   ✅ Mock supply rate set to 5% a year");
+
+      const AaveV3Strategy = await ethers.getContractFactory("AaveV3Strategy");
+      const aaveStrategy = await AaveV3Strategy.deploy(
+        usdtAddress,
+        aavePoolAddress,
+        aTokenAddress,
+        moduleAddresses.yieldSystem,
+      );
+      await aaveStrategy.waitForDeployment();
+      const strategyAddress = await aaveStrategy.getAddress();
+      console.log(`   ✅ AaveV3Strategy deployed to: ${strategyAddress}`);
+
+      console.log("   Wiring the yield module...");
+      tx = await yieldModule.setVaultModule(moduleAddresses.vaultSystem);
+      await tx.wait();
+
+      const MODE_STABLE = 2;
+      tx = await yieldModule.setStrategy(usdtAddress, MODE_STABLE, strategyAddress);
+      await tx.wait();
+      console.log(`   ✅ Stable-earning strategy set for USDT`);
+
+      // Vault funds only start moving once the vault module knows the yield
+      // module — deliberately the last step.
+      tx = await vaultSystemModule.setYieldModule(moduleAddresses.yieldSystem);
+      await tx.wait();
+      tx = await yieldModule.setYieldWatermark();
+      await tx.wait();
+      console.log("   ✅ Earning is on by default for vaults created from now on");
     }
 
     // Set production mode if requested (disable dev mode for production)
@@ -402,6 +461,11 @@ async function main() {
       fs.writeFileSync(frontendRecoverySystemABIPath, JSON.stringify(recoverySystemArtifact.abi, null, 2));
       console.log("✅ RecoverySystemModule ABI updated");
 
+      const yieldArtifact = require("../artifacts/contracts/YieldModule.sol/YieldModule.json");
+      const frontendYieldABIPath = path.join(__dirname, "../../frontend/src/YieldModuleABI.json");
+      fs.writeFileSync(frontendYieldABIPath, JSON.stringify(yieldArtifact.abi, null, 2));
+      console.log("✅ YieldModule ABI updated");
+
       // Copy MockUSDT ABI
       if (usdtAddress) {
         const usdtArtifact = require("../artifacts/contracts/MockUSDT.sol/MockUSDT.json");
@@ -435,6 +499,7 @@ async function main() {
     console.log(`  PoolTogether:        ${moduleAddresses.poolTogether}`);
     console.log(`  VaultSystem:         ${moduleAddresses.vaultSystem}`);
     console.log(`  RecoverySystem:      ${moduleAddresses.recoverySystem}`);
+    console.log(`  YieldSystem:         ${moduleAddresses.yieldSystem}`);
     if (usdtAddress) {
       console.log(`MockUSDT Address:      ${usdtAddress}`);
     }

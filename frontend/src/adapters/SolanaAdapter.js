@@ -1669,4 +1669,23 @@ export class SolanaAdapter extends BlockchainAdapter {
       deserializePendingDestinationRequest(Buffer.from(account.data))
     );
   }
+
+  // ========== EARNING ON SAVINGS ==========
+  //
+  // Not built on Solana yet. Stated explicitly rather than inherited from the
+  // base adapter so the intent is readable here and the interface test has
+  // something concrete to assert. The writes stay inherited, so they raise the
+  // shared "not available on this network yet" message.
+
+  supportsYield() {
+    return false;
+  }
+
+  async getYieldStatus() {
+    return { supported: false };
+  }
+
+  async getYieldOptions() {
+    return [];
+  }
 }

@@ -571,6 +571,17 @@ export class TransactionManager {
   async withdrawFromPoolTogether(tokenAddress, shares) { return this.getAdapter().withdrawFromPoolTogether?.(tokenAddress, shares); }
   async claimPoolTogetherPrize(tokenAddress, tier) { return this.getAdapter().claimPoolTogetherPrize?.(tokenAddress, tier); }
 
+  // ---- Earning on savings ----
+  //
+  // Optional capability: an adapter without these degrades to "not supported"
+  // rather than throwing, so the UI needs no network awareness.
+  supportsYield() { return this.getAdapter().supportsYield?.() ?? false; }
+  async getYieldStatus() { return this.getAdapter().getYieldStatus?.(this.getActiveVaultAddress()) ?? { supported: false }; }
+  async getYieldOptions(tokenAddress) { return this.getAdapter().getYieldOptions?.(tokenAddress) ?? []; }
+  async setYieldMode(mode) { return this.getAdapter().setYieldMode?.(this._requireActiveVault(), mode); }
+  async compoundActiveVaultYield() { return this.getAdapter().compoundVaultYield?.(this._requireActiveVault()); }
+  async harvestActiveVaultPrize(claimData) { return this.getAdapter().harvestVaultPrize?.(this._requireActiveVault(), claimData); }
+
   // ---- EVM withdraw ----
   async withdraw(amount, tokenAddress, destination) {
     if (this._usesLegacyAccount()) return this.getAdapter().withdraw(amount, tokenAddress, destination);

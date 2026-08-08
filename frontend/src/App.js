@@ -36,7 +36,7 @@ import {
   getDefaultNetwork,
   getAvailableNetworks,
 } from "./utils/networkFilter.js";
-import { isSolanaEnabled, isPrizePoolEnabled } from "./utils/featureFlags.js";
+import { isSolanaEnabled, isPrizePoolEnabled, isYieldEnabled } from "./utils/featureFlags.js";
 import { createEmptyLimitEdits } from "./utils/spendingPeriods.js";
 import { PRIZE_SAVINGS_PATH } from "./utils/prizeSavingsContent.js";
 import {
@@ -69,6 +69,7 @@ import SolanaWalletProvider from "./components/SolanaWalletProvider.js";
 import SocialLinks from "./components/atoms/SocialLinks.js";
 import Footer from "./components/atoms/Footer.js";
 import CollapsibleSection from "./components/atoms/CollapsibleSection.js";
+import YieldSection from "./components/organisms/YieldSection.js";
 import StatusHeader from "./components/molecules/StatusHeader.js";
 import WalletConnectionPrompt from "./components/molecules/WalletConnectionPrompt.js";
 import WalletOnboardingModal from "./components/molecules/WalletOnboardingModal.js";
@@ -408,6 +409,15 @@ function MainFlow({
           />
         </CollapsibleSection>
       )}
+
+      {/* Earning on savings. Sits with the money-movement sections, and inside
+          the vault-keyed wrapper above so switching vaults refetches it. The
+          section hides itself when earning does not apply to this vault. */}
+      {isSetupCommitted && isYieldEnabled() && transactionManager?.supportsYield?.() ? (
+        <CollapsibleSection title="Earn on your savings" icon="sprout" defaultExpanded={true}>
+          <YieldSection transactionManager={transactionManager} />
+        </CollapsibleSection>
+      ) : null}
 
       {/* Spending Limits Setup / Management */}
       {isSetupCommitted ? (

@@ -7,6 +7,7 @@ import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "./SavingsInterfaces.sol";
+import "./YieldInterfaces.sol";
 import "./VaultDepositProxy.sol";
 
 /// @title VaultSystemModule
@@ -38,6 +39,11 @@ contract VaultSystemModule is Initializable, UUPSUpgradeable, OwnableUpgradeable
 
     // Appended for upgrades: permanent per-vault deposit addresses
     mapping(uint256 => address) private vaultDepositProxies;
+
+    // Appended for upgrades: earning on idle vault balances. The module keeps
+    // custody; the yield module only accounts for what is invested. Nothing
+    // above this line moves.
+    IYieldModule public yieldModule;
 
     uint8 private constant VAULT_TYPE_PERSONAL = 0;
     uint8 private constant VAULT_TYPE_COMMUNITY = 1;
@@ -80,6 +86,12 @@ contract VaultSystemModule is Initializable, UUPSUpgradeable, OwnableUpgradeable
     function setTreasury(address _treasury) external onlyOwner {
         require(_treasury != address(0), "Invalid treasury");
         treasury = _treasury;
+    }
+
+    /// @notice Attach the yield module. Until this is set, every yield hook below
+    /// is a no-op, so the upgrade changes nothing for anyone until this call.
+    function setYieldModule(address _yieldModule) external onlyOwner {
+        yieldModule = IYieldModule(_yieldModule);
     }
 
     // ========== VAULT LIFECYCLE ==========
@@ -129,7 +141,9 @@ contract VaultSystemModule is Initializable, UUPSUpgradeable, OwnableUpgradeable
         VaultInfo storage vault = _activeVault(vaultId);
         VaultMemberInfo storage member = vaultMembers[vaultId][msg.sender];
         _settlePenalties(vault, member);
+        _settleYield(vaultId, vault, member, msg.sender);
         require(member.balance == 0 && member.unclaimedPenalties == 0, "Balance not zero");
+        require(_pendingYield(vaultId, msg.sender) == 0, "Pending yield not zero");
         require(msg.sender != vault.creator, "Creator cannot leave");
 
         vault.memberCount--;
@@ -197,11 +211,18 @@ contract VaultSystemModule is Initializable, UUPSUpgradeable, OwnableUpgradeable
         }
 
         _settlePenalties(vault, member);
+        _settleYield(vaultId, vault, member, beneficiary);
         member.balance += credited;
         vault.totalBalance += credited;
         _snapshotDebt(vault, member);
+        _snapshotYield(vaultId, member, beneficiary);
         vault.updatedAt = block.timestamp;
         emit VaultDeposit(vaultId, beneficiary, credited);
+
+        // Put the vault's idle balance to work. A balance that predates the
+        // vault opting in joins on the first deposit after, which is what keeps
+        // funds already in custody from moving on their own.
+        _investIdle(vaultId, vault);
     }
 
     // ========== PERMANENT DEPOSIT ADDRESSES ==========
@@ -228,14 +249,24 @@ contract VaultSystemModule is Initializable, UUPSUpgradeable, OwnableUpgradeable
         enforceNotFrozen(savingsCore, msg.sender);
         VaultInfo storage vault = _activeVault(vaultId);
         VaultMemberInfo storage member = vaultMembers[vaultId][msg.sender];
-        require(amount > 0 && amount <= member.balance, "Invalid amount");
+        require(amount > 0, "Invalid amount");
 
         _settlePenalties(vault, member);
+        // Settle before the balance check so earned yield is withdrawable, and
+        // before the limit check so a percentage limit is measured against the
+        // balance the member actually has.
+        _settleYield(vaultId, vault, member, msg.sender);
+        require(amount <= member.balance, "Invalid amount");
         _checkAndUpdateLimits(vault, member, amount);
+
+        // Redeem while totalBalance still includes this withdrawal — the vault's
+        // own idle share is derived from it.
+        _ensureLiquidity(vaultId, vault, amount);
 
         member.balance -= amount;
         vault.totalBalance -= amount;
         _snapshotDebt(vault, member);
+        _snapshotYield(vaultId, member, msg.sender);
         vault.updatedAt = block.timestamp;
 
         _payOut(vault.token, msg.sender, amount);
@@ -247,12 +278,18 @@ contract VaultSystemModule is Initializable, UUPSUpgradeable, OwnableUpgradeable
         enforceNotFrozen(savingsCore, msg.sender);
         VaultInfo storage vault = _activeVault(vaultId);
         VaultMemberInfo storage member = vaultMembers[vaultId][msg.sender];
-        require(amount > 0 && amount <= member.balance, "Invalid amount");
+        require(amount > 0, "Invalid amount");
 
         _settlePenalties(vault, member);
+        _settleYield(vaultId, vault, member, msg.sender);
+        require(amount <= member.balance, "Invalid amount");
 
         uint256 penalty = (amount * vault.penaltyRateBps) / MAX_BPS;
         uint256 userAmount = amount - penalty;
+
+        // The full amount must be liquid: the user's share leaves, and the
+        // penalty stays here as idle tokens to redistribute or send to treasury.
+        _ensureLiquidity(vaultId, vault, amount);
 
         member.balance -= amount;
         vault.totalBalance -= amount;
@@ -266,6 +303,7 @@ contract VaultSystemModule is Initializable, UUPSUpgradeable, OwnableUpgradeable
         // Snapshot AFTER the accrual so the withdrawer's remaining balance is
         // excluded from the penalty they just paid
         _snapshotDebt(vault, member);
+        _snapshotYield(vaultId, member, msg.sender);
 
         _payOut(vault.token, msg.sender, userAmount);
         if (!redistribute && penalty > 0) {
@@ -280,12 +318,56 @@ contract VaultSystemModule is Initializable, UUPSUpgradeable, OwnableUpgradeable
         VaultMemberInfo storage member = vaultMembers[vaultId][msg.sender];
 
         _settlePenalties(vault, member);
+        _settleYield(vaultId, vault, member, msg.sender);
+        _snapshotYield(vaultId, member, msg.sender);
         uint256 amount = member.unclaimedPenalties;
         require(amount > 0, "Nothing to claim");
         member.unclaimedPenalties = 0;
 
+        // No _ensureLiquidity: penalties are never invested, so they are always
+        // already sitting here as idle tokens.
         _payOut(vault.token, msg.sender, amount);
         emit PenaltyRewardsClaimed(vaultId, msg.sender, amount);
+    }
+
+    // ========== EARNING ==========
+
+    /// @notice Choose how this vault's balance earns. Personal vaults only:
+    /// community rules are immutable by design, and one member must not be able
+    /// to route everyone else's funds into an outside protocol.
+    function setVaultYieldMode(uint256 vaultId, uint8 mode) external nonReentrant {
+        require(address(yieldModule) != address(0), "Yield module not configured");
+        VaultInfo storage vault = _activeVault(vaultId);
+        require(msg.sender == vault.creator, "Only creator");
+        require(vault.vaultType == VAULT_TYPE_PERSONAL, "Community yield immutable");
+
+        VaultMemberInfo storage member = vaultMembers[vaultId][msg.sender];
+        _settleYield(vaultId, vault, member, msg.sender);
+        // Fully exit the old position before repointing — never mix two share
+        // prices in one position.
+        yieldModule.divestAll(vaultId, address(this));
+        yieldModule.setVaultMode(vaultId, vault.token, mode);
+        _snapshotYield(vaultId, member, msg.sender);
+        vault.updatedAt = block.timestamp;
+
+        if (mode != MODE_OFF) _investIdle(vaultId, vault);
+        emit VaultYieldModeSet(vaultId, mode);
+    }
+
+    /// @notice Fold a member's earned yield into their balance. Permissionless,
+    /// because it only ever credits the member named — it lets the app (or
+    /// anyone) keep idle members' accounting current.
+    function compoundYield(uint256 vaultId, address memberAddr) external nonReentrant {
+        require(address(yieldModule) != address(0), "Yield module not configured");
+        VaultInfo storage vault = _activeVault(vaultId);
+        VaultMemberInfo storage member = vaultMembers[vaultId][memberAddr];
+        require(member.exists, "Not a vault member");
+
+        uint256 before = member.balance;
+        _settleYield(vaultId, vault, member, memberAddr);
+        _snapshotYield(vaultId, member, memberAddr);
+        vault.updatedAt = block.timestamp;
+        emit VaultYieldCompounded(vaultId, memberAddr, member.balance - before);
     }
 
     // ========== VIEWS ==========
@@ -309,6 +391,34 @@ contract VaultSystemModule is Initializable, UUPSUpgradeable, OwnableUpgradeable
 
     function getVaultCount() external view returns (uint256) {
         return vaultCount;
+    }
+
+    function pendingVaultYield(uint256 vaultId, address memberAddr) external view returns (uint256) {
+        return _pendingYield(vaultId, memberAddr);
+    }
+
+    function getVaultYieldInfo(uint256 vaultId)
+        external
+        view
+        returns (
+            uint8 mode,
+            address strategy,
+            uint256 invested,
+            uint256 currentValue,
+            uint256 lifetimeYield,
+            uint256 feeBps
+        )
+    {
+        if (address(yieldModule) == address(0)) return (MODE_OFF, address(0), 0, 0, 0, 0);
+        VaultYieldState memory y = yieldModule.getVaultYield(vaultId);
+        return (
+            yieldModule.effectiveMode(vaultId),
+            y.strategy,
+            y.principal,
+            yieldModule.investedValue(vaultId),
+            y.lifetimeYield,
+            yieldModule.managementFeeBps()
+        );
     }
 
     function pendingPenaltyRewards(uint256 vaultId, address memberAddr) external view returns (uint256) {
@@ -377,6 +487,65 @@ contract VaultSystemModule is Initializable, UUPSUpgradeable, OwnableUpgradeable
 
     function _snapshotDebt(VaultInfo storage vault, VaultMemberInfo storage member) private {
         member.penaltyDebt = (member.balance * vault.accPenaltyPerShare) / PENALTY_PRECISION;
+    }
+
+    // ========== YIELD INTERNALS ==========
+
+    /// @dev Credit the member's share of the yield. Mirrors _settlePenalties:
+    /// call it before any balance change. The yield module keeps its own
+    /// accumulator; this module stays the single owner of the balance ledger, so
+    /// `vault.totalBalance == sum(member.balance)` still holds.
+    function _settleYield(
+        uint256 vaultId,
+        VaultInfo storage vault,
+        VaultMemberInfo storage member,
+        address who
+    ) private {
+        if (address(yieldModule) == address(0) || !member.exists) return;
+        uint256 credited = yieldModule.settleMemberYield(vaultId, who);
+        if (credited == 0) return;
+        member.balance += credited;
+        vault.totalBalance += credited;
+    }
+
+    /// @dev Re-baseline the member's yield debt. Mirrors _snapshotDebt: call it
+    /// after the balance change.
+    function _snapshotYield(uint256 vaultId, VaultMemberInfo storage member, address who) private {
+        if (address(yieldModule) == address(0)) return;
+        yieldModule.snapshotMemberYield(vaultId, who, member.balance);
+    }
+
+    /// @dev Invest this vault's uninvested balance. Deliberately derived from
+    /// `vault.totalBalance - investedPrincipal` rather than from this module's
+    /// token balance, so one vault can never invest another's funds — and so
+    /// penalties awaiting a claim are never invested at all.
+    function _investIdle(uint256 vaultId, VaultInfo storage vault) private {
+        if (address(yieldModule) == address(0) || vault.token == address(0)) return;
+        uint256 invested = yieldModule.investedPrincipal(vaultId);
+        if (vault.totalBalance <= invested) return;
+
+        uint256 toInvest = vault.totalBalance - invested;
+        IERC20(vault.token).forceApprove(address(yieldModule), toInvest);
+        yieldModule.onDeposit(vaultId, vault.token, toInvest);
+        IERC20(vault.token).forceApprove(address(yieldModule), 0);
+    }
+
+    /// @dev Make `needed` liquid for a payout, redeeming only the part this
+    /// vault cannot cover from its own idle share. Must be called while
+    /// `vault.totalBalance` still includes the amount being withdrawn.
+    function _ensureLiquidity(uint256 vaultId, VaultInfo storage vault, uint256 needed) private {
+        if (address(yieldModule) == address(0) || vault.token == address(0)) return;
+        uint256 invested = yieldModule.investedPrincipal(vaultId);
+        if (invested == 0) return;
+
+        uint256 idle = vault.totalBalance > invested ? vault.totalBalance - invested : 0;
+        if (needed <= idle) return;
+        yieldModule.ensureLiquidity(vaultId, vault.token, needed - idle, address(this));
+    }
+
+    function _pendingYield(uint256 vaultId, address memberAddr) private view returns (uint256) {
+        if (address(yieldModule) == address(0)) return 0;
+        return yieldModule.pendingYield(vaultId, memberAddr);
     }
 
     /// @dev Reset expired windows, verify the amount fits every active limit

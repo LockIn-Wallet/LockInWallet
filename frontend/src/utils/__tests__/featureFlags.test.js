@@ -2,6 +2,7 @@
 const {
   isSolanaEnabled,
   isPrizePoolEnabled,
+  isYieldEnabled,
   isLinkVisible,
 } = require("../featureFlags.js");
 const { getAvailableNetworks } = require("../networkFilter.js");
@@ -41,6 +42,14 @@ describe("isPrizePoolEnabled", () => {
   // if the prize pool is switched back on without the feature being ready
   test("is off while the feature is unfinished", () => {
     expect(isPrizePoolEnabled()).toBe(false);
+  });
+});
+
+describe("isYieldEnabled", () => {
+  // Hardcoded off in featureFlags.js — this test is the tripwire that fails if
+  // earning is switched on before a YieldModule and strategy are live
+  test("is off until the yield module is deployed and verified", () => {
+    expect(isYieldEnabled()).toBe(false);
   });
 });
 

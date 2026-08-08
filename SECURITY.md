@@ -111,6 +111,47 @@ all contracts. Once deployed:
 [GOVERNANCE.md](GOVERNANCE.md) for the signer-selection design (including
 why signers are chosen by role and independence, not by token holdings).
 
+## Third-party protocol exposure (earning on savings)
+
+Earning is **opt-out, and off by default for any vault that existed before the
+feature shipped.** While it is on, that vault's balance is supplied to an
+outside lending protocol (Aave v3). This is the one place where the wallet's
+safety no longer depends only on our own contracts, so the honest statement of
+the risk:
+
+- **Your principal is exposed to that protocol.** If Aave suffers bad debt, an
+  exploit or an oracle failure, savings supplied to it can lose value. Our
+  accounting records such a loss as a `deficit` and repays it from future yield
+  before anyone earns or is charged, and it never silently reduces your recorded
+  balance — but that is bookkeeping, not insurance. **Earning is not
+  risk-free.** Leaving it off is a legitimate choice, and the balance then never
+  leaves the vault.
+- **Withdrawal liquidity is not guaranteed.** Funds are redeemed on demand, with
+  no buffer held back (a buffer would cost every user yield without surviving
+  the case it is meant to cover). If Aave's reserve is fully utilized or paused,
+  a withdrawal **reverts** rather than paying out short. A spending limit you
+  cannot exercise is a real cost of earning, and it is why the emergency exits
+  below exist.
+- **The fee cannot reach your principal.** The management fee is one percentage
+  point of the rate, capped in code at two, and it is funded exclusively from the
+  surplus above principal — there is no code path from a deposit to a fee. A
+  period that earns nothing is charged nothing.
+- **One vault can never spend another's funds.** What is available to a vault is
+  derived from its own recorded balance minus its own invested principal, never
+  from the module's pooled token balance. Penalties awaiting a claim are never
+  invested at all.
+- **Escape hatches:** `pauseStrategies` halts new investment without affecting
+  withdrawals; `emergencyExitVault` / `emergencyExitToken` divest everything back
+  into the vault module and switch that vault to off. Any owner can switch their
+  own vault off at any time, which fully divests it.
+- **Known simplification:** a member's yield is credited against the vault's
+  recorded balance, which excludes yield not yet folded in. So interest earned
+  *by* an unsettled member's interest is shared across all principal holders
+  rather than going to that member alone. The effect is small (on the order of
+  0.16% a year of principal, shared) and is why `compoundYield` is
+  permissionless — anyone, including the app, can settle an idle member's
+  accounting at any time.
+
 ## What an upgrade cannot do quietly
 
 - It cannot execute before the timelock delay elapses (once governance is
@@ -118,6 +159,14 @@ why signers are chosen by role and independence, not by token holdings).
 - It cannot bypass the Safe's signature threshold (once expanded to M-of-N).
 - It cannot retroactively change these guarantees without itself going
   through the same queue.
+- It cannot take your principal as a yield fee. That is structural rather than
+  procedural: the fee is only ever funded from realized surplus, and the rate is
+  capped in the contract.
+- It **can** point a token at a different yield protocol — this is a genuine new
+  power that came with earning. Replacing a live strategy therefore has to be
+  queued and wait out a 7-day delay first, so you can see it and switch earning
+  off before your funds move. A first-time assignment for a token is immediate,
+  because no funds are parked there yet.
 
 ## Reporting a vulnerability
 

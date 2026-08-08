@@ -326,6 +326,11 @@ interface IVaultSystemModule {
     function deployVaultDepositAddress(uint256 vaultId) external returns (address proxy);
     function getVaultDepositAddress(uint256 vaultId) external view returns (address);
 
+    // Earning on vault balances — the module custodies the funds and delegates
+    // the accounting to the yield module
+    function setVaultYieldMode(uint256 vaultId, uint8 mode) external;
+    function compoundYield(uint256 vaultId, address member) external;
+
     // Views
     function getVault(uint256 vaultId) external view returns (VaultInfo memory);
     function getVaultMember(uint256 vaultId, address member) external view returns (VaultMemberInfo memory);
@@ -333,6 +338,20 @@ interface IVaultSystemModule {
     function getVaultMembers(uint256 vaultId) external view returns (address[] memory);
     function getVaultCount() external view returns (uint256);
     function pendingPenaltyRewards(uint256 vaultId, address member) external view returns (uint256);
+    function pendingVaultYield(uint256 vaultId, address member) external view returns (uint256);
+    function getVaultYieldInfo(uint256 vaultId) external view returns (
+        uint8 mode,
+        address strategy,
+        uint256 invested,
+        uint256 currentValue,
+        uint256 lifetimeYield,
+        uint256 feeBps
+    );
+
+    /// @notice Where penalties and yield fees are sent. Already owner-configured
+    /// via setTreasury; exposed so the yield module can reuse it rather than
+    /// carrying a second treasury address.
+    function treasury() external view returns (address);
 
     // Events
     event VaultCreated(uint256 indexed vaultId, address indexed creator, address indexed token, string name, uint8 vaultType);
@@ -343,6 +362,8 @@ interface IVaultSystemModule {
     event VaultDepositAddressDeployed(uint256 indexed vaultId, address indexed proxy);
     event VaultWithdrawal(uint256 indexed vaultId, address indexed member, uint256 amount, uint256 penalty);
     event PenaltyRewardsClaimed(uint256 indexed vaultId, address indexed member, uint256 amount);
+    event VaultYieldModeSet(uint256 indexed vaultId, uint8 mode);
+    event VaultYieldCompounded(uint256 indexed vaultId, address indexed member, uint256 amount);
 }
 
 interface IRecoverySystemModule {
@@ -450,6 +471,7 @@ library ModuleIds {
     bytes32 public constant VAULT_SYSTEM = keccak256("VAULT_SYSTEM");
     bytes32 public constant REFERRAL = keccak256("REFERRAL");
     bytes32 public constant RECOVERY_SYSTEM = keccak256("RECOVERY_SYSTEM");
+    bytes32 public constant YIELD_SYSTEM = keccak256("YIELD_SYSTEM");
 }
 
 // ========== SHARED GUARDS ==========

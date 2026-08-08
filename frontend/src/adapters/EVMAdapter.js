@@ -12,6 +12,7 @@ import VaultSystemModuleABI from "../VaultSystemModuleABI.json";
 import SavingsTimelockABI from "../SavingsTimelockABI.json";
 import ReferralModuleABI from "../ReferralModuleABI.json";
 import RecoverySystemModuleABI from "../RecoverySystemModuleABI.json";
+import YieldModuleABI from "../YieldModuleABI.json";
 import ERC20ABI from "../ERC20ABI.json";
 import { getTokenMeta } from "../utils/tokenUtils.js";
 import {
@@ -19,10 +20,17 @@ import {
   getPeriodDuration,
   getDefaultUnlockDelay,
 } from "../utils/spendingPeriods.js";
+import { aprBpsToApyPercent, netApyPercent } from "../utils/yieldMath.js";
 
 const VAULT_SYSTEM_MODULE_ID = ethers.keccak256(ethers.toUtf8Bytes("VAULT_SYSTEM"));
 const REFERRAL_MODULE_ID = ethers.keccak256(ethers.toUtf8Bytes("REFERRAL"));
 const RECOVERY_SYSTEM_MODULE_ID = ethers.keccak256(ethers.toUtf8Bytes("RECOVERY_SYSTEM"));
+const YIELD_SYSTEM_MODULE_ID = ethers.keccak256(ethers.toUtf8Bytes("YIELD_SYSTEM"));
+
+// Earning modes, mirroring YieldInterfaces.sol. The numbers stay inside this
+// adapter — components only ever see the string names.
+const YIELD_MODES = { off: 1, stable: 2, prize: 3 };
+const YIELD_MODE_NAMES = { 0: "off", 1: "off", 2: "stable", 3: "prize" };
 
 // User-facing modules are called directly (Pattern B): each authenticates the
 // caller via msg.sender, so no calls route through SavingsCore forwarders
@@ -165,6 +173,24 @@ const REVERT_MESSAGES = [
   ["Zero redeem", "There is nothing to withdraw from the prize pool"],
   ["Zero deposit", "Enter a deposit greater than zero"],
 
+  // Earning on savings. Longer strings come first so they are not shadowed by
+  // a shorter one they contain.
+  ["Insufficient strategy liquidity", "The savings protocol is temporarily out of liquidity — try a smaller amount, or try again shortly"],
+  ["Yield module not configured", "Earning on savings is not switched on for this network yet"],
+  ["Strategy deposit shortfall", "The savings protocol short-changed the deposit, so it was rejected — your funds stayed in your vault"],
+  ["Strategy controller mismatch", "That earning strategy is not controlled by this wallet's contracts"],
+  ["Strategy asset mismatch", "That earning strategy does not match this vault's token"],
+  ["Strategy mode mismatch", "That earning strategy does not match the chosen option"],
+  ["Strategy change not queued", "That strategy change has not been queued yet"],
+  ["Strategy change not ready", "That strategy change is still in its waiting period"],
+  ["Community yield immutable", "A community vault's earning setting is fixed when it is created"],
+  ["Pending yield not zero", "Collect your earnings before leaving the vault"],
+  ["Yield mode unchanged", "That is already your setting"],
+  ["No strategy for token", "This vault's token cannot earn yield yet"],
+  ["Strategies paused", "Earning is paused right now — your savings are untouched"],
+  ["Fee above maximum", "That fee is above the allowed maximum"],
+  ["Nothing invested", "This vault has nothing invested"],
+
   // Referrals and proxies
   ["Cannot refer yourself", "You cannot refer yourself"],
   ["Referrer already recorded", "A referrer is already recorded for this account"],
@@ -216,6 +242,9 @@ const WRITE_FALLBACKS = {
   withdrawFromVaultWithPenalty: "Withdrawal failed",
   claimVaultPenaltyRewards: "Could not claim your rewards",
   deployVaultDepositAddress: "Could not create the vault deposit address",
+  setYieldMode: "Could not change how your savings earn",
+  compoundVaultYield: "Could not add your earnings to your balance",
+  harvestVaultPrize: "Could not claim the prize",
 };
 
 /**
@@ -2041,5 +2070,169 @@ export class EVMAdapter extends BlockchainAdapter {
       if (membership) members.push(membership);
     }
     return members;
+  }
+
+  // ========== EARNING ON SAVINGS ==========
+
+  /** EVM has a yield module; whether a given network has one is reported by getYieldStatus. */
+  supportsYield() {
+    return true;
+  }
+
+  /** Resolve the yield module, or null when this network has none registered. */
+  async _getYieldModule() {
+    if (this.yieldModule !== undefined) return this.yieldModule;
+    if (!this.savingsContract) throw new Error("Contract not initialized");
+    try {
+      const moduleAddress = await this.savingsContract.getModule(YIELD_SYSTEM_MODULE_ID);
+      this.yieldModule =
+        moduleAddress && moduleAddress !== ethers.ZeroAddress
+          ? new ethers.Contract(moduleAddress, YieldModuleABI, this.signer)
+          : null;
+    } catch {
+      this.yieldModule = null;
+    }
+    return this.yieldModule;
+  }
+
+  async _requireYieldModule() {
+    const module = await this._getYieldModule();
+    if (!module) throw this._userError("Earning on savings is not switched on for this network yet");
+    return module;
+  }
+
+  /**
+   * The earning options for a token, with live rates read from the strategies
+   * themselves. The gross rate is compounded into an APY here so no contract has
+   * to do floating-point maths.
+   *
+   * @returns {Promise<Array<{key: string, protocol: string, apyPercent: number,
+   *   netApyPercent: number, grandPrize: number|null, available: boolean}>>}
+   */
+  async getYieldOptions(tokenAddress) {
+    const module = await this._getYieldModule();
+    if (!module || !tokenAddress) return [];
+
+    const feeBps = Number(await module.managementFeeBps());
+    const options = [];
+
+    for (const [key, protocol] of [
+      ["stable", "Aave"],
+      ["prize", "PoolTogether"],
+    ]) {
+      const strategy = await module.getStrategy(tokenAddress, YIELD_MODES[key]);
+      const available = strategy && strategy !== ethers.ZeroAddress;
+      const aprBps = available ? await module.currentAprBps(tokenAddress, YIELD_MODES[key]) : 0;
+      const gross = aprBpsToApyPercent(aprBps);
+
+      options.push({
+        key,
+        protocol,
+        apyPercent: gross,
+        // A prize position earns nothing between draws, so its fee comes out of
+        // the prizes rather than the rate.
+        netApyPercent: key === "prize" ? gross : netApyPercent(gross, feeBps),
+        grandPrize: key === "prize" ? await this._safeGrandPrize() : null,
+        available: Boolean(available),
+      });
+    }
+
+    // Switching earning off is always on offer.
+    options.push({
+      key: "off",
+      protocol: null,
+      apyPercent: 0,
+      netApyPercent: 0,
+      grandPrize: null,
+      available: true,
+    });
+    return options;
+  }
+
+  /** Grand prize size, or null when the prize pool is not configured. */
+  async _safeGrandPrize() {
+    try {
+      const prize = await this.getPoolTogetherGrandPrize();
+      return prize ?? null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Current earning setting and figures for one vault.
+   *
+   * `supported: false` means "hide the earning UI": either this network has no
+   * yield module, or there is no vault to configure (the legacy savings account
+   * holds its balance in SavingsCore, which does not earn).
+   */
+  async getYieldStatus(vaultAddress = null) {
+    const module = await this._getYieldModule();
+    if (!module) return { supported: false };
+    if (!vaultAddress) return { supported: false, reason: "no-vault" };
+
+    const vault = await this.getVaultInfo(vaultAddress);
+    if (!vault) return { supported: false };
+
+    const vaultModule = await this._getVaultModule();
+    const [modeRaw, strategy, invested, currentValue, lifetimeYield, feeBps] =
+      await vaultModule.getVaultYieldInfo(vaultAddress);
+    const pendingRaw = await vaultModule.pendingVaultYield(vaultAddress, this.userAddress);
+
+    const options = await this.getYieldOptions(vault.tokenMint);
+    const decimals = vault.tokenDecimals;
+    const format = (raw) => ethers.formatUnits(raw, decimals);
+
+    return {
+      supported: true,
+      // A native-coin vault, or a token with no strategy, cannot earn.
+      tokenSupported: options.some((option) => option.key !== "off" && option.available),
+      tokenSymbol: vault.tokenSymbol,
+      mode: YIELD_MODE_NAMES[Number(modeRaw)] || "off",
+      strategy: strategy === ethers.ZeroAddress ? null : strategy,
+      options,
+      // Raw values kept alongside the formatted strings: these are token amounts,
+      // and Number() would quietly lose precision on large balances.
+      investedRaw: invested,
+      invested: format(invested),
+      investedValueRaw: currentValue,
+      investedValue: format(currentValue),
+      pendingYieldRaw: pendingRaw,
+      pendingYield: format(pendingRaw),
+      lifetimeYieldRaw: lifetimeYield,
+      lifetimeYield: format(lifetimeYield),
+      feeBps: Number(feeBps),
+      // 100 bps of the rate reads to a user as "one percentage point".
+      feePercentagePoints: Number(feeBps) / 100,
+    };
+  }
+
+  /** Switch a vault between stable earning, prize savings and off. */
+  async setYieldMode(vaultAddress, mode) {
+    await this._requireYieldModule();
+    const modeValue = YIELD_MODES[mode];
+    if (!modeValue) throw this._userError("Choose a valid earning option");
+
+    const vaultModule = await this._getVaultModule();
+    const tx = await vaultModule.setVaultYieldMode(vaultAddress, modeValue);
+    await tx.wait();
+    return tx.hash;
+  }
+
+  /** Fold earned yield into the member's balance so it compounds. */
+  async compoundVaultYield(vaultAddress, memberAddress = null) {
+    await this._requireYieldModule();
+    const vaultModule = await this._getVaultModule();
+    const tx = await vaultModule.compoundYield(vaultAddress, memberAddress || this.userAddress);
+    await tx.wait();
+    return tx.hash;
+  }
+
+  /** Claim a prize for a prize-savings vault and share it with the members. */
+  async harvestVaultPrize(vaultAddress, claimData = "0x") {
+    const module = await this._requireYieldModule();
+    const tx = await module.harvestPrize(vaultAddress, claimData);
+    await tx.wait();
+    return tx.hash;
   }
 }

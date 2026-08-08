@@ -18,6 +18,14 @@ export const RELEASE_NOTES = [
         text: "You can now lock in on Base as well as Optimism. The reason is simple: we want you to be able to buy savings with a bank card, and the card provider doesn't sell dollars on Optimism — only ETH. On Base it does. Optimism is still what you get by default, and nothing moves on its own: if your savings are on Optimism they stay there, and picking Base means starting a separate wallet on that chain.",
       },
       {
+        emoji: "🌱",
+        text: "Your savings can now earn interest while they sit locked. You pick how — a steady rate, or a lower rate plus entry into a prize draw — and you can switch it off whenever you like, which returns everything to your vault. Nothing moves until your next deposit, so no money already in your vault goes anywhere without you doing something first. Worth knowing: earning means your balance is lent out through an outside protocol, and that is not risk-free. If you would rather it sat still, leaving earning off is a perfectly good answer.",
+      },
+      {
+        emoji: "🤝",
+        text: "We keep one percentage point of the interest rate — so a 5% rate pays you 4%. Two promises about that. First, we never take more than what your savings actually earned: a month that earns nothing costs you nothing, and the shortfall waits for interest rather than coming out of your deposit. Second, your deposit is never the source of our fee, and that is enforced in the contract rather than promised in a document — there is no path in the code from your principal to our revenue.",
+      },
+      {
         emoji: "🕵️",
         text: "Inviting someone no longer lets you watch their money. Before, anyone who shared a referral link could pull up the list of wallets that joined through it — and every balance on this chain is public, so that was a window into what those people had saved. Now you only ever see a number: how many people locked in through your link. Being paid for a referral and being able to spy on that person are two different things, and only one of them is part of the deal.",
       },

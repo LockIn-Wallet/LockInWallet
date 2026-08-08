@@ -18,6 +18,17 @@ const PRIZE_POOL_ENABLED = false;
 export const isPrizePoolEnabled = () => PRIZE_POOL_ENABLED;
 
 /**
+ * Earning on vault balances (the "Earn on your savings" section and its
+ * configure dialog) stays hidden until the YieldModule and an Aave strategy are
+ * deployed and verified on a live network. Hardcoded for the same reason as the
+ * prize pool: it is off for everyone until it ships, so flip this line to bring
+ * it in.
+ */
+const YIELD_ENABLED = false;
+
+export const isYieldEnabled = () => YIELD_ENABLED;
+
+/**
  * Nav-link predicate: an entry carrying a `flag` only shows while that flag
  * is on. Shared so every nav surface hides the same links.
  */
