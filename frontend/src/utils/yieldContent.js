@@ -80,6 +80,21 @@ export const YIELD_MODE_LABELS = {
   off: "Not earning",
 };
 
+/**
+ * Shown on the legacy "Savings" account, which is not a vault: on EVM, locking
+ * in writes spending limits and holds the balance in the core contract, so
+ * there is no vault for earning to attach to.
+ */
+export const YIELD_NO_VAULT_NOTE =
+  "Earning works on vaults. Your first Savings account isn't one — it was created " +
+  "when you locked in, and its balance is held directly by the wallet contract. " +
+  "Create a vault, or pick an existing one above, and its balance can start earning.";
+
+/** Shown for a vault whose token has no strategy (ETH, or an unlisted token). */
+export const YIELD_TOKEN_UNSUPPORTED_NOTE =
+  "This vault's token can't earn yet. Earning is available on supported " +
+  "stablecoins — a vault holding one of those can start earning straight away.";
+
 /** The fee note for prize savings — a different fee from the stable one. */
 export const YIELD_PRIZE_FEE_NOTE =
   "A prize vault pays no interest of its own, so there is no rate to charge on. " +

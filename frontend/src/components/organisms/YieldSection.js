@@ -13,6 +13,7 @@ import {
 } from "../../styles";
 import ApyBadge from "../atoms/ApyBadge.js";
 import YieldModal from "../molecules/YieldModal.js";
+import CollapsibleSection from "../atoms/CollapsibleSection.js";
 import { isYieldEnabled } from "../../utils/featureFlags.js";
 import {
   YIELD_LEDE,
@@ -21,6 +22,9 @@ import {
   YIELD_OFF_REASSURANCE,
   YIELD_PRIZE_WON_NOTE,
   YIELD_PRIZE_FEE_NOTE,
+  YIELD_NO_VAULT_NOTE,
+  YIELD_TOKEN_UNSUPPORTED_NOTE,
+  YIELD_SECTION_TITLE,
 } from "../../utils/yieldContent.js";
 
 /**
@@ -100,14 +104,40 @@ const YieldSection = ({ transactionManager }) => {
 
   if (!isYieldEnabled()) return null;
   if (loading) return null;
-  if (!status?.supported || !status?.tokenSupported) return null;
+
+  // This component owns the whole section, header included. Deciding to render
+  // the wrapper anywhere else means a header that expands to nothing whenever
+  // the two disagree.
+  const noVault = status?.reason === "no-vault";
+  // Nothing to say at all when the chain has no yield module.
+  if (!status?.supported && !noVault) return null;
+
+  // Two cases worth explaining rather than hiding — a user who has just been
+  // told their savings can earn deserves to know why this one can't.
+  if (noVault || !status?.tokenSupported) {
+    return (
+      <CollapsibleSection title={YIELD_SECTION_TITLE} icon="sprout" defaultExpanded={true}>
+        <p
+          style={{
+            margin: 0,
+            fontSize: type.small,
+            color: colors.text.secondary,
+            lineHeight: 1.6,
+            textAlign: "left",
+          }}
+        >
+          {noVault ? YIELD_NO_VAULT_NOTE : YIELD_TOKEN_UNSUPPORTED_NOTE}
+        </p>
+      </CollapsibleSection>
+    );
+  }
 
   const isEarning = status.mode !== "off";
   const isPrize = status.mode === "prize";
   const activeOption = status.options?.find((option) => option.key === status.mode);
 
   return (
-    <div>
+    <CollapsibleSection title={YIELD_SECTION_TITLE} icon="sprout" defaultExpanded={true}>
       <p
         style={{
           margin: `0 0 ${space[4]} 0`,
@@ -263,7 +293,7 @@ const YieldSection = ({ transactionManager }) => {
         }}
         onConfirm={handleConfirm}
       />
-    </div>
+    </CollapsibleSection>
   );
 };
 

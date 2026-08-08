@@ -414,9 +414,7 @@ function MainFlow({
           the vault-keyed wrapper above so switching vaults refetches it. The
           section hides itself when earning does not apply to this vault. */}
       {isSetupCommitted && isYieldEnabled() && transactionManager?.supportsYield?.() ? (
-        <CollapsibleSection title="Earn on your savings" icon="sprout" defaultExpanded={true}>
-          <YieldSection transactionManager={transactionManager} />
-        </CollapsibleSection>
+        <YieldSection transactionManager={transactionManager} />
       ) : null}
 
       {/* Spending Limits Setup / Management */}
