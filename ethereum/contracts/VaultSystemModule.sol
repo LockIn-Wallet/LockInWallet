@@ -222,7 +222,7 @@ contract VaultSystemModule is Initializable, UUPSUpgradeable, OwnableUpgradeable
         // Put the vault's idle balance to work. A balance that predates the
         // vault opting in joins on the first deposit after, which is what keeps
         // funds already in custody from moving on their own.
-        _investIdle(vaultId, vault);
+        _investIdle(vaultId, vault, member, beneficiary);
     }
 
     // ========== PERMANENT DEPOSIT ADDRESSES ==========
@@ -261,7 +261,7 @@ contract VaultSystemModule is Initializable, UUPSUpgradeable, OwnableUpgradeable
 
         // Redeem while totalBalance still includes this withdrawal — the vault's
         // own idle share is derived from it.
-        _ensureLiquidity(vaultId, vault, amount);
+        _ensureLiquidity(vaultId, vault, member, msg.sender, amount);
 
         member.balance -= amount;
         vault.totalBalance -= amount;
@@ -289,7 +289,7 @@ contract VaultSystemModule is Initializable, UUPSUpgradeable, OwnableUpgradeable
 
         // The full amount must be liquid: the user's share leaves, and the
         // penalty stays here as idle tokens to redistribute or send to treasury.
-        _ensureLiquidity(vaultId, vault, amount);
+        _ensureLiquidity(vaultId, vault, member, msg.sender, amount);
 
         member.balance -= amount;
         vault.totalBalance -= amount;
@@ -352,12 +352,15 @@ contract VaultSystemModule is Initializable, UUPSUpgradeable, OwnableUpgradeable
         _settleYield(vaultId, vault, member, msg.sender);
         // Fully exit the old position before repointing — never mix two share
         // prices in one position.
-        yieldModule.divestAll(vaultId, address(this));
+        // Only the creator can reach this, and a community vault's mode is fixed
+        // once anyone else joins — so the caller is the only member with a
+        // position to unwind.
+        yieldModule.divestAll(vaultId, msg.sender, address(this));
         yieldModule.setVaultMode(vaultId, vault.token, mode);
         _snapshotYield(vaultId, member, msg.sender);
         vault.updatedAt = block.timestamp;
 
-        if (mode != MODE_OFF) _investIdle(vaultId, vault);
+        if (mode != MODE_OFF) _investIdle(vaultId, vault, member, msg.sender);
         emit VaultYieldModeSet(vaultId, mode);
     }
 
@@ -526,28 +529,42 @@ contract VaultSystemModule is Initializable, UUPSUpgradeable, OwnableUpgradeable
     /// `vault.totalBalance - investedPrincipal` rather than from this module's
     /// token balance, so one vault can never invest another's funds — and so
     /// penalties awaiting a claim are never invested at all.
-    function _investIdle(uint256 vaultId, VaultInfo storage vault) private {
+    function _investIdle(
+        uint256 vaultId,
+        VaultInfo storage vault,
+        VaultMemberInfo storage member,
+        address who
+    ) private {
         if (address(yieldModule) == address(0) || vault.token == address(0)) return;
-        uint256 invested = yieldModule.investedPrincipal(vaultId);
-        if (vault.totalBalance <= invested) return;
 
-        uint256 toInvest = vault.totalBalance - invested;
+        // The yield module decides how much, because only it knows whether this
+        // vault pools its balance (stable earning) or gives each member their
+        // own position (prize savings). This module stays mode-agnostic.
+        uint256 toInvest =
+            yieldModule.investableAmount(vaultId, who, vault.totalBalance, member.balance);
+        if (toInvest == 0) return;
+
         IERC20(vault.token).forceApprove(address(yieldModule), toInvest);
-        yieldModule.onDeposit(vaultId, vault.token, toInvest);
+        yieldModule.onDeposit(vaultId, vault.token, who, toInvest);
         IERC20(vault.token).forceApprove(address(yieldModule), 0);
     }
 
     /// @dev Make `needed` liquid for a payout, redeeming only the part this
     /// vault cannot cover from its own idle share. Must be called while
     /// `vault.totalBalance` still includes the amount being withdrawn.
-    function _ensureLiquidity(uint256 vaultId, VaultInfo storage vault, uint256 needed) private {
+    function _ensureLiquidity(
+        uint256 vaultId,
+        VaultInfo storage vault,
+        VaultMemberInfo storage member,
+        address who,
+        uint256 needed
+    ) private {
         if (address(yieldModule) == address(0) || vault.token == address(0)) return;
-        uint256 invested = yieldModule.investedPrincipal(vaultId);
-        if (invested == 0) return;
 
-        uint256 idle = vault.totalBalance > invested ? vault.totalBalance - invested : 0;
-        if (needed <= idle) return;
-        yieldModule.ensureLiquidity(vaultId, vault.token, needed - idle, address(this));
+        uint256 shortfall =
+            yieldModule.liquidityShortfall(vaultId, who, needed, vault.totalBalance, member.balance);
+        if (shortfall == 0) return;
+        yieldModule.ensureLiquidity(vaultId, vault.token, who, shortfall, address(this));
     }
 
     function _pendingYield(uint256 vaultId, address memberAddr) private view returns (uint256) {

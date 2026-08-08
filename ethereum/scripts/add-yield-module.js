@@ -27,6 +27,9 @@ const path = require("path");
 const AAVE_V3 = {
   optimism: {
     pool: "0x794a61358D6845594F94dc1DB02A252b5b4814aD",
+    // PoolTogether v5, verified against the live deployment: the prize pool
+    // pays in WETH (0x4200...0006), not the deposited asset.
+    prizePool: "0xF35fE10ffd0a9672d0095c435fd8767A7fe29B55",
     reserves: {
       USDC: {
         token: "0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85",

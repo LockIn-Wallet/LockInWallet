@@ -18,10 +18,11 @@ const YIELD_METHODS = [
   "getYieldOptions",
   "setYieldMode",
   "compoundVaultYield",
-  "harvestVaultPrize",
+  "getClaimablePrizes",
+  "claimVaultPrizes",
 ];
 
-const YIELD_WRITES = ["setYieldMode", "compoundVaultYield", "harvestVaultPrize"];
+const YIELD_WRITES = ["setYieldMode", "compoundVaultYield", "claimVaultPrizes"];
 
 describe("Yield adapter interface", () => {
   test("base adapter reports earning as unsupported", async () => {

@@ -328,6 +328,38 @@ async function main() {
       await tx.wait();
       console.log(`   ✅ Stable-earning strategy set for USDT`);
 
+      // Prize savings, so the localhost UI can exercise the third option.
+      // Prizes are paid in a DIFFERENT token from the deposit — WETH on
+      // Optimism — so the mock pool mirrors that rather than paying USDT.
+      console.log("   Deploying mock prize savings...");
+      const MockWETH = await ethers.getContractFactory("MockWETH");
+      const mockWeth = await MockWETH.deploy();
+      await mockWeth.waitForDeployment();
+      const wethAddress = await mockWeth.getAddress();
+
+      const MockV5PrizeVault = await ethers.getContractFactory("MockV5PrizeVault");
+      const mockPrizeVaultV5 = await MockV5PrizeVault.deploy(usdtAddress, 6);
+      await mockPrizeVaultV5.waitForDeployment();
+
+      const MockPrizePoolV5 = await ethers.getContractFactory("MockPrizePoolV5");
+      const mockPrizePoolV5 = await MockPrizePoolV5.deploy(wethAddress, ethers.parseEther("3.16"));
+      await mockPrizePoolV5.waitForDeployment();
+
+      const PoolTogetherStrategy = await ethers.getContractFactory("PoolTogetherStrategy");
+      const prizeStrategy = await PoolTogetherStrategy.deploy(
+        await mockPrizeVaultV5.getAddress(),
+        await mockPrizePoolV5.getAddress(),
+        moduleAddresses.yieldSystem,
+      );
+      await prizeStrategy.waitForDeployment();
+      const prizeStrategyAddress = await prizeStrategy.getAddress();
+
+      const MODE_PRIZE = 3;
+      tx = await yieldModule.setStrategy(usdtAddress, MODE_PRIZE, prizeStrategyAddress);
+      await tx.wait();
+      console.log(`   ✅ Prize-savings strategy set for USDT: ${prizeStrategyAddress}`);
+      console.log(`      prize token (mock WETH): ${wethAddress}`);
+
       // Vault funds only start moving once the vault module knows the yield
       // module — deliberately the last step.
       tx = await vaultSystemModule.setYieldModule(moduleAddresses.yieldSystem);

@@ -149,6 +149,16 @@ the risk:
   withdrawals; `emergencyExitVault` / `emergencyExitToken` divest everything back
   into the vault module and switch that vault to off. Any owner can switch their
   own vault off at any time, which fully divests it.
+- **Prize savings carries the same protocol exposure, plus two differences worth
+  stating.** Each member has their own position contract, so nobody else's win or
+  loss touches theirs, and a member's prize can never be paid out of another
+  member's deposit. Prizes are paid in a **different token** from the deposit
+  (WETH, not USDC): they are tracked and claimed separately and are never
+  swapped, so the wallet takes no price or slippage risk on your behalf. The
+  prize fee is a share of what you actually win — a prize vault pays no interest
+  of its own, so there is nothing else it could come from, and a member who never
+  wins is never charged. A prize position also earns **no steady interest at all**:
+  if you never win, you end with exactly what you put in, minus nothing.
 - **Known simplification:** a member's yield is credited against the vault's
   recorded balance, which excludes yield not yet folded in. So interest earned
   *by* an unsettled member's interest is shared across all principal holders

@@ -53,14 +53,14 @@ export const YIELD_OPTIONS = [
     key: "prize",
     title: "Prize savings",
     badge: "Coming soon",
-    // Deliberately not "a lower steady rate": a prize vault pays no steady rate
-    // at all. Every bit of the interest funds the draw, so most months pay
-    // nothing. Saying otherwise would set up exactly the wrong expectation.
+    // Two things this wording has to get right: a prize vault pays no steady
+    // rate at all (every bit of the interest funds the draw), and each member
+    // has their own entry rather than a share of a pooled one.
     blurb:
       "Your interest funds a shared prize draw instead of landing in your balance. " +
       "Your deposit is never at stake — but most months you win nothing, and " +
       "occasionally you win a lot.",
-    detail: "Prizes are shared across everyone saving this way.",
+    detail: "You get your own entry, so anything you win is yours alone.",
     requiresPrizePool: true,
   },
   {
@@ -79,3 +79,14 @@ export const YIELD_MODE_LABELS = {
   prize: "Prize savings",
   off: "Not earning",
 };
+
+/** The fee note for prize savings — a different fee from the stable one. */
+export const YIELD_PRIZE_FEE_NOTE =
+  "A prize vault pays no interest of its own, so there is no rate to charge on. " +
+  "We keep a small share of anything you actually win, and nothing at all if you " +
+  "never win. Your deposit is never touched.";
+
+/** Shown above the claim button when a member has won something. */
+export const YIELD_PRIZE_WON_NOTE =
+  "Prizes are paid in the prize token, not the token you saved — so they arrive " +
+  "separately rather than being added to your balance.";

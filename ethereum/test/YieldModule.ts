@@ -871,12 +871,14 @@ describe("YieldModule", function () {
         ctx.yieldModule.connect(ctx.user1).settleMemberYield(vaultId, ctx.user1.address),
       ).to.be.revertedWith("Not vault module");
       await expect(
-        ctx.yieldModule.connect(ctx.user1).onDeposit(vaultId, ctx.usdt.target, usdt6("1")),
+        ctx.yieldModule
+          .connect(ctx.user1)
+          .onDeposit(vaultId, ctx.usdt.target, ctx.user1.address, usdt6("1")),
       ).to.be.revertedWith("Not vault module");
       await expect(
         ctx.yieldModule
           .connect(ctx.user1)
-          .ensureLiquidity(vaultId, ctx.usdt.target, usdt6("1"), ctx.user1.address),
+          .ensureLiquidity(vaultId, ctx.usdt.target, ctx.user1.address, usdt6("1"), ctx.user1.address),
       ).to.be.revertedWith("Not vault module");
     });
   });

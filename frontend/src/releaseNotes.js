@@ -19,11 +19,15 @@ export const RELEASE_NOTES = [
       },
       {
         emoji: "🌱",
-        text: "Your savings can now earn interest while they sit locked. You pick how — a steady rate, or a lower rate plus entry into a prize draw — and you can switch it off whenever you like, which returns everything to your vault. Nothing moves until your next deposit, so no money already in your vault goes anywhere without you doing something first. Worth knowing: earning means your balance is lent out through an outside protocol, and that is not risk-free. If you would rather it sat still, leaving earning off is a perfectly good answer.",
+        text: "Your savings can now earn interest while they sit locked. You pick how — a steady rate, or a prize draw instead of a rate — and you can switch it off whenever you like, which returns everything to your vault. Nothing moves until your next deposit, so no money already in your vault goes anywhere without you doing something first. Worth knowing: earning means your balance is lent out through an outside protocol, and that is not risk-free. If you would rather it sat still, leaving earning off is a perfectly good answer.",
+      },
+      {
+        emoji: "🎟️",
+        text: "Prize savings is here as a second way to earn. Instead of a steady rate, the interest your savings would have earned goes into a prize draw — and you get your own entry, so anything you win is yours alone rather than split with everyone else. Two things worth knowing. Your deposit is never at stake, only the interest it would have made. And prizes are paid in ETH rather than the coin you saved, so they arrive separately for you to claim instead of being added to your balance. Most months you win nothing; occasionally you win a lot. If that is not for you, steady earning is one tap away.",
       },
       {
         emoji: "🤝",
-        text: "We keep one percentage point of the interest rate — so a 5% rate pays you 4%. Two promises about that. First, we never take more than what your savings actually earned: a month that earns nothing costs you nothing, and the shortfall waits for interest rather than coming out of your deposit. Second, your deposit is never the source of our fee, and that is enforced in the contract rather than promised in a document — there is no path in the code from your principal to our revenue.",
+        text: "We keep one percentage point of the interest rate — so a 5% rate pays you 4%. On prize savings there is no rate at all, so instead we keep a small share of anything you actually win, and nothing whatsoever if you never win. Two promises about that. First, we never take more than what your savings actually earned: a month that earns nothing costs you nothing, and the shortfall waits for interest rather than coming out of your deposit. Second, your deposit is never the source of our fee, and that is enforced in the contract rather than promised in a document — there is no path in the code from your principal to our revenue.",
       },
       {
         emoji: "🕵️",

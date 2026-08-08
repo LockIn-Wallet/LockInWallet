@@ -45,6 +45,13 @@ contract YieldModule is Initializable, UUPSUpgradeable, OwnableUpgradeable, IYie
     mapping(address => uint256) public pendingFees; // slot 9 — fee assets held here, awaiting sweep
     mapping(bytes32 => uint256) private strategyChangeReadyAt; // slot 10
 
+    // Prize savings keeps its own books. It shares nothing with the accumulator
+    // above: each member has their own position and their own odds, so there is
+    // no pooled yield to divide and no fee on a rate that does not exist.
+    uint256 public prizeFeeBps; // slot 11 — flat share of each prize claimed
+    mapping(uint256 => mapping(address => uint256)) private prizePrincipal; // slot 12
+    mapping(uint256 => address) private prizeStrategyOf; // slot 13 — strategy a vault's positions live in
+
     // ==== APPEND NEW STATE BELOW THIS LINE ONLY ====
 
     /// @dev Deliberately 1e18 and NOT VaultSystemModule's PENALTY_PRECISION of
@@ -53,6 +60,7 @@ contract YieldModule is Initializable, UUPSUpgradeable, OwnableUpgradeable, IYie
     /// harvest to zero and loses it permanently. Do not "unify" these.
     uint256 private constant YIELD_PRECISION = 1e18;
     uint256 private constant MAX_FEE_BPS = 200; // the owner can never charge more than 2 pp
+    uint256 private constant MAX_PRIZE_FEE_BPS = 1000; // and never more than a tenth of a prize
     uint256 private constant MAX_BPS = 10000;
     uint256 private constant SECONDS_PER_YEAR = 365 days;
     uint8 private constant VAULT_TYPE_PERSONAL = 0;
@@ -91,6 +99,7 @@ contract YieldModule is Initializable, UUPSUpgradeable, OwnableUpgradeable, IYie
         __UUPSUpgradeable_init();
         savingsCore = ISavingsCore(_savingsCore);
         managementFeeBps = 100; // one percentage point of the rate
+        prizeFeeBps = 500; // a twentieth of each prize won
         strategyChangeDelay = 7 days;
     }
 
@@ -107,6 +116,15 @@ contract YieldModule is Initializable, UUPSUpgradeable, OwnableUpgradeable, IYie
         require(feeBps <= MAX_FEE_BPS, "Fee above maximum");
         managementFeeBps = feeBps;
         emit ManagementFeeSet(feeBps);
+    }
+
+    /// @notice Share of each claimed prize kept by the treasury. A prize
+    /// position earns no rate, so this is the only thing a fee could come from —
+    /// and a member who never wins is never charged.
+    function setPrizeFeeBps(uint256 feeBps) external onlyOwner {
+        require(feeBps <= MAX_PRIZE_FEE_BPS, "Fee above maximum");
+        prizeFeeBps = feeBps;
+        emit PrizeFeeSet(feeBps);
     }
 
     function setStrategyChangeDelay(uint256 delay) external onlyOwner {
@@ -133,14 +151,19 @@ contract YieldModule is Initializable, UUPSUpgradeable, OwnableUpgradeable, IYie
     /// a token+mode is immediate, since no funds are parked there yet.
     function setStrategy(address token, uint8 mode, address strategy) external onlyOwner {
         require(token != address(0), "Invalid token");
-        // MODE_PRIZE lands with PoolTogetherStrategy. Until then there is no
-        // code here to turn a claimed prize into member yield, so accepting a
-        // prize strategy would take deposits it could never pay a return on.
-        require(mode == MODE_STABLE, "Invalid mode");
+        require(mode == MODE_STABLE || mode == MODE_PRIZE, "Invalid mode");
         require(strategy != address(0), "Invalid strategy");
-        require(IYieldStrategy(strategy).asset() == token, "Strategy asset mismatch");
-        require(IYieldStrategy(strategy).mode() == mode, "Strategy mode mismatch");
-        require(IYieldStrategy(strategy).controller() == address(this), "Strategy controller mismatch");
+        // Prize strategies are a different shape — per member, paying a different
+        // token — so they are validated against their own interface.
+        if (mode == MODE_PRIZE) {
+            require(IPrizeStrategy(strategy).asset() == token, "Strategy asset mismatch");
+            require(IPrizeStrategy(strategy).mode() == mode, "Strategy mode mismatch");
+            require(IPrizeStrategy(strategy).controller() == address(this), "Strategy controller mismatch");
+        } else {
+            require(IYieldStrategy(strategy).asset() == token, "Strategy asset mismatch");
+            require(IYieldStrategy(strategy).mode() == mode, "Strategy mode mismatch");
+            require(IYieldStrategy(strategy).controller() == address(this), "Strategy controller mismatch");
+        }
 
         address current = strategies[token][mode];
         if (current != address(0) && current != strategy) {
@@ -183,11 +206,18 @@ contract YieldModule is Initializable, UUPSUpgradeable, OwnableUpgradeable, IYie
     /// balance or the deposit — a small saver is exactly who this is for. An
     /// amount too small to buy a single share is simply left idle and swept in
     /// with the next deposit, never stranded.
-    function onDeposit(uint256 vaultId, address token, uint256 amount) external onlyVaultModule {
+    function onDeposit(uint256 vaultId, address token, address member, uint256 amount)
+        external
+        onlyVaultModule
+    {
         if (strategiesPaused || token == address(0) || amount == 0) return;
 
         uint8 mode = effectiveMode(vaultId);
-        if (mode != MODE_STABLE && mode != MODE_PRIZE) return;
+        if (mode == MODE_PRIZE) {
+            _investPrize(vaultId, token, member, amount);
+            return;
+        }
+        if (mode != MODE_STABLE) return;
 
         address strategy = strategies[token][mode];
         if (strategy == address(0)) return;
@@ -223,11 +253,52 @@ contract YieldModule is Initializable, UUPSUpgradeable, OwnableUpgradeable, IYie
         }
     }
 
+    /// @dev Prize savings: the member's own position, so their own odds. Same
+    /// contract as stable earning in every other respect — a protocol that
+    /// refuses the deposit leaves the funds idle rather than failing the user.
+    function _investPrize(uint256 vaultId, address token, address member, uint256 amount) private {
+        address strategy = strategies[token][MODE_PRIZE];
+        if (strategy == address(0) || member == address(0)) return;
+
+        address current = prizeStrategyOf[vaultId];
+        if (current != address(0) && current != strategy) {
+            emit StrategyDepositSkipped(vaultId, token, amount, "Strategy changed");
+            return;
+        }
+
+        IERC20 erc20 = IERC20(token);
+        uint256 before = erc20.balanceOf(address(this));
+        erc20.safeTransferFrom(msg.sender, address(this), amount);
+        uint256 received = erc20.balanceOf(address(this)) - before;
+        if (received == 0) return;
+
+        erc20.forceApprove(strategy, received);
+        try IPrizeStrategy(strategy).deposit(_accountId(vaultId, member), received) {
+            prizeStrategyOf[vaultId] = strategy;
+            prizePrincipal[vaultId][member] += received;
+            emit Invested(vaultId, token, received, 0);
+        } catch {
+            erc20.forceApprove(strategy, 0);
+            erc20.safeTransfer(msg.sender, received);
+            emit StrategyDepositSkipped(vaultId, token, received, "Strategy rejected deposit");
+        }
+    }
+
+    /// @dev One position per (vault, member) — the unit PoolTogether measures
+    /// odds over.
+    function _accountId(uint256 vaultId, address member) private pure returns (bytes32) {
+        return keccak256(abi.encodePacked(vaultId, member));
+    }
+
     function settleMemberYield(uint256 vaultId, address member)
         external
         onlyVaultModule
         returns (uint256 credited)
     {
+        // Prize savings pays in a different token and never compounds into a
+        // balance, so there is nothing to settle into the ledger here.
+        if (effectiveMode(vaultId) == MODE_PRIZE) return 0;
+
         _accrue(vaultId);
         VaultYieldState storage y = vaultYield[vaultId];
         if (y.accYieldPerShare == 0) return 0;
@@ -266,11 +337,27 @@ contract YieldModule is Initializable, UUPSUpgradeable, OwnableUpgradeable, IYie
     /// @notice Redeem exactly `amount` for `vaultId` and send it to `recipient`.
     /// The caller passes the shortfall it cannot cover from that vault's own
     /// idle funds, which is what keeps one vault from spending another's.
-    function ensureLiquidity(uint256 vaultId, address token, uint256 amount, address recipient)
-        external
-        onlyVaultModule
-    {
+    function ensureLiquidity(
+        uint256 vaultId,
+        address token,
+        address member,
+        uint256 amount,
+        address recipient
+    ) external onlyVaultModule {
         if (amount == 0) return;
+
+        if (effectiveMode(vaultId) == MODE_PRIZE) {
+            address strategy = prizeStrategyOf[vaultId];
+            require(strategy != address(0), "Insufficient strategy liquidity");
+            uint256 invested = prizePrincipal[vaultId][member];
+            require(amount <= invested, "Insufficient strategy liquidity");
+
+            prizePrincipal[vaultId][member] = invested - amount;
+            IPrizeStrategy(strategy).withdraw(_accountId(vaultId, member), amount, recipient);
+            emit Divested(vaultId, token, amount, 0);
+            return;
+        }
+
         VaultYieldState storage y = vaultYield[vaultId];
         require(y.strategy != address(0) && y.shares > 0, "Insufficient strategy liquidity");
 
@@ -285,11 +372,22 @@ contract YieldModule is Initializable, UUPSUpgradeable, OwnableUpgradeable, IYie
 
     /// @notice Full exit for one vault: principal and members' yield go back to
     /// the vault module, the treasury's cut stays here awaiting a sweep.
-    function divestAll(uint256 vaultId, address recipient)
+    function divestAll(uint256 vaultId, address member, address recipient)
         external
         onlyVaultModule
         returns (uint256 assets)
     {
+        // Prize savings holds one position per member rather than one per vault,
+        // so unwinding means emptying that member's own position.
+        address prizeStrategy = prizeStrategyOf[vaultId];
+        if (prizeStrategy != address(0)) {
+            uint256 returned =
+                IPrizeStrategy(prizeStrategy).withdrawAll(_accountId(vaultId, member), recipient);
+            prizePrincipal[vaultId][member] = 0;
+            if (returned > 0) emit Divested(vaultId, IPrizeStrategy(prizeStrategy).asset(), returned, 0);
+            return returned;
+        }
+
         VaultYieldState storage y = vaultYield[vaultId];
         if (y.strategy == address(0) || y.shares == 0) {
             y.shares = 0;
@@ -469,6 +567,92 @@ contract YieldModule is Initializable, UUPSUpgradeable, OwnableUpgradeable, IYie
         // opts in explicitly while still its only member.
         if (vaultModule.getVault(vaultId).vaultType != VAULT_TYPE_PERSONAL) return MODE_OFF;
         return MODE_STABLE;
+    }
+
+    /// @notice How much to invest right now. Stable earning pools the vault, so
+    /// it measures against the vault's balance; prize savings gives each member
+    /// their own position, so it measures against theirs. Answering here is what
+    /// keeps the vault module from ever branching on the mode.
+    function investableAmount(
+        uint256 vaultId,
+        address member,
+        uint256 vaultTotalBalance,
+        uint256 memberBalance
+    ) external view returns (uint256) {
+        if (effectiveMode(vaultId) == MODE_PRIZE) {
+            uint256 invested = prizePrincipal[vaultId][member];
+            return memberBalance > invested ? memberBalance - invested : 0;
+        }
+        uint256 vaultInvested = vaultYield[vaultId].principal;
+        return vaultTotalBalance > vaultInvested ? vaultTotalBalance - vaultInvested : 0;
+    }
+
+    /// @notice How much has to come back out of the protocol to pay `needed`,
+    /// after the idle funds belonging to this same scope are used first.
+    function liquidityShortfall(
+        uint256 vaultId,
+        address member,
+        uint256 needed,
+        uint256 vaultTotalBalance,
+        uint256 memberBalance
+    ) external view returns (uint256) {
+        uint256 invested;
+        uint256 backing;
+        if (effectiveMode(vaultId) == MODE_PRIZE) {
+            invested = prizePrincipal[vaultId][member];
+            backing = memberBalance;
+        } else {
+            invested = vaultYield[vaultId].principal;
+            backing = vaultTotalBalance;
+        }
+        if (invested == 0) return 0;
+
+        uint256 idle = backing > invested ? backing - invested : 0;
+        return needed > idle ? needed - idle : 0;
+    }
+
+    /// @notice Pay a member their won prize tokens, less the fee.
+    /// @dev Permissionless: it only ever moves prizes to the member who won
+    /// them. The fee comes out of the prize itself — a prize position earns no
+    /// rate, so there is nothing else it could come from, and a member who never
+    /// wins is never charged.
+    function claimPrizes(uint256 vaultId, address member)
+        external
+        nonReentrant
+        returns (uint256 amount)
+    {
+        address strategy = prizeStrategyOf[vaultId];
+        if (strategy == address(0)) return 0;
+
+        address token = IPrizeStrategy(strategy).prizeToken();
+        uint256 swept = IPrizeStrategy(strategy).sweepPrizes(_accountId(vaultId, member), address(this));
+        if (swept == 0) return 0;
+
+        uint256 fee = (swept * prizeFeeBps) / MAX_BPS;
+        amount = swept - fee;
+        if (fee > 0) pendingFees[token] += fee;
+        IERC20(token).safeTransfer(member, amount);
+
+        emit PrizesClaimed(vaultId, member, token, amount, fee);
+    }
+
+    function claimablePrizes(uint256 vaultId, address member)
+        external
+        view
+        returns (uint256 amount, address token)
+    {
+        address strategy = prizeStrategyOf[vaultId];
+        if (strategy == address(0)) return (0, address(0));
+        token = IPrizeStrategy(strategy).prizeToken();
+        uint256 gross = IPrizeStrategy(strategy).claimablePrizes(_accountId(vaultId, member));
+        amount = gross - (gross * prizeFeeBps) / MAX_BPS;
+    }
+
+    /// @notice The member's own prize position, or address(0) before first use.
+    function prizePositionOf(uint256 vaultId, address member) external view returns (address) {
+        address strategy = prizeStrategyOf[vaultId];
+        if (strategy == address(0)) return address(0);
+        return IPrizeStrategy(strategy).positionOf(_accountId(vaultId, member));
     }
 
     function investedPrincipal(uint256 vaultId) external view returns (uint256) {

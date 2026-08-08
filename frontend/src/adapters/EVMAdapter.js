@@ -30,6 +30,12 @@ const YIELD_SYSTEM_MODULE_ID = ethers.keccak256(ethers.toUtf8Bytes("YIELD_SYSTEM
 // Earning modes, mirroring YieldInterfaces.sol. The numbers stay inside this
 // adapter — components only ever see the string names.
 const YIELD_MODES = { off: 1, stable: 2, prize: 3 };
+
+// Only what the UI reads off a prize strategy; the module handles everything else.
+const PRIZE_STRATEGY_ABI = [
+  "function grandPrize() view returns (uint256)",
+  "function prizeToken() view returns (address)",
+];
 const YIELD_MODE_NAMES = { 0: "off", 1: "off", 2: "stable", 3: "prize" };
 
 // User-facing modules are called directly (Pattern B): each authenticates the
@@ -244,6 +250,7 @@ const WRITE_FALLBACKS = {
   deployVaultDepositAddress: "Could not create the vault deposit address",
   setYieldMode: "Could not change how your savings earn",
   compoundVaultYield: "Could not add your earnings to your balance",
+  claimVaultPrizes: "Could not claim your winnings",
 };
 
 /**
@@ -2128,10 +2135,10 @@ export class EVMAdapter extends BlockchainAdapter {
         key,
         protocol,
         apyPercent: gross,
-        // A prize position earns nothing between draws, so its fee comes out of
-        // the prizes rather than the rate.
-        netApyPercent: key === "prize" ? gross : netApyPercent(gross, feeBps),
-        grandPrize: key === "prize" ? await this._safeGrandPrize() : null,
+        // A prize position earns no rate of its own — every bit of the interest
+        // funds the draw — so there is no net rate to quote for it.
+        netApyPercent: key === "prize" ? 0 : netApyPercent(gross, feeBps),
+        grandPrize: key === "prize" && available ? await this._safeGrandPrize(strategy) : null,
         available: Boolean(available),
       });
     }
@@ -2148,14 +2155,50 @@ export class EVMAdapter extends BlockchainAdapter {
     return options;
   }
 
-  /** Grand prize size, or null when the prize pool is not configured. */
-  async _safeGrandPrize() {
+  /**
+   * Top-tier prize, formatted in the prize token. Null when it cannot be read,
+   * so a reshaped upstream interface shows nothing rather than a wrong number.
+   */
+  async _safeGrandPrize(strategyAddress) {
     try {
-      const prize = await this.getPoolTogetherGrandPrize();
-      return prize ?? null;
+      const strategy = new ethers.Contract(strategyAddress, PRIZE_STRATEGY_ABI, this.signer);
+      const [raw, prizeToken] = await Promise.all([strategy.grandPrize(), strategy.prizeToken()]);
+      if (!raw) return null;
+      const { symbol, decimals } = await this._resolveTokenMeta(prizeToken);
+      return `${ethers.formatUnits(raw, decimals)} ${symbol}`;
     } catch {
       return null;
     }
+  }
+
+  /**
+   * A member's unclaimed prize winnings, net of the fee. Prizes are paid in a
+   * different token from the deposit (WETH, not USDC), so they are reported
+   * separately rather than folded into the balance.
+   */
+  async getClaimablePrizes(vaultAddress) {
+    const module = await this._getYieldModule();
+    if (!module || !vaultAddress) return null;
+
+    const [amount, token] = await module.claimablePrizes(vaultAddress, this.userAddress);
+    if (!token || token === ethers.ZeroAddress) return null;
+
+    const { symbol, decimals } = await this._resolveTokenMeta(token);
+    return {
+      amountRaw: amount,
+      amount: ethers.formatUnits(amount, decimals),
+      token,
+      tokenSymbol: symbol,
+      hasPrizes: amount > 0n,
+    };
+  }
+
+  /** Claim a member's won prizes. Permissionless on-chain; paid to the member. */
+  async claimVaultPrizes(vaultAddress, memberAddress = null) {
+    const module = await this._requireYieldModule();
+    const tx = await module.claimPrizes(vaultAddress, memberAddress || this.userAddress);
+    await tx.wait();
+    return tx.hash;
   }
 
   /**
@@ -2227,7 +2270,4 @@ export class EVMAdapter extends BlockchainAdapter {
     return tx.hash;
   }
 
-  // harvestVaultPrize is inherited from the base adapter until prize savings
-  // ships: the yield module has no prize plumbing yet, so the base's "not
-  // available on this network yet" is the honest answer.
 }

@@ -13,7 +13,6 @@ import {
 } from "../../styles";
 import ApyBadge from "../atoms/ApyBadge.js";
 import { YIELD_OPTIONS } from "../../utils/yieldContent.js";
-import { isPrizePoolEnabled } from "../../utils/featureFlags.js";
 
 /**
  * YieldOptionCards - the three earning choices, as selectable cards.
@@ -30,9 +29,9 @@ const YieldOptionCards = ({ options, selected, onSelect, disabled = false }) => 
     <div style={modalStyles.optionGrid}>
       {YIELD_OPTIONS.map((option) => {
         const rate = rates.get(option.key);
-        const flagged = option.requiresPrizePool && !isPrizePoolEnabled();
-        // "Off" needs no protocol, so it is always available.
-        const available = option.key === "off" || (Boolean(rate?.available) && !flagged);
+        // Availability comes from the chain — whether a strategy is configured
+        // for this vault's token — rather than a flag. "Off" needs no protocol.
+        const available = option.key === "off" || Boolean(rate?.available);
         const isSelected = selected === option.key;
         const selectable = available && !disabled;
 
@@ -128,7 +127,7 @@ const YieldOptionCards = ({ options, selected, onSelect, disabled = false }) => 
                   color: colors.text.muted,
                 }}
               >
-                {flagged ? option.badge || "Coming soon" : "Not available for this token"}
+                {option.badge || "Not available for this token"}
               </span>
             )}
           </button>

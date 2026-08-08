@@ -164,7 +164,12 @@ export class BlockchainAdapter {
     throw new Error("Earning on your savings is not available on this network yet");
   }
 
-  async harvestVaultPrize(vaultAddress, claimData) {
+  /** Unclaimed prize winnings, or null when prize savings is unavailable. */
+  async getClaimablePrizes(vaultAddress) {
+    return null;
+  }
+
+  async claimVaultPrizes(vaultAddress, memberAddress) {
     throw new Error("Earning on your savings is not available on this network yet");
   }
 

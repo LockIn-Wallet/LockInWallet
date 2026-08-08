@@ -19,6 +19,8 @@ import {
   YIELD_FEE_NOTE,
   YIELD_MODE_LABELS,
   YIELD_OFF_REASSURANCE,
+  YIELD_PRIZE_WON_NOTE,
+  YIELD_PRIZE_FEE_NOTE,
 } from "../../utils/yieldContent.js";
 
 /**
@@ -31,6 +33,8 @@ import {
  */
 const YieldSection = ({ transactionManager }) => {
   const [status, setStatus] = useState(null);
+  const [prizes, setPrizes] = useState(null);
+  const [claiming, setClaiming] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
@@ -43,7 +47,13 @@ const YieldSection = ({ transactionManager }) => {
       return;
     }
     try {
-      setStatus(await transactionManager.getYieldStatus());
+      const next = await transactionManager.getYieldStatus();
+      setStatus(next);
+      // Winnings are a separate token from the deposit, so they are read and
+      // shown separately rather than folded into the balance.
+      setPrizes(
+        next?.mode === "prize" ? await transactionManager.getClaimablePrizes() : null,
+      );
     } catch (loadError) {
       // A failed read must not take the dashboard down; the section just hides.
       console.error("Could not load earning status:", loadError);
@@ -75,11 +85,25 @@ const YieldSection = ({ transactionManager }) => {
     [transactionManager, refresh],
   );
 
+  const handleClaim = useCallback(async () => {
+    setClaiming(true);
+    setError(null);
+    try {
+      await transactionManager.claimActiveVaultPrizes();
+      await refresh();
+    } catch (claimError) {
+      setError(claimError.message);
+    } finally {
+      setClaiming(false);
+    }
+  }, [transactionManager, refresh]);
+
   if (!isYieldEnabled()) return null;
   if (loading) return null;
   if (!status?.supported || !status?.tokenSupported) return null;
 
   const isEarning = status.mode !== "off";
+  const isPrize = status.mode === "prize";
   const activeOption = status.options?.find((option) => option.key === status.mode);
 
   return (
@@ -116,7 +140,10 @@ const YieldSection = ({ transactionManager }) => {
           <div style={{ fontSize: type.caption, color: colors.text.muted, marginBottom: space[1] }}>
             Your rate
           </div>
-          {isEarning ? (
+          {isPrize ? (
+            // No rate exists to quote: the interest funds the draw instead.
+            <div style={{ fontSize: type.body, color: colors.text.secondary }}>Prizes only</div>
+          ) : isEarning ? (
             <ApyBadge apyPercent={activeOption?.netApyPercent ?? 0} />
           ) : (
             <div style={{ fontSize: type.body, color: colors.text.muted }}>—</div>
@@ -134,10 +161,12 @@ const YieldSection = ({ transactionManager }) => {
 
         <div style={cardStyles.yieldStat}>
           <div style={{ fontSize: type.caption, color: colors.text.muted, marginBottom: space[1] }}>
-            Earned so far
+            {isPrize ? "Grand prize" : "Earned so far"}
           </div>
           <div style={{ fontFamily: fontFamily.mono, fontSize: type.body, color: colors.success.light }}>
-            +{status.lifetimeYield} {status.tokenSymbol}
+            {isPrize
+              ? activeOption?.grandPrize || "—"
+              : `+${status.lifetimeYield} ${status.tokenSymbol}`}
           </div>
         </div>
       </div>
@@ -159,6 +188,45 @@ const YieldSection = ({ transactionManager }) => {
         </p>
       ) : null}
 
+      {/* A win arrives in a different token, so it gets its own line and its
+          own action rather than quietly changing the balance above. */}
+      {prizes?.hasPrizes ? (
+        <div style={{ ...cardStyles.yieldStat, marginBottom: space[4] }}>
+          <div style={{ fontSize: type.caption, color: colors.text.muted, marginBottom: space[1] }}>
+            You won
+          </div>
+          <div
+            style={{
+              fontFamily: fontFamily.mono,
+              fontSize: type.lead,
+              color: colors.success.light,
+              marginBottom: space[2],
+            }}
+          >
+            {prizes.amount} {prizes.tokenSymbol}
+          </div>
+          <p
+            style={{
+              margin: `0 0 ${space[3]} 0`,
+              fontSize: type.caption,
+              color: colors.text.muted,
+              lineHeight: 1.6,
+              textAlign: "left",
+            }}
+          >
+            {YIELD_PRIZE_WON_NOTE}
+          </p>
+          <button
+            type="button"
+            style={{ ...(claiming ? buttonStyles.disabled : buttonStyles.success), margin: 0 }}
+            onClick={handleClaim}
+            disabled={claiming}
+          >
+            {claiming ? "Claiming…" : `Claim ${prizes.amount} ${prizes.tokenSymbol}`}
+          </button>
+        </div>
+      ) : null}
+
       <p
         style={{
           margin: `0 0 ${space[4]} 0`,
@@ -168,7 +236,7 @@ const YieldSection = ({ transactionManager }) => {
           textAlign: "left",
         }}
       >
-        {isEarning ? YIELD_FEE_NOTE : YIELD_OFF_REASSURANCE}
+        {!isEarning ? YIELD_OFF_REASSURANCE : isPrize ? YIELD_PRIZE_FEE_NOTE : YIELD_FEE_NOTE}
       </p>
 
       <div style={layoutStyles.flexAlignCenter}>

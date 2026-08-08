@@ -92,6 +92,86 @@ interface IYieldStrategy {
     function emergencyExit(address recipient) external returns (uint256 assets);
 }
 
+// ========== PRIZE SAVINGS ==========
+
+/// @notice A PoolTogether v5 prize vault. It is a normal ERC4626 over the
+/// deposited asset, but — unlike a lending vault — the yield is diverted to the
+/// prize pool rather than the share price, so shares stay ~1:1 forever and the
+/// return arrives as discrete prizes in a different token.
+interface IPrizeVault {
+    function asset() external view returns (address);
+    function deposit(uint256 assets, address receiver) external returns (uint256 shares);
+    function redeem(uint256 shares, address receiver, address owner) external returns (uint256 assets);
+    function withdraw(uint256 assets, address receiver, address owner) external returns (uint256 shares);
+    function convertToAssets(uint256 shares) external view returns (uint256);
+    function maxWithdraw(address owner) external view returns (uint256);
+    function balanceOf(address account) external view returns (uint256);
+}
+
+/// @notice PoolTogether v5 prize pool, for reading prize sizes only.
+/// @dev Deliberately no `claimPrize`. Verified against the live Optimism
+/// deployment: the real signature is
+/// `claimPrize(address,uint8,uint32,address,uint96,address)` and **only the
+/// prize vault may call it**. A depositor never claims for itself — third-party
+/// claimer bots do it, and the prize token is transferred straight to the
+/// winning depositor's address. So a position here simply receives the tokens.
+interface IPrizePool {
+    function prizeToken() external view returns (address);
+    function getTierPrizeSize(uint8 tier) external view returns (uint104);
+    function numberOfTiers() external view returns (uint8);
+}
+
+/// @notice A prize-savings strategy.
+///
+/// Deliberately NOT IYieldStrategy. That interface is share-based and pools
+/// every vault into one position, which is right for a lending protocol but
+/// wrong here: PoolTogether computes odds per depositing *address* from its
+/// time-weighted balance, so a shared position would win as one large account
+/// and force every prize to be split. Each account therefore gets its own
+/// position contract and its own real odds.
+///
+/// Accounts are addressed by an opaque id (vault + member) so the strategy
+/// never needs to know how the caller organises its users.
+interface IPrizeStrategy {
+    function asset() external view returns (address);
+
+    /// @notice The token prizes are paid in. On Optimism this is WETH — not the
+    /// asset that was deposited.
+    function prizeToken() external view returns (address);
+
+    function mode() external view returns (uint8);
+
+    function controller() external view returns (address);
+
+    /// @notice The position that holds this account's deposit and receives its
+    /// prizes. Deterministic, and address(0) until first funded.
+    function positionOf(bytes32 accountId) external view returns (address);
+
+    /// @notice Pull `assets` from the controller into this account's position,
+    /// deploying the position on first use.
+    function deposit(bytes32 accountId, uint256 assets) external;
+
+    function withdraw(bytes32 accountId, uint256 assets, address recipient) external;
+
+    /// @notice Exit an account entirely. Returns the assets returned.
+    function withdrawAll(bytes32 accountId, address recipient) external returns (uint256 assets);
+
+    /// @notice Assets currently deposited for this account.
+    function investedAssets(bytes32 accountId) external view returns (uint256);
+
+    /// @notice Prize tokens sitting in this account's position, unclaimed.
+    function claimablePrizes(bytes32 accountId) external view returns (uint256);
+
+    /// @notice Move this account's won prize tokens to `recipient`.
+    function sweepPrizes(bytes32 accountId, address recipient) external returns (uint256 amount);
+
+    /// @notice Current top-tier prize, for display. 0 when unknown.
+    function grandPrize() external view returns (uint256);
+
+    event PositionDeployed(bytes32 indexed accountId, address indexed position);
+    event PrizesSwept(bytes32 indexed accountId, address indexed recipient, uint256 amount);
+}
+
 // ========== MODULE INTERFACE ==========
 
 /// @notice The accountant. VaultSystemModule custodies vault funds and calls
@@ -105,7 +185,31 @@ interface IYieldModule {
     /// protocol — a failing strategy leaves the funds with the caller and
     /// emits StrategyDepositSkipped, so a user's deposit can't be blocked by a
     /// third party.
-    function onDeposit(uint256 vaultId, address token, uint256 amount) external;
+    /// @param member the depositor being credited. Stable earning pools a whole
+    /// vault into one position and ignores this; prize savings gives each member
+    /// their own position, so it must know whose money this is. Passing it
+    /// always keeps the vault module from having to know which mode is in force.
+    function onDeposit(uint256 vaultId, address token, address member, uint256 amount) external;
+
+    /// @notice How much of a vault's idle balance should be invested right now.
+    /// The caller supplies both balances and the module decides, so the vault
+    /// module never has to branch on the earning mode.
+    function investableAmount(
+        uint256 vaultId,
+        address member,
+        uint256 vaultTotalBalance,
+        uint256 memberBalance
+    ) external view returns (uint256);
+
+    /// @notice How much must be redeemed to pay out `needed`, given what this
+    /// scope already holds idle. Zero when idle funds already cover it.
+    function liquidityShortfall(
+        uint256 vaultId,
+        address member,
+        uint256 needed,
+        uint256 vaultTotalBalance,
+        uint256 memberBalance
+    ) external view returns (uint256);
 
     /// @notice Credit a member's accrued yield. Returns the amount to add to
     /// their balance; the caller writes it into its own ledger.
@@ -117,11 +221,29 @@ interface IYieldModule {
     /// @notice Redeem `amount` of `token` from `vaultId`'s position and send it
     /// to `recipient`. Reverts "Insufficient strategy liquidity" rather than
     /// paying out short.
-    function ensureLiquidity(uint256 vaultId, address token, uint256 amount, address recipient) external;
+    function ensureLiquidity(
+        uint256 vaultId,
+        address token,
+        address member,
+        uint256 amount,
+        address recipient
+    ) external;
+
+    /// @notice Send a member's won prize tokens to them, net of the fee.
+    /// Prizes are paid in a different token from the deposit, so they are never
+    /// folded into a balance — they are claimed.
+    function claimPrizes(uint256 vaultId, address member) external returns (uint256 amount);
+
+    /// @notice Prize tokens this member has won and not yet claimed, and the
+    /// token they are denominated in.
+    function claimablePrizes(uint256 vaultId, address member)
+        external
+        view
+        returns (uint256 amount, address token);
 
     /// @notice Divest everything for `vaultId` back to the vault module, and
     /// set the vault's stored mode. Used when the owner switches earning off.
-    function divestAll(uint256 vaultId, address recipient) external returns (uint256 assets);
+    function divestAll(uint256 vaultId, address member, address recipient) external returns (uint256 assets);
 
     /// @notice Record the vault's chosen mode. Vault-module only.
     function setVaultMode(uint256 vaultId, address token, uint8 mode) external;
@@ -169,6 +291,8 @@ interface IYieldModule {
     event YieldDeficit(uint256 indexed vaultId, uint256 deficit);
     event MemberYieldSettled(uint256 indexed vaultId, address indexed member, uint256 credited);
     event FeesSwept(address indexed token, address indexed treasury, uint256 amount);
+    event PrizesClaimed(uint256 indexed vaultId, address indexed member, address indexed token, uint256 amount, uint256 fee);
+    event PrizeFeeSet(uint256 feeBps);
     event ManagementFeeSet(uint256 feeBps);
     event StrategiesPaused(bool paused);
     event YieldWatermarkSet(uint256 fromVaultId);

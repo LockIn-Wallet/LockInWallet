@@ -138,11 +138,28 @@ these notes on the in-app **Governance** page before they execute.
 - `YieldDeficit` is only emitted once the shortfall exceeds a millionth of the
   vault's principal, so Aave's routine one-unit rounding no longer reads as a
   protocol loss in monitoring. The deficit itself is still recorded in full.
-- Prize-savings plumbing (`harvestPrize`, `prizeFeeBps`) is **not** in this
-  release. It was untested and unreachable — no prize strategy exists yet — so it
-  is pure audit surface; `setStrategy` accepts stable strategies only. It returns
-  with `PoolTogetherStrategy`, where it can be tested. The dialog still shows the
-  prize option, disabled, so the choice is visible.
+- **Prize savings**, via a new `PoolTogetherStrategy`. Two facts about
+  PoolTogether v5, both verified against the live Optimism deployment rather than
+  assumed, shaped it:
+  - **Odds are per depositing address.** So each member gets their own
+    `PrizePosition` (an EIP-1167 clone) and their own real odds, including a real
+    shot at the grand prize. A shared position would have made every member one
+    large depositor whose prizes had to be split — a variable bonus rate, not a
+    lottery. This is why the yield hooks are now member-aware.
+  - **Prizes are paid in a different token from the deposit** — WETH, not USDC
+    (`prizeToken()` on the live pool) — and are *not* claimed by the depositor.
+    Only the prize vault may call `claimPrize`, third-party claimer bots do it,
+    and the token is transferred straight to the winner. So a position never
+    claims; prizes simply arrive and are swept. Members' winnings are therefore
+    tracked and claimed **separately** from their balance, never swapped and
+    never folded into the USDC ledger.
+  The prize fee is a flat share of each prize claimed (500 bps, capped at 1000),
+  which is the only thing it could come from: a prize vault pays no rate. A
+  member who never wins is never charged.
+- Corrected `IPrizePool`: the old module declared `claimPrize(address,uint8)`,
+  whose selector is **absent** from the deployed v5 prize pool — it only ever
+  worked against the mock. The real one takes six arguments, and we now do not
+  call it at all.
 - Escape hatches for the new third-party dependency: `pauseStrategies` stops new
   investment without affecting withdrawals, and `emergencyExitVault` /
   `emergencyExitToken` divest everything back into `VaultSystemModule` and set
