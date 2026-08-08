@@ -120,6 +120,9 @@ interface ITimePeriodLimitsModule {
 
     // Limit checking and spending
     function checkAllTimePeriodLimits(address user, uint256 amount) external;
+    function checkAllTimePeriodLimitsFor(address user, uint256 amount, uint256 balance) external;
+    function setLimitsArePercentage(address user, bool arePercentage) external;
+    function limitsArePercentage(address user) external view returns (bool);
     function checkLimitsWithBypass(address user, uint256 amount, string calldata skipPeriod) external view;
     function updateSpendingWithBypass(address user, uint256 amount, string calldata skipPeriod) external;
 
@@ -151,6 +154,7 @@ interface ITimePeriodLimitsModule {
     event CategoryDeleted(address indexed user, string category);
     event UnlockDelaySet(address indexed user, string category, uint256 unlockDelay);
     event PeriodsMigrated(address indexed from, address indexed to, uint256 periodCount);
+    event LimitsArePercentageSet(address indexed user, bool arePercentage);
 }
 
 interface IProposalSystemModule {
