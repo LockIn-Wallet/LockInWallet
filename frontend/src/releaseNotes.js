@@ -14,6 +14,10 @@ export const RELEASE_NOTES = [
     title: "A home page you can check",
     highlights: [
       {
+        emoji: "🔵",
+        text: "You can now lock in on Base as well as Optimism. The reason is simple: we want you to be able to buy savings with a bank card, and the card provider doesn't sell dollars on Optimism — only ETH. On Base it does. Optimism is still what you get by default, and nothing moves on its own: if your savings are on Optimism they stay there, and picking Base means starting a separate wallet on that chain.",
+      },
+      {
         emoji: "🕵️",
         text: "Inviting someone no longer lets you watch their money. Before, anyone who shared a referral link could pull up the list of wallets that joined through it — and every balance on this chain is public, so that was a window into what those people had saved. Now you only ever see a number: how many people locked in through your link. Being paid for a referral and being able to spy on that person are two different things, and only one of them is part of the deal.",
       },

@@ -68,6 +68,19 @@ these notes on the in-app **Governance** page before they execute.
   again — otherwise a reload would re-attach the same wallet within seconds.
   Frontend only — no contract change.
 
+- **Base (chain 8453) as a deployment target**, selectable in the network
+  dropdown alongside Optimism. The reason is the card on-ramp: Transak sells
+  no stablecoin on Optimism — only ETH — so buying USDC directly into a
+  locked wallet needs a chain where USDC is actually purchasable. **On-chain:**
+  a new, independent deployment of the full module set at
+  `0xA827CDB73b986e987fA88B8f5471ECa25E8b9d63`, tracked in
+  `ethereum/.openzeppelin/base.json`. It shares Optimism's address only
+  because the deployer's nonce sequence lined up; the two chains hold
+  separate state and are upgraded separately. Optimism stays the default
+  network so returning users are not silently moved off the chain their
+  savings are on. Base USDC/USDT/DAI addresses were verified by calling
+  `symbol()` and `decimals()` on Base mainnet.
+
 ### Security
 - Removing a spending limit now serves that period's unlock delay instead of
   executing immediately. `proposeLimitRemoval` wrote an `executeAfter` of
@@ -181,6 +194,19 @@ these notes on the in-app **Governance** page before they execute.
   page.
 
 ### Fixed
+- `deploy-modular` no longer deploys mock tokens to live chains. It gated mock
+  deployment on the `PRODUCTION` env flag, so a fresh deploy to any real
+  network — with or without `PRODUCTION=true` — deployed `MockUSDT`, wrote
+  that address into `networkConfig.json` as the real USDT, and priced the
+  deposit-address fee at 3 of those unobtainable mock tokens, leaving the
+  feature unusable. Mocks are now gated on the network being localhost. Live
+  chains keep the token addresses already in `networkConfig.json` and charge
+  the fee in native ETH, which a user arriving with only a card can pay.
+
+- The Ethereum mainnet `USDC` entry in `networkConfig.json` was not USDC —
+  it pointed at an unrelated contract, and is corrected here. Nothing was
+  ever routed through it: no core contract is deployed on Ethereum mainnet.
+
 - Home page copy no longer claims "zero admin keys". The page now states the
   actual upgrade trust model from [SECURITY.md](SECURITY.md) — upgrades are
   executed by a single maintainer key today, an on-chain 48h timelock is
