@@ -24,7 +24,7 @@ const TITLE_ID = "yield-options-title";
  * The choice is staged locally and only submitted on confirm — switching earning
  * off divests real funds, so it should not fire on a stray click.
  */
-const YieldModal = ({ open, currentMode, options, onClose, onConfirm, saving = false }) => {
+const YieldModal = ({ open, currentMode, options, onClose, onConfirm, saving = false, error = null }) => {
   const [choice, setChoice] = useState(currentMode);
 
   // Re-sync whenever the dialog reopens, so a cancelled edit does not persist.
@@ -97,10 +97,23 @@ const YieldModal = ({ open, currentMode, options, onClose, onConfirm, saving = f
           </p>
         )}
 
+        {/* A failed save keeps the dialog open, so the reason has to be shown
+            here — anything rendered by the section behind is hidden by the
+            overlay, leaving the user staring at a button that did nothing. */}
+        {error ? (
+          <p style={modalStyles.errorNote} role="alert">
+            <span aria-hidden="true">⚠️</span>
+            <span>{error}</span>
+          </p>
+        ) : null}
+
         <div style={modalStyles.footer}>
           <button
             type="button"
-            style={unchanged || saving ? buttonStyles.disabled : landingStyles.ctaPrimary}
+            style={{
+              ...(unchanged || saving ? buttonStyles.disabled : landingStyles.ctaPrimary),
+              ...modalStyles.footerButton,
+            }}
             onClick={() => onConfirm(choice)}
             disabled={unchanged || saving}
           >
@@ -108,7 +121,7 @@ const YieldModal = ({ open, currentMode, options, onClose, onConfirm, saving = f
           </button>
           <button
             type="button"
-            style={landingStyles.ctaSecondary}
+            style={{ ...landingStyles.ctaSecondary, ...modalStyles.footerButton }}
             onClick={onClose}
             disabled={saving}
           >

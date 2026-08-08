@@ -53,9 +53,13 @@ export const YIELD_OPTIONS = [
     key: "prize",
     title: "Prize savings",
     badge: "Coming soon",
+    // Deliberately not "a lower steady rate": a prize vault pays no steady rate
+    // at all. Every bit of the interest funds the draw, so most months pay
+    // nothing. Saying otherwise would set up exactly the wrong expectation.
     blurb:
-      "A lower steady rate, plus entry into the prize draw. Your deposit is never " +
-      "at stake in the draw — only the interest it earns funds the prizes.",
+      "Your interest funds a shared prize draw instead of landing in your balance. " +
+      "Your deposit is never at stake — but most months you win nothing, and " +
+      "occasionally you win a lot.",
     detail: "Prizes are shared across everyone saving this way.",
     requiresPrizePool: true,
   },

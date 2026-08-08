@@ -211,50 +211,15 @@ export const cardStyles = {
     padding: spacing.lg,
     marginBottom: spacing.xl,
   },
-};
-
-// Layout styles
-export const layoutStyles = {
-  // Flex layouts
-  flexBetween: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: spacing.xxl,
-    flexWrap: 'wrap',
-    gap: spacing.xl,
-  },
-
-  flexCenter: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: spacing.lg,
-  },
-
-  flexCenterSmall: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
-
-  // Grid layouts
-  tokenGrid: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
-    gap: spacing.lg,
-  },
-
-  balanceGrid: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
-    gap: spacing.lg,
-  },
 
   // ---- Earning on savings -------------------------------------------------
 
   // One selectable option inside the earning dialog. Dashed while unselected and
   // solid mint once chosen, matching how LimitPeriodCards signals "configured".
   yieldOptionCard: {
+    // index.css styles every bare <button> as a centred mint pill, so a card
+    // built on one has to restate its own box.
+    margin: 0,
     padding: spacing.xl,
     borderRadius: borderRadius.lg,
     backgroundColor: colors.background.secondary,
@@ -292,6 +257,44 @@ export const layoutStyles = {
     borderRadius: borderRadius.md,
     backgroundColor: colors.background.dark,
     border: `1px solid ${colors.border.default}`,
+  },
+};
+
+// Layout styles
+export const layoutStyles = {
+  // Flex layouts
+  flexBetween: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing.xxl,
+    flexWrap: 'wrap',
+    gap: spacing.xl,
+  },
+
+  flexCenter: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: spacing.lg,
+  },
+
+  flexCenterSmall: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+
+  // Grid layouts
+  tokenGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
+    gap: spacing.lg,
+  },
+
+  balanceGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
+    gap: spacing.lg,
   },
 
   // Section margins

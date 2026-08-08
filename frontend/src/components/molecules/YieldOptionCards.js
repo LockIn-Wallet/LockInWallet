@@ -68,8 +68,11 @@ const YieldOptionCards = ({ options, selected, onSelect, disabled = false }) => 
                 {option.title}
               </span>
 
-              {option.key === "off" ? null : (
-                <ApyBadge apyPercent={rate?.netApyPercent ?? 0} muted={!available} />
+              {/* No badge on an option that has no rate to quote: "off" never
+                  does, and an unavailable one would just read "0.00% a year",
+                  which says nothing true about what it will pay. */}
+              {option.key === "off" || !available ? null : (
+                <ApyBadge apyPercent={rate?.netApyPercent ?? 0} />
               )}
             </span>
 

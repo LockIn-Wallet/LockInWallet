@@ -90,6 +90,7 @@ const YieldSection = ({ transactionManager }) => {
           fontSize: type.small,
           color: colors.text.secondary,
           lineHeight: 1.6,
+          textAlign: "left",
         }}
       >
         {YIELD_LEDE}
@@ -150,6 +151,7 @@ const YieldSection = ({ transactionManager }) => {
             fontFamily: fontFamily.mono,
             fontSize: type.caption,
             color: colors.text.light,
+            textAlign: "left",
           }}
         >
           {status.pendingYield} {status.tokenSymbol} of interest is waiting to be added to your
@@ -163,25 +165,20 @@ const YieldSection = ({ transactionManager }) => {
           fontSize: type.caption,
           color: colors.text.muted,
           lineHeight: 1.6,
+          textAlign: "left",
         }}
       >
         {isEarning ? YIELD_FEE_NOTE : YIELD_OFF_REASSURANCE}
       </p>
 
-      {error ? (
-        <p
-          style={{
-            margin: `0 0 ${space[4]} 0`,
-            fontSize: type.small,
-            color: colors.error.light,
-          }}
-        >
-          {error}
-        </p>
-      ) : null}
-
       <div style={layoutStyles.flexAlignCenter}>
-        <button type="button" style={buttonStyles.primary} onClick={() => setModalOpen(true)}>
+        {/* margin: 0 overrides index.css's global `button { margin: 10px auto }`,
+            which would otherwise centre this against the left-aligned section. */}
+        <button
+          type="button"
+          style={{ ...buttonStyles.primary, margin: 0 }}
+          onClick={() => setModalOpen(true)}
+        >
           {isEarning ? "Change how it earns" : "Start earning"}
         </button>
       </div>
@@ -191,7 +188,11 @@ const YieldSection = ({ transactionManager }) => {
         currentMode={status.mode}
         options={status.options}
         saving={saving}
-        onClose={() => setModalOpen(false)}
+        error={error}
+        onClose={() => {
+          setError(null);
+          setModalOpen(false);
+        }}
         onConfirm={handleConfirm}
       />
     </div>
