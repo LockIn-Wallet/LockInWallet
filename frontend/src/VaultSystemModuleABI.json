@@ -294,6 +294,38 @@
         "type": "uint256"
       }
     ],
+    "name": "VaultRuleChangeCancelled",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "vaultId",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "executeAfter",
+        "type": "uint256"
+      }
+    ],
+    "name": "VaultRuleChangeProposed",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "vaultId",
+        "type": "uint256"
+      }
+    ],
     "name": "VaultRulesUpdated",
     "type": "event"
   },
@@ -383,6 +415,19 @@
       }
     ],
     "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "vaultId",
+        "type": "uint256"
+      }
+    ],
+    "name": "cancelVaultRuleChange",
+    "outputs": [],
+    "stateMutability": "nonpayable",
     "type": "function"
   },
   {
@@ -540,6 +585,73 @@
     "name": "depositFor",
     "outputs": [],
     "stateMutability": "payable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "vaultId",
+        "type": "uint256"
+      }
+    ],
+    "name": "executeVaultRuleChange",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "vaultId",
+        "type": "uint256"
+      }
+    ],
+    "name": "getPendingVaultRuleChange",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "dailyLimit",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "weeklyLimit",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "monthlyLimit",
+        "type": "uint256"
+      },
+      {
+        "internalType": "bool",
+        "name": "limitsArePercentage",
+        "type": "bool"
+      },
+      {
+        "internalType": "uint256",
+        "name": "penaltyRateBps",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "newUnlockDelay",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "executeAfter",
+        "type": "uint256"
+      },
+      {
+        "internalType": "bool",
+        "name": "exists",
+        "type": "bool"
+      }
+    ],
+    "stateMutability": "view",
     "type": "function"
   },
   {
@@ -802,6 +914,25 @@
         "type": "uint256"
       }
     ],
+    "name": "getVaultUnlockDelay",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "vaultId",
+        "type": "uint256"
+      }
+    ],
     "name": "getVaultYieldInfo",
     "outputs": [
       {
@@ -936,6 +1067,49 @@
       }
     ],
     "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "vaultId",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "dailyLimit",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "weeklyLimit",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "monthlyLimit",
+        "type": "uint256"
+      },
+      {
+        "internalType": "bool",
+        "name": "limitsArePercentage",
+        "type": "bool"
+      },
+      {
+        "internalType": "uint256",
+        "name": "penaltyRateBps",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "newUnlockDelay",
+        "type": "uint256"
+      }
+    ],
+    "name": "proposeVaultRuleChange",
+    "outputs": [],
+    "stateMutability": "nonpayable",
     "type": "function"
   },
   {

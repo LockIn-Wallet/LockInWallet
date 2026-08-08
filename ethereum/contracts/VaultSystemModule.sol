@@ -45,6 +45,21 @@ contract VaultSystemModule is Initializable, UUPSUpgradeable, OwnableUpgradeable
     // above this line moves.
     IYieldModule public yieldModule;
 
+    // Appended for upgrades: timelocked rule changes, mirroring the savings
+    // account. Reached only through mappings, so appending is safe.
+    struct VaultRuleChange {
+        uint256 dailyLimit;
+        uint256 weeklyLimit;
+        uint256 monthlyLimit;
+        uint256 penaltyRateBps;
+        uint256 newUnlockDelay; // 0 = leave the wait alone
+        uint256 executeAfter;
+        bool limitsArePercentage;
+        bool exists;
+    }
+    mapping(uint256 => VaultRuleChange) private pendingRuleChange;
+    mapping(uint256 => uint256) private vaultUnlockDelays;
+
     uint8 private constant VAULT_TYPE_PERSONAL = 0;
     uint8 private constant VAULT_TYPE_COMMUNITY = 1;
     uint256 private constant MAX_BPS = 10000;
@@ -52,6 +67,11 @@ contract VaultSystemModule is Initializable, UUPSUpgradeable, OwnableUpgradeable
     uint256 private constant MAX_NAME_LENGTH = 32;
     uint256 private constant MAX_DESCRIPTION_LENGTH = 256;
     uint256 private constant PENALTY_PRECISION = 1e12;
+    // Same bounds as the savings account, so a vault is not a weaker place to
+    // keep money than the account it sits beside.
+    uint256 private constant DEFAULT_UNLOCK_DELAY = 24 hours;
+    uint256 private constant MIN_UNLOCK_DELAY = 1 hours;
+    uint256 private constant MAX_UNLOCK_DELAY = 90 days;
     uint256 private constant DAILY_DURATION = 1 days;
     uint256 private constant WEEKLY_DURATION = 7 days;
     uint256 private constant MONTHLY_DURATION = 30 days;
@@ -168,6 +188,96 @@ contract VaultSystemModule is Initializable, UUPSUpgradeable, OwnableUpgradeable
         require(vault.vaultType == VAULT_TYPE_PERSONAL, "Community rules immutable");
         _validateVaultParams(vault.name, vault.description, dailyLimit, weeklyLimit, monthlyLimit, limitsArePercentage, penaltyRateBps);
 
+        // Tightening is instant; it can only ever make the vault safer, and
+        // making someone wait to protect themselves harder would be perverse.
+        // Anything that loosens the rules serves the wait — otherwise a stolen
+        // key could raise every limit and empty the vault in two transactions,
+        // which is exactly the hole that was closed on the savings account.
+        require(
+            _isTightening(vault, dailyLimit, weeklyLimit, monthlyLimit, limitsArePercentage, penaltyRateBps),
+            "Loosening rules needs a proposal"
+        );
+
+        _applyRules(vaultId, vault, dailyLimit, weeklyLimit, monthlyLimit, limitsArePercentage, penaltyRateBps);
+    }
+
+    /// @notice Queue a change that loosens the rules. It applies only after the
+    /// vault's wait, in the open, where the owner can see and cancel it.
+    function proposeVaultRuleChange(
+        uint256 vaultId,
+        uint256 dailyLimit,
+        uint256 weeklyLimit,
+        uint256 monthlyLimit,
+        bool limitsArePercentage,
+        uint256 penaltyRateBps,
+        uint256 newUnlockDelay
+    ) external {
+        VaultInfo storage vault = _activeVault(vaultId);
+        require(msg.sender == vault.creator, "Only creator");
+        require(vault.vaultType == VAULT_TYPE_PERSONAL, "Community rules immutable");
+        _validateVaultParams(vault.name, vault.description, dailyLimit, weeklyLimit, monthlyLimit, limitsArePercentage, penaltyRateBps);
+        if (newUnlockDelay != 0) {
+            require(
+                newUnlockDelay >= MIN_UNLOCK_DELAY && newUnlockDelay <= MAX_UNLOCK_DELAY,
+                "Invalid unlock delay"
+            );
+        }
+
+        // The wait served is the CURRENT one, so shortening it costs the old
+        // wait first — a moment of impatience cannot undo a careful decision.
+        uint256 executeAfter = block.timestamp + getVaultUnlockDelay(vaultId);
+        pendingRuleChange[vaultId] = VaultRuleChange({
+            dailyLimit: dailyLimit,
+            weeklyLimit: weeklyLimit,
+            monthlyLimit: monthlyLimit,
+            penaltyRateBps: penaltyRateBps,
+            newUnlockDelay: newUnlockDelay,
+            executeAfter: executeAfter,
+            limitsArePercentage: limitsArePercentage,
+            exists: true
+        });
+        emit VaultRuleChangeProposed(vaultId, executeAfter);
+    }
+
+    function executeVaultRuleChange(uint256 vaultId) external {
+        VaultInfo storage vault = _activeVault(vaultId);
+        require(msg.sender == vault.creator, "Only creator");
+        VaultRuleChange memory change = pendingRuleChange[vaultId];
+        require(change.exists, "No pending change");
+        require(block.timestamp >= change.executeAfter, "Still in timelock");
+
+        delete pendingRuleChange[vaultId];
+        if (change.newUnlockDelay != 0) vaultUnlockDelays[vaultId] = change.newUnlockDelay;
+        _applyRules(
+            vaultId,
+            vault,
+            change.dailyLimit,
+            change.weeklyLimit,
+            change.monthlyLimit,
+            change.limitsArePercentage,
+            change.penaltyRateBps
+        );
+    }
+
+    /// @notice Drop a queued change. This is the defensive action, so it is
+    /// instant — seeing a change you did not make and having to wait to stop it
+    /// would defeat the point of showing it.
+    function cancelVaultRuleChange(uint256 vaultId) external {
+        require(msg.sender == vaults[vaultId].creator, "Only creator");
+        require(pendingRuleChange[vaultId].exists, "No pending change");
+        delete pendingRuleChange[vaultId];
+        emit VaultRuleChangeCancelled(vaultId);
+    }
+
+    function _applyRules(
+        uint256 vaultId,
+        VaultInfo storage vault,
+        uint256 dailyLimit,
+        uint256 weeklyLimit,
+        uint256 monthlyLimit,
+        bool limitsArePercentage,
+        uint256 penaltyRateBps
+    ) private {
         vault.dailyLimit = dailyLimit;
         vault.weeklyLimit = weeklyLimit;
         vault.monthlyLimit = monthlyLimit;
@@ -175,6 +285,67 @@ contract VaultSystemModule is Initializable, UUPSUpgradeable, OwnableUpgradeable
         vault.penaltyRateBps = penaltyRateBps;
         vault.updatedAt = block.timestamp;
         emit VaultRulesUpdated(vaultId);
+    }
+
+    /// @dev A change is tightening only if every rule is at least as strict.
+    /// Note zero means "no limit at all", so it is the loosest value there is —
+    /// going from 100 to 0 removes the cap and must never be instant.
+    function _isTightening(
+        VaultInfo storage vault,
+        uint256 dailyLimit,
+        uint256 weeklyLimit,
+        uint256 monthlyLimit,
+        bool limitsArePercentage,
+        uint256 penaltyRateBps
+    ) private view returns (bool) {
+        // Fixed and percentage caps are not comparable without knowing the
+        // balance, so switching between them is never treated as tightening.
+        if (limitsArePercentage != vault.limitsArePercentage) return false;
+        // A lower penalty makes leaving early cheaper, which is a loosening.
+        if (penaltyRateBps < vault.penaltyRateBps) return false;
+        return
+            _limitAtLeastAsStrict(dailyLimit, vault.dailyLimit) &&
+            _limitAtLeastAsStrict(weeklyLimit, vault.weeklyLimit) &&
+            _limitAtLeastAsStrict(monthlyLimit, vault.monthlyLimit);
+    }
+
+    function _limitAtLeastAsStrict(uint256 newLimit, uint256 oldLimit) private pure returns (bool) {
+        if (newLimit == 0) return oldLimit == 0; // removing a cap loosens
+        if (oldLimit == 0) return true; // adding one tightens
+        return newLimit <= oldLimit;
+    }
+
+    /// @notice How long a loosening change waits. Defaults to 24 hours.
+    function getVaultUnlockDelay(uint256 vaultId) public view returns (uint256) {
+        uint256 stored = vaultUnlockDelays[vaultId];
+        return stored == 0 ? DEFAULT_UNLOCK_DELAY : stored;
+    }
+
+    function getPendingVaultRuleChange(uint256 vaultId)
+        external
+        view
+        returns (
+            uint256 dailyLimit,
+            uint256 weeklyLimit,
+            uint256 monthlyLimit,
+            bool limitsArePercentage,
+            uint256 penaltyRateBps,
+            uint256 newUnlockDelay,
+            uint256 executeAfter,
+            bool exists
+        )
+    {
+        VaultRuleChange memory c = pendingRuleChange[vaultId];
+        return (
+            c.dailyLimit,
+            c.weeklyLimit,
+            c.monthlyLimit,
+            c.limitsArePercentage,
+            c.penaltyRateBps,
+            c.newUnlockDelay,
+            c.executeAfter,
+            c.exists
+        );
     }
 
     // ========== FUNDS ==========

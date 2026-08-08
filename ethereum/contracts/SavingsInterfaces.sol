@@ -363,6 +363,8 @@ interface IVaultSystemModule {
     event VaultDepositAddressDeployed(uint256 indexed vaultId, address indexed proxy);
     event VaultWithdrawal(uint256 indexed vaultId, address indexed member, uint256 amount, uint256 penalty);
     event PenaltyRewardsClaimed(uint256 indexed vaultId, address indexed member, uint256 amount);
+    event VaultRuleChangeProposed(uint256 indexed vaultId, uint256 executeAfter);
+    event VaultRuleChangeCancelled(uint256 indexed vaultId);
     event VaultYieldModeSet(uint256 indexed vaultId, uint8 mode);
     event VaultYieldCompounded(uint256 indexed vaultId, address indexed member, uint256 amount);
 }

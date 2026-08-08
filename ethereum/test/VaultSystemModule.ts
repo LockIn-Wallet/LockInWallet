@@ -428,11 +428,17 @@ describe("VaultSystemModule", function () {
         vaultModule.connect(user1).updateVaultRules(1, 0, 0, 0, false, 1000)
       ).to.be.revertedWith("No limits set");
 
-      await expect(vaultModule.connect(user1).updateVaultRules(1, 100, 200, 300, false, 1000))
+      // Lowering the penalty makes leaving early cheaper, so it now needs the wait.
+      await expect(
+        vaultModule.connect(user1).updateVaultRules(1, 100, 200, 300, false, 1000)
+      ).to.be.revertedWith("Loosening rules needs a proposal");
+
+      // Tightening every rule still applies immediately.
+      await expect(vaultModule.connect(user1).updateVaultRules(1, 100, 200, 300, false, 2000))
         .to.emit(vaultModule, "VaultRulesUpdated").withArgs(1);
       const vault = await vaultModule.getVault(1);
       expect(vault.dailyLimit).to.equal(100);
-      expect(vault.penaltyRateBps).to.equal(1000);
+      expect(vault.penaltyRateBps).to.equal(2000);
     });
 
     it("keeps community vault rules immutable, even for the creator", async function () {
@@ -564,5 +570,176 @@ describe("VaultSystemModule — shared withdrawal addresses", function () {
     await expect(
       vaultModule.connect(user1).withdrawTo(1, hre.ethers.parseUnits("5000", 6), user2.address),
     ).to.be.revertedWith("Invalid amount");
+  });
+});
+
+describe("VaultSystemModule — timelocked rule changes", function () {
+  const DAY = 24 * 60 * 60;
+
+  async function vaultFixture() {
+    const [owner, user1, user2] = await hre.ethers.getSigners();
+    const SavingsCore = await hre.ethers.getContractFactory("SavingsCore");
+    const savingsCore = await hre.upgrades.deployProxy(SavingsCore, []);
+    const VaultSystemModule = await hre.ethers.getContractFactory("VaultSystemModule");
+    const vaultModule = await hre.upgrades.deployProxy(VaultSystemModule, [savingsCore.target]);
+    await savingsCore.registerModule(
+      hre.ethers.keccak256(hre.ethers.toUtf8Bytes("VAULT_SYSTEM")),
+      vaultModule.target,
+    );
+    // Daily 1 ETH, weekly 5, monthly 15, penalty 20%.
+    await vaultModule.connect(user1).createVault({
+      name: "Personal Savings",
+      description: "",
+      vaultType: VAULT_TYPE_PERSONAL,
+      token: hre.ethers.ZeroAddress,
+      dailyLimit: hre.ethers.parseEther("1"),
+      weeklyLimit: hre.ethers.parseEther("5"),
+      monthlyLimit: hre.ethers.parseEther("15"),
+      limitsArePercentage: false,
+      penaltyRateBps: 2000,
+    });
+    return { vaultModule, user1, user2 };
+  }
+
+  const loosen = (vaultModule: any, user: any, overrides: any = {}) =>
+    vaultModule.connect(user).proposeVaultRuleChange(
+      1,
+      overrides.daily ?? hre.ethers.parseEther("10"),
+      overrides.weekly ?? hre.ethers.parseEther("20"),
+      overrides.monthly ?? hre.ethers.parseEther("30"),
+      false,
+      overrides.penalty ?? 2000,
+      overrides.delay ?? 0,
+    );
+
+  it("defaults the wait to 24 hours", async function () {
+    const { vaultModule } = await loadFixture(vaultFixture);
+    expect(await vaultModule.getVaultUnlockDelay(1)).to.equal(DAY);
+  });
+
+  it("refuses to raise a limit on the spot", async function () {
+    // The hole this closes: a stolen key raising every cap and draining in two
+    // transactions.
+    const { vaultModule, user1 } = await loadFixture(vaultFixture);
+    await expect(
+      vaultModule.connect(user1).updateVaultRules(
+        1, hre.ethers.parseEther("100"), hre.ethers.parseEther("100"),
+        hre.ethers.parseEther("100"), false, 2000,
+      ),
+    ).to.be.revertedWith("Loosening rules needs a proposal");
+  });
+
+  it("treats removing a cap as loosening, not tightening", async function () {
+    // Zero means "no limit", so it is the loosest value, not the strictest.
+    const { vaultModule, user1 } = await loadFixture(vaultFixture);
+    await expect(
+      vaultModule.connect(user1).updateVaultRules(
+        1, 0, hre.ethers.parseEther("5"), hre.ethers.parseEther("15"), false, 2000,
+      ),
+    ).to.be.revertedWith("Loosening rules needs a proposal");
+  });
+
+  it("treats switching between fixed and percentage as loosening", async function () {
+    // The two are not comparable without a balance, so it never counts as safe.
+    const { vaultModule, user1 } = await loadFixture(vaultFixture);
+    await expect(
+      vaultModule.connect(user1).updateVaultRules(1, 100, 200, 300, true, 2000),
+    ).to.be.revertedWith("Loosening rules needs a proposal");
+  });
+
+  it("applies a loosening change only after the wait", async function () {
+    const { vaultModule, user1 } = await loadFixture(vaultFixture);
+    await expect(loosen(vaultModule, user1)).to.emit(vaultModule, "VaultRuleChangeProposed");
+
+    await expect(vaultModule.connect(user1).executeVaultRuleChange(1)).to.be.revertedWith(
+      "Still in timelock",
+    );
+    expect((await vaultModule.getVault(1)).dailyLimit).to.equal(hre.ethers.parseEther("1"));
+
+    await time.increase(DAY);
+    await vaultModule.connect(user1).executeVaultRuleChange(1);
+    expect((await vaultModule.getVault(1)).dailyLimit).to.equal(hre.ethers.parseEther("10"));
+  });
+
+  it("lets the owner cancel a queued change immediately", async function () {
+    // Cancelling is the defensive move, so it must not itself wait.
+    const { vaultModule, user1 } = await loadFixture(vaultFixture);
+    await loosen(vaultModule, user1);
+    await expect(vaultModule.connect(user1).cancelVaultRuleChange(1)).to.emit(
+      vaultModule,
+      "VaultRuleChangeCancelled",
+    );
+
+    await time.increase(DAY);
+    await expect(vaultModule.connect(user1).executeVaultRuleChange(1)).to.be.revertedWith(
+      "No pending change",
+    );
+  });
+
+  it("makes shortening the wait serve the current, longer wait first", async function () {
+    // A moment of impatience must not undo a decision made carefully.
+    const { vaultModule, user1 } = await loadFixture(vaultFixture);
+    await loosen(vaultModule, user1, { delay: 30 * DAY });
+    await time.increase(DAY);
+    await vaultModule.connect(user1).executeVaultRuleChange(1);
+    expect(await vaultModule.getVaultUnlockDelay(1)).to.equal(30 * DAY);
+
+    // Now the 30-day wait binds, including on shortening it back.
+    await loosen(vaultModule, user1, {
+      daily: hre.ethers.parseEther("50"),
+      weekly: hre.ethers.parseEther("60"),
+      monthly: hre.ethers.parseEther("70"),
+      delay: DAY,
+    });
+    await time.increase(DAY);
+    await expect(vaultModule.connect(user1).executeVaultRuleChange(1)).to.be.revertedWith(
+      "Still in timelock",
+    );
+    await time.increase(29 * DAY);
+    await vaultModule.connect(user1).executeVaultRuleChange(1);
+    expect(await vaultModule.getVaultUnlockDelay(1)).to.equal(DAY);
+  });
+
+  it("keeps the wait inside the same bounds as the savings account", async function () {
+    const { vaultModule, user1 } = await loadFixture(vaultFixture);
+    await expect(loosen(vaultModule, user1, { delay: 60 * 30 })).to.be.revertedWith(
+      "Invalid unlock delay",
+    );
+    await expect(loosen(vaultModule, user1, { delay: 91 * DAY })).to.be.revertedWith(
+      "Invalid unlock delay",
+    );
+  });
+
+  it("lets only the creator propose, execute or cancel", async function () {
+    const { vaultModule, user1, user2 } = await loadFixture(vaultFixture);
+    await expect(loosen(vaultModule, user2)).to.be.revertedWith("Only creator");
+    await loosen(vaultModule, user1);
+    await expect(vaultModule.connect(user2).executeVaultRuleChange(1)).to.be.revertedWith(
+      "Only creator",
+    );
+    await expect(vaultModule.connect(user2).cancelVaultRuleChange(1)).to.be.revertedWith(
+      "Only creator",
+    );
+  });
+
+  it("keeps community vault rules immutable either way", async function () {
+    const { vaultModule, user1 } = await loadFixture(vaultFixture);
+    await vaultModule.connect(user1).createVault({
+      name: "Community",
+      description: "",
+      vaultType: VAULT_TYPE_COMMUNITY,
+      token: hre.ethers.ZeroAddress,
+      dailyLimit: hre.ethers.parseEther("1"),
+      weeklyLimit: hre.ethers.parseEther("5"),
+      monthlyLimit: hre.ethers.parseEther("15"),
+      limitsArePercentage: false,
+      penaltyRateBps: 2000,
+    });
+    await expect(
+      vaultModule.connect(user1).proposeVaultRuleChange(
+        2, hre.ethers.parseEther("10"), hre.ethers.parseEther("20"),
+        hre.ethers.parseEther("30"), false, 2000, 0,
+      ),
+    ).to.be.revertedWith("Community rules immutable");
   });
 });
