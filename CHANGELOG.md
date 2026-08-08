@@ -156,6 +156,18 @@ these notes on the in-app **Governance** page before they execute.
   The prize fee is a flat share of each prize claimed (500 bps, capped at 1000),
   which is the only thing it could come from: a prize vault pays no rate. A
   member who never wins is never charged.
+- Prize savings reuses the prize vault **already configured in production**:
+  `PoolTogetherModule.prizeVaults(USDC)` on the live SavingsCore points at
+  PoolTogether's `przUSDC` (`0x03D3CE84…`), sharing prize pool
+  `0xF35fE10f…`. `add-yield-module.js` records both, so the new strategy points
+  at the same venue rather than introducing a second one.
+- `PoolTogetherStrategy` is verified against that **live** vault over a fork
+  (`npm run test:fork` now runs both fork suites). It pins what a mock cannot:
+  that the configured vault really is an ERC4626 over USDC sharing the expected
+  prize pool, that prize-vault shares do **not** appreciate (1,000 USDC in →
+  1,000 USDC withdrawable, because the yield funds the draw), and that two
+  members hold genuinely separate positions against the real TWAB-tracking
+  vault — the property the per-member design exists to buy.
 - Corrected `IPrizePool`: the old module declared `claimPrize(address,uint8)`,
   whose selector is **absent** from the deployed v5 prize pool — it only ever
   worked against the mock. The real one takes six arguments, and we now do not

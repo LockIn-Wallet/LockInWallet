@@ -28,8 +28,14 @@ const AAVE_V3 = {
   optimism: {
     pool: "0x794a61358D6845594F94dc1DB02A252b5b4814aD",
     // PoolTogether v5, verified against the live deployment: the prize pool
-    // pays in WETH (0x4200...0006), not the deposited asset.
+    // pays in WETH (0x4200...0006), not the deposited asset. This prize vault is
+    // the one PoolTogetherModule.prizeVaults(USDC) already points at in
+    // production, so prize savings reuses what is configured rather than
+    // introducing a second venue.
     prizePool: "0xF35fE10ffd0a9672d0095c435fd8767A7fe29B55",
+    prizeVaults: {
+      USDC: "0x03D3CE84279cB6F54f5e6074ff0F8319d830dafe", // przUSDC
+    },
     reserves: {
       USDC: {
         token: "0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85",
@@ -153,6 +159,32 @@ async function main() {
     tx = await yieldModule.setStrategy(reserve.token, MODE_STABLE, strategyAddress);
     await tx.wait();
     console.log(`   ✅ Registered as the stable-earning strategy for ${symbol}`);
+  }
+
+  // ---- 3b. Prize savings, where a prize vault is configured for the token ----
+  const MODE_PRIZE = 3;
+  const PoolTogetherStrategy = await ethers.getContractFactory("PoolTogetherStrategy");
+  for (const [symbol, prizeVault] of Object.entries(aave.prizeVaults || {})) {
+    const reserve = aave.reserves[symbol];
+    if (!reserve) {
+      console.log(`\n⚠️  No reserve recorded for ${symbol}; skipping its prize vault.`);
+      continue;
+    }
+
+    console.log(`\nDeploying PoolTogetherStrategy for ${symbol}...`);
+    const prizeStrategy = await PoolTogetherStrategy.deploy(prizeVault, aave.prizePool, yieldModuleAddress);
+    await prizeStrategy.waitForDeployment();
+    const prizeStrategyAddress = await prizeStrategy.getAddress();
+    deployed[`${symbol} (prize)`] = prizeStrategyAddress;
+
+    console.log(`✅ ${symbol} prize strategy: ${prizeStrategyAddress}`);
+    console.log(`   Prize vault:  ${prizeVault}`);
+    console.log(`   Prize token:  ${await prizeStrategy.prizeToken()} (paid in this, not ${symbol})`);
+    console.log(`   Grand prize:  ${ethers.formatEther(await prizeStrategy.grandPrize())}`);
+
+    tx = await yieldModule.setStrategy(reserve.token, MODE_PRIZE, prizeStrategyAddress);
+    await tx.wait();
+    console.log(`   ✅ Registered as the prize-savings strategy for ${symbol}`);
   }
 
   // ---- 4. The only two calls that change behaviour ----
