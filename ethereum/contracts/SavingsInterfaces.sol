@@ -319,6 +319,7 @@ interface IVaultSystemModule {
     function deposit(uint256 vaultId, uint256 amount) external payable;
     function depositFor(uint256 vaultId, uint256 amount, address beneficiary) external payable;
     function withdraw(uint256 vaultId, uint256 amount) external;
+    function withdrawTo(uint256 vaultId, uint256 amount, address destination) external;
     function withdrawWithPenalty(uint256 vaultId, uint256 amount) external;
     function claimPenaltyRewards(uint256 vaultId) external;
 

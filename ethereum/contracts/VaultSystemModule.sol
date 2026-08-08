@@ -244,9 +244,29 @@ contract VaultSystemModule is Initializable, UUPSUpgradeable, OwnableUpgradeable
         return vaultDepositProxies[vaultId];
     }
 
-    /// @notice Withdraw within the vault's spending limits.
+    /// @notice Withdraw within the vault's spending limits, to your own address.
     function withdraw(uint256 vaultId, uint256 amount) external nonReentrant onlyMember(vaultId) {
+        _withdraw(vaultId, amount, msg.sender);
+    }
+
+    /// @notice Withdraw to a saved withdrawal address.
+    ///
+    /// The list is deliberately the member's own — the same one the savings
+    /// account uses — rather than one per vault. Where money may go is a
+    /// property of the person, not of the asset, and per-vault lists would
+    /// mean re-approving the same destination repeatedly, which is how people
+    /// end up approving carelessly.
+    function withdrawTo(uint256 vaultId, uint256 amount, address destination)
+        external
+        nonReentrant
+        onlyMember(vaultId)
+    {
+        _withdraw(vaultId, amount, destination);
+    }
+
+    function _withdraw(uint256 vaultId, uint256 amount, address destination) private {
         enforceNotFrozen(savingsCore, msg.sender);
+        _requireApprovedDestination(msg.sender, destination);
         VaultInfo storage vault = _activeVault(vaultId);
         VaultMemberInfo storage member = vaultMembers[vaultId][msg.sender];
         require(amount > 0, "Invalid amount");
@@ -269,7 +289,7 @@ contract VaultSystemModule is Initializable, UUPSUpgradeable, OwnableUpgradeable
         _snapshotYield(vaultId, member, msg.sender);
         vault.updatedAt = block.timestamp;
 
-        _payOut(vault.token, msg.sender, amount);
+        _payOut(vault.token, destination, amount);
         emit VaultWithdrawal(vaultId, msg.sender, amount, 0);
     }
 
@@ -636,6 +656,25 @@ contract VaultSystemModule is Initializable, UUPSUpgradeable, OwnableUpgradeable
         if (dailyLimit > 0 && monthlyLimit > 0 && weeklyLimit == 0) {
             require(monthlyLimit >= dailyLimit, "Monthly below daily");
         }
+    }
+
+    /// @dev A destination is either the member themselves or one they added to
+    /// their saved list, which sits in the approval module keyed by their real
+    /// address — so every vault they own shares the one list.
+    ///
+    /// If that module is not registered, only self-withdrawal is possible.
+    /// Failing closed matters here: the alternative would let an attacker send
+    /// vault funds anywhere on a chain where the whitelist happens to be absent.
+    function _requireApprovedDestination(address member, address destination) private view {
+        require(destination != address(0), "Invalid destination");
+        if (destination == member) return;
+
+        address approvalModule = savingsCore.getModule(ModuleIds.APPROVAL_SYSTEM);
+        require(approvalModule != address(0), "Withdrawal address not approved");
+        require(
+            IApprovalSystemModule(approvalModule).isValidWithdrawalDestination(member, destination),
+            "Withdrawal address not approved"
+        );
     }
 
     function _payOut(address token, address to, uint256 amount) private {

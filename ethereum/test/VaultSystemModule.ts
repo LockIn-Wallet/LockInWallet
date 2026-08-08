@@ -454,3 +454,115 @@ describe("VaultSystemModule", function () {
     });
   });
 });
+
+describe("VaultSystemModule — shared withdrawal addresses", function () {
+  async function deployWithApprovalFixture() {
+    const [owner, user1, user2, stranger] = await hre.ethers.getSigners();
+
+    const SavingsCore = await hre.ethers.getContractFactory("SavingsCore");
+    const savingsCore = await hre.upgrades.deployProxy(SavingsCore, []);
+
+    const VaultSystemModule = await hre.ethers.getContractFactory("VaultSystemModule");
+    const vaultModule = await hre.upgrades.deployProxy(VaultSystemModule, [savingsCore.target]);
+    await savingsCore.registerModule(
+      hre.ethers.keccak256(hre.ethers.toUtf8Bytes("VAULT_SYSTEM")),
+      vaultModule.target,
+    );
+
+    // addWithdrawalAddressDirect consults the proposal module to check the user
+    // has not locked in yet, so it has to be registered for the fixture to work.
+    const ProposalSystemModule = await hre.ethers.getContractFactory("ProposalSystemModule");
+    const proposalModule = await hre.upgrades.deployProxy(ProposalSystemModule, [savingsCore.target]);
+    await savingsCore.registerModule(
+      hre.ethers.keccak256(hre.ethers.toUtf8Bytes("PROPOSAL_SYSTEM")),
+      proposalModule.target,
+    );
+
+    const ApprovalSystemModule = await hre.ethers.getContractFactory("ApprovalSystemModule");
+    const approvalModule = await hre.upgrades.deployProxy(ApprovalSystemModule, [savingsCore.target]);
+    await savingsCore.registerModule(
+      hre.ethers.keccak256(hre.ethers.toUtf8Bytes("APPROVAL_SYSTEM")),
+      approvalModule.target,
+    );
+
+    const MockUSDT = await hre.ethers.getContractFactory("MockUSDT");
+    const usdt = await MockUSDT.deploy();
+    await usdt.transfer(user1.address, hre.ethers.parseUnits("10000", 6));
+
+    // A funded personal vault to withdraw from.
+    await vaultModule.connect(user1).createVault({
+      name: "Savings",
+      description: "",
+      vaultType: VAULT_TYPE_PERSONAL,
+      token: usdt.target,
+      dailyLimit: hre.ethers.parseUnits("10000", 6),
+      weeklyLimit: hre.ethers.parseUnits("10000", 6),
+      monthlyLimit: hre.ethers.parseUnits("10000", 6),
+      limitsArePercentage: false,
+      penaltyRateBps: 2000,
+    });
+    await usdt.connect(user1).approve(vaultModule.target, hre.ethers.parseUnits("1000", 6));
+    await vaultModule.connect(user1).deposit(1, hre.ethers.parseUnits("1000", 6));
+
+    return { savingsCore, vaultModule, approvalModule, usdt, owner, user1, user2, stranger };
+  }
+
+  it("pays a vault withdrawal to your own address without any approval", async function () {
+    const { vaultModule, usdt, user1 } = await loadFixture(deployWithApprovalFixture);
+    const before = await usdt.balanceOf(user1.address);
+
+    await vaultModule.connect(user1).withdrawTo(1, hre.ethers.parseUnits("100", 6), user1.address);
+
+    expect((await usdt.balanceOf(user1.address)) - before).to.equal(hre.ethers.parseUnits("100", 6));
+  });
+
+  it("refuses a destination the member has not saved", async function () {
+    const { vaultModule, stranger, user1 } = await loadFixture(deployWithApprovalFixture);
+
+    await expect(
+      vaultModule.connect(user1).withdrawTo(1, hre.ethers.parseUnits("100", 6), stranger.address),
+    ).to.be.revertedWith("Withdrawal address not approved");
+  });
+
+  it("accepts a destination from the member's existing savings list", async function () {
+    // The point of the shared list: an address saved for the savings account
+    // works in every vault, with no per-vault re-approval.
+    const { vaultModule, approvalModule, usdt, user1, user2 } =
+      await loadFixture(deployWithApprovalFixture);
+    await approvalModule.connect(user1).addWithdrawalAddressDirect(user1.address, "Cold", user2.address);
+
+    const before = await usdt.balanceOf(user2.address);
+    await vaultModule.connect(user1).withdrawTo(1, hre.ethers.parseUnits("250", 6), user2.address);
+
+    expect((await usdt.balanceOf(user2.address)) - before).to.equal(hre.ethers.parseUnits("250", 6));
+  });
+
+  it("keeps one member's saved list from authorising another's withdrawal", async function () {
+    const { vaultModule, approvalModule, user1, user2, stranger } =
+      await loadFixture(deployWithApprovalFixture);
+    // user2 approves the stranger — that must not help user1.
+    await approvalModule.connect(user2).addWithdrawalAddressDirect(user2.address, "Theirs", stranger.address);
+
+    await expect(
+      vaultModule.connect(user1).withdrawTo(1, hre.ethers.parseUnits("100", 6), stranger.address),
+    ).to.be.revertedWith("Withdrawal address not approved");
+  });
+
+  it("rejects the zero address", async function () {
+    const { vaultModule, user1 } = await loadFixture(deployWithApprovalFixture);
+    await expect(
+      vaultModule.connect(user1).withdrawTo(1, hre.ethers.parseUnits("100", 6), hre.ethers.ZeroAddress),
+    ).to.be.revertedWith("Invalid destination");
+  });
+
+  it("still enforces the vault's spending limits on a whitelisted destination", async function () {
+    // A saved address is not a way around the limits.
+    const { vaultModule, approvalModule, user1, user2 } =
+      await loadFixture(deployWithApprovalFixture);
+    await approvalModule.connect(user1).addWithdrawalAddressDirect(user1.address, "Cold", user2.address);
+
+    await expect(
+      vaultModule.connect(user1).withdrawTo(1, hre.ethers.parseUnits("5000", 6), user2.address),
+    ).to.be.revertedWith("Invalid amount");
+  });
+});
