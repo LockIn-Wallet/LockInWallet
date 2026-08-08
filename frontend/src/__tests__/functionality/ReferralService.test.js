@@ -42,6 +42,38 @@ describe('Referral Service', () => {
       expect(captureReferrerFromUrl()).toBe(REFERRER);
     });
 
+    // The referrer is a wallet address and the chain is public, so it must not
+    // survive in the URL, where analytics and Referer headers would carry it
+    test('strips ?ref= from the address bar after capturing it', () => {
+      setUrl(`?ref=${REFERRER}`);
+
+      expect(captureReferrerFromUrl()).toBe(REFERRER);
+      expect(window.location.search).toBe('');
+      expect(window.location.href).not.toContain(REFERRER);
+    });
+
+    test('strips ?ref= even when the address is invalid', () => {
+      setUrl('?ref=not-an-address');
+      captureReferrerFromUrl();
+
+      expect(window.location.search).toBe('');
+    });
+
+    test('keeps other query parameters and the hash intact', () => {
+      setUrl(`?utm_source=discord&ref=${REFERRER}#how-it-works`);
+      captureReferrerFromUrl();
+
+      expect(window.location.search).toBe('?utm_source=discord');
+      expect(window.location.hash).toBe('#how-it-works');
+    });
+
+    test('leaves a URL with no ref alone', () => {
+      setUrl('?utm_source=discord');
+      captureReferrerFromUrl();
+
+      expect(window.location.search).toBe('?utm_source=discord');
+    });
+
     test('ignores an invalid address', () => {
       setUrl('?ref=not-an-address');
       expect(captureReferrerFromUrl()).toBeNull();

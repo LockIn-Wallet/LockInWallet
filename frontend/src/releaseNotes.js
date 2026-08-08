@@ -50,6 +50,10 @@ export const RELEASE_NOTES = [
         text: "The wallet screen now opens with what you can actually withdraw right now — each of your limits, how much is left in it, and when it resets. Withdrawing moved above the limits themselves, since taking money out is the everyday action and changing a limit is the rare one.",
       },
       {
+        emoji: "🕶️",
+        text: "Opening someone's referral link used to hand their wallet address to Google. The link carries the address of whoever invited you, and our analytics logged the whole web address before the page had a chance to clean it up — and since every balance on this chain is public, that address is a window into that person's savings. The address is now removed from the link the instant you arrive, before anything else runs, and analytics is set up so it can't follow you around the web either.",
+      },
+      {
         emoji: "🦊",
         text: "If you've never done this before, pressing connect now explains it instead of telling you off. What MetaMask is, why there's no password here, what a chain is and why ours is Optimism — four short paragraphs, then the download link. It used to be a pop-up box reading 'Please install MetaMask!', which helps nobody who doesn't already know what that means.",
       },

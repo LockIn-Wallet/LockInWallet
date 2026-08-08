@@ -40,14 +40,9 @@
     <link rel="apple-touch-icon" href="%PUBLIC_URL%/favicon.png" />
     <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
 
-    <!-- Google Analytics -->
-    <script async src="https://www.googletagmanager.com/gtag/js?id=G-EZS61DFP72"></script>
-    <script>
-      window.dataLayer = window.dataLayer || [];
-      function gtag(){dataLayer.push(arguments);}
-      gtag('js', new Date());
-      gtag('config', 'G-EZS61DFP72');
-    </script>
+    <!-- Google Analytics loads from src/utils/analytics.js, not here. A tag in
+         this file fires before React mounts, which reported referral links
+         (/?ref=<wallet address>) to Google before anything could scrub them. -->
 
     <!-- Landing page styles (only visible until React mounts) -->
     <link rel="stylesheet" href="%PUBLIC_URL%/landing.css" />
