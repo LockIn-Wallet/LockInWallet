@@ -250,6 +250,65 @@ describe("YieldModule", function () {
       await expectSolvent(ctx, [1n]);
     });
 
+    it("accepts a deposit that Aave credits one unit short", async function () {
+      // Real Aave mints scaledBalance * index rounded down, so supplying N units
+      // leaves a position worth N-1. A strict receipt check rejected every live
+      // deposit; only a fork test caught it, so this pins the behaviour offline.
+      const ctx = await loadFixture(deployYieldFixture);
+      await ctx.pool.setSupplyShortfall(1);
+
+      await ctx.vaultModule.connect(ctx.user1).createVault(usdtVaultParams({ token: ctx.usdt.target }));
+      await ctx.usdt.connect(ctx.user1).approve(ctx.vaultModule.target, usdt6("1000"));
+      await expect(ctx.vaultModule.connect(ctx.user1).deposit(1, usdt6("1000")))
+        .to.not.emit(ctx.yieldModule, "StrategyDepositSkipped");
+
+      // The member is credited in full and the money really is invested.
+      expect((await ctx.vaultModule.getVaultMember(1, ctx.user1.address)).balance).to.equal(usdt6("1000"));
+      expect(await ctx.yieldModule.investedPrincipal(1)).to.equal(usdt6("1000"));
+      expect(await ctx.strategy.totalAssets()).to.equal(usdt6("1000") - 1n);
+
+      // The one unit the pool kept shows up as a deficit — recorded honestly,
+      // never taken out of the member's balance.
+      await ctx.yieldModule.accrue(1);
+      let y = await ctx.yieldModule.getVaultYield(1);
+      expect(y.deficit).to.equal(1n);
+      expect(y.principal).to.equal(usdt6("1000"));
+      expect((await ctx.vaultModule.getVaultMember(1, ctx.user1.address)).balance).to.equal(usdt6("1000"));
+
+      // The first real interest repays it, before any fee or member yield.
+      await earn(ctx, usdt6("10"));
+      await ctx.yieldModule.accrue(1);
+      y = await ctx.yieldModule.getVaultYield(1);
+      expect(y.deficit).to.equal(0n);
+
+      // And a full exit still pays out everything the member is owed.
+      const before = await ctx.usdt.balanceOf(ctx.user1.address);
+      const member = await ctx.vaultModule.getVaultMember(1, ctx.user1.address);
+      const pending = await ctx.yieldModule.pendingYield(1, ctx.user1.address);
+      await ctx.vaultModule.connect(ctx.user1).withdraw(1, member.balance + pending);
+      expect((await ctx.usdt.balanceOf(ctx.user1.address)) - before).to.equal(member.balance + pending);
+    });
+
+    it("refuses a deposit that loses real value, rather than absorbing it", async function () {
+      // The rounding tolerance must not become a hole a fee-on-transfer token
+      // fits through. A whole unit of USDT is 500,000x the two-unit slack.
+      const ctx = await loadFixture(deployYieldFixture);
+      await ctx.pool.setSupplyShortfall(usdt6("1"));
+
+      await ctx.vaultModule.connect(ctx.user1).createVault(usdtVaultParams({ token: ctx.usdt.target }));
+      await ctx.usdt.connect(ctx.user1).approve(ctx.vaultModule.target, usdt6("1000"));
+
+      // Skipped, not accepted — and the user's deposit still succeeds.
+      await expect(ctx.vaultModule.connect(ctx.user1).deposit(1, usdt6("1000")))
+        .to.emit(ctx.yieldModule, "StrategyDepositSkipped");
+
+      expect((await ctx.vaultModule.getVaultMember(1, ctx.user1.address)).balance).to.equal(usdt6("1000"));
+      expect(await ctx.yieldModule.investedPrincipal(1)).to.equal(0);
+      // The money stayed here rather than being handed to a lossy protocol.
+      expect(await ctx.usdt.balanceOf(ctx.vaultModule.target)).to.equal(usdt6("1000"));
+      await expectSolvent(ctx, [1n]);
+    });
+
     it("invests a balance that predates opting in on the next deposit", async function () {
       const ctx = await loadFixture(deployBase);
       // No yield module attached yet — this is the pre-upgrade world.

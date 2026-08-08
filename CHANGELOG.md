@@ -108,6 +108,23 @@ these notes on the in-app **Governance** page before they execute.
 - Percentage spending limits now apply to compounded yield, because settled yield
   lands in `member.balance` — a 10% daily limit on a balance that grew to 1100 is
   110, not 100.
+- `AaveV3Strategy` is verified against the **live** Aave v3 pool on Optimism over
+  a fork (`npm run test:fork`, opt-in via `FORK_OPTIMISM=true` so the default
+  suite stays offline). It pins the two things a mock cannot: that
+  `AaveReserveData` still matches Aave's `getReserveData` struct — confirmed at
+  15 words with `aTokenAddress` at index 8, so a future Aave reshape would be
+  caught rather than silently quoting every user 0% — and that supply/withdraw
+  round-trip through the real pool.
+- **Fixed before shipping, found only by that fork test:** Aave reports
+  `balanceOf` as `scaledBalance * liquidityIndex` rounded down, so supplying
+  1,000,000,000 USDC leaves a position worth 999,999,999. The strategy's
+  exact-receipt check rejected that, which would have made **every real deposit**
+  fall back to idle. It now tolerates two units of rounding — still far below any
+  fee-on-transfer loss — and issues shares against the amount actually credited,
+  so the rounding cannot dilute other vaults in the same strategy. The unit is
+  recorded as a deficit and repaid by the first interest, never taken from a
+  member's balance. `MockAavePool.setSupplyShortfall` reproduces both this and a
+  lossy token in the offline suite.
 - Escape hatches for the new third-party dependency: `pauseStrategies` stops new
   investment without affecting withdrawals, and `emergencyExitVault` /
   `emergencyExitToken` divest everything back into `VaultSystemModule` and set

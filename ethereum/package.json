@@ -5,6 +5,7 @@
   "main": "index.js",
   "scripts": {
     "test": "hardhat test",
+    "test:fork": "FORK_OPTIMISM=true hardhat test test/AaveV3StrategyFork.ts",
     "compile": "hardhat compile",
     "dev": "node scripts/dev.js",
     "node": "hardhat node --hostname 0.0.0.0",

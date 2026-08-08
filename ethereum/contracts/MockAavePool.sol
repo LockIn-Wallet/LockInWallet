@@ -19,6 +19,7 @@ contract MockAavePool {
 
     bool public supplyPaused;
     bool public reserveDataBroken;
+    uint256 public supplyShortfall;
 
     function registerReserve(address asset, address aToken) external {
         aTokens[asset] = aToken;
@@ -40,6 +41,18 @@ contract MockAavePool {
         liquidityRateRay[asset] = rateRay;
     }
 
+    /// @notice Credit `units` fewer aTokens than were supplied.
+    ///
+    /// At 1 unit this reproduces real Aave's scaled-balance rounding: it stores
+    /// `amount / index` and reports `scaled * index` rounded down, so supplying
+    /// N units leaves a position worth N-1 (verified on the live Optimism pool).
+    /// At a larger value it stands in for a fee-on-transfer token, which the
+    /// strategy must refuse rather than absorb. Zero by default so the
+    /// arithmetic in most tests stays readable.
+    function setSupplyShortfall(uint256 units) external {
+        supplyShortfall = units;
+    }
+
     /// @notice Credit `amount` of interest to `holder`, funded by the caller.
     function simulateYield(address asset, address holder, uint256 amount) external {
         IERC20(asset).safeTransferFrom(msg.sender, address(this), amount);
@@ -58,7 +71,8 @@ contract MockAavePool {
         address aToken = aTokens[asset];
         require(aToken != address(0), "Reserve not registered");
         IERC20(asset).safeTransferFrom(msg.sender, address(this), amount);
-        MockAToken(aToken).mint(onBehalfOf, amount);
+        uint256 credited = amount > supplyShortfall ? amount - supplyShortfall : 0;
+        if (credited > 0) MockAToken(aToken).mint(onBehalfOf, credited);
     }
 
     function withdraw(address asset, uint256 amount, address to) external returns (uint256) {

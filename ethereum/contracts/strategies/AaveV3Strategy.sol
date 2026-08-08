@@ -60,6 +60,14 @@ contract AaveV3Strategy is IYieldStrategy {
     uint256 private constant RAY = 1e27;
     uint256 private constant MAX_BPS = 10000;
 
+    /// @dev Aave stores a scaled balance and reports `balanceOf` as
+    /// `scaledBalance * liquidityIndex`, rounded down — so supplying N units
+    /// mints a position worth N-1. Verified against the live Optimism pool:
+    /// supplying 1_000_000_000 USDC yields a 999_999_999 aUSDC balance. The
+    /// guard below therefore has to allow a couple of units of rounding, while
+    /// still rejecting a fee-on-transfer token, which loses whole basis points.
+    uint256 private constant ROUNDING_TOLERANCE = 2;
+
     modifier onlyController() {
         require(msg.sender == controller, "Not controller");
         _;
@@ -94,12 +102,17 @@ contract AaveV3Strategy is IYieldStrategy {
         IERC20(underlying).forceApprove(address(pool), assets);
         pool.supply(underlying, assets, address(this), 0);
 
-        // Assert exact receipt so a fee-on-transfer or rebasing token can never
-        // make recorded principal exceed what Aave actually holds for us.
-        require(totalAssets() >= assetsBefore + assets, "Strategy deposit shortfall");
+        // What the position actually grew by, which is the only thing worth
+        // issuing shares against. Rejects a fee-on-transfer or rebasing token,
+        // whose loss dwarfs ROUNDING_TOLERANCE.
+        uint256 gained = totalAssets() - assetsBefore;
+        require(gained + ROUNDING_TOLERANCE >= assets, "Strategy deposit shortfall");
 
-        // Rounds down: the depositor never gets more shares than they paid for.
-        shares = (totalShares == 0 || assetsBefore == 0) ? assets : (assets * totalShares) / assetsBefore;
+        // Priced off `gained`, not `assets`: issuing shares for value the pool
+        // never credited would dilute every other vault in this strategy by the
+        // rounding loss. Rounds down, so the depositor never gets more shares
+        // than they paid for.
+        shares = (totalShares == 0 || assetsBefore == 0) ? gained : (gained * totalShares) / assetsBefore;
         require(shares > 0, "Zero shares");
         totalShares += shares;
     }
