@@ -32,9 +32,12 @@ function evmManager(adapter, networkConfig = fullConfig) {
   return tm;
 }
 
+// getAddress is async on EVM. Mocking it that way is the point: using it
+// synchronously stored everything under the string "[object Promise]".
 const creatingAdapter = () => ({
   createVault: jest.fn().mockResolvedValue({ vaultAddress: "7", signature: "0xsig" }),
-  getAddress: jest.fn().mockReturnValue("0xwallet"),
+  getAddress: jest.fn().mockResolvedValue("0xwallet"),
+  userAddress: "0xwallet",
 });
 
 beforeEach(() => localStorage.clear());
@@ -85,6 +88,17 @@ describe("locking in", () => {
 
     expect(tm.getPersonalVaultAddress()).toBe("7");
     expect(tm.isSetupCommitted()).toBe(true);
+  });
+
+  test("stores the vault under the wallet's address, not a stringified promise", async () => {
+    const tm = evmManager(creatingAdapter());
+    await tm.commitSetup(PERIODS, {});
+
+    // getAddress is async here. Read synchronously it yields "[object Promise]"
+    // — one key shared by every wallet, and never the one a reload looks under.
+    const keys = Object.keys(localStorage);
+    expect(keys.some((key) => key.includes("[object Promise]"))).toBe(false);
+    expect(keys.some((key) => key.endsWith("0xwallet"))).toBe(true);
   });
 
   test("refuses a percentage cap on a vault holding several coins", async () => {
@@ -164,7 +178,7 @@ describe("knowing the savings vault is there after a reload", () => {
 
   const restoringAdapter = (overrides = {}) => ({
     connect: jest.fn(),
-    getAddress: jest.fn().mockReturnValue(WALLET),
+    getAddress: jest.fn().mockResolvedValue(WALLET),
     userAddress: WALLET,
     getVaultInfo: jest.fn().mockResolvedValue(savingsVault),
     getUserVaults: jest.fn().mockResolvedValue([{ vault: savingsVault, membership: {} }]),
@@ -185,7 +199,7 @@ describe("knowing the savings vault is there after a reload", () => {
   test("matches the creator whatever case the address arrived in", async () => {
     const tm = evmManager(
       restoringAdapter({
-        getAddress: jest.fn().mockReturnValue(WALLET.toLowerCase()),
+        getAddress: jest.fn().mockResolvedValue(WALLET.toLowerCase()),
         userAddress: WALLET.toLowerCase(),
       }),
     );

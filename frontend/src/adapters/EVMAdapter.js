@@ -2484,10 +2484,17 @@ export class EVMAdapter extends BlockchainAdapter {
     const earning = tokens.filter((t) => t.mode !== "off");
     const mode =
       earning.length === 0 ? "off" : earning.length === tokens.length ? earning[0].mode : "mixed";
+    const sum = (field) => tokens.reduce((total, t) => total + Number(t[field]), 0).toString();
 
     return {
       supported: true,
       tokenSupported: tokens.some((t) => t.canEarn),
+      // What the amounts below are counted in. Several pegged coins add up to
+      // dollars — that is the whole basis of a stables vault — whereas one coin
+      // counts in itself. "Stablecoins" names what is earning, not a unit, so
+      // it must never end up suffixed to a number.
+      amountSymbol: tokens.length === 1 ? tokens[0].symbol : "USD",
+      invested: sum("invested"),
       // The one-coin view the single-asset screens read. For a stables vault
       // this is the vault's label rather than any one coin, which is honest:
       // there is no single coin to name.
@@ -2495,8 +2502,8 @@ export class EVMAdapter extends BlockchainAdapter {
       tokens,
       mode,
       options: tokens[0]?.options ?? [],
-      pendingYield: tokens.reduce((sum, t) => sum + Number(t.pendingYield), 0).toString(),
-      lifetimeYield: tokens.reduce((sum, t) => sum + Number(t.lifetimeYield), 0).toString(),
+      pendingYield: sum("pendingYield"),
+      lifetimeYield: sum("lifetimeYield"),
       feeBps,
       // 100 bps of the rate reads to a user as "one percentage point".
       feePercentagePoints: feeBps / 100,

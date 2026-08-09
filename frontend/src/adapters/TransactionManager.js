@@ -6,7 +6,8 @@ import { SPENDING_PERIODS, getPeriodDuration } from "../utils/spendingPeriods.js
 import { getStablecoins } from "../utils/stablecoins.js";
 
 /** Same address, whatever case it arrived in. */
-const sameAddress = (a, b) => !!a && !!b && a.toLowerCase() === b.toLowerCase();
+const sameAddress = (a, b) =>
+  typeof a === "string" && typeof b === "string" && a.toLowerCase() === b.toLowerCase();
 
 const PERSONAL_VAULT_KEY = "personal_vault_address";
 const ACTIVE_VAULT_KEY = "active_vault_address";
@@ -153,7 +154,10 @@ export class TransactionManager {
   }
 
   async _loadPersonalVault() {
-    const walletAddr = this.getAddress();
+    // _walletKey, not getAddress: getAddress is async on EVM, so using it here
+    // stored and looked up under the string "[object Promise]" — one key shared
+    // by every wallet, and never the one the vault was saved under.
+    const walletAddr = this._walletKey();
     if (!walletAddr) return;
 
     const stored = localStorage.getItem(`${PERSONAL_VAULT_KEY}_${walletAddr}`);
@@ -321,7 +325,7 @@ export class TransactionManager {
 
   _rememberPersonalVault(vaultAddress) {
     this.personalVaultAddress = vaultAddress;
-    const walletAddr = this.getAddress();
+    const walletAddr = this._walletKey();
     if (walletAddr) {
       localStorage.setItem(`${PERSONAL_VAULT_KEY}_${walletAddr}`, vaultAddress);
     }

@@ -185,7 +185,7 @@ const YieldSection = ({ transactionManager }) => {
             Earning now
           </div>
           <div style={{ fontFamily: fontFamily.mono, fontSize: type.body, color: colors.text.primary }}>
-            {status.invested} {status.tokenSymbol}
+            {status.invested} {status.amountSymbol || status.tokenSymbol}
           </div>
         </div>
 
@@ -196,7 +196,7 @@ const YieldSection = ({ transactionManager }) => {
           <div style={{ fontFamily: fontFamily.mono, fontSize: type.body, color: colors.success.light }}>
             {isPrize
               ? activeOption?.grandPrize || "—"
-              : `+${status.lifetimeYield} ${status.tokenSymbol}`}
+              : `+${status.lifetimeYield} ${status.amountSymbol || status.tokenSymbol}`}
           </div>
         </div>
       </div>
@@ -213,7 +213,7 @@ const YieldSection = ({ transactionManager }) => {
             textAlign: "left",
           }}
         >
-          {status.pendingYield} {status.tokenSymbol} of interest is waiting to be added to your
+          {status.pendingYield} {status.amountSymbol || status.tokenSymbol} of interest is waiting to be added to your
           balance. It is added automatically on your next deposit or withdrawal.
         </p>
       ) : null}
