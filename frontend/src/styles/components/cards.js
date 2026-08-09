@@ -350,6 +350,27 @@ export const balanceEarningStyles = {
     fontSize: fontSize.sm,
     marginTop: spacing.sm,
   },
+  controls: {
+    display: "flex",
+    alignItems: "center",
+    gap: spacing.lg,
+    flexShrink: 0,
+  },
+  // Quiet on purpose: the switch is the action here, and a second filled
+  // control beside it would compete for the same glance.
+  configureButton: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: "32px",
+    height: "32px",
+    padding: 0,
+    margin: 0,
+    borderRadius: borderRadius.sm,
+    border: `1px solid ${colors.border.default}`,
+    backgroundColor: "transparent",
+    cursor: "pointer",
+  },
 };
 
 /** A vault card's detail line: what it holds on the left, how much on the right. */

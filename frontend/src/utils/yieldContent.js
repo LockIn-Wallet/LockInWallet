@@ -115,9 +115,27 @@ export const YIELD_PRIZE_WON_NOTE =
  */
 export const BALANCE_EARNING = {
   toggleLabel: "Earn interest on your savings",
+  configureLabel: "Change how your savings earn",
   on: (rate) => (rate ? `Earning ${rate.toFixed(2)}% a year` : "Earning"),
   off: (rate) => (rate ? `Earn ${rate.toFixed(2)}% a year` : "Earn interest"),
   mixed: "Earning on some of your coins",
-  onDetail: "Through Aave. Withdraw any time, under your usual limits.",
-  offDetail: "Your savings sit still. Switch this on to put them to work.",
+
+  /**
+   * Which money this is actually about.
+   *
+   * A vault can hold several coins, so "earning" on its own leaves the obvious
+   * question unanswered: earning on what? These name the coins and the amount
+   * genuinely sitting in the protocol, which is not always the whole balance —
+   * a deposit made while earning was off stays put until it is invested.
+   */
+  onDetail: (amounts) =>
+    amounts.length > 0
+      ? `${amounts.join(" and ")} earning through Aave. Withdraw any time, under your usual limits.`
+      : "Through Aave. Withdraw any time, under your usual limits.",
+  offDetail: (coins) =>
+    coins.length > 0
+      ? `Your ${coins.join(" and ")} sits still. Switch this on to put it to work.`
+      : "Your savings sit still. Switch this on to put them to work.",
+  mixedDetail: (earning, idle) =>
+    `${earning.join(" and ")} earning; ${idle.join(" and ")} sitting still.`,
 };

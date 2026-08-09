@@ -82,6 +82,15 @@ const PATHS = {
       <path d="M12 10c0-4 3-5 4-3.8 1 1.2-.7 3.8-4 3.8z" />
     </>
   ),
+  // Three sliders: "adjust this", rather than a cog's "system settings"
+  sliders: (
+    <>
+      <line x1="4" y1="8" x2="20" y2="8" />
+      <line x1="4" y1="16" x2="20" y2="16" />
+      <circle cx="9" cy="8" r="2.2" />
+      <circle cx="16" cy="16" r="2.2" />
+    </>
+  ),
 };
 
 /**
