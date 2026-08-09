@@ -107,10 +107,9 @@ export class TransactionManager {
 
   /** Feature support of the currently selected vault. */
   getActiveVaultCapabilities() {
-    // The EVM vault module has no timelocked rule proposals, bypass requests
-    // or destination whitelists yet — rule changes apply immediately there
-    const full = this.networkType !== "evm" || !this.activeVaultAddress;
-    return { proposals: full, bypass: full, destinations: full };
+    // Vaults reuse the savings account's own modules for limits, proposals,
+    // bypasses and withdrawal addresses, so there is nothing left to withhold.
+    return { proposals: true, bypass: true, destinations: true };
   }
 
   _requireCapability(name) {
@@ -364,7 +363,22 @@ export class TransactionManager {
     if (this._usesLegacyAccount()) {
       return this.getAdapter().getSpendingLimits(userAddress);
     }
+    // A vault's limits come from the same module as the account's, so the two
+    // return the same shape and the UI needs no idea which it is showing.
+    const vaultLimits = this.getAdapter().getVaultSpendingLimits;
+    if (vaultLimits) return vaultLimits.call(this.getAdapter(), this._requireActiveVault());
+    // Chains whose vault program keeps its own counters still rebuild them.
+    return this._reconstructVaultLimits();
+  }
 
+  /**
+   * Vault limits rebuilt from the vault program's own records.
+   *
+   * Only for chains whose vault program still keeps its own spent counters —
+   * Solana. On EVM those counters moved into the shared limits module, and
+   * reading the stale ones here reported every window as unspent.
+   */
+  async _reconstructVaultLimits() {
     const vault = await this.getActiveVault();
     const membership = await this.getActiveMembership();
     if (!vault || !membership) {
@@ -418,6 +432,7 @@ export class TransactionManager {
     const tokenSymbol = stablecoins.includes(symbol) ? "USD" : symbol;
     return { limits, isSetupCommitted: true, limitsArePercentage: isPercentage, tokenSymbol };
   }
+
 
   async getPendingWithdrawalDestinationRequests(userAddress) {
     if (this._usesLegacyAccount()) {

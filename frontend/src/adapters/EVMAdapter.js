@@ -1931,6 +1931,49 @@ export class EVMAdapter extends BlockchainAdapter {
     return results;
   }
 
+  /**
+   * A vault's spending limits, in exactly the shape the savings account
+   * returns — because they now come from exactly the same place.
+   *
+   * Vault rules live in TimePeriodLimitsModule under a per-member scope, so the
+   * spent counters, remaining amounts and per-period waits are all real rather
+   * than reconstructed. That is what lets one set of components render a vault
+   * and the savings account without knowing which it is looking at.
+   */
+  async getVaultSpendingLimits(vaultAddress, memberAddress = null) {
+    const vaultModule = await this._getVaultModule();
+    const member = memberAddress || this.userAddress;
+    const scope = await vaultModule.vaultScopeOf(vaultAddress, member);
+
+    const vault = await this.getVaultInfo(vaultAddress);
+    // Percentage caps are stored as basis points; fixed ones in token units.
+    const decimals = vault?.limitsArePercentage ? 2 : (vault?.tokenDecimals ?? 6);
+
+    const limitsModule = await this._getModuleContract("timePeriodLimits");
+    const [names, limits, spent, remaining, durations, active, unlockDelays] =
+      await limitsModule.getUserSpendingLimits(scope);
+
+    const resetData = await this._fetchLimitResetTimes(scope, names, durations, active);
+
+    const fetchedLimits = [];
+    for (let i = 0; i < names.length; i++) {
+      fetchedLimits.push({
+        name: names[i],
+        limit: this.formatAmount(limits[i], decimals),
+        spent: this.formatAmount(spent[i], decimals),
+        remaining: Number(this.formatAmount(remaining[i], decimals)),
+        duration: durations[i].toString(),
+        active: active[i],
+        resetAt: resetData[i],
+        unlockDelay: Number(unlockDelays[i]),
+      });
+    }
+
+    // A vault is committed the moment it is created, so its rules always go
+    // through the timelock.
+    return { limits: fetchedLimits, isSetupCommitted: true };
+  }
+
   /** Queued rule changes for a vault, with when each can be applied. */
   async getPendingVaultRuleChanges(vaultAddress, memberAddress = null) {
     const vaultModule = await this._getVaultModule();
