@@ -136,6 +136,23 @@ these notes on the in-app **Governance** page before they execute.
   with nothing to press). Copy lives in
   `frontend/src/utils/walletOnboardingContent.js`. Frontend only.
 
+### Fixed
+- **Referral links no longer leak a wallet address to Google Analytics.** A
+  referral link is `/?ref=<referrer address>`, and the GA tag sat in
+  `index.html`, firing before React could scrub it — so every visit from a
+  referral link reported a real address to Google, joined to that visitor's IP
+  and device, and put it in the `Referer` header of GA's own request. Because
+  the chain is public, an address is not an anonymous token: it reads straight
+  through to that person's balance and full history. This is the same leak
+  closed on-chain by removing `getReferredUsers()`, left open in the browser.
+  `?ref=` is now stripped from the address bar the moment it is captured (other
+  query parameters and the hash survive), GA boots from
+  `frontend/src/utils/analytics.js` only after that, any address in a reported
+  URL is redacted as a backstop, and Google Signals plus ad personalisation are
+  switched off. Frontend only; no contract change. **Note:** addresses already
+  sent to GA stay in Google's data until the property's retention window
+  expires — that clean-up is a console-side action, not a code change.
+
 ### Changed
 - The home page no longer states a flat "24 hours" time to full exit. Since
   each limit carries its own wait, the proof strip, the trust card and the

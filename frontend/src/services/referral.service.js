@@ -13,7 +13,30 @@ const PENDING_REFERRER_KEY = "pending_referrer";
 const REF_QUERY_PARAM = "ref";
 
 /**
- * Reads ?ref= from the current URL and persists it as the pending referrer.
+ * Removes ?ref= from the address bar without reloading or adding history.
+ *
+ * The referrer is a real wallet address, and the chain is public: anyone who
+ * reads that address can read that person's balance and whole history. Left in
+ * the URL it reaches analytics, the `Referer` header of every third-party
+ * request, bookmarks and shared links. It is captured to localStorage first,
+ * so dropping it costs nothing.
+ */
+function stripReferrerFromUrl() {
+  const url = new URL(window.location.href);
+  if (!url.searchParams.has(REF_QUERY_PARAM)) return;
+
+  url.searchParams.delete(REF_QUERY_PARAM);
+  const query = url.searchParams.toString();
+  window.history.replaceState(
+    window.history.state,
+    "",
+    `${url.pathname}${query ? `?${query}` : ""}${url.hash}`
+  );
+}
+
+/**
+ * Reads ?ref= from the current URL and persists it as the pending referrer,
+ * then scrubs the parameter from the address bar.
  * First capture wins: an already-stored valid referrer is never overwritten,
  * so an in-progress signup can't be hijacked by a later link click.
  * @returns {string|null} The pending referrer address after capture
@@ -26,6 +49,7 @@ export function captureReferrerFromUrl() {
       JSON.stringify({ address: ethers.getAddress(ref), capturedAt: Date.now() })
     );
   }
+  stripReferrerFromUrl();
   return getPendingReferrer();
 }
 

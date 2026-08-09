@@ -38,6 +38,7 @@ import {
 } from "./utils/networkFilter.js";
 import { isSolanaEnabled, isPrizePoolEnabled } from "./utils/featureFlags.js";
 import { createEmptyLimitEdits } from "./utils/spendingPeriods.js";
+import { initAnalytics } from "./utils/analytics.js";
 import { PRIZE_SAVINGS_PATH } from "./utils/prizeSavingsContent.js";
 import {
   ensureCorrectNetwork,
@@ -574,7 +575,10 @@ function AppContentInner({
 
   // Capture a ?ref= referral link once on load, before any wallet connects
   useEffect(() => {
+    // Order matters: the referrer is a wallet address, and capturing it takes
+    // it out of the URL. Analytics only starts once the URL is clean.
     captureReferrerFromUrl();
+    initAnalytics();
   }, []);
 
   const clearAllState = useCallback(() => {
