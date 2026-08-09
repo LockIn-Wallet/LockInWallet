@@ -3,6 +3,7 @@ import { SolanaAdapter } from "./SolanaAdapter.js";
 import { getTokenMeta } from "../utils/tokenUtils.js";
 import { clearPendingReferrer } from "../services/referral.service.js";
 import { SPENDING_PERIODS, getPeriodDuration } from "../utils/spendingPeriods.js";
+import { getStablecoins } from "../utils/stablecoins.js";
 
 const PERSONAL_VAULT_KEY = "personal_vault_address";
 const ACTIVE_VAULT_KEY = "active_vault_address";
@@ -93,10 +94,16 @@ export class TransactionManager {
     return !!this.activeVaultAddress;
   }
 
+  /**
+   * True while this wallet's savings still live in the pre-vault account.
+   *
+   * Locking in now creates a real vault on both chains, so this is only ever
+   * true for someone who locked in before that — their balance sits in
+   * SavingsCore and keeps working exactly as it did. New wallets never take
+   * this path.
+   */
   _usesLegacyAccount() {
-    // EVM's initial setup lives in the legacy savings account; only an
-    // explicitly selected vault routes through the vault module
-    return this.networkType === "evm" && !this.activeVaultAddress;
+    return this.networkType === "evm" && !this.getActiveVaultAddress();
   }
 
   _requireActiveVault() {
@@ -166,8 +173,11 @@ export class TransactionManager {
   }
 
   isSetupCommitted() {
-    if (this.networkType === "evm") return null;
-    return !!this.personalVaultAddress;
+    // A personal vault is what locking in produces on either chain. On EVM,
+    // null still means "ask the account" — the pre-vault wallets whose setup
+    // lives in SavingsCore rather than a vault.
+    if (this.personalVaultAddress) return true;
+    return this.networkType === "evm" ? null : false;
   }
 
   supportsReferrals() {
@@ -176,9 +186,10 @@ export class TransactionManager {
   }
 
   supportsPercentSetupLimits() {
-    // Solana setup creates a personal vault, which supports percent-of-balance
-    // limits; EVM setup still uses the legacy TimePeriodLimits module, which
-    // only knows fixed amounts
+    // Locking in creates a stablecoins vault, and its cap is in dollars across
+    // every coin it holds. A percentage of a mixed balance would need the coins
+    // priced against each other, which is the one thing a dollar cap avoids —
+    // percentages belong to a single-coin pot.
     return this.networkType === "solana";
   }
 
@@ -202,15 +213,16 @@ export class TransactionManager {
    * classic three until those programs gain the extra windows.
    */
   getSupportedSpendingPeriods() {
-    if (this.networkType === "evm" && !this.activeVaultAddress) {
-      return SPENDING_PERIODS.map((period) => period.name);
-    }
+    // EVM vaults keep their limits in the same module the account uses, so
+    // every window is available. Solana's vault program still has three fixed
+    // fields.
+    if (this.networkType === "evm") return SPENDING_PERIODS.map((period) => period.name);
     return ["Daily", "Weekly", "Monthly"];
   }
 
   /** True when the user can choose their own bypass/limit-change wait times. */
   supportsCustomUnlockDelays() {
-    return this.networkType === "evm" && !this.activeVaultAddress;
+    return this.networkType === "evm";
   }
 
   /**
@@ -226,9 +238,7 @@ export class TransactionManager {
     }
 
     if (this.networkType === "evm") {
-      const hash = await this.getAdapter().commitSetup(periods, referrer);
-      clearPendingReferrer();
-      return hash;
+      return this._createSavingsVault(periods, { limitsArePercentage, referrer });
     }
 
     const limitOf = (name) => periods.find((period) => period.name === name)?.limit || 0;
@@ -251,15 +261,55 @@ export class TransactionManager {
       limitsArePercentage,
     });
 
-    this.personalVaultAddress = result.vaultAddress;
-    const walletAddr = this.getAddress();
-    if (walletAddr) {
-      localStorage.setItem(`${PERSONAL_VAULT_KEY}_${walletAddr}`, result.vaultAddress);
-    }
+    this._rememberPersonalVault(result.vaultAddress);
     // Referral recording isn't supported on this chain yet, but the signup is
     // complete, so the captured referrer is no longer pending
     clearPendingReferrer();
     return result.signature;
+  }
+
+  /**
+   * Lock in on EVM by creating the savings vault itself.
+   *
+   * The main wallet is a vault — the same primitive as any pot, with the same
+   * rules in the same modules — so locking in creates one rather than writing
+   * to a separate account with its own custody and its own copy of the limit
+   * logic. It holds the network's dollar-pegged coins under one cap, which is
+   * what makes several coins share a limit without pricing them.
+   */
+  async _createSavingsVault(periods, { limitsArePercentage, referrer }) {
+    const stablecoins = getStablecoins(this.networkConfig);
+    if (stablecoins.length === 0) {
+      throw new Error("No stablecoins are available on this network yet");
+    }
+    if (limitsArePercentage) {
+      // A percentage of a mixed balance needs the coins priced against each
+      // other, which is the one thing a shared dollar cap avoids.
+      throw new Error("Your savings are capped in dollars, not a percentage");
+    }
+
+    const result = await this.getAdapter().createVault({
+      name: "Savings",
+      vaultType: "Personal",
+      kind: "stables",
+      tokens: stablecoins.map((token) => token.address),
+      periods,
+      penaltyRateBps: 2000,
+      limitsArePercentage: false,
+      referrer,
+    });
+
+    this._rememberPersonalVault(result.vaultAddress);
+    clearPendingReferrer();
+    return result.signature;
+  }
+
+  _rememberPersonalVault(vaultAddress) {
+    this.personalVaultAddress = vaultAddress;
+    const walletAddr = this.getAddress();
+    if (walletAddr) {
+      localStorage.setItem(`${PERSONAL_VAULT_KEY}_${walletAddr}`, vaultAddress);
+    }
   }
 
   // ---- Governance ----
@@ -325,6 +375,16 @@ export class TransactionManager {
     const membership = await this.getActiveMembership();
     if (!vault || !membership) return {};
 
+    // One row per coin the vault holds. A single row was only ever right for a
+    // one-coin vault, and it silently hid everything else a stables vault held.
+    if (membership.balances) {
+      const balances = {};
+      for (const entry of Object.values(membership.balances)) {
+        balances[entry.symbol] = this._formatTokenAmount(Number(entry.raw), entry.decimals);
+      }
+      return balances;
+    }
+
     const decimals = this._getTokenDecimals(vault);
     const symbol = this._getTokenSymbol(vault);
     const value = this._formatTokenAmount(membership.balance, decimals);
@@ -339,16 +399,20 @@ export class TransactionManager {
     return parseFloat(formatted).toString();
   }
 
-  async depositToActiveVault(amount) {
-    return this.getAdapter().depositToVault(this._requireActiveVault(), amount);
+  async depositToActiveVault(amount, tokenAddress = null) {
+    return this.getAdapter().depositToVault(this._requireActiveVault(), amount, tokenAddress);
   }
 
-  async withdrawFromActiveVault(amount) {
-    return this.getAdapter().withdrawFromVault(this._requireActiveVault(), amount);
+  async withdrawFromActiveVault(amount, tokenAddress = null, destination = null) {
+    return this.getAdapter().withdrawFromVault(
+      this._requireActiveVault(), amount, tokenAddress, destination,
+    );
   }
 
-  async penaltyWithdrawFromActiveVault(amount) {
-    return this.getAdapter().withdrawFromVaultWithPenalty(this._requireActiveVault(), amount);
+  async penaltyWithdrawFromActiveVault(amount, tokenAddress = null, destination = null) {
+    return this.getAdapter().withdrawFromVaultWithPenalty(
+      this._requireActiveVault(), amount, tokenAddress, destination,
+    );
   }
 
   async updateActiveVaultRules(rules) {
@@ -499,8 +563,9 @@ export class TransactionManager {
       return this.getAdapter().deposit(tokenAddress, amount, decimals);
     }
 
-    // A vault holds a single token, so the deposit always uses the vault's own
-    const sig = await this.depositToActiveVault(parseFloat(amount));
+    // The coin the caller chose, passed through. A vault holds several, so
+    // dropping it here would deposit whichever one happened to be first.
+    const sig = await this.depositToActiveVault(parseFloat(amount), tokenAddress);
     return { hash: sig };
   }
 
@@ -601,11 +666,13 @@ export class TransactionManager {
   // ---- EVM withdraw ----
   async withdraw(amount, tokenAddress, destination) {
     if (this._usesLegacyAccount()) return this.getAdapter().withdraw(amount, tokenAddress, destination);
-    return this.withdrawFromActiveVault(amount);
+    return this.withdrawFromActiveVault(amount, tokenAddress, destination);
   }
-  async withdrawWithPenalty(tokenAddress, amount, tokenDecimals) {
-    if (this._usesLegacyAccount()) throw new Error("Penalty withdrawal not supported on EVM");
-    return this.penaltyWithdrawFromActiveVault(amount);
+  async withdrawWithPenalty(tokenAddress, amount, tokenDecimals, destination = null) {
+    if (this._usesLegacyAccount()) {
+      throw new Error("Withdrawing early with a penalty needs a vault — lock in first");
+    }
+    return this.penaltyWithdrawFromActiveVault(amount, tokenAddress, destination);
   }
   async getPenaltyRate() {
     if (this._usesLegacyAccount()) return 0;

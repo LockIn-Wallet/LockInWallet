@@ -101,7 +101,7 @@ describe("VaultYieldModule", function () {
   async function coinVault(ctx: any, signer: any, token: any, earning = true) {
     await ctx.vaults.connect(signer).createVault(
       "Savings", KIND_COIN, PERSONAL, [token.target],
-      false, 2000, ["Daily"], [usd("100000")], [DAY], [DAY],
+      false, 2000, ["Daily"], [usd("100000")], [DAY], [DAY], hre.ethers.ZeroAddress,
     );
     const id = await ctx.vaults.getVaultCount();
     if (earning) await ctx.vaults.connect(signer).setYieldMode(id, token.target, MODE_STABLE);
@@ -155,7 +155,7 @@ describe("VaultYieldModule", function () {
       const ctx = await loadFixture(fixture);
       await ctx.vaults.connect(ctx.user1).createVault(
         "Savings", KIND_STABLES, PERSONAL, [ctx.usdt.target, ctx.usdc.target],
-        false, 2000, ["Daily"], [usd("100000")], [DAY], [DAY],
+        false, 2000, ["Daily"], [usd("100000")], [DAY], [DAY], hre.ethers.ZeroAddress,
       );
       const id = await ctx.vaults.getVaultCount();
       await ctx.vaults.connect(ctx.user1).setYieldMode(id, ctx.usdt.target, MODE_STABLE);
@@ -214,7 +214,7 @@ describe("VaultYieldModule", function () {
       await ctx.yieldModule.setManagementFeeBps(0);
       await ctx.vaults.connect(ctx.user1).createVault(
         "Club", KIND_COIN, COMMUNITY, [ctx.usdt.target],
-        false, 2000, ["Daily"], [usd("100000")], [DAY], [DAY],
+        false, 2000, ["Daily"], [usd("100000")], [DAY], [DAY], hre.ethers.ZeroAddress,
       );
       const id = await ctx.vaults.getVaultCount();
       // Settled while the creator is still alone — after that the terms people
@@ -241,7 +241,7 @@ describe("VaultYieldModule", function () {
       await ctx.yieldModule.setManagementFeeBps(0);
       await ctx.vaults.connect(ctx.user1).createVault(
         "Club", KIND_COIN, COMMUNITY, [ctx.usdt.target],
-        false, 2000, ["Daily"], [usd("100000")], [DAY], [DAY],
+        false, 2000, ["Daily"], [usd("100000")], [DAY], [DAY], hre.ethers.ZeroAddress,
       );
       const id = await ctx.vaults.getVaultCount();
       await ctx.vaults.connect(ctx.user1).setYieldMode(id, ctx.usdt.target, MODE_STABLE);
@@ -425,7 +425,7 @@ describe("VaultYieldModule", function () {
       const ctx = await loadFixture(fixture);
       await ctx.vaults.connect(ctx.user1).createVault(
         "Club", KIND_COIN, COMMUNITY, [ctx.usdt.target],
-        false, 2000, ["Daily"], [usd("100000")], [DAY], [DAY],
+        false, 2000, ["Daily"], [usd("100000")], [DAY], [DAY], hre.ethers.ZeroAddress,
       );
       const id = await ctx.vaults.getVaultCount();
       await ctx.vaults.connect(ctx.user2).joinVault(id);

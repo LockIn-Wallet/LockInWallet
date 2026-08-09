@@ -1893,6 +1893,7 @@ export class EVMAdapter extends BlockchainAdapter {
     monthlyLimit = 0,
     penaltyRateBps = 2000,
     limitsArePercentage = false,
+    referrer = null,
   }) {
     const vaultModule = await this._getVaultModule();
 
@@ -1933,6 +1934,9 @@ export class EVMAdapter extends BlockchainAdapter {
       schedule.map((p) => this._toRawLimit(p.limit, limitsArePercentage, limitDecimals)),
       schedule.map((p) => getPeriodDuration(p.name)),
       schedule.map((p) => p.unlockDelay ?? getDefaultUnlockDelay(p.name)),
+      // Recording a referrer must never block someone starting to save: an
+      // unusable one becomes no referrer, and the contract shrugs off the rest.
+      referrer && ethers.isAddress(referrer) ? referrer : ethers.ZeroAddress,
     );
     const receipt = await tx.wait();
 

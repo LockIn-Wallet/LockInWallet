@@ -67,6 +67,24 @@ these notes on the in-app **Governance** page before they execute.
   auto-connect and the adapter's `autoConnect` until the user connects
   again — otherwise a reload would re-attach the same wallet within seconds.
   Frontend only — no contract change.
+- **Locking in now creates the savings vault itself.** The main wallet is a
+  vault, so setup produces one rather than writing to a separate account with
+  its own custody and its own copy of the limit logic. It is a stablecoins
+  vault holding every dollar-pegged coin the network offers, under one dollar
+  cap. Which coins count as dollars is a **frontend** list
+  (`frontend/src/utils/stablecoins.js`) and deliberately not a contract's: a
+  contract cannot know what is pegged without an oracle or a governed list, and
+  both put something in the enforcement path. Adding a coin is one line there
+  plus a `networkConfig` entry; coins the network has no address for are left
+  out, so a vault never accepts something nobody can send. `createVault` takes
+  the referrer so lock-in stays a single transaction — recorded best-effort, so
+  a stale invite link can never be the reason someone cannot start saving.
+  Percentage caps are refused for this vault, because a percentage of a mixed
+  balance would need the coins priced against each other.
+- Vault balances are reported **per coin**. The old path formatted one symbol
+  and one amount, which was only ever right for a one-coin vault and silently
+  hid everything else. Deposits, withdrawals and penalty withdrawals now carry
+  the coin the user chose instead of dropping it.
 - **One savings primitive: `SavingsVaultModule`.** The main wallet and a
   single-coin pot are now the same thing — a vault — instead of a savings
   account with its own custody and its own copy of the limit logic sitting

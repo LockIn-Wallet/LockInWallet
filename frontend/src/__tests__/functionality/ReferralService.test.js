@@ -17,6 +17,7 @@ const { TransactionManager } = require('../../adapters/TransactionManager.js');
  * - TransactionManager forwarding the referrer to the EVM adapter only
  */
 
+const USDC = '0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85';
 const REFERRER = '0x70997970C51812dc3A010C7d01b50e0d17dc79C8';
 const OTHER_REFERRER = '0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC';
 
@@ -134,24 +135,38 @@ describe('TransactionManager referral threading', () => {
     );
   }
 
-  test('forwards the referrer to the EVM adapter and clears it on success', async () => {
-    pendingReferrerStored();
+  // Locking in on EVM creates the savings vault itself, so the referrer rides
+  // along with it rather than with a separate account commit.
+  const evmManager = (adapter) => {
     const tm = new TransactionManager();
     tm.networkType = 'evm';
-    tm.adapter = { commitSetup: jest.fn().mockResolvedValue('0xhash') };
+    tm.networkConfig = { tokens: { USDC: { address: USDC, symbol: 'USDC', decimals: 6 } } };
+    tm.adapter = adapter;
+    return tm;
+  };
+
+  test('forwards the referrer to the EVM adapter and clears it on success', async () => {
+    pendingReferrerStored();
+    const tm = evmManager({
+      createVault: jest.fn().mockResolvedValue({ vaultAddress: '1', signature: '0xhash' }),
+      getAddress: jest.fn().mockReturnValue('wallet111'),
+    });
 
     const hash = await tm.commitSetup(PERIODS, { referrer: REFERRER });
 
     expect(hash).toBe('0xhash');
-    expect(tm.adapter.commitSetup).toHaveBeenCalledWith(PERIODS, REFERRER);
+    expect(tm.adapter.createVault).toHaveBeenCalledWith(
+      expect.objectContaining({ referrer: REFERRER, kind: 'stables' }),
+    );
     expect(getPendingReferrer()).toBeNull();
   });
 
   test('keeps the pending referrer when the EVM commit fails', async () => {
     pendingReferrerStored();
-    const tm = new TransactionManager();
-    tm.networkType = 'evm';
-    tm.adapter = { commitSetup: jest.fn().mockRejectedValue(new Error('rejected')) };
+    const tm = evmManager({
+      createVault: jest.fn().mockRejectedValue(new Error('rejected')),
+      getAddress: jest.fn().mockReturnValue('wallet111'),
+    });
 
     await expect(tm.commitSetup(PERIODS, { referrer: REFERRER })).rejects.toThrow('rejected');
     expect(getPendingReferrer()).toBe(REFERRER);

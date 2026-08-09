@@ -60,7 +60,7 @@ describe("SavingsVaultModule", function () {
       "Savings", KIND_STABLES, PERSONAL,
       [ctx.usdt.target, ctx.dai.target],
       false, 2000,
-      ["Daily"], [usd(dailyUsd)], [DAY], [DAY],
+      ["Daily"], [usd(dailyUsd)], [DAY], [DAY], hre.ethers.ZeroAddress,
     );
     return ctx.vaults.getVaultCount();
   }
@@ -132,8 +132,8 @@ describe("SavingsVaultModule", function () {
       await expect(
         ctx.vaults.connect(ctx.user1).createVault(
           "Bad", KIND_STABLES, PERSONAL, [ctx.usdt.target, ctx.dai.target],
-          true, 2000, ["Daily"], [1000], [DAY], [DAY],
-        ),
+          true, 2000, ["Daily"], [1000], [DAY], [DAY], hre.ethers.ZeroAddress,
+      ),
       ).to.be.revertedWith("Stables vault uses dollar limits");
     });
   });
@@ -144,8 +144,8 @@ describe("SavingsVaultModule", function () {
       await expect(
         ctx.vaults.connect(ctx.user1).createVault(
           "Two coins", KIND_COIN, PERSONAL, [ctx.usdt.target, ctx.dai.target],
-          false, 2000, ["Daily"], [usd("100")], [DAY], [DAY],
-        ),
+          false, 2000, ["Daily"], [usd("100")], [DAY], [DAY], hre.ethers.ZeroAddress,
+      ),
       ).to.be.revertedWith("Coin vault takes one token");
     });
 
@@ -154,7 +154,7 @@ describe("SavingsVaultModule", function () {
       // 10% a day of whatever ETH is in here.
       await ctx.vaults.connect(ctx.user1).createVault(
         "ETH", KIND_COIN, PERSONAL, [hre.ethers.ZeroAddress],
-        true, 2000, ["Daily"], [1000], [DAY], [DAY],
+        true, 2000, ["Daily"], [1000], [DAY], [DAY], hre.ethers.ZeroAddress,
       );
       const id = await ctx.vaults.getVaultCount();
       await ctx.vaults.connect(ctx.user1).deposit(id, hre.ethers.ZeroAddress, hre.ethers.parseEther("10"), {
@@ -175,7 +175,7 @@ describe("SavingsVaultModule", function () {
       const ctx = await loadFixture(fixture);
       await ctx.vaults.connect(ctx.user1).createVault(
         "ETH", KIND_COIN, PERSONAL, [hre.ethers.ZeroAddress],
-        false, 2000, ["Daily"], [hre.ethers.parseEther("1")], [DAY], [DAY],
+        false, 2000, ["Daily"], [hre.ethers.parseEther("1")], [DAY], [DAY], hre.ethers.ZeroAddress,
       );
       const id = await ctx.vaults.getVaultCount();
       await ctx.vaults.connect(ctx.user1).deposit(id, hre.ethers.ZeroAddress, hre.ethers.parseEther("5"), {
@@ -232,7 +232,7 @@ describe("SavingsVaultModule", function () {
     async function makeCoinVault(ctx: any, signer: any, type = PERSONAL) {
       await ctx.vaults.connect(signer).createVault(
         "Pot", KIND_COIN, type, [ctx.usdt.target],
-        false, 2000, ["Daily"], [usd("100")], [DAY], [DAY],
+        false, 2000, ["Daily"], [usd("100")], [DAY], [DAY], hre.ethers.ZeroAddress,
       );
       return ctx.vaults.getVaultCount();
     }
@@ -325,7 +325,7 @@ describe("SavingsVaultModule", function () {
       const ctx = await loadFixture(fixture);
       await ctx.vaults.connect(ctx.user1).createVault(
         "Club", KIND_STABLES, COMMUNITY, [ctx.usdt.target, ctx.dai.target],
-        false, 2000, ["Daily"], [usd("100")], [DAY], [DAY],
+        false, 2000, ["Daily"], [usd("100")], [DAY], [DAY], hre.ethers.ZeroAddress,
       );
       const id = await ctx.vaults.getVaultCount();
       await ctx.vaults.connect(ctx.user2).joinVault(id);
@@ -401,7 +401,7 @@ describe("SavingsVaultModule", function () {
       const ctx = await loadFixture(fixture);
       await ctx.vaults.connect(ctx.user1).createVault(
         "Club", KIND_STABLES, COMMUNITY, [ctx.usdt.target, ctx.dai.target],
-        false, 2000, ["Daily"], [usd("500")], [DAY], [DAY],
+        false, 2000, ["Daily"], [usd("500")], [DAY], [DAY], hre.ethers.ZeroAddress,
       );
       const id = await ctx.vaults.getVaultCount();
       await ctx.vaults.connect(ctx.user2).joinVault(id);
@@ -421,7 +421,7 @@ describe("SavingsVaultModule", function () {
       const ctx = await loadFixture(fixture);
       await ctx.vaults.connect(ctx.user1).createVault(
         "Club", KIND_STABLES, COMMUNITY, [ctx.usdt.target, ctx.dai.target],
-        false, 2000, ["Daily"], [usd("500")], [DAY], [DAY],
+        false, 2000, ["Daily"], [usd("500")], [DAY], [DAY], hre.ethers.ZeroAddress,
       );
       const id = await ctx.vaults.getVaultCount();
       await ctx.vaults.connect(ctx.user2).joinVault(id);
@@ -434,7 +434,7 @@ describe("SavingsVaultModule", function () {
       const ctx = await loadFixture(fixture);
       await ctx.vaults.connect(ctx.user1).createVault(
         "ETH", KIND_COIN, PERSONAL, [hre.ethers.ZeroAddress],
-        false, 2000, ["Daily"], [hre.ethers.parseEther("1")], [DAY], [DAY],
+        false, 2000, ["Daily"], [hre.ethers.parseEther("1")], [DAY], [DAY], hre.ethers.ZeroAddress,
       );
       const id = await ctx.vaults.getVaultCount();
       await ctx.depositAddresses.connect(ctx.user1).deployDepositAddress(id);
@@ -476,7 +476,7 @@ describe("SavingsVaultModule", function () {
       const ctx = await loadFixture(fixture);
       await ctx.vaults.connect(ctx.user1).createVault(
         "Pot", KIND_COIN, PERSONAL, [ctx.usdt.target],
-        false, 2000, ["Daily"], [usd("100")], [DAY], [DAY],
+        false, 2000, ["Daily"], [usd("100")], [DAY], [DAY], hre.ethers.ZeroAddress,
       );
       const id = await ctx.vaults.getVaultCount();
       await ctx.usdt.connect(ctx.user1).approve(ctx.vaults.target, usd("1000"));
@@ -545,7 +545,7 @@ describe("SavingsVaultModule", function () {
       const ctx = await loadFixture(fixture);
       await ctx.vaults.connect(ctx.user1).createVault(
         "Club", KIND_COIN, COMMUNITY, [ctx.usdt.target],
-        false, 2000, ["Daily"], [usd("100000")], [DAY], [DAY],
+        false, 2000, ["Daily"], [usd("100000")], [DAY], [DAY], hre.ethers.ZeroAddress,
       );
       const id = await ctx.vaults.getVaultCount();
       await ctx.vaults.connect(ctx.user2).joinVault(id);
@@ -594,6 +594,54 @@ describe("SavingsVaultModule", function () {
       const ctx = await clubFixture();
       await expect(ctx.vaults.connect(ctx.user1).leaveVault(ctx.id))
         .to.be.revertedWith("Creator cannot leave");
+    });
+  });
+
+  describe("Who invited you", function () {
+    it("records the referrer as part of locking in", async function () {
+      const ctx = await loadFixture(fixture);
+      const Referral = await hre.ethers.getContractFactory("ReferralModule");
+      const referral = await hre.upgrades.deployProxy(Referral, [ctx.savingsCore.target]);
+      await ctx.savingsCore.registerModule(
+        hre.ethers.keccak256(hre.ethers.toUtf8Bytes("REFERRAL")), referral.target,
+      );
+
+      await ctx.vaults.connect(ctx.user1).createVault(
+        "Savings", KIND_STABLES, PERSONAL, [ctx.usdt.target],
+        false, 2000, ["Daily"], [usd("500")], [DAY], [DAY], ctx.user2.address,
+      );
+
+      // Only you can look up who referred you — the lookup is self-only.
+      const [referrer] = await referral.connect(ctx.user1).getReferrer(ctx.user1.address);
+      expect(referrer).to.equal(ctx.user2.address);
+      expect(await referral.getReferralCount(ctx.user2.address)).to.equal(1);
+    });
+
+    it("still creates the vault when the referral cannot be recorded", async function () {
+      const ctx = await loadFixture(fixture);
+      // No referral module on this network at all — a stale invite link must
+      // never be the reason someone cannot start saving.
+      await ctx.vaults.connect(ctx.user1).createVault(
+        "Savings", KIND_STABLES, PERSONAL, [ctx.usdt.target],
+        false, 2000, ["Daily"], [usd("500")], [DAY], [DAY], ctx.user2.address,
+      );
+      expect(await ctx.vaults.getVaultCount()).to.equal(1);
+    });
+
+    it("ignores someone referring themselves", async function () {
+      const ctx = await loadFixture(fixture);
+      const Referral = await hre.ethers.getContractFactory("ReferralModule");
+      const referral = await hre.upgrades.deployProxy(Referral, [ctx.savingsCore.target]);
+      await ctx.savingsCore.registerModule(
+        hre.ethers.keccak256(hre.ethers.toUtf8Bytes("REFERRAL")), referral.target,
+      );
+
+      await ctx.vaults.connect(ctx.user1).createVault(
+        "Savings", KIND_STABLES, PERSONAL, [ctx.usdt.target],
+        false, 2000, ["Daily"], [usd("500")], [DAY], [DAY], ctx.user1.address,
+      );
+      const [referrer] = await referral.connect(ctx.user1).getReferrer(ctx.user1.address);
+      expect(referrer).to.equal(hre.ethers.ZeroAddress);
     });
   });
 });

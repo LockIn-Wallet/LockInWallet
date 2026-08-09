@@ -303,6 +303,25 @@
         "internalType": "address",
         "name": "member",
         "type": "address"
+      }
+    ],
+    "name": "VaultLeft",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "vaultId",
+        "type": "uint256"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "member",
+        "type": "address"
       },
       {
         "indexed": true,
@@ -769,6 +788,19 @@
       }
     ],
     "name": "joinVault",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "vaultId",
+        "type": "uint256"
+      }
+    ],
+    "name": "leaveVault",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"

@@ -163,7 +163,8 @@ contract SavingsVaultModule is Initializable, UUPSUpgradeable, OwnableUpgradeabl
         string[] calldata periodNames,
         uint256[] calldata limits,
         uint256[] calldata durations,
-        uint256[] calldata unlockDelays
+        uint256[] calldata unlockDelays,
+        address referrer
     ) external returns (uint256 vaultId) {
         require(bytes(name).length > 0 && bytes(name).length <= MAX_NAME_LENGTH, "Invalid name");
         require(kind <= VAULT_KIND_STABLES, "Invalid kind");
@@ -203,7 +204,18 @@ contract SavingsVaultModule is Initializable, UUPSUpgradeable, OwnableUpgradeabl
 
         _addMember(vaultId, msg.sender);
         _installRules(vaultId, msg.sender, periodNames, limits, durations, unlockDelays, limitsArePercentage);
+        _recordReferrer(referrer);
         emit VaultCreated(vaultId, msg.sender, kind, name);
+    }
+
+    /// @dev Best-effort by design. Creating your savings must not fail because
+    /// the link you followed was stale, already used, or the referral module is
+    /// not deployed on this network.
+    function _recordReferrer(address referrer) private {
+        if (referrer == address(0) || referrer == msg.sender) return;
+        address module = savingsCore.getModule(ModuleIds.REFERRAL);
+        if (module == address(0)) return;
+        try IReferralModule(module).recordReferral(msg.sender, referrer) {} catch {}
     }
 
     function joinVault(uint256 vaultId) external {
