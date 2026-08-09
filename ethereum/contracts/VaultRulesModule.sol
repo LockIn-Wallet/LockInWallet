@@ -89,18 +89,18 @@ contract VaultRulesModule is Initializable, UUPSUpgradeable, OwnableUpgradeable 
     /// member of the vault, and only for a personal one — a community vault's
     /// terms are fixed when it is created so nobody can move them afterwards.
     function _scopeFor(uint256 vaultId) private view returns (address) {
-        IVaultSystemModule vaults = _vaults();
-        require(vaults.getVaultMember(vaultId, msg.sender).exists, "Not a vault member");
-        require(vaults.getVault(vaultId).vaultType == 0, "Community rules immutable");
+        ISavingsVaultModule vaults = _vaults();
+        require(vaults.isVaultMember(vaultId, msg.sender), "Not a vault member");
+        require(vaults.vaultTypeOf(vaultId) == 0, "Community rules immutable");
         return vaults.vaultScopeOf(vaultId, msg.sender);
     }
 
     /// @dev Both fail closed, for the same reason the vault module's do: a rule
     /// change that silently did nothing is worse than one that refuses.
-    function _vaults() private view returns (IVaultSystemModule) {
-        address module = savingsCore.getModule(ModuleIds.VAULT_SYSTEM);
+    function _vaults() private view returns (ISavingsVaultModule) {
+        address module = savingsCore.getModule(ModuleIds.SAVINGS_VAULTS);
         require(module != address(0), "Vault module not registered");
-        return IVaultSystemModule(module);
+        return ISavingsVaultModule(module);
     }
 
     function _proposals() private view returns (IProposalSystemModule) {

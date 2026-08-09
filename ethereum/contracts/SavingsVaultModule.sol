@@ -514,9 +514,17 @@ contract SavingsVaultModule is Initializable, UUPSUpgradeable, OwnableUpgradeabl
     }
 
     /// @notice Membership, for the modules that act on a member's behalf without
-    /// holding any of their money — the deposit-address factory, chiefly.
+    /// holding any of their money — the deposit-address factory and the rules
+    /// module.
     function isVaultMember(uint256 vaultId, address member) external view returns (bool) {
         return isMember[vaultId][member];
+    }
+
+    /// @notice 0 personal, 1 community. Its own view because the rules module
+    /// needs only this, and decoding the whole vault to reach it would make a
+    /// cheap check expensive.
+    function vaultTypeOf(uint256 vaultId) external view returns (uint8) {
+        return vaults[vaultId].vaultType;
     }
 
     function acceptsToken(uint256 vaultId, address token) external view returns (bool) {

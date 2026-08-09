@@ -412,6 +412,13 @@ interface IRecoverySystemModule {
     event OwnershipRecovered(address indexed oldOwner, address indexed newOwner, uint256 tokenCount);
 }
 
+/// @notice The unified vault, as the modules acting on its members need it.
+interface ISavingsVaultModule {
+    function isVaultMember(uint256 vaultId, address member) external view returns (bool);
+    function vaultTypeOf(uint256 vaultId) external view returns (uint8);
+    function vaultScopeOf(uint256 vaultId, address member) external pure returns (address);
+}
+
 interface IReferralModule {
     // Referral recording
     function recordReferral(address user, address referrer) external;

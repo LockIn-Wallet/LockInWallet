@@ -644,4 +644,74 @@ describe("SavingsVaultModule", function () {
       expect(referrer).to.equal(hre.ethers.ZeroAddress);
     });
   });
+
+  /**
+   * Changing a limit after the vault exists.
+   *
+   * A vault is committed the moment it is created, so every change serves the
+   * timelock — the same state the savings account reaches when its owner locks
+   * in, through the same modules.
+   */
+  describe("Changing the rules later", function () {
+    async function rulesFixture() {
+      const ctx = await loadFixture(fixture);
+      const Rules = await hre.ethers.getContractFactory("VaultRulesModule");
+      const rules = await hre.upgrades.deployProxy(Rules, [ctx.savingsCore.target]);
+      await ctx.savingsCore.registerModule(
+        hre.ethers.keccak256(hre.ethers.toUtf8Bytes("VAULT_RULES")), rules.target,
+      );
+      const id = await makeStablesVault(ctx, ctx.user1);
+      return { ...ctx, rules, id };
+    }
+
+    it("proposes a change against the new vault module", async function () {
+      const ctx = await rulesFixture();
+      // The rules module used to look membership up in the old vault system, so
+      // a change to one of these vaults reverted as "not a member".
+      await ctx.rules.connect(ctx.user1).proposeVaultLimitChange(ctx.id, "Daily", usd("250"));
+
+      const [ids, categories] =
+        await ctx.rules.getPendingVaultRuleChanges(ctx.id, ctx.user1.address);
+      expect(ids.length).to.equal(1);
+      expect(categories[0]).to.equal("Daily");
+    });
+
+    it("applies the change only after the period's own wait", async function () {
+      const ctx = await rulesFixture();
+      await ctx.rules.connect(ctx.user1).proposeVaultLimitChange(ctx.id, "Daily", usd("250"));
+      const [ids] = await ctx.rules.getPendingVaultRuleChanges(ctx.id, ctx.user1.address);
+
+      await expect(ctx.rules.connect(ctx.user1).executeVaultLimitProposal(ctx.id, ids[0]))
+        .to.be.reverted;
+
+      await time.increase(DAY + 1);
+      await ctx.rules.connect(ctx.user1).executeVaultLimitProposal(ctx.id, ids[0]);
+
+      const scope = await ctx.vaults.vaultScopeOf(ctx.id, ctx.user1.address);
+      const [names, limits] = await ctx.limits.getUserSpendingLimits(scope);
+      const daily = names.indexOf("Daily");
+      expect(limits[daily]).to.equal(usd("250"));
+    });
+
+    it("refuses someone who is not a member", async function () {
+      const ctx = await rulesFixture();
+      await expect(
+        ctx.rules.connect(ctx.user2).proposeVaultLimitChange(ctx.id, "Daily", usd("250")),
+      ).to.be.revertedWith("Not a vault member");
+    });
+
+    it("keeps a community vault's rules fixed", async function () {
+      const ctx = await rulesFixture();
+      await ctx.vaults.connect(ctx.user1).createVault(
+        "Club", KIND_STABLES, COMMUNITY, [ctx.usdt.target],
+        false, 2000, ["Daily"], [usd("500")], [DAY], [DAY], hre.ethers.ZeroAddress,
+      );
+      const clubId = await ctx.vaults.getVaultCount();
+
+      // People join under terms they can see, so nobody can move them after.
+      await expect(
+        ctx.rules.connect(ctx.user1).proposeVaultLimitChange(clubId, "Daily", usd("250")),
+      ).to.be.revertedWith("Community rules immutable");
+    });
+  });
 });

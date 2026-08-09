@@ -653,47 +653,15 @@ describe("VaultSystemModule — rules reuse the savings account's modules", func
     ).to.be.revertedWith("Not authorized");
   });
 
-  it("makes raising a vault limit serve the wait, then apply", async function () {
-    const { vaultModule, limits, proposals, rules, user1 } = await loadFixture(fixture);
-    const scope = await vaultModule.vaultScopeOf(1, user1.address);
-
-    const tx = await rules
-      .connect(user1)
-      .proposeVaultLimitChange(1, "Daily", hre.ethers.parseEther("3"));
-    await tx.wait();
-    // Read it back from the proposal module — the vault's pending changes are
-    // stored there, not in the vault module, which is the whole point.
-    const [proposalIds] = await proposals.getUserPendingProposals(scope);
-    expect(proposalIds.length).to.equal(1);
-    const proposalId = proposalIds[0];
-
-    // Still the old cap until the wait is served.
-    await expect(
-      vaultModule.connect(user1).withdraw(1, hre.ethers.parseEther("1.1")),
-    ).to.be.revertedWith("Exceeds limit");
-    await expect(
-      rules.connect(user1).executeVaultLimitProposal(1, proposalId),
-    ).to.be.revertedWith("Still in timelock");
-
-    await time.increase(DAY);
-    await rules.connect(user1).executeVaultLimitProposal(1, proposalId);
-    expect(await limits.findPeriodLimit(scope, "Daily")).to.equal(hre.ethers.parseEther("3"));
-  });
-
-  it("keeps community vault rules immutable, even for the creator", async function () {
-    const { vaultModule, rules, user1 } = await loadFixture(fixture);
-    await vaultModule.connect(user1).createVault({
-      name: "Community", description: "", vaultType: VAULT_TYPE_COMMUNITY,
-      token: hre.ethers.ZeroAddress,
-      dailyLimit: hre.ethers.parseEther("1"),
-      weeklyLimit: hre.ethers.parseEther("5"),
-      monthlyLimit: hre.ethers.parseEther("15"),
-      limitsArePercentage: false, penaltyRateBps: 2000,
-    });
-    await expect(
-      rules.connect(user1).proposeVaultLimitChange(2, "Daily", 100),
-    ).to.be.revertedWith("Community rules immutable");
-  });
+  /**
+   * Rule changes for these vaults are gone on purpose.
+   *
+   * VaultRulesModule now serves SavingsVaultModule — the unified vault that
+   * replaces this one — and a module cannot look membership up in two places at
+   * once. The tests that covered this path moved to SavingsVaultModule.ts along
+   * with the capability. Everything below still covers what this module does on
+   * its own: custody, limits, penalties and the ledger.
+   */
 
   it("fails closed when the limits module is not registered", async function () {
     // A vault whose limit check silently no-opped would be worse than having

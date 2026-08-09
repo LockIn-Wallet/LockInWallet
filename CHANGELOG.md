@@ -67,6 +67,13 @@ these notes on the in-app **Governance** page before they execute.
   auto-connect and the adapter's `autoConnect` until the user connects
   again — otherwise a reload would re-attach the same wallet within seconds.
   Frontend only — no contract change.
+- `VaultRulesModule` now serves the **unified vault**, not the old
+  `VaultSystemModule`. It looked membership up in the old module, so changing a
+  spending limit on a vault created by locking in reverted with "Not a vault
+  member" — the timelocked rule change was unreachable for every new vault.
+  A module cannot look membership up in two places at once, so rule changes for
+  the old module's vaults are no longer served; those vaults hold nothing and
+  the module is being retired behind the unified one.
 - **Locking in now creates the savings vault itself.** The main wallet is a
   vault, so setup produces one rather than writing to a separate account with
   its own custody and its own copy of the limit logic. It is a stablecoins
