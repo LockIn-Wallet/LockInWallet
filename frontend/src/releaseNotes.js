@@ -22,6 +22,10 @@ export const RELEASE_NOTES = [
         text: "Your savings and your coin pots are now the same kind of thing. Your main wallet holds dollar-pegged coins together under one limit, because a hundred of one is a hundred of the other; anything whose price moves gets its own pot with its own limit, because there is no honest way to put a single dollar cap on things that are not worth the same. Either way the rules work exactly as they always have, and the list of addresses you are allowed to withdraw to is shared across all of them — where your money may go is about you, not about which coin it is.",
       },
       {
+        emoji: "➕",
+        text: "You can add another dollar coin to your savings later, rather than being stuck with whatever was supported the day you locked in. Your limit does not change when you do — it is a dollar limit covering everything your savings hold, so a new coin shares the allowance you already had rather than quietly widening it.",
+      },
+      {
         emoji: "🎚️",
         text: "Each coin decides for itself whether it earns. Your balances now carry their own switch, showing that coin's own rate — because each one earns in a different market, at a different rate, and one may have options another does not. Tapping a switch asks how you want that coin to earn rather than picking for you, and it asks the same way when you are turning earning off, since that moves money back out of a protocol.",
       },

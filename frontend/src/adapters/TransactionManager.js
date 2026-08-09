@@ -782,6 +782,9 @@ export class TransactionManager {
   createVault(params) { return this.getAdapter().createVault(params); }
   joinVault(vaultAddress) { return this.getAdapter().joinVault(vaultAddress); }
   leaveVault(vaultAddress) { return this.getAdapter().leaveVault(vaultAddress); }
+  addVaultToken(vaultAddress, tokenAddress) {
+    return this.getAdapter().addVaultToken?.(vaultAddress, tokenAddress);
+  }
 
   // ---- Deposits / withdrawals (chain-agnostic, business units) ----
   depositToVault(vaultAddress, amount) {

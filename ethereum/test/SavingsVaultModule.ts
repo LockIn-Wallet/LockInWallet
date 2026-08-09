@@ -714,4 +714,103 @@ describe("SavingsVaultModule", function () {
       ).to.be.revertedWith("Community rules immutable");
     });
   });
+
+  /**
+   * Adding a coin to a vault that already exists.
+   *
+   * Without this, a stablecoin added to the app's list is usable only by vaults
+   * created after it — everyone else would have to start again to reach it.
+   */
+  describe("Accepting another coin later", function () {
+    it("takes deposits in a coin added after the vault was created", async function () {
+      const ctx = await loadFixture(fixture);
+      await ctx.vaults.connect(ctx.user1).createVault(
+        "Savings", KIND_STABLES, PERSONAL, [ctx.usdt.target],
+        false, 2000, ["Daily"], [usd("500")], [DAY], [DAY], hre.ethers.ZeroAddress,
+      );
+      const id = await ctx.vaults.getVaultCount();
+
+      await expect(
+        ctx.vaults.connect(ctx.user1).deposit(id, ctx.dai.target, hre.ethers.parseEther("100")),
+      ).to.be.revertedWith("Token not accepted here");
+
+      await ctx.vaults.connect(ctx.user1).addAcceptedToken(id, ctx.dai.target);
+      await ctx.dai.connect(ctx.user1).approve(ctx.vaults.target, hre.ethers.parseEther("100"));
+      await ctx.vaults.connect(ctx.user1).deposit(id, ctx.dai.target, hre.ethers.parseEther("100"));
+
+      expect(await ctx.vaults.balanceOf(id, ctx.user1.address, ctx.dai.target))
+        .to.equal(hre.ethers.parseEther("100"));
+    });
+
+    it("shares the existing dollar cap rather than adding to it", async function () {
+      const ctx = await loadFixture(fixture);
+      await ctx.vaults.connect(ctx.user1).createVault(
+        "Savings", KIND_STABLES, PERSONAL, [ctx.usdt.target],
+        false, 2000, ["Daily"], [usd("500")], [DAY], [DAY], hre.ethers.ZeroAddress,
+      );
+      const id = await ctx.vaults.getVaultCount();
+      await ctx.vaults.connect(ctx.user1).addAcceptedToken(id, ctx.dai.target);
+
+      await ctx.usdt.connect(ctx.user1).approve(ctx.vaults.target, usd("1000"));
+      await ctx.vaults.connect(ctx.user1).deposit(id, ctx.usdt.target, usd("1000"));
+      await ctx.dai.connect(ctx.user1).approve(ctx.vaults.target, hre.ethers.parseEther("1000"));
+      await ctx.vaults.connect(ctx.user1).deposit(id, ctx.dai.target, hre.ethers.parseEther("1000"));
+
+      // $400 of USDT leaves $100 of the daily cap, in any coin.
+      await ctx.vaults.connect(ctx.user1)
+        .withdraw(id, ctx.usdt.target, usd("400"), ctx.user1.address);
+      await expect(
+        ctx.vaults.connect(ctx.user1)
+          .withdraw(id, ctx.dai.target, hre.ethers.parseEther("200"), ctx.user1.address),
+      ).to.be.reverted;
+      await ctx.vaults.connect(ctx.user1)
+        .withdraw(id, ctx.dai.target, hre.ethers.parseEther("100"), ctx.user1.address);
+    });
+
+    it("refuses on a single-coin vault", async function () {
+      const ctx = await loadFixture(fixture);
+      await ctx.vaults.connect(ctx.user1).createVault(
+        "Pot", KIND_COIN, PERSONAL, [ctx.usdt.target],
+        false, 2000, ["Daily"], [usd("500")], [DAY], [DAY], hre.ethers.ZeroAddress,
+      );
+      const id = await ctx.vaults.getVaultCount();
+
+      // One asset is what makes a coin vault's cap mean something in that asset.
+      await expect(
+        ctx.vaults.connect(ctx.user1).addAcceptedToken(id, ctx.dai.target),
+      ).to.be.revertedWith("Coin vault takes one token");
+    });
+
+    it("refuses once a community vault has anyone else in it", async function () {
+      const ctx = await loadFixture(fixture);
+      await ctx.vaults.connect(ctx.user1).createVault(
+        "Club", KIND_STABLES, COMMUNITY, [ctx.usdt.target],
+        false, 2000, ["Daily"], [usd("500")], [DAY], [DAY], hre.ethers.ZeroAddress,
+      );
+      const id = await ctx.vaults.getVaultCount();
+      await ctx.vaults.connect(ctx.user1).addAcceptedToken(id, ctx.dai.target);
+
+      await ctx.vaults.connect(ctx.user2).joinVault(id);
+      // People joined under a cap spanning a known set of coins, and one that
+      // does not hold its peg breaks that accounting for all of them.
+      await expect(
+        ctx.vaults.connect(ctx.user1).addAcceptedToken(id, ctx.usdt.target),
+      ).to.be.revertedWith("Community coins immutable");
+    });
+
+    it("refuses anyone but the creator, duplicates, and native coin", async function () {
+      const ctx = await loadFixture(fixture);
+      const id = await makeStablesVault(ctx, ctx.user1);
+
+      await expect(
+        ctx.vaults.connect(ctx.user2).addAcceptedToken(id, ctx.usdt.target),
+      ).to.be.revertedWith("Not the vault creator");
+      await expect(
+        ctx.vaults.connect(ctx.user1).addAcceptedToken(id, ctx.usdt.target),
+      ).to.be.revertedWith("Duplicate token");
+      await expect(
+        ctx.vaults.connect(ctx.user1).addAcceptedToken(id, hre.ethers.ZeroAddress),
+      ).to.be.revertedWith("Native coin belongs in its own vault");
+    });
+  });
 });

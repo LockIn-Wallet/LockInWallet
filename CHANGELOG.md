@@ -102,6 +102,17 @@ these notes on the in-app **Governance** page before they execute.
   and one amount, which was only ever right for a one-coin vault and silently
   hid everything else. Deposits, withdrawals and penalty withdrawals now carry
   the coin the user chose instead of dropping it.
+- **A stables vault can accept another coin after it exists**
+  (`addAcceptedToken`). The accepted set was written only at creation, so a
+  stablecoin added to the app's list later was reachable only by vaults created
+  after it — everyone else would have had to start again. The cap does not
+  change: it is denominated in dollars across whatever the vault holds, so a new
+  coin shares the existing allowance rather than adding to it, and it starts
+  with earning off like any other. Refused for a single-coin vault, whose one
+  asset is what makes its cap mean anything, and for a community vault once
+  anyone else has joined — people join under a cap spanning a known set of
+  coins, and one that fails to hold its peg breaks that accounting for all of
+  them.
 - **Earning is released.** `isYieldEnabled()` is now true and no longer reads
   the environment. The flag was never the real gate: the adapter reports
   `supported: false` for a network with no vault yield module registered, and

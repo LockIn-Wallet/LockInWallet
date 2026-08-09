@@ -109,6 +109,7 @@ contract SavingsVaultModule is Initializable, UUPSUpgradeable, OwnableUpgradeabl
     event VaultCreated(uint256 indexed vaultId, address indexed creator, uint8 kind, string name);
     event VaultJoined(uint256 indexed vaultId, address indexed member);
     event VaultLeft(uint256 indexed vaultId, address indexed member);
+    event TokenAccepted(uint256 indexed vaultId, address indexed token);
     event Deposited(uint256 indexed vaultId, address indexed member, address indexed token, uint256 amount);
     event Withdrawn(uint256 indexed vaultId, address indexed member, address indexed token, uint256 amount, address destination);
     event PenaltyPaid(uint256 indexed vaultId, address indexed member, address indexed token, uint256 amount, uint256 penalty);
@@ -216,6 +217,41 @@ contract SavingsVaultModule is Initializable, UUPSUpgradeable, OwnableUpgradeabl
         address module = savingsCore.getModule(ModuleIds.REFERRAL);
         if (module == address(0)) return;
         try IReferralModule(module).recordReferral(msg.sender, referrer) {} catch {}
+    }
+
+    /// @notice Accept another dollar coin into this vault.
+    ///
+    /// A vault is created holding a set of coins and refuses the rest, so a
+    /// stablecoin added to the app's list later would otherwise be usable only
+    /// by vaults created after it — everyone else would have to start again.
+    ///
+    /// Only a stables vault: a coin vault holds exactly one asset by definition,
+    /// which is what makes its cap mean something in that asset. And for a
+    /// community vault only while the creator is still alone in it, on the same
+    /// principle as its other terms — people join under a cap spanning a known
+    /// set of coins, and a coin that turns out not to hold its peg breaks that
+    /// accounting for everyone in the vault, not just whoever added it.
+    ///
+    /// The cap does not change: it is denominated in dollars across whatever the
+    /// vault accepts, so the new coin shares the existing allowance rather than
+    /// adding to it. The coin starts with earning off, like any other.
+    function addAcceptedToken(uint256 vaultId, address token) external {
+        Vault storage vault = _activeVault(vaultId);
+        require(msg.sender == vault.creator, "Not the vault creator");
+        require(
+            vault.vaultType == VAULT_TYPE_PERSONAL || vault.memberCount == 1,
+            "Community coins immutable"
+        );
+        require(vault.kind == VAULT_KIND_STABLES, "Coin vault takes one token");
+        // Native coin has no decimals to divide out and no peg to rely on, so a
+        // dollar cap could not measure it.
+        require(token != address(0), "Native coin belongs in its own vault");
+        require(!accepted[vaultId][token], "Duplicate token");
+        require(acceptedList[vaultId].length < MAX_ACCEPTED_TOKENS, "Too many tokens");
+
+        accepted[vaultId][token] = true;
+        acceptedList[vaultId].push(token);
+        emit TokenAccepted(vaultId, token);
     }
 
     function joinVault(uint256 vaultId) external {

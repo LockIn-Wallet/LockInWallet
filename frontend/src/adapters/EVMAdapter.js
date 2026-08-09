@@ -183,6 +183,10 @@ const REVERT_MESSAGES = [
   // The unified vault: what a vault holds is what it accepts, and a limit can
   // only mean what its kind allows.
   ["Token not accepted here", "This vault does not hold that coin"],
+  ["Community coins immutable", "A community vault's coins are fixed once anyone has joined"],
+  ["Native coin belongs in its own vault", "A stablecoins vault cannot hold a coin whose value moves"],
+  ["Duplicate token", "That coin is already in this vault"],
+  ["Too many tokens", "This vault already holds as many coins as it can"],
   ["Coin vault takes one token", "A vault for a single coin takes exactly one coin"],
   ["Stables vault uses dollar limits", "A stablecoins vault caps dollars, not a percentage"],
   ["Not the vault creator", "Only the vault's creator can do this"],
@@ -274,6 +278,7 @@ const WRITE_FALLBACKS = {
   createVault: "Could not create the vault",
   joinVault: "Could not join the vault",
   leaveVault: "Could not leave the vault",
+  addVaultToken: "Could not add that coin to the vault",
   updateVaultRules: "Could not propose the vault rule change",
   executeVaultRuleChange: "Could not apply the vault rule change",
   cancelVaultRuleChange: "Could not cancel the vault rule change",
@@ -1959,6 +1964,19 @@ export class EVMAdapter extends BlockchainAdapter {
   async joinVault(vaultAddress) {
     const vaultModule = await this._getVaultModule();
     const tx = await vaultModule.joinVault(vaultAddress);
+    await tx.wait();
+    return tx.hash;
+  }
+
+  /**
+   * Accept another dollar coin into an existing vault.
+   *
+   * The cap does not change — it is in dollars across whatever the vault holds
+   * — so the new coin shares the existing allowance rather than adding to it.
+   */
+  async addVaultToken(vaultAddress, tokenAddress) {
+    const vaultModule = await this._getVaultModule();
+    const tx = await vaultModule.addAcceptedToken(vaultAddress, tokenAddress);
     await tx.wait();
     return tx.hash;
   }
