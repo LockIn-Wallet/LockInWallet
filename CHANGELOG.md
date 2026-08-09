@@ -102,6 +102,15 @@ these notes on the in-app **Governance** page before they execute.
   and one amount, which was only ever right for a one-coin vault and silently
   hid everything else. Deposits, withdrawals and penalty withdrawals now carry
   the coin the user chose instead of dropping it.
+- **Earning is released.** `isYieldEnabled()` is now true and no longer reads
+  the environment. The flag was never the real gate: the adapter reports
+  `supported: false` for a network with no vault yield module registered, and
+  every earning surface renders nothing in that case — so on a chain where
+  earning is not deployed, this changes nothing. The real switch is
+  `registerModule("VAULT_YIELD", …)`, and `RELEASING.md` now spells out the
+  order that has to precede it: treasury pointed at the Safe, then verified
+  strategies, then registration. Done in the wrong order, money moves into a
+  protocol before the guard rails exist. Prize savings stays off.
 - **One savings primitive: `SavingsVaultModule`.** The main wallet and a
   single-coin pot are now the same thing — a vault — instead of a savings
   account with its own custody and its own copy of the limit logic sitting

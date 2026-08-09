@@ -40,6 +40,30 @@ changelog section as the body.
 - [ ] `npx hardhat run scripts/validate-deployment.js --network optimism`
       — kernel + all 8 modules must respond
 
+#### 3a. Turning earning on for a network — order matters
+
+Registering `VAULT_YIELD` is the moment earning becomes visible and usable to
+users on that chain. The frontend flag is already on; the adapter reports
+`supported: false` while the module is absent, which is the only thing hiding
+it. So the sequence below is not a preference — done out of order, real money
+moves into a protocol before the guard rails exist.
+
+- [ ] `SavingsVaultModule.setTreasury(<Safe>)` — a fresh deploy leaves this as
+      the deployer, a hot key that also controls upgrades. `deploy-modular`
+      prints a 🚨 when this is still the case. **Do this before the module is
+      registered**, or the first fees accrue toward the wrong address.
+- [ ] Deploy an `AaveV3Strategy` per coin against the real Aave v3 pool, and
+      verify each with a small round trip on a fork before setting it.
+- [ ] `VaultYieldModule.setStrategy(token, strategy)` for each coin. A coin with
+      no strategy simply cannot earn — it is not a failure state, and its switch
+      does not appear.
+- [ ] Only now register `VAULT_YIELD`. Earning is live from this transaction.
+- [ ] Confirm on production that a vault reports the expected **net** rate, and
+      that principal is untouched after the first accrual.
+- [ ] Schedule fee collection (`realizeFees` then `sweepFees`). Both are
+      permissionless; nothing calls them on its own, so revenue sits
+      uncollected until something does.
+
 ### 4. Frontend
 - [ ] Deploy in the same window as the contract execution (old frontend
       calls removed contract functions; never leave them crossed).

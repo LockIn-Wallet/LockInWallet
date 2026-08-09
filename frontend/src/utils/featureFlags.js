@@ -18,19 +18,23 @@ const PRIZE_POOL_ENABLED = false;
 export const isPrizePoolEnabled = () => PRIZE_POOL_ENABLED;
 
 /**
- * Earning on vault balances (the "Earn on your savings" section and its
- * configure dialog) stays hidden until the vault yield module and an Aave
- * strategy are deployed and verified on a live network.
+ * Earning on vault balances is released.
  *
- * Off for everyone by default, and the default is what ships: flip this line to
- * release it. The environment override exists only so the feature can be looked
- * at on a local chain — a build with `REACT_APP_ENABLE_YIELD=true` is a
- * deliberate act, and the flag is still off in every build that does not set it.
+ * This flag no longer decides whether anyone sees it — the chain does. The
+ * adapter reports `supported: false` when a network has no vault yield module
+ * registered, and every earning surface renders nothing in that case. So on a
+ * network where earning is not deployed, this being true changes nothing.
+ *
+ * Which means the real switch is now `registerModule("VAULT_YIELD", …)` on a
+ * live chain, and that is the moment earning becomes visible to users there.
+ * Two things must be true first, and neither is enforced by code:
+ *   1. `SavingsVaultModule.setTreasury` points at the Safe, not the deployer.
+ *   2. A verified Aave strategy is set for each coin that should earn.
+ * See RELEASING.md.
  */
-const YIELD_ENABLED = false;
+const YIELD_ENABLED = true;
 
-export const isYieldEnabled = () =>
-  YIELD_ENABLED || process.env.REACT_APP_ENABLE_YIELD === "true";
+export const isYieldEnabled = () => YIELD_ENABLED;
 
 /**
  * Nav-link predicate: an entry carrying a `flag` only shows while that flag

@@ -46,25 +46,17 @@ describe("isPrizePoolEnabled", () => {
 });
 
 describe("isYieldEnabled", () => {
-  // Hardcoded off in featureFlags.js — this test is the tripwire that fails if
-  // earning is switched on before a YieldModule and strategy are live
-  test("is off until the yield module is deployed and verified", () => {
-    delete process.env.REACT_APP_ENABLE_YIELD;
-    expect(isYieldEnabled()).toBe(false);
+  test("is on — the chain decides who actually sees earning", () => {
+    // A network without a vault yield module registered reports
+    // `supported: false`, and every earning surface renders nothing. So this
+    // being on does not expose earning where it is not deployed.
+    expect(isYieldEnabled()).toBe(true);
   });
 
-  test("stays off for anything short of an explicit opt-in", () => {
-    // Only the exact string turns it on, so a stray "1" or "yes" in an
-    // environment file cannot ship the feature by accident.
-    for (const value of ["1", "yes", "TRUE", ""]) {
-      process.env.REACT_APP_ENABLE_YIELD = value;
-      expect(isYieldEnabled()).toBe(false);
-    }
-    delete process.env.REACT_APP_ENABLE_YIELD;
-  });
-
-  test("can be switched on locally to look at it", () => {
-    process.env.REACT_APP_ENABLE_YIELD = "true";
+  test("ignores the environment now that it has shipped", () => {
+    // The local-only override is gone: leaving it in would mean a build could
+    // still differ from what everyone else gets.
+    process.env.REACT_APP_ENABLE_YIELD = "false";
     expect(isYieldEnabled()).toBe(true);
     delete process.env.REACT_APP_ENABLE_YIELD;
   });
