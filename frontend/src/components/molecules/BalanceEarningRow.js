@@ -71,9 +71,10 @@ const BalanceEarningRow = ({ transactionManager, activeVaultAddress, onChanged }
   // cannot represent, so say it rather than rounding to one or the other.
   const isMixed = status.mode === "mixed";
   const isOn = status.mode !== "off";
-  const rate = tokens
-    .find((token) => token.canEarn)
-    ?.options?.find((option) => option.key === "stable")?.netApyPercent;
+  // One rate when every coin earns the same, a range when they differ — a
+  // vault holding three coins earns three different rates.
+  const rate = status.netRateHigh;
+  const range = status.netRateRangeLabel;
 
   // What is actually in the protocol, which is not always the whole balance: a
   // deposit made while earning was off sits in the vault until it is invested.
@@ -99,8 +100,8 @@ const BalanceEarningRow = ({ transactionManager, activeVaultAddress, onChanged }
             {isMixed
               ? BALANCE_EARNING.mixed
               : isOn
-                ? BALANCE_EARNING.on(rate)
-                : BALANCE_EARNING.off(rate)}
+                ? BALANCE_EARNING.on(rate, range)
+                : BALANCE_EARNING.off(rate, range)}
           </div>
           <div style={balanceEarningStyles.sub}>{detail}</div>
           {error ? (

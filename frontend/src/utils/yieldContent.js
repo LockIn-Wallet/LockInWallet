@@ -113,11 +113,23 @@ export const YIELD_PRIZE_WON_NOTE =
  * so it states the rate and the one thing people worry about — that they can
  * still get their money — and leaves the explaining to the panel.
  */
+/**
+ * "a, b and c" rather than "a and b and c" — join() cannot do this, and the
+ * difference is visible the moment a vault holds three coins.
+ */
+const listOf = (items) => {
+  if (items.length <= 1) return items[0] || "";
+  if (items.length === 2) return `${items[0]} and ${items[1]}`;
+  return `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}`;
+};
+
 export const BALANCE_EARNING = {
   toggleLabel: "Earn interest on your savings",
   configureLabel: "Change how your savings earn",
-  on: (rate) => (rate ? `Earning ${rate.toFixed(2)}% a year` : "Earning"),
-  off: (rate) => (rate ? `Earn ${rate.toFixed(2)}% a year` : "Earn interest"),
+  on: (rate, range) =>
+    range ? `Earning ${range} a year` : rate ? `Earning ${rate.toFixed(2)}% a year` : "Earning",
+  off: (rate, range) =>
+    range ? `Earn ${range} a year` : rate ? `Earn ${rate.toFixed(2)}% a year` : "Earn interest",
   mixed: "Earning on some of your coins",
 
   /**
@@ -130,12 +142,12 @@ export const BALANCE_EARNING = {
    */
   onDetail: (amounts) =>
     amounts.length > 0
-      ? `${amounts.join(" and ")} earning through Aave. Withdraw any time, under your usual limits.`
+      ? `${listOf(amounts)} earning through Aave. Withdraw any time, under your usual limits.`
       : "Through Aave. Withdraw any time, under your usual limits.",
   offDetail: (coins) =>
     coins.length > 0
-      ? `Your ${coins.join(" and ")} sits still. Switch this on to put it to work.`
+      ? `Your ${listOf(coins)} sits still. Switch this on to put it to work.`
       : "Your savings sit still. Switch this on to put them to work.",
   mixedDetail: (earning, idle) =>
-    `${earning.join(" and ")} earning; ${idle.join(" and ")} sitting still.`,
+    `${listOf(earning)} earning; ${listOf(idle)} sitting still.`,
 };

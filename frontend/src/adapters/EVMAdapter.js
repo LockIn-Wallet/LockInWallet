@@ -2463,13 +2463,17 @@ export class EVMAdapter extends BlockchainAdapter {
       ]);
       const format = (raw) => ethers.formatUnits(raw, token.decimals);
 
+      const canEarn = options.some((option) => option.key !== "off" && option.available);
       tokens.push({
         address: token.address,
         symbol: token.symbol,
         decimals: token.decimals,
-        mode: YIELD_MODE_NAMES[Number(modeRaw)] || "off",
+        // A coin with no strategy cannot earn whatever its stored mode says.
+        // Reporting it as earning would put "0 DAI earning" in front of someone
+        // whose DAI is doing nothing at all.
+        mode: canEarn ? YIELD_MODE_NAMES[Number(modeRaw)] || "off" : "off",
         options,
-        canEarn: options.some((o) => o.key !== "off" && o.available),
+        canEarn,
         // Raw values kept alongside the formatted strings: these are token
         // amounts, and Number() would quietly lose precision on large balances.
         investedRaw: position.principal,
@@ -2486,6 +2490,25 @@ export class EVMAdapter extends BlockchainAdapter {
       earning.length === 0 ? "off" : earning.length === tokens.length ? earning[0].mode : "mixed";
     const sum = (field) => tokens.reduce((total, t) => total + Number(t[field]), 0).toString();
 
+    // Each coin earns in its own market at its own rate, so a vault holding
+    // several has no single rate. Quoting the first one would be quoting USDT's
+    // rate for someone's DAI.
+    const netRates = tokens
+      .filter((t) => t.canEarn)
+      .map((t) => t.options.find((o) => o.key === "stable")?.netApyPercent ?? 0);
+    const lowest = netRates.length > 0 ? Math.min(...netRates) : 0;
+    const highest = netRates.length > 0 ? Math.max(...netRates) : 0;
+    const rangeLabel =
+      lowest.toFixed(2) === highest.toFixed(2)
+        ? null
+        : `${lowest.toFixed(2)}\u2013${highest.toFixed(2)}%`;
+
+    // The dialog shows one set of options for the vault, so its rate has to be
+    // the whole range too.
+    const dialogOptions = (tokens[0]?.options ?? []).map((option) =>
+      option.key === "stable" ? { ...option, netApyPercent: highest, rangeLabel } : option,
+    );
+
     return {
       supported: true,
       tokenSupported: tokens.some((t) => t.canEarn),
@@ -2501,7 +2524,10 @@ export class EVMAdapter extends BlockchainAdapter {
       tokenSymbol: vault.tokenSymbol,
       tokens,
       mode,
-      options: tokens[0]?.options ?? [],
+      options: dialogOptions,
+      netRateLow: lowest,
+      netRateHigh: highest,
+      netRateRangeLabel: rangeLabel,
       pendingYield: sum("pendingYield"),
       lifetimeYield: sum("lifetimeYield"),
       feeBps,

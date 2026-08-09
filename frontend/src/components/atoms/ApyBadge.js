@@ -12,7 +12,7 @@ import { YIELD_APY_CAVEAT } from "../../utils/yieldContent.js";
  * the lending protocol and move constantly, so presenting one as a fixed
  * headline number would misrepresent it.
  */
-const ApyBadge = ({ apyPercent, label = "a year", muted = false }) => (
+const ApyBadge = ({ apyPercent, rangeLabel = null, label = "a year", muted = false }) => (
   <span
     style={{
       display: "inline-flex",
@@ -30,13 +30,17 @@ const ApyBadge = ({ apyPercent, label = "a year", muted = false }) => (
     }}
     title={YIELD_APY_CAVEAT}
   >
-    <span>{formatApyPercent(apyPercent)}%</span>
+    {/* A vault holding several coins earns a different rate on each, and one
+        of them is not the answer for all of them. */}
+    <span>{rangeLabel || `${formatApyPercent(apyPercent)}%`}</span>
     <span style={{ color: colors.text.muted, fontWeight: fontWeight.normal }}>{label}</span>
   </span>
 );
 
 ApyBadge.propTypes = {
   apyPercent: PropTypes.number,
+  /** Shown instead of the single rate, e.g. "3.47–4.13%". */
+  rangeLabel: PropTypes.string,
   label: PropTypes.string,
   muted: PropTypes.bool,
 };

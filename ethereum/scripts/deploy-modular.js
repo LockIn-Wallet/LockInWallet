@@ -229,6 +229,29 @@ async function main() {
       }
     }
 
+    // The other dollar coins, on a local chain only.
+    //
+    // A stablecoins vault exists to hold several pegged assets under one dollar
+    // cap, and with a single coin deployed that is never exercised outside unit
+    // tests. DAI carries 18 decimals on purpose: it is what proves the vault
+    // counts 100 DAI (100e18) and 100 USDT (100e6) as the same $100.
+    const extraStables = {};
+    if (isLocalNetwork) {
+      const MockStablecoin = await ethers.getContractFactory("MockStablecoin");
+      for (const [symbol, name, decimals] of [
+        ["USDC", "Mock USD Coin", 6],
+        ["DAI", "Mock Dai Stablecoin", 18],
+      ]) {
+        const existing = readNetworkConfig().evm?.[TARGET_NETWORK]?.tokens?.[symbol]?.address;
+        if (!isUpgrade || !existing || existing === ethers.ZeroAddress) {
+          const token = await MockStablecoin.deploy(name, symbol, decimals);
+          await token.waitForDeployment();
+          extraStables[symbol] = await token.getAddress();
+          console.log(`📄 Mock ${symbol} (${decimals}dp) deployed to: ${extraStables[symbol]}`);
+        }
+      }
+    }
+
     // Configure the deposit-address fee. Fresh deployments only — upgrades must
     // never overwrite a live fee model. Localhost charges the mock ERC20 so the
     // approve-then-pay path gets exercised; live chains charge native ETH, which
@@ -308,37 +331,52 @@ async function main() {
     // too, which is when a freshly added module has no strategy yet.
     if (isLocalNetwork && usdtAddress && modules.vaultYield) {
       const vaultYield = modules.vaultYield.contract;
-      const existing = await vaultYield.getStrategy(usdtAddress).catch(() => ethers.ZeroAddress);
+      const MockAavePool = await ethers.getContractFactory("MockAavePool");
+      const MockAToken = await ethers.getContractFactory("MockAToken");
+      const AaveV3Strategy = await ethers.getContractFactory("AaveV3Strategy");
 
-      if (existing === ethers.ZeroAddress) {
-        console.log("\n🌾 Deploying a mock lending market for vault earning...");
-        const MockAavePool = await ethers.getContractFactory("MockAavePool");
-        const pool = await MockAavePool.deploy();
-        await pool.waitForDeployment();
+      // One reserve per coin, as in the real thing: USDC's Aave market knows
+      // nothing about DAI's, which is why a position is per (vault, coin).
+      // Rates differ so the UI cannot accidentally pass by showing one number
+      // everywhere.
+      const config = readNetworkConfig().evm?.[TARGET_NETWORK]?.tokens || {};
+      const markets = [
+        ["USDT", usdtAddress, 6, 5],
+        ["USDC", extraStables.USDC || config.USDC?.address, 6, 4],
+        ["DAI", extraStables.DAI || config.DAI?.address, 18, 3.5],
+      ];
 
-        const MockAToken = await ethers.getContractFactory("MockAToken");
+      const pool = await MockAavePool.deploy();
+      await pool.waitForDeployment();
+      let deployed = false;
+
+      for (const [symbol, address, decimals, percent] of markets) {
+        if (!address || address === ethers.ZeroAddress) continue;
+        const existing = await vaultYield.getStrategy(address).catch(() => ethers.ZeroAddress);
+        if (existing !== ethers.ZeroAddress) {
+          console.log(`   🌾 ${symbol} already earns via ${existing}`);
+          continue;
+        }
+
         const aToken = await MockAToken.deploy(
-          "Aave USDT", "aUSDT", usdtAddress, await pool.getAddress(), 6,
+          `Aave ${symbol}`, `a${symbol}`, address, await pool.getAddress(), decimals,
         );
         await aToken.waitForDeployment();
-        await (await pool.registerReserve(usdtAddress, await aToken.getAddress())).wait();
+        await (await pool.registerReserve(address, await aToken.getAddress())).wait();
 
-        // 5% a year, expressed the way Aave does it: an annual rate in rays.
-        await (await pool.setLiquidityRate(usdtAddress, (5n * 10n ** 27n) / 100n)).wait();
+        // Aave states an annual rate in rays.
+        const rateRay = (BigInt(Math.round(percent * 100)) * 10n ** 27n) / 10000n;
+        await (await pool.setLiquidityRate(address, rateRay)).wait();
 
-        const AaveV3Strategy = await ethers.getContractFactory("AaveV3Strategy");
         const strategy = await AaveV3Strategy.deploy(
-          usdtAddress,
-          await pool.getAddress(),
-          await aToken.getAddress(),
-          modules.vaultYield.address,
+          address, await pool.getAddress(), await aToken.getAddress(), modules.vaultYield.address,
         );
         await strategy.waitForDeployment();
-        await (await vaultYield.setStrategy(usdtAddress, await strategy.getAddress())).wait();
-        console.log(`   ✅ USDT earns 5% a year via ${await strategy.getAddress()}`);
-      } else {
-        console.log(`\n🌾 Vault earning already has a USDT strategy at ${existing}`);
+        await (await vaultYield.setStrategy(address, await strategy.getAddress())).wait();
+        console.log(`   ✅ ${symbol} earns ${percent}% a year`);
+        deployed = true;
       }
+      if (deployed) console.log("🌾 Mock lending markets ready");
     }
 
     // Deploy a mock Aave reserve for localhost so the earning UI has a live rate
@@ -461,6 +499,18 @@ async function main() {
         console.log(`   Updated Savings address: ${savingsAddress}`);
       } else {
         console.log(`   Savings address unchanged: ${savingsAddress}`);
+      }
+
+      for (const [symbol, address] of Object.entries(extraStables)) {
+        if (!networkConfig.evm[TARGET_NETWORK].tokens) networkConfig.evm[TARGET_NETWORK].tokens = {};
+        if (!networkConfig.evm[TARGET_NETWORK].tokens[symbol]) {
+          networkConfig.evm[TARGET_NETWORK].tokens[symbol] = {};
+        }
+        if (networkConfig.evm[TARGET_NETWORK].tokens[symbol].address !== address) {
+          networkConfig.evm[TARGET_NETWORK].tokens[symbol].address = address;
+          addressChanged = true;
+          console.log(`   Updated ${symbol} address: ${address}`);
+        }
       }
 
       // Update USDT address only if we have a new one

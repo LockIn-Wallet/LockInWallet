@@ -71,7 +71,7 @@ const YieldOptionCards = ({ options = [], selected, onSelect, disabled = false }
                   does, and an unavailable one would just read "0.00% a year",
                   which says nothing true about what it will pay. */}
               {option.key === "off" || !available ? null : (
-                <ApyBadge apyPercent={rate?.netApyPercent ?? 0} />
+                <ApyBadge apyPercent={rate?.netApyPercent ?? 0} rangeLabel={rate?.rangeLabel} />
               )}
             </span>
 
@@ -142,6 +142,7 @@ YieldOptionCards.propTypes = {
     PropTypes.shape({
       key: PropTypes.string.isRequired,
       netApyPercent: PropTypes.number,
+      rangeLabel: PropTypes.string,
       grandPrize: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
       available: PropTypes.bool,
     }),
