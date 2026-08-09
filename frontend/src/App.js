@@ -237,9 +237,14 @@ function MainFlow({
           isCurrent: currentVaultAddress === null,
         }]
       : []),
-    ...userVaults
-      .map((entry) => ({ ...entry, isCurrent: entry.vault.address === currentVaultAddress }))
-      .sort((a, b) => Number(b.isCurrent) - Number(a.isCurrent)),
+    // Deliberately not reordered. Sorting the selected vault to the front means
+    // the "Current" badge is always on the first card, so switching vaults looks
+    // like nothing moved except the balances — which reads as a bug even though
+    // the right vault is selected. A stable order is what makes the change legible.
+    ...userVaults.map((entry) => ({
+      ...entry,
+      isCurrent: entry.vault.address === currentVaultAddress,
+    })),
   ];
 
   const refreshBalances = useCallback(async () => {
@@ -307,10 +312,11 @@ function MainFlow({
             gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))",
             gap: spacing.lg,
           }}>
-            {displayVaults.map(({ vault, isCurrent }) => (
+            {displayVaults.map(({ vault, membership, isCurrent }) => (
               <VaultCard
                 key={vault.address || "default"}
                 vault={vault}
+                membership={membership}
                 isSelected={isCurrent}
                 onClick={isCurrent ? undefined : () => handleSelectVault(vault.address)}
               />

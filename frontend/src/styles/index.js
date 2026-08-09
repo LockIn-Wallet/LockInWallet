@@ -35,6 +35,7 @@ export {
 export {
   cardStyles,
   balanceEarningStyles,
+  vaultCardStyles,
   layoutStyles as cardLayoutStyles,
   default as cards,
 } from "./components/cards.js";

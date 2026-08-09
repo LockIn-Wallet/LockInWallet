@@ -351,3 +351,18 @@ export const balanceEarningStyles = {
     marginTop: spacing.sm,
   },
 };
+
+/** A vault card's detail line: what it holds on the left, how much on the right. */
+export const vaultCardStyles = {
+  detailRow: {
+    display: "flex",
+    alignItems: "baseline",
+    justifyContent: "space-between",
+    gap: spacing.sm,
+  },
+  balance: {
+    color: colors.text.primary,
+    fontSize: fontSize.normal,
+    fontWeight: fontWeight.semibold,
+  },
+};
