@@ -33,6 +33,23 @@ describe("Prize savings", function () {
       yieldModule.target,
     );
 
+    // Vault rules live in the shared modules now, so a fixture that creates a
+    // vault has to register them — the vault module fails closed without them.
+    const deployShared = async (name) => {
+      const f = await hre.ethers.getContractFactory(name);
+      const proxy = await hre.upgrades.deployProxy(f, [savingsCore.target], { initializer: "initialize" });
+      await proxy.waitForDeployment();
+      return proxy;
+    };
+    const limitsModule = await deployShared("TimePeriodLimitsModule");
+    const proposalModule = await deployShared("ProposalSystemModule");
+    const bypassModule = await deployShared("BypassSystemModule");
+    const reg = (id, t) => savingsCore.registerModule(hre.ethers.keccak256(hre.ethers.toUtf8Bytes(id)), t);
+    await reg("TIME_PERIOD_LIMITS", limitsModule.target);
+    await reg("PROPOSAL_SYSTEM", proposalModule.target);
+    await reg("BYPASS_SYSTEM", bypassModule.target);
+    await savingsCore.setupModuleCrossReferences();
+
     const MockUSDT = await hre.ethers.getContractFactory("MockUSDT");
     const usdt = await MockUSDT.deploy();
     for (const user of [user1, user2]) await usdt.transfer(user.address, usdt6("100000"));

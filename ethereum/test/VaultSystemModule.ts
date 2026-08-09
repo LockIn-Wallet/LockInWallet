@@ -25,6 +25,23 @@ describe("VaultSystemModule", function () {
     const vaultModuleId = hre.ethers.keccak256(hre.ethers.toUtf8Bytes("VAULT_SYSTEM"));
     await savingsCore.registerModule(vaultModuleId, vaultModule.target);
 
+    // Vault rules live in the shared modules now, so a fixture that creates a
+    // vault has to register them — the vault module fails closed without them.
+    const deployShared = async (name: string) => {
+      const f = await hre.ethers.getContractFactory(name);
+      const proxy = await hre.upgrades.deployProxy(f, [savingsCore.target], { initializer: "initialize" });
+      await proxy.waitForDeployment();
+      return proxy;
+    };
+    const limitsModule = await deployShared("TimePeriodLimitsModule");
+    const proposalModule2 = await deployShared("ProposalSystemModule");
+    const bypassModule = await deployShared("BypassSystemModule");
+    const reg = (id: string, t: any) => savingsCore.registerModule(hre.ethers.keccak256(hre.ethers.toUtf8Bytes(id)), t);
+    await reg("TIME_PERIOD_LIMITS", limitsModule.target);
+    await reg("PROPOSAL_SYSTEM", proposalModule2.target);
+    await reg("BYPASS_SYSTEM", bypassModule.target);
+    await savingsCore.setupModuleCrossReferences();
+
     const MockUSDT = await hre.ethers.getContractFactory("MockUSDT");
     const usdt = await MockUSDT.deploy();
     await usdt.waitForDeployment();
@@ -187,7 +204,7 @@ describe("VaultSystemModule", function () {
       const daily = hre.ethers.parseEther("1");
       await expect(vaultModule.connect(user1).withdraw(1, daily))
         .to.changeEtherBalance(user1, daily);
-      await expect(vaultModule.connect(user1).withdraw(1, 1n)).to.be.revertedWith("Daily limit exceeded");
+      await expect(vaultModule.connect(user1).withdraw(1, 1n)).to.be.revertedWith("Exceeds limit");
 
       await time.increase(DAY + 1);
       await expect(vaultModule.connect(user1).withdraw(1, daily))
@@ -209,7 +226,7 @@ describe("VaultSystemModule", function () {
       // Daily window has reset, but only 1 ETH remains within the weekly window
       await expect(
         vaultModule.connect(user1).withdraw(1, hre.ethers.parseEther("2"))
-      ).to.be.revertedWith("Weekly limit exceeded");
+      ).to.be.revertedWith("Exceeds limit");
       await vaultModule.connect(user1).withdraw(1, hre.ethers.parseEther("1"));
 
       await time.increase(WEEK + 1);
@@ -240,14 +257,14 @@ describe("VaultSystemModule", function () {
       // 10% of 10 ETH = 1 ETH
       await expect(
         vaultModule.connect(user1).withdraw(1, hre.ethers.parseEther("1") + 1n)
-      ).to.be.revertedWith("Daily limit exceeded");
+      ).to.be.revertedWith("Exceeds limit");
       await vaultModule.connect(user1).withdraw(1, hre.ethers.parseEther("1"));
 
       // Next day the cap shrinks with the balance: 10% of 9 ETH = 0.9 ETH
       await time.increase(DAY + 1);
       await expect(
         vaultModule.connect(user1).withdraw(1, hre.ethers.parseEther("1"))
-      ).to.be.revertedWith("Daily limit exceeded");
+      ).to.be.revertedWith("Exceeds limit");
       await vaultModule.connect(user1).withdraw(1, hre.ethers.parseEther("0.9"));
     });
   });
@@ -417,35 +434,12 @@ describe("VaultSystemModule", function () {
   });
 
   describe("Rule updates", function () {
-    it("lets only the creator update personal vault rules, with validation", async function () {
-      const { vaultModule, user1, user2 } = await loadFixture(deployVaultSystemFixture);
-      await vaultModule.connect(user1).createVault(ethVaultParams());
-
-      await expect(
-        vaultModule.connect(user2).updateVaultRules(1, 100, 200, 300, false, 1000)
-      ).to.be.revertedWith("Only creator");
-      await expect(
-        vaultModule.connect(user1).updateVaultRules(1, 0, 0, 0, false, 1000)
-      ).to.be.revertedWith("No limits set");
-
-      // Lowering the penalty makes leaving early cheaper, so it now needs the wait.
-      await expect(
-        vaultModule.connect(user1).updateVaultRules(1, 100, 200, 300, false, 1000)
-      ).to.be.revertedWith("Loosening rules needs a proposal");
-
-      // Tightening every rule still applies immediately.
-      await expect(vaultModule.connect(user1).updateVaultRules(1, 100, 200, 300, false, 2000))
-        .to.emit(vaultModule, "VaultRulesUpdated").withArgs(1);
-      const vault = await vaultModule.getVault(1);
-      expect(vault.dailyLimit).to.equal(100);
-      expect(vault.penaltyRateBps).to.equal(2000);
-    });
 
     it("keeps community vault rules immutable, even for the creator", async function () {
       const { vaultModule, user1 } = await loadFixture(deployVaultSystemFixture);
       await vaultModule.connect(user1).createVault(ethVaultParams({ vaultType: VAULT_TYPE_COMMUNITY }));
       await expect(
-        vaultModule.connect(user1).updateVaultRules(1, 100, 200, 300, false, 1000)
+        vaultModule.connect(user1).proposeVaultLimitChange(1, "Daily", 100)
       ).to.be.revertedWith("Community rules immutable");
     });
   });
@@ -475,14 +469,22 @@ describe("VaultSystemModule — shared withdrawal addresses", function () {
       vaultModule.target,
     );
 
-    // addWithdrawalAddressDirect consults the proposal module to check the user
-    // has not locked in yet, so it has to be registered for the fixture to work.
-    const ProposalSystemModule = await hre.ethers.getContractFactory("ProposalSystemModule");
-    const proposalModule = await hre.upgrades.deployProxy(ProposalSystemModule, [savingsCore.target]);
-    await savingsCore.registerModule(
-      hre.ethers.keccak256(hre.ethers.toUtf8Bytes("PROPOSAL_SYSTEM")),
-      proposalModule.target,
-    );
+    // Vault rules live in the shared modules now, so a fixture that creates a
+    // vault has to register them — the vault module fails closed without them.
+    const deployShared = async (name: string) => {
+      const f = await hre.ethers.getContractFactory(name);
+      const proxy = await hre.upgrades.deployProxy(f, [savingsCore.target], { initializer: "initialize" });
+      await proxy.waitForDeployment();
+      return proxy;
+    };
+    const limitsModule = await deployShared("TimePeriodLimitsModule");
+    const proposalModule2 = await deployShared("ProposalSystemModule");
+    const bypassModule = await deployShared("BypassSystemModule");
+    const reg = (id: string, t: any) => savingsCore.registerModule(hre.ethers.keccak256(hre.ethers.toUtf8Bytes(id)), t);
+    await reg("TIME_PERIOD_LIMITS", limitsModule.target);
+    await reg("PROPOSAL_SYSTEM", proposalModule2.target);
+    await reg("BYPASS_SYSTEM", bypassModule.target);
+    await savingsCore.setupModuleCrossReferences();
 
     const ApprovalSystemModule = await hre.ethers.getContractFactory("ApprovalSystemModule");
     const approvalModule = await hre.upgrades.deployProxy(ApprovalSystemModule, [savingsCore.target]);
@@ -573,173 +575,129 @@ describe("VaultSystemModule — shared withdrawal addresses", function () {
   });
 });
 
-describe("VaultSystemModule — timelocked rule changes", function () {
-  const DAY = 24 * 60 * 60;
+describe("VaultSystemModule — rules reuse the savings account's modules", function () {
+  const DAY = 86400;
 
-  async function vaultFixture() {
+  async function fixture() {
     const [owner, user1, user2] = await hre.ethers.getSigners();
     const SavingsCore = await hre.ethers.getContractFactory("SavingsCore");
     const savingsCore = await hre.upgrades.deployProxy(SavingsCore, []);
-    const VaultSystemModule = await hre.ethers.getContractFactory("VaultSystemModule");
-    const vaultModule = await hre.upgrades.deployProxy(VaultSystemModule, [savingsCore.target]);
-    await savingsCore.registerModule(
-      hre.ethers.keccak256(hre.ethers.toUtf8Bytes("VAULT_SYSTEM")),
-      vaultModule.target,
-    );
-    // Daily 1 ETH, weekly 5, monthly 15, penalty 20%.
+    const deploy = async (n: string) => {
+      const f = await hre.ethers.getContractFactory(n);
+      const p = await hre.upgrades.deployProxy(f, [savingsCore.target], { initializer: "initialize" });
+      await p.waitForDeployment();
+      return p;
+    };
+    const vaultModule = await deploy("VaultSystemModule");
+    const limits = await deploy("TimePeriodLimitsModule");
+    const proposals = await deploy("ProposalSystemModule");
+    const bypass = await deploy("BypassSystemModule");
+    const reg = (id: string, t: any) =>
+      savingsCore.registerModule(hre.ethers.keccak256(hre.ethers.toUtf8Bytes(id)), t);
+    await reg("VAULT_SYSTEM", vaultModule.target);
+    await reg("TIME_PERIOD_LIMITS", limits.target);
+    await reg("PROPOSAL_SYSTEM", proposals.target);
+    await reg("BYPASS_SYSTEM", bypass.target);
+    await savingsCore.setupModuleCrossReferences();
+    await savingsCore.setDevelopmentMode(false); // real waits
+
     await vaultModule.connect(user1).createVault({
-      name: "Personal Savings",
-      description: "",
-      vaultType: VAULT_TYPE_PERSONAL,
+      name: "Savings", description: "", vaultType: VAULT_TYPE_PERSONAL,
       token: hre.ethers.ZeroAddress,
       dailyLimit: hre.ethers.parseEther("1"),
       weeklyLimit: hre.ethers.parseEther("5"),
       monthlyLimit: hre.ethers.parseEther("15"),
-      limitsArePercentage: false,
-      penaltyRateBps: 2000,
+      limitsArePercentage: false, penaltyRateBps: 2000,
     });
-    return { vaultModule, user1, user2 };
+    await vaultModule.connect(user1).deposit(1, hre.ethers.parseEther("10"), {
+      value: hre.ethers.parseEther("10"),
+    });
+    return { savingsCore, vaultModule, limits, proposals, owner, user1, user2 };
   }
 
-  const loosen = (vaultModule: any, user: any, overrides: any = {}) =>
-    vaultModule.connect(user).proposeVaultRuleChange(
-      1,
-      overrides.daily ?? hre.ethers.parseEther("10"),
-      overrides.weekly ?? hre.ethers.parseEther("20"),
-      overrides.monthly ?? hre.ethers.parseEther("30"),
-      false,
-      overrides.penalty ?? 2000,
-      overrides.delay ?? 0,
+  it("stores a vault's rules in the shared limits module, under its own scope", async function () {
+    const { vaultModule, limits, user1 } = await loadFixture(fixture);
+    const scope = await vaultModule.vaultScopeOf(1, user1.address);
+
+    expect(await limits.findPeriodLimit(scope, "Daily")).to.equal(hre.ethers.parseEther("1"));
+    expect(await limits.findPeriodLimit(scope, "Weekly")).to.equal(hre.ethers.parseEther("5"));
+  });
+
+  it("keeps a vault scope distinct from the member's own savings account", async function () {
+    // A collision would merge a vault's rules with someone's account, so the
+    // derivation is domain-separated rather than merely improbable.
+    const { vaultModule, limits, user1 } = await loadFixture(fixture);
+    const scope = await vaultModule.vaultScopeOf(1, user1.address);
+
+    expect(scope).to.not.equal(user1.address);
+    expect(await limits.findPeriodLimit(user1.address, "Daily")).to.equal(0);
+  });
+
+  it("gives every member their own scope, so counters are never shared", async function () {
+    const { vaultModule, user1, user2 } = await loadFixture(fixture);
+    expect(await vaultModule.vaultScopeOf(1, user1.address)).to.not.equal(
+      await vaultModule.vaultScopeOf(1, user2.address),
     );
-
-  it("defaults the wait to 24 hours", async function () {
-    const { vaultModule } = await loadFixture(vaultFixture);
-    expect(await vaultModule.getVaultUnlockDelay(1)).to.equal(DAY);
-  });
-
-  it("refuses to raise a limit on the spot", async function () {
-    // The hole this closes: a stolen key raising every cap and draining in two
-    // transactions.
-    const { vaultModule, user1 } = await loadFixture(vaultFixture);
-    await expect(
-      vaultModule.connect(user1).updateVaultRules(
-        1, hre.ethers.parseEther("100"), hre.ethers.parseEther("100"),
-        hre.ethers.parseEther("100"), false, 2000,
-      ),
-    ).to.be.revertedWith("Loosening rules needs a proposal");
-  });
-
-  it("treats removing a cap as loosening, not tightening", async function () {
-    // Zero means "no limit", so it is the loosest value, not the strictest.
-    const { vaultModule, user1 } = await loadFixture(vaultFixture);
-    await expect(
-      vaultModule.connect(user1).updateVaultRules(
-        1, 0, hre.ethers.parseEther("5"), hre.ethers.parseEther("15"), false, 2000,
-      ),
-    ).to.be.revertedWith("Loosening rules needs a proposal");
-  });
-
-  it("treats switching between fixed and percentage as loosening", async function () {
-    // The two are not comparable without a balance, so it never counts as safe.
-    const { vaultModule, user1 } = await loadFixture(vaultFixture);
-    await expect(
-      vaultModule.connect(user1).updateVaultRules(1, 100, 200, 300, true, 2000),
-    ).to.be.revertedWith("Loosening rules needs a proposal");
-  });
-
-  it("applies a loosening change only after the wait", async function () {
-    const { vaultModule, user1 } = await loadFixture(vaultFixture);
-    await expect(loosen(vaultModule, user1)).to.emit(vaultModule, "VaultRuleChangeProposed");
-
-    await expect(vaultModule.connect(user1).executeVaultRuleChange(1)).to.be.revertedWith(
-      "Still in timelock",
+    expect(await vaultModule.vaultScopeOf(1, user1.address)).to.not.equal(
+      await vaultModule.vaultScopeOf(2, user1.address),
     );
-    expect((await vaultModule.getVault(1)).dailyLimit).to.equal(hre.ethers.parseEther("1"));
+  });
+
+  it("enforces the vault's limits through the shared module", async function () {
+    const { vaultModule, user1 } = await loadFixture(fixture);
+    await expect(
+      vaultModule.connect(user1).withdraw(1, hre.ethers.parseEther("1.1")),
+    ).to.be.revertedWith("Exceeds limit");
+    await vaultModule.connect(user1).withdraw(1, hre.ethers.parseEther("1"));
+  });
+
+  it("locks a vault in at creation, so no limit can be rewritten on the spot", async function () {
+    // This is what makes every later change serve the timelock — the same
+    // state the savings account reaches when its owner locks in.
+    const { vaultModule, limits, user1 } = await loadFixture(fixture);
+    const scope = await vaultModule.vaultScopeOf(1, user1.address);
+
+    await expect(
+      limits.connect(user1).setPeriodLimit(scope, "Daily", hre.ethers.parseEther("100"), DAY, DAY),
+    ).to.be.revertedWith("Not authorized");
+  });
+
+  it("makes raising a vault limit serve the wait, then apply", async function () {
+    const { vaultModule, limits, proposals, user1 } = await loadFixture(fixture);
+    const scope = await vaultModule.vaultScopeOf(1, user1.address);
+
+    const tx = await vaultModule
+      .connect(user1)
+      .proposeVaultLimitChange(1, "Daily", hre.ethers.parseEther("3"));
+    await tx.wait();
+    // Read it back from the proposal module — the vault's pending changes are
+    // stored there, not in the vault module, which is the whole point.
+    const [proposalIds] = await proposals.getUserPendingProposals(scope);
+    expect(proposalIds.length).to.equal(1);
+    const proposalId = proposalIds[0];
+
+    // Still the old cap until the wait is served.
+    await expect(
+      vaultModule.connect(user1).withdraw(1, hre.ethers.parseEther("1.1")),
+    ).to.be.revertedWith("Exceeds limit");
+    await expect(
+      vaultModule.connect(user1).executeVaultLimitProposal(1, proposalId),
+    ).to.be.revertedWith("Still in timelock");
 
     await time.increase(DAY);
-    await vaultModule.connect(user1).executeVaultRuleChange(1);
-    expect((await vaultModule.getVault(1)).dailyLimit).to.equal(hre.ethers.parseEther("10"));
+    await vaultModule.connect(user1).executeVaultLimitProposal(1, proposalId);
+    expect(await limits.findPeriodLimit(scope, "Daily")).to.equal(hre.ethers.parseEther("3"));
   });
 
-  it("lets the owner cancel a queued change immediately", async function () {
-    // Cancelling is the defensive move, so it must not itself wait.
-    const { vaultModule, user1 } = await loadFixture(vaultFixture);
-    await loosen(vaultModule, user1);
-    await expect(vaultModule.connect(user1).cancelVaultRuleChange(1)).to.emit(
-      vaultModule,
-      "VaultRuleChangeCancelled",
+  it("fails closed when the limits module is not registered", async function () {
+    // A vault whose limit check silently no-opped would be worse than having
+    // no limits, because the app would still promise them.
+    const { savingsCore, vaultModule, user1 } = await loadFixture(fixture);
+    await savingsCore.unregisterModule(
+      hre.ethers.keccak256(hre.ethers.toUtf8Bytes("TIME_PERIOD_LIMITS")),
     );
-
-    await time.increase(DAY);
-    await expect(vaultModule.connect(user1).executeVaultRuleChange(1)).to.be.revertedWith(
-      "No pending change",
-    );
-  });
-
-  it("makes shortening the wait serve the current, longer wait first", async function () {
-    // A moment of impatience must not undo a decision made carefully.
-    const { vaultModule, user1 } = await loadFixture(vaultFixture);
-    await loosen(vaultModule, user1, { delay: 30 * DAY });
-    await time.increase(DAY);
-    await vaultModule.connect(user1).executeVaultRuleChange(1);
-    expect(await vaultModule.getVaultUnlockDelay(1)).to.equal(30 * DAY);
-
-    // Now the 30-day wait binds, including on shortening it back.
-    await loosen(vaultModule, user1, {
-      daily: hre.ethers.parseEther("50"),
-      weekly: hre.ethers.parseEther("60"),
-      monthly: hre.ethers.parseEther("70"),
-      delay: DAY,
-    });
-    await time.increase(DAY);
-    await expect(vaultModule.connect(user1).executeVaultRuleChange(1)).to.be.revertedWith(
-      "Still in timelock",
-    );
-    await time.increase(29 * DAY);
-    await vaultModule.connect(user1).executeVaultRuleChange(1);
-    expect(await vaultModule.getVaultUnlockDelay(1)).to.equal(DAY);
-  });
-
-  it("keeps the wait inside the same bounds as the savings account", async function () {
-    const { vaultModule, user1 } = await loadFixture(vaultFixture);
-    await expect(loosen(vaultModule, user1, { delay: 60 * 30 })).to.be.revertedWith(
-      "Invalid unlock delay",
-    );
-    await expect(loosen(vaultModule, user1, { delay: 91 * DAY })).to.be.revertedWith(
-      "Invalid unlock delay",
-    );
-  });
-
-  it("lets only the creator propose, execute or cancel", async function () {
-    const { vaultModule, user1, user2 } = await loadFixture(vaultFixture);
-    await expect(loosen(vaultModule, user2)).to.be.revertedWith("Only creator");
-    await loosen(vaultModule, user1);
-    await expect(vaultModule.connect(user2).executeVaultRuleChange(1)).to.be.revertedWith(
-      "Only creator",
-    );
-    await expect(vaultModule.connect(user2).cancelVaultRuleChange(1)).to.be.revertedWith(
-      "Only creator",
-    );
-  });
-
-  it("keeps community vault rules immutable either way", async function () {
-    const { vaultModule, user1 } = await loadFixture(vaultFixture);
-    await vaultModule.connect(user1).createVault({
-      name: "Community",
-      description: "",
-      vaultType: VAULT_TYPE_COMMUNITY,
-      token: hre.ethers.ZeroAddress,
-      dailyLimit: hre.ethers.parseEther("1"),
-      weeklyLimit: hre.ethers.parseEther("5"),
-      monthlyLimit: hre.ethers.parseEther("15"),
-      limitsArePercentage: false,
-      penaltyRateBps: 2000,
-    });
     await expect(
-      vaultModule.connect(user1).proposeVaultRuleChange(
-        2, hre.ethers.parseEther("10"), hre.ethers.parseEther("20"),
-        hre.ethers.parseEther("30"), false, 2000, 0,
-      ),
-    ).to.be.revertedWith("Community rules immutable");
+      vaultModule.connect(user1).withdraw(1, hre.ethers.parseEther("0.1")),
+    ).to.be.revertedWith("Limits module not registered");
   });
 });

@@ -45,21 +45,6 @@ contract VaultSystemModule is Initializable, UUPSUpgradeable, OwnableUpgradeable
     // above this line moves.
     IYieldModule public yieldModule;
 
-    // Appended for upgrades: timelocked rule changes, mirroring the savings
-    // account. Reached only through mappings, so appending is safe.
-    struct VaultRuleChange {
-        uint256 dailyLimit;
-        uint256 weeklyLimit;
-        uint256 monthlyLimit;
-        uint256 penaltyRateBps;
-        uint256 newUnlockDelay; // 0 = leave the wait alone
-        uint256 executeAfter;
-        bool limitsArePercentage;
-        bool exists;
-    }
-    mapping(uint256 => VaultRuleChange) private pendingRuleChange;
-    mapping(uint256 => uint256) private vaultUnlockDelays;
-
     uint8 private constant VAULT_TYPE_PERSONAL = 0;
     uint8 private constant VAULT_TYPE_COMMUNITY = 1;
     uint256 private constant MAX_BPS = 10000;
@@ -145,6 +130,7 @@ contract VaultSystemModule is Initializable, UUPSUpgradeable, OwnableUpgradeable
         vault.updatedAt = block.timestamp;
 
         _addMember(vaultId, msg.sender);
+        _installMemberRules(vaultId, vault, msg.sender);
         emit VaultCreated(vaultId, msg.sender, params.token, params.name, params.vaultType);
     }
 
@@ -153,6 +139,9 @@ contract VaultSystemModule is Initializable, UUPSUpgradeable, OwnableUpgradeable
         require(vault.vaultType == VAULT_TYPE_COMMUNITY, "Personal vault");
         require(!vaultMembers[vaultId][msg.sender].exists, "Already a member");
         _addMember(vaultId, msg.sender);
+        // Members join under the terms they can see, written into their own
+        // scope so their spent counters are theirs alone.
+        _installMemberRules(vaultId, vault, msg.sender);
         vault.updatedAt = block.timestamp;
         emit VaultJoined(vaultId, msg.sender);
     }
@@ -174,178 +163,114 @@ contract VaultSystemModule is Initializable, UUPSUpgradeable, OwnableUpgradeable
         emit VaultLeft(vaultId, msg.sender);
     }
 
-    function updateVaultRules(
-        uint256 vaultId,
-        uint256 dailyLimit,
-        uint256 weeklyLimit,
-        uint256 monthlyLimit,
-        bool limitsArePercentage,
-        uint256 penaltyRateBps
-    ) external {
+    /// @notice Propose a change to one of this vault's spending limits.
+    ///
+    /// Vault rules live in the same modules as the savings account's, keyed by
+    /// a scope derived from (vault, member). That is deliberate: a vault should
+    /// not be a second, weaker implementation of the same protections. It
+    /// inherits the timelock, the per-period waits and the increase-rate
+    /// tracking exactly as the account has them.
+    function proposeVaultLimitChange(uint256 vaultId, string calldata periodName, uint256 newLimit)
+        external
+        onlyMember(vaultId)
+        returns (bytes32 proposalId)
+    {
         VaultInfo storage vault = _activeVault(vaultId);
-        require(msg.sender == vault.creator, "Only creator");
-        // Community vault rules are immutable — members join under fixed terms
         require(vault.vaultType == VAULT_TYPE_PERSONAL, "Community rules immutable");
-        _validateVaultParams(vault.name, vault.description, dailyLimit, weeklyLimit, monthlyLimit, limitsArePercentage, penaltyRateBps);
-
-        // Tightening is instant; it can only ever make the vault safer, and
-        // making someone wait to protect themselves harder would be perverse.
-        // Anything that loosens the rules serves the wait — otherwise a stolen
-        // key could raise every limit and empty the vault in two transactions,
-        // which is exactly the hole that was closed on the savings account.
-        require(
-            _isTightening(vault, dailyLimit, weeklyLimit, monthlyLimit, limitsArePercentage, penaltyRateBps),
-            "Loosening rules needs a proposal"
-        );
-
-        _applyRules(vaultId, vault, dailyLimit, weeklyLimit, monthlyLimit, limitsArePercentage, penaltyRateBps);
+        return _proposals().proposeLimitChange(_vaultScope(vaultId, msg.sender), periodName, newLimit);
     }
 
-    /// @notice Queue a change that loosens the rules. It applies only after the
-    /// vault's wait, in the open, where the owner can see and cancel it.
-    function proposeVaultRuleChange(
+    /// @notice Propose a change to how long this vault's limits take to change.
+    function proposeVaultUnlockDelayChange(
         uint256 vaultId,
-        uint256 dailyLimit,
-        uint256 weeklyLimit,
-        uint256 monthlyLimit,
-        bool limitsArePercentage,
-        uint256 penaltyRateBps,
+        string calldata periodName,
         uint256 newUnlockDelay
-    ) external {
+    ) external onlyMember(vaultId) returns (bytes32 proposalId) {
         VaultInfo storage vault = _activeVault(vaultId);
-        require(msg.sender == vault.creator, "Only creator");
         require(vault.vaultType == VAULT_TYPE_PERSONAL, "Community rules immutable");
-        _validateVaultParams(vault.name, vault.description, dailyLimit, weeklyLimit, monthlyLimit, limitsArePercentage, penaltyRateBps);
-        if (newUnlockDelay != 0) {
-            require(
-                newUnlockDelay >= MIN_UNLOCK_DELAY && newUnlockDelay <= MAX_UNLOCK_DELAY,
-                "Invalid unlock delay"
-            );
+        return _proposals().proposeUnlockDelayChange(
+            _vaultScope(vaultId, msg.sender), periodName, newUnlockDelay
+        );
+    }
+
+    function executeVaultLimitProposal(uint256 vaultId, bytes32 proposalId)
+        external
+        onlyMember(vaultId)
+    {
+        _proposals().executeLimitProposal(_vaultScope(vaultId, msg.sender), proposalId);
+    }
+
+    function cancelVaultLimitProposal(uint256 vaultId, bytes32 proposalId)
+        external
+        onlyMember(vaultId)
+    {
+        _proposals().cancelLimitProposal(_vaultScope(vaultId, msg.sender), proposalId);
+    }
+
+    /// @notice The scope a member's vault rules are stored under.
+    ///
+    /// Domain-separated so it cannot collide with a real account: an address
+    /// derived this way is not one anybody can hold a key for, and it is not
+    /// derived the way any other address in this system is. A collision would
+    /// merge a vault's rules with someone's savings account, so improbable is
+    /// not good enough — it has to be structurally distinct.
+    function vaultScopeOf(uint256 vaultId, address member) external pure returns (address) {
+        return _vaultScope(vaultId, member);
+    }
+
+    function _vaultScope(uint256 vaultId, address member) private pure returns (address) {
+        return address(uint160(uint256(keccak256(abi.encode("LOCKIN_VAULT_SCOPE", vaultId, member)))));
+    }
+
+    /// @dev Both fail closed. A vault whose limit check silently no-opped
+    /// because a module was missing would be worse than having no limits at
+    /// all, because the UI would still promise them.
+    function _limits() private view returns (ITimePeriodLimitsModule) {
+        address module = savingsCore.getModule(ModuleIds.TIME_PERIOD_LIMITS);
+        require(module != address(0), "Limits module not registered");
+        return ITimePeriodLimitsModule(module);
+    }
+
+    function _proposals() private view returns (IProposalSystemModule) {
+        address module = savingsCore.getModule(ModuleIds.PROPOSAL_SYSTEM);
+        require(module != address(0), "Proposal module not registered");
+        return IProposalSystemModule(module);
+    }
+
+    /// @dev Copy the vault's rules into a member's own scope, then lock it in.
+    /// Locking at creation is what makes every later change serve the timelock
+    /// — the same state the savings account reaches when the user locks in.
+    function _installMemberRules(uint256 vaultId, VaultInfo storage vault, address member) private {
+        address scope = _vaultScope(vaultId, member);
+
+        uint256 count;
+        if (vault.dailyLimit > 0) count++;
+        if (vault.weeklyLimit > 0) count++;
+        if (vault.monthlyLimit > 0) count++;
+
+        string[] memory names = new string[](count);
+        uint256[] memory limits = new uint256[](count);
+        uint256[] memory durations = new uint256[](count);
+        uint256[] memory delays = new uint256[](count);
+
+        uint256 i;
+        if (vault.dailyLimit > 0) {
+            names[i] = "Daily"; limits[i] = vault.dailyLimit;
+            durations[i] = DAILY_DURATION; delays[i] = DEFAULT_UNLOCK_DELAY; i++;
+        }
+        if (vault.weeklyLimit > 0) {
+            names[i] = "Weekly"; limits[i] = vault.weeklyLimit;
+            durations[i] = WEEKLY_DURATION; delays[i] = WEEKLY_DURATION; i++;
+        }
+        if (vault.monthlyLimit > 0) {
+            names[i] = "Monthly"; limits[i] = vault.monthlyLimit;
+            durations[i] = MONTHLY_DURATION; delays[i] = MONTHLY_DURATION; i++;
         }
 
-        // The wait served is the CURRENT one, so shortening it costs the old
-        // wait first — a moment of impatience cannot undo a careful decision.
-        uint256 executeAfter = block.timestamp + getVaultUnlockDelay(vaultId);
-        pendingRuleChange[vaultId] = VaultRuleChange({
-            dailyLimit: dailyLimit,
-            weeklyLimit: weeklyLimit,
-            monthlyLimit: monthlyLimit,
-            penaltyRateBps: penaltyRateBps,
-            newUnlockDelay: newUnlockDelay,
-            executeAfter: executeAfter,
-            limitsArePercentage: limitsArePercentage,
-            exists: true
-        });
-        emit VaultRuleChangeProposed(vaultId, executeAfter);
-    }
-
-    function executeVaultRuleChange(uint256 vaultId) external {
-        VaultInfo storage vault = _activeVault(vaultId);
-        require(msg.sender == vault.creator, "Only creator");
-        VaultRuleChange memory change = pendingRuleChange[vaultId];
-        require(change.exists, "No pending change");
-        require(block.timestamp >= change.executeAfter, "Still in timelock");
-
-        delete pendingRuleChange[vaultId];
-        if (change.newUnlockDelay != 0) vaultUnlockDelays[vaultId] = change.newUnlockDelay;
-        _applyRules(
-            vaultId,
-            vault,
-            change.dailyLimit,
-            change.weeklyLimit,
-            change.monthlyLimit,
-            change.limitsArePercentage,
-            change.penaltyRateBps
-        );
-    }
-
-    /// @notice Drop a queued change. This is the defensive action, so it is
-    /// instant — seeing a change you did not make and having to wait to stop it
-    /// would defeat the point of showing it.
-    function cancelVaultRuleChange(uint256 vaultId) external {
-        require(msg.sender == vaults[vaultId].creator, "Only creator");
-        require(pendingRuleChange[vaultId].exists, "No pending change");
-        delete pendingRuleChange[vaultId];
-        emit VaultRuleChangeCancelled(vaultId);
-    }
-
-    function _applyRules(
-        uint256 vaultId,
-        VaultInfo storage vault,
-        uint256 dailyLimit,
-        uint256 weeklyLimit,
-        uint256 monthlyLimit,
-        bool limitsArePercentage,
-        uint256 penaltyRateBps
-    ) private {
-        vault.dailyLimit = dailyLimit;
-        vault.weeklyLimit = weeklyLimit;
-        vault.monthlyLimit = monthlyLimit;
-        vault.limitsArePercentage = limitsArePercentage;
-        vault.penaltyRateBps = penaltyRateBps;
-        vault.updatedAt = block.timestamp;
-        emit VaultRulesUpdated(vaultId);
-    }
-
-    /// @dev A change is tightening only if every rule is at least as strict.
-    /// Note zero means "no limit at all", so it is the loosest value there is —
-    /// going from 100 to 0 removes the cap and must never be instant.
-    function _isTightening(
-        VaultInfo storage vault,
-        uint256 dailyLimit,
-        uint256 weeklyLimit,
-        uint256 monthlyLimit,
-        bool limitsArePercentage,
-        uint256 penaltyRateBps
-    ) private view returns (bool) {
-        // Fixed and percentage caps are not comparable without knowing the
-        // balance, so switching between them is never treated as tightening.
-        if (limitsArePercentage != vault.limitsArePercentage) return false;
-        // A lower penalty makes leaving early cheaper, which is a loosening.
-        if (penaltyRateBps < vault.penaltyRateBps) return false;
-        return
-            _limitAtLeastAsStrict(dailyLimit, vault.dailyLimit) &&
-            _limitAtLeastAsStrict(weeklyLimit, vault.weeklyLimit) &&
-            _limitAtLeastAsStrict(monthlyLimit, vault.monthlyLimit);
-    }
-
-    function _limitAtLeastAsStrict(uint256 newLimit, uint256 oldLimit) private pure returns (bool) {
-        if (newLimit == 0) return oldLimit == 0; // removing a cap loosens
-        if (oldLimit == 0) return true; // adding one tightens
-        return newLimit <= oldLimit;
-    }
-
-    /// @notice How long a loosening change waits. Defaults to 24 hours.
-    function getVaultUnlockDelay(uint256 vaultId) public view returns (uint256) {
-        uint256 stored = vaultUnlockDelays[vaultId];
-        return stored == 0 ? DEFAULT_UNLOCK_DELAY : stored;
-    }
-
-    function getPendingVaultRuleChange(uint256 vaultId)
-        external
-        view
-        returns (
-            uint256 dailyLimit,
-            uint256 weeklyLimit,
-            uint256 monthlyLimit,
-            bool limitsArePercentage,
-            uint256 penaltyRateBps,
-            uint256 newUnlockDelay,
-            uint256 executeAfter,
-            bool exists
-        )
-    {
-        VaultRuleChange memory c = pendingRuleChange[vaultId];
-        return (
-            c.dailyLimit,
-            c.weeklyLimit,
-            c.monthlyLimit,
-            c.limitsArePercentage,
-            c.penaltyRateBps,
-            c.newUnlockDelay,
-            c.executeAfter,
-            c.exists
-        );
+        ITimePeriodLimitsModule limitsModule = _limits();
+        limitsModule.setPeriodLimits(scope, names, limits, durations, delays);
+        limitsModule.setLimitsArePercentage(scope, vault.limitsArePercentage);
+        _proposals().commitInitialSetup(scope);
     }
 
     // ========== FUNDS ==========
@@ -448,7 +373,7 @@ contract VaultSystemModule is Initializable, UUPSUpgradeable, OwnableUpgradeable
         // balance the member actually has.
         _settleYield(vaultId, vault, member, msg.sender);
         require(amount <= member.balance, "Invalid amount");
-        _checkAndUpdateLimits(vault, member, amount);
+        _limits().checkAllTimePeriodLimitsFor(_vaultScope(vaultId, msg.sender), amount, member.balance);
 
         // Redeem while totalBalance still includes this withdrawal — the vault's
         // own idle share is derived from it.
@@ -763,44 +688,7 @@ contract VaultSystemModule is Initializable, UUPSUpgradeable, OwnableUpgradeable
         return yieldModule.pendingYield(vaultId, memberAddr);
     }
 
-    /// @dev Reset expired windows, verify the amount fits every active limit
-    /// (percentage limits apply to the balance before this withdrawal), then
-    /// add the amount to the spent counters.
-    function _checkAndUpdateLimits(VaultInfo storage vault, VaultMemberInfo storage member, uint256 amount) private {
-        uint256 balance = member.balance;
-        if (vault.dailyLimit > 0) {
-            if (block.timestamp >= member.dailyLastReset + DAILY_DURATION) {
-                member.dailySpent = 0;
-                member.dailyLastReset = block.timestamp;
-            }
-            require(member.dailySpent + amount <= _effectiveLimit(vault, vault.dailyLimit, balance), "Daily limit exceeded");
-            member.dailySpent += amount;
-        }
-        if (vault.weeklyLimit > 0) {
-            if (block.timestamp >= member.weeklyLastReset + WEEKLY_DURATION) {
-                member.weeklySpent = 0;
-                member.weeklyLastReset = block.timestamp;
-            }
-            require(member.weeklySpent + amount <= _effectiveLimit(vault, vault.weeklyLimit, balance), "Weekly limit exceeded");
-            member.weeklySpent += amount;
-        }
-        if (vault.monthlyLimit > 0) {
-            if (block.timestamp >= member.monthlyLastReset + MONTHLY_DURATION) {
-                member.monthlySpent = 0;
-                member.monthlyLastReset = block.timestamp;
-            }
-            require(member.monthlySpent + amount <= _effectiveLimit(vault, vault.monthlyLimit, balance), "Monthly limit exceeded");
-            member.monthlySpent += amount;
-        }
-    }
 
-    function _effectiveLimit(VaultInfo storage vault, uint256 limitValue, uint256 balance) private view returns (uint256) {
-        if (limitValue == 0) return 0;
-        if (vault.limitsArePercentage) {
-            return (balance * limitValue) / MAX_BPS;
-        }
-        return limitValue;
-    }
 
     function _validateVaultParams(
         string memory name,

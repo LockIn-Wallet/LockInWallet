@@ -294,38 +294,6 @@
         "type": "uint256"
       }
     ],
-    "name": "VaultRuleChangeCancelled",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      {
-        "indexed": true,
-        "internalType": "uint256",
-        "name": "vaultId",
-        "type": "uint256"
-      },
-      {
-        "indexed": false,
-        "internalType": "uint256",
-        "name": "executeAfter",
-        "type": "uint256"
-      }
-    ],
-    "name": "VaultRuleChangeProposed",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      {
-        "indexed": true,
-        "internalType": "uint256",
-        "name": "vaultId",
-        "type": "uint256"
-      }
-    ],
     "name": "VaultRulesUpdated",
     "type": "event"
   },
@@ -423,9 +391,14 @@
         "internalType": "uint256",
         "name": "vaultId",
         "type": "uint256"
+      },
+      {
+        "internalType": "bytes32",
+        "name": "proposalId",
+        "type": "bytes32"
       }
     ],
-    "name": "cancelVaultRuleChange",
+    "name": "cancelVaultLimitProposal",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
@@ -593,65 +566,16 @@
         "internalType": "uint256",
         "name": "vaultId",
         "type": "uint256"
+      },
+      {
+        "internalType": "bytes32",
+        "name": "proposalId",
+        "type": "bytes32"
       }
     ],
-    "name": "executeVaultRuleChange",
+    "name": "executeVaultLimitProposal",
     "outputs": [],
     "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "uint256",
-        "name": "vaultId",
-        "type": "uint256"
-      }
-    ],
-    "name": "getPendingVaultRuleChange",
-    "outputs": [
-      {
-        "internalType": "uint256",
-        "name": "dailyLimit",
-        "type": "uint256"
-      },
-      {
-        "internalType": "uint256",
-        "name": "weeklyLimit",
-        "type": "uint256"
-      },
-      {
-        "internalType": "uint256",
-        "name": "monthlyLimit",
-        "type": "uint256"
-      },
-      {
-        "internalType": "bool",
-        "name": "limitsArePercentage",
-        "type": "bool"
-      },
-      {
-        "internalType": "uint256",
-        "name": "penaltyRateBps",
-        "type": "uint256"
-      },
-      {
-        "internalType": "uint256",
-        "name": "newUnlockDelay",
-        "type": "uint256"
-      },
-      {
-        "internalType": "uint256",
-        "name": "executeAfter",
-        "type": "uint256"
-      },
-      {
-        "internalType": "bool",
-        "name": "exists",
-        "type": "bool"
-      }
-    ],
-    "stateMutability": "view",
     "type": "function"
   },
   {
@@ -914,25 +838,6 @@
         "type": "uint256"
       }
     ],
-    "name": "getVaultUnlockDelay",
-    "outputs": [
-      {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "uint256",
-        "name": "vaultId",
-        "type": "uint256"
-      }
-    ],
     "name": "getVaultYieldInfo",
     "outputs": [
       {
@@ -1077,29 +982,38 @@
         "type": "uint256"
       },
       {
-        "internalType": "uint256",
-        "name": "dailyLimit",
-        "type": "uint256"
+        "internalType": "string",
+        "name": "periodName",
+        "type": "string"
       },
       {
         "internalType": "uint256",
-        "name": "weeklyLimit",
+        "name": "newLimit",
         "type": "uint256"
-      },
+      }
+    ],
+    "name": "proposeVaultLimitChange",
+    "outputs": [
+      {
+        "internalType": "bytes32",
+        "name": "proposalId",
+        "type": "bytes32"
+      }
+    ],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
       {
         "internalType": "uint256",
-        "name": "monthlyLimit",
+        "name": "vaultId",
         "type": "uint256"
       },
       {
-        "internalType": "bool",
-        "name": "limitsArePercentage",
-        "type": "bool"
-      },
-      {
-        "internalType": "uint256",
-        "name": "penaltyRateBps",
-        "type": "uint256"
+        "internalType": "string",
+        "name": "periodName",
+        "type": "string"
       },
       {
         "internalType": "uint256",
@@ -1107,8 +1021,14 @@
         "type": "uint256"
       }
     ],
-    "name": "proposeVaultRuleChange",
-    "outputs": [],
+    "name": "proposeVaultUnlockDelayChange",
+    "outputs": [
+      {
+        "internalType": "bytes32",
+        "name": "proposalId",
+        "type": "bytes32"
+      }
+    ],
     "stateMutability": "nonpayable",
     "type": "function"
   },
@@ -1218,44 +1138,6 @@
   {
     "inputs": [
       {
-        "internalType": "uint256",
-        "name": "vaultId",
-        "type": "uint256"
-      },
-      {
-        "internalType": "uint256",
-        "name": "dailyLimit",
-        "type": "uint256"
-      },
-      {
-        "internalType": "uint256",
-        "name": "weeklyLimit",
-        "type": "uint256"
-      },
-      {
-        "internalType": "uint256",
-        "name": "monthlyLimit",
-        "type": "uint256"
-      },
-      {
-        "internalType": "bool",
-        "name": "limitsArePercentage",
-        "type": "bool"
-      },
-      {
-        "internalType": "uint256",
-        "name": "penaltyRateBps",
-        "type": "uint256"
-      }
-    ],
-    "name": "updateVaultRules",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
         "internalType": "address",
         "name": "newImplementation",
         "type": "address"
@@ -1282,6 +1164,30 @@
       }
     ],
     "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "vaultId",
+        "type": "uint256"
+      },
+      {
+        "internalType": "address",
+        "name": "member",
+        "type": "address"
+      }
+    ],
+    "name": "vaultScopeOf",
+    "outputs": [
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "pure",
     "type": "function"
   },
   {

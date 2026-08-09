@@ -310,14 +310,11 @@ interface IVaultSystemModule {
     function createVault(VaultParams calldata params) external returns (uint256 vaultId);
     function joinVault(uint256 vaultId) external;
     function leaveVault(uint256 vaultId) external;
-    function updateVaultRules(
-        uint256 vaultId,
-        uint256 dailyLimit,
-        uint256 weeklyLimit,
-        uint256 monthlyLimit,
-        bool limitsArePercentage,
-        uint256 penaltyRateBps
-    ) external;
+    function proposeVaultLimitChange(uint256 vaultId, string calldata periodName, uint256 newLimit) external returns (bytes32);
+    function proposeVaultUnlockDelayChange(uint256 vaultId, string calldata periodName, uint256 newUnlockDelay) external returns (bytes32);
+    function executeVaultLimitProposal(uint256 vaultId, bytes32 proposalId) external;
+    function cancelVaultLimitProposal(uint256 vaultId, bytes32 proposalId) external;
+    function vaultScopeOf(uint256 vaultId, address member) external pure returns (address);
 
     // Funds
     function deposit(uint256 vaultId, uint256 amount) external payable;
@@ -367,8 +364,6 @@ interface IVaultSystemModule {
     event VaultDepositAddressDeployed(uint256 indexed vaultId, address indexed proxy);
     event VaultWithdrawal(uint256 indexed vaultId, address indexed member, uint256 amount, uint256 penalty);
     event PenaltyRewardsClaimed(uint256 indexed vaultId, address indexed member, uint256 amount);
-    event VaultRuleChangeProposed(uint256 indexed vaultId, uint256 executeAfter);
-    event VaultRuleChangeCancelled(uint256 indexed vaultId);
     event VaultYieldModeSet(uint256 indexed vaultId, uint8 mode);
     event VaultYieldCompounded(uint256 indexed vaultId, address indexed member, uint256 amount);
 }
