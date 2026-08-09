@@ -5,6 +5,9 @@ import { clearPendingReferrer } from "../services/referral.service.js";
 import { SPENDING_PERIODS, getPeriodDuration } from "../utils/spendingPeriods.js";
 import { getStablecoins } from "../utils/stablecoins.js";
 
+/** Same address, whatever case it arrived in. */
+const sameAddress = (a, b) => !!a && !!b && a.toLowerCase() === b.toLowerCase();
+
 const PERSONAL_VAULT_KEY = "personal_vault_address";
 const ACTIVE_VAULT_KEY = "active_vault_address";
 
@@ -33,6 +36,11 @@ export class TransactionManager {
     if (networkType === "evm") {
       this.adapter = new EVMAdapter(networkConfig);
       await this.adapter.connect(walletConfig);
+      // Locking in creates a vault on EVM too now, so the same restore has to
+      // run here. Without it the app reloads knowing nothing about the vault it
+      // just made, decides setup never happened, and locks in again — one more
+      // vault every time.
+      await this._loadPersonalVault();
     } else if (networkType === "solana") {
       const { wallet, connection } = walletConfig;
       if (!wallet || !connection) {
@@ -151,7 +159,9 @@ export class TransactionManager {
     const stored = localStorage.getItem(`${PERSONAL_VAULT_KEY}_${walletAddr}`);
     if (stored) {
       const info = await this.getAdapter().getVaultInfo(stored).catch(() => null);
-      if (info && info.vaultType === "Personal" && info.creator === walletAddr) {
+      // Addresses compared case-insensitively: a checksummed address from the
+      // contract and a lowercase one from the wallet are the same address.
+      if (info && info.vaultType === "Personal" && sameAddress(info.creator, walletAddr)) {
         this.personalVaultAddress = stored;
         return;
       }
@@ -160,7 +170,7 @@ export class TransactionManager {
 
     const userVaults = await this.getAdapter().getUserVaults().catch(() => []);
     const personal = userVaults.find(
-      (v) => v.vault.vaultType === "Personal" && v.vault.creator === walletAddr
+      (v) => v.vault.vaultType === "Personal" && sameAddress(v.vault.creator, walletAddr)
     );
     if (personal) {
       this.personalVaultAddress = personal.vault.address;
@@ -278,6 +288,11 @@ export class TransactionManager {
    * what makes several coins share a limit without pricing them.
    */
   async _createSavingsVault(periods, { limitsArePercentage, referrer }) {
+    // Locking in twice is never intended. Left unguarded it is also silent —
+    // it just makes another vault, and the money is split across them.
+    if (this.personalVaultAddress) {
+      throw new Error("Your savings are already locked in");
+    }
     const stablecoins = getStablecoins(this.networkConfig);
     if (stablecoins.length === 0) {
       throw new Error("No stablecoins are available on this network yet");
@@ -635,8 +650,12 @@ export class TransactionManager {
     throw new Error("Proxy deployment is only available on EVM");
   }
   async getIsSetupCommitted(userAddress) {
+    // A savings vault is what locking in produces, so having one is the answer.
+    // Only a wallet without one still has to ask the account, and only because
+    // its savings predate vaults.
+    if (this.personalVaultAddress) return true;
     if (this.networkType === "evm") return this.getAdapter().getIsSetupCommitted(userAddress);
-    return !!this.personalVaultAddress;
+    return false;
   }
   async setSpendingLimits(daily, weekly, monthly) {
     if (this._usesLegacyAccount()) return this.getAdapter().setSpendingLimits(daily, weekly, monthly);

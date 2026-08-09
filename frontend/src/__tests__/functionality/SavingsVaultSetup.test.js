@@ -152,3 +152,79 @@ describe("naming the coin", () => {
     expect(tm.adapter.withdrawFromVault).toHaveBeenCalledWith("7", 10, DAI, "0xdestination");
   });
 });
+
+describe("knowing the savings vault is there after a reload", () => {
+  const WALLET = "0xAbC0000000000000000000000000000000000001";
+  const savingsVault = {
+    address: "7",
+    vaultType: "Personal",
+    creator: WALLET,
+    tokens: [{ address: USDC, symbol: "USDC", decimals: 6, isNative: false }],
+  };
+
+  const restoringAdapter = (overrides = {}) => ({
+    connect: jest.fn(),
+    getAddress: jest.fn().mockReturnValue(WALLET),
+    userAddress: WALLET,
+    getVaultInfo: jest.fn().mockResolvedValue(savingsVault),
+    getUserVaults: jest.fn().mockResolvedValue([{ vault: savingsVault, membership: {} }]),
+    getIsSetupCommitted: jest.fn().mockResolvedValue(false),
+    ...overrides,
+  });
+
+  test("finds the vault on EVM, not just on Solana", async () => {
+    // Without this the app reloads knowing nothing about the vault it just
+    // made, decides setup never happened, and locks in again — one more vault
+    // every time.
+    const tm = evmManager(restoringAdapter());
+    await tm._loadPersonalVault();
+
+    expect(tm.getPersonalVaultAddress()).toBe("7");
+  });
+
+  test("matches the creator whatever case the address arrived in", async () => {
+    const tm = evmManager(
+      restoringAdapter({
+        getAddress: jest.fn().mockReturnValue(WALLET.toLowerCase()),
+        userAddress: WALLET.toLowerCase(),
+      }),
+    );
+    await tm._loadPersonalVault();
+
+    // A checksummed address from the contract and a lowercase one from the
+    // wallet are the same address.
+    expect(tm.getPersonalVaultAddress()).toBe("7");
+  });
+
+  test("counts as locked in without asking the account", async () => {
+    const tm = evmManager(restoringAdapter());
+    await tm._loadPersonalVault();
+
+    await expect(tm.getIsSetupCommitted(WALLET)).resolves.toBe(true);
+    expect(tm.adapter.getIsSetupCommitted).not.toHaveBeenCalled();
+  });
+
+  test("still asks the account for a wallet whose savings predate vaults", async () => {
+    const tm = evmManager(
+      restoringAdapter({
+        getUserVaults: jest.fn().mockResolvedValue([]),
+        getVaultInfo: jest.fn().mockResolvedValue(null),
+        getIsSetupCommitted: jest.fn().mockResolvedValue(true),
+      }),
+    );
+    await tm._loadPersonalVault();
+
+    await expect(tm.getIsSetupCommitted(WALLET)).resolves.toBe(true);
+    expect(tm.adapter.getIsSetupCommitted).toHaveBeenCalled();
+  });
+
+  test("refuses to lock in a second time", async () => {
+    const tm = evmManager(creatingAdapter());
+    await tm.commitSetup(PERIODS, {});
+
+    // Unguarded this is silent: it just makes another vault and splits the
+    // money across them.
+    await expect(tm.commitSetup(PERIODS, {})).rejects.toThrow("already locked in");
+    expect(tm.adapter.createVault).toHaveBeenCalledTimes(1);
+  });
+});
