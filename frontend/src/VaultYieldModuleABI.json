@@ -107,17 +107,55 @@
       {
         "indexed": true,
         "internalType": "address",
-        "name": "member",
+        "name": "token",
         "type": "address"
       },
       {
         "indexed": false,
-        "internalType": "address",
-        "name": "proxy",
-        "type": "address"
+        "internalType": "uint256",
+        "name": "assets",
+        "type": "uint256"
       }
     ],
-    "name": "DepositAddressDeployed",
+    "name": "Divested",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "token",
+        "type": "address"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "treasury",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "amount",
+        "type": "uint256"
+      }
+    ],
+    "name": "FeesSwept",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
+        "internalType": "uint64",
+        "name": "version",
+        "type": "uint64"
+      }
+    ],
+    "name": "Initialized",
     "type": "event"
   },
   {
@@ -132,8 +170,33 @@
       {
         "indexed": true,
         "internalType": "address",
-        "name": "member",
+        "name": "token",
         "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "assets",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "shares",
+        "type": "uint256"
+      }
+    ],
+    "name": "Invested",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "vaultId",
+        "type": "uint256"
       },
       {
         "indexed": true,
@@ -142,26 +205,19 @@
         "type": "address"
       },
       {
+        "indexed": true,
+        "internalType": "address",
+        "name": "member",
+        "type": "address"
+      },
+      {
         "indexed": false,
         "internalType": "uint256",
-        "name": "amount",
+        "name": "credited",
         "type": "uint256"
       }
     ],
-    "name": "Deposited",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      {
-        "indexed": false,
-        "internalType": "uint64",
-        "name": "version",
-        "type": "uint64"
-      }
-    ],
-    "name": "Initialized",
+    "name": "MemberYieldSettled",
     "type": "event"
   },
   {
@@ -195,12 +251,6 @@
       {
         "indexed": true,
         "internalType": "address",
-        "name": "member",
-        "type": "address"
-      },
-      {
-        "indexed": true,
-        "internalType": "address",
         "name": "token",
         "type": "address"
       },
@@ -209,15 +259,9 @@
         "internalType": "uint256",
         "name": "amount",
         "type": "uint256"
-      },
-      {
-        "indexed": false,
-        "internalType": "uint256",
-        "name": "penalty",
-        "type": "uint256"
       }
     ],
-    "name": "PenaltyPaid",
+    "name": "StrategyDepositSkipped",
     "type": "event"
   },
   {
@@ -225,30 +269,24 @@
     "inputs": [
       {
         "indexed": true,
-        "internalType": "uint256",
-        "name": "vaultId",
-        "type": "uint256"
-      },
-      {
-        "indexed": true,
-        "internalType": "address",
-        "name": "member",
-        "type": "address"
-      },
-      {
-        "indexed": true,
         "internalType": "address",
         "name": "token",
         "type": "address"
       },
       {
-        "indexed": false,
-        "internalType": "uint256",
-        "name": "amount",
-        "type": "uint256"
+        "indexed": true,
+        "internalType": "uint8",
+        "name": "mode",
+        "type": "uint8"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "strategy",
+        "type": "address"
       }
     ],
-    "name": "PenaltyRewardsClaimed",
+    "name": "StrategySet",
     "type": "event"
   },
   {
@@ -276,23 +314,17 @@
       {
         "indexed": true,
         "internalType": "address",
-        "name": "creator",
+        "name": "token",
         "type": "address"
       },
       {
         "indexed": false,
         "internalType": "uint8",
-        "name": "kind",
+        "name": "mode",
         "type": "uint8"
-      },
-      {
-        "indexed": false,
-        "internalType": "string",
-        "name": "name",
-        "type": "string"
       }
     ],
-    "name": "VaultCreated",
+    "name": "VaultModeSet",
     "type": "event"
   },
   {
@@ -303,31 +335,6 @@
         "internalType": "uint256",
         "name": "vaultId",
         "type": "uint256"
-      },
-      {
-        "indexed": true,
-        "internalType": "address",
-        "name": "member",
-        "type": "address"
-      }
-    ],
-    "name": "VaultJoined",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      {
-        "indexed": true,
-        "internalType": "uint256",
-        "name": "vaultId",
-        "type": "uint256"
-      },
-      {
-        "indexed": true,
-        "internalType": "address",
-        "name": "member",
-        "type": "address"
       },
       {
         "indexed": true,
@@ -338,17 +345,48 @@
       {
         "indexed": false,
         "internalType": "uint256",
-        "name": "amount",
+        "name": "gross",
         "type": "uint256"
       },
       {
         "indexed": false,
-        "internalType": "address",
-        "name": "destination",
-        "type": "address"
+        "internalType": "uint256",
+        "name": "fee",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "net",
+        "type": "uint256"
       }
     ],
-    "name": "Withdrawn",
+    "name": "YieldAccrued",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "vaultId",
+        "type": "uint256"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "token",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "deficit",
+        "type": "uint256"
+      }
+    ],
+    "name": "YieldDeficit",
     "type": "event"
   },
   {
@@ -377,36 +415,20 @@
         "type": "address"
       }
     ],
-    "name": "acceptsToken",
-    "outputs": [
-      {
-        "internalType": "bool",
-        "name": "",
-        "type": "bool"
-      }
-    ],
-    "stateMutability": "view",
+    "name": "accrue",
+    "outputs": [],
+    "stateMutability": "nonpayable",
     "type": "function"
   },
   {
     "inputs": [
-      {
-        "internalType": "uint256",
-        "name": "vaultId",
-        "type": "uint256"
-      },
-      {
-        "internalType": "address",
-        "name": "member",
-        "type": "address"
-      },
       {
         "internalType": "address",
         "name": "token",
         "type": "address"
       }
     ],
-    "name": "balanceOf",
+    "name": "currentAprBps",
     "outputs": [
       {
         "internalType": "uint256",
@@ -428,9 +450,14 @@
         "internalType": "address",
         "name": "token",
         "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "recipient",
+        "type": "address"
       }
     ],
-    "name": "claimPenaltyRewards",
+    "name": "divestAll",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
@@ -448,96 +475,18 @@
         "type": "address"
       },
       {
+        "internalType": "uint256",
+        "name": "needed",
+        "type": "uint256"
+      },
+      {
         "internalType": "address",
-        "name": "member",
+        "name": "recipient",
         "type": "address"
       }
     ],
-    "name": "compoundYield",
+    "name": "ensureLiquidity",
     "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "string",
-        "name": "name",
-        "type": "string"
-      },
-      {
-        "internalType": "uint8",
-        "name": "kind",
-        "type": "uint8"
-      },
-      {
-        "internalType": "uint8",
-        "name": "vaultType",
-        "type": "uint8"
-      },
-      {
-        "internalType": "address[]",
-        "name": "tokens",
-        "type": "address[]"
-      },
-      {
-        "internalType": "bool",
-        "name": "limitsArePercentage",
-        "type": "bool"
-      },
-      {
-        "internalType": "uint256",
-        "name": "penaltyRateBps",
-        "type": "uint256"
-      },
-      {
-        "internalType": "string[]",
-        "name": "periodNames",
-        "type": "string[]"
-      },
-      {
-        "internalType": "uint256[]",
-        "name": "limits",
-        "type": "uint256[]"
-      },
-      {
-        "internalType": "uint256[]",
-        "name": "durations",
-        "type": "uint256[]"
-      },
-      {
-        "internalType": "uint256[]",
-        "name": "unlockDelays",
-        "type": "uint256[]"
-      }
-    ],
-    "name": "createVault",
-    "outputs": [
-      {
-        "internalType": "uint256",
-        "name": "vaultId",
-        "type": "uint256"
-      }
-    ],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "uint256",
-        "name": "vaultId",
-        "type": "uint256"
-      }
-    ],
-    "name": "deployDepositAddress",
-    "outputs": [
-      {
-        "internalType": "address",
-        "name": "proxy",
-        "type": "address"
-      }
-    ],
     "stateMutability": "nonpayable",
     "type": "function"
   },
@@ -552,37 +501,76 @@
         "internalType": "address",
         "name": "token",
         "type": "address"
-      },
-      {
-        "internalType": "uint256",
-        "name": "amount",
-        "type": "uint256"
       }
     ],
-    "name": "deposit",
-    "outputs": [],
-    "stateMutability": "payable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "uint256",
-        "name": "vaultId",
-        "type": "uint256"
-      },
-      {
-        "internalType": "address",
-        "name": "member",
-        "type": "address"
-      }
-    ],
-    "name": "depositAddressOf",
+    "name": "getPosition",
     "outputs": [
       {
-        "internalType": "address",
+        "components": [
+          {
+            "internalType": "uint8",
+            "name": "mode",
+            "type": "uint8"
+          },
+          {
+            "internalType": "address",
+            "name": "strategy",
+            "type": "address"
+          },
+          {
+            "internalType": "uint256",
+            "name": "shares",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "principal",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "owedYield",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "accruedFees",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "feeDebt",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "deficit",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "accYieldPerShare",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "lastAccrualAt",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "lifetimeYield",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "lifetimeFees",
+            "type": "uint256"
+          }
+        ],
+        "internalType": "struct VaultYieldState",
         "name": "",
-        "type": "address"
+        "type": "tuple"
       }
     ],
     "stateMutability": "view",
@@ -590,161 +578,18 @@
   },
   {
     "inputs": [
-      {
-        "internalType": "uint256",
-        "name": "vaultId",
-        "type": "uint256"
-      },
       {
         "internalType": "address",
         "name": "token",
         "type": "address"
-      },
-      {
-        "internalType": "uint256",
-        "name": "amount",
-        "type": "uint256"
-      },
-      {
-        "internalType": "address",
-        "name": "beneficiary",
-        "type": "address"
       }
     ],
-    "name": "depositFor",
-    "outputs": [],
-    "stateMutability": "payable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "uint256",
-        "name": "vaultId",
-        "type": "uint256"
-      },
-      {
-        "internalType": "address",
-        "name": "member",
-        "type": "address"
-      }
-    ],
-    "name": "dollarBalanceOf",
-    "outputs": [
-      {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "address",
-        "name": "user",
-        "type": "address"
-      }
-    ],
-    "name": "getUserVaultIds",
-    "outputs": [
-      {
-        "internalType": "uint256[]",
-        "name": "",
-        "type": "uint256[]"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "uint256",
-        "name": "vaultId",
-        "type": "uint256"
-      }
-    ],
-    "name": "getVault",
+    "name": "getStrategy",
     "outputs": [
       {
         "internalType": "address",
-        "name": "creator",
+        "name": "",
         "type": "address"
-      },
-      {
-        "internalType": "uint8",
-        "name": "kind",
-        "type": "uint8"
-      },
-      {
-        "internalType": "uint8",
-        "name": "vaultType",
-        "type": "uint8"
-      },
-      {
-        "internalType": "string",
-        "name": "name",
-        "type": "string"
-      },
-      {
-        "internalType": "bool",
-        "name": "limitsArePercentage",
-        "type": "bool"
-      },
-      {
-        "internalType": "uint256",
-        "name": "penaltyRateBps",
-        "type": "uint256"
-      },
-      {
-        "internalType": "uint256",
-        "name": "memberCount",
-        "type": "uint256"
-      },
-      {
-        "internalType": "bool",
-        "name": "isActive",
-        "type": "bool"
-      },
-      {
-        "internalType": "address[]",
-        "name": "tokens",
-        "type": "address[]"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "getVaultCount",
-    "outputs": [
-      {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "uint256",
-        "name": "vaultId",
-        "type": "uint256"
-      }
-    ],
-    "name": "getVaultMembers",
-    "outputs": [
-      {
-        "internalType": "address[]",
-        "name": "",
-        "type": "address[]"
       }
     ],
     "stateMutability": "view",
@@ -772,16 +617,16 @@
       },
       {
         "internalType": "address",
-        "name": "member",
+        "name": "token",
         "type": "address"
       }
     ],
-    "name": "isDepositAddressDeployed",
+    "name": "investedPrincipal",
     "outputs": [
       {
-        "internalType": "bool",
+        "internalType": "uint256",
         "name": "",
-        "type": "bool"
+        "type": "uint256"
       }
     ],
     "stateMutability": "view",
@@ -793,9 +638,75 @@
         "internalType": "uint256",
         "name": "vaultId",
         "type": "uint256"
+      },
+      {
+        "internalType": "address",
+        "name": "token",
+        "type": "address"
       }
     ],
-    "name": "joinVault",
+    "name": "investedValue",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "managementFeeBps",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "vaultId",
+        "type": "uint256"
+      },
+      {
+        "internalType": "address",
+        "name": "token",
+        "type": "address"
+      }
+    ],
+    "name": "modeOf",
+    "outputs": [
+      {
+        "internalType": "uint8",
+        "name": "",
+        "type": "uint8"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "vaultId",
+        "type": "uint256"
+      },
+      {
+        "internalType": "address",
+        "name": "token",
+        "type": "address"
+      }
+    ],
+    "name": "onDeposit",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
@@ -816,22 +727,25 @@
   {
     "inputs": [
       {
-        "internalType": "uint256",
-        "name": "vaultId",
-        "type": "uint256"
-      },
+        "internalType": "bool",
+        "name": "paused",
+        "type": "bool"
+      }
+    ],
+    "name": "pauseStrategies",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
       {
         "internalType": "address",
-        "name": "token",
-        "type": "address"
-      },
-      {
-        "internalType": "address",
-        "name": "member",
+        "name": "",
         "type": "address"
       }
     ],
-    "name": "pendingPenaltyRewards",
+    "name": "pendingFees",
     "outputs": [
       {
         "internalType": "uint256",
@@ -885,6 +799,48 @@
     "type": "function"
   },
   {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "token",
+        "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "strategy",
+        "type": "address"
+      }
+    ],
+    "name": "queueStrategyChange",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "vaultId",
+        "type": "uint256"
+      },
+      {
+        "internalType": "address",
+        "name": "token",
+        "type": "address"
+      }
+    ],
+    "name": "realizeFees",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "amount",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
     "inputs": [],
     "name": "renounceOwnership",
     "outputs": [],
@@ -907,12 +863,12 @@
   {
     "inputs": [
       {
-        "internalType": "address",
-        "name": "_treasury",
-        "type": "address"
+        "internalType": "uint256",
+        "name": "feeBps",
+        "type": "uint256"
       }
     ],
-    "name": "setTreasury",
+    "name": "setManagementFeeBps",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
@@ -935,7 +891,7 @@
         "type": "uint8"
       }
     ],
-    "name": "setYieldMode",
+    "name": "setMode",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
@@ -944,11 +900,42 @@
     "inputs": [
       {
         "internalType": "address",
-        "name": "module",
+        "name": "token",
+        "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "strategy",
         "type": "address"
       }
     ],
-    "name": "setYieldModule",
+    "name": "setStrategy",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "delay",
+        "type": "uint256"
+      }
+    ],
+    "name": "setStrategyChangeDelay",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "_vaults",
+        "type": "address"
+      }
+    ],
+    "name": "setVaultModule",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
@@ -964,9 +951,68 @@
         "internalType": "address",
         "name": "token",
         "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "member",
+        "type": "address"
       }
     ],
-    "name": "totalOf",
+    "name": "settleMember",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "credited",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "vaultId",
+        "type": "uint256"
+      },
+      {
+        "internalType": "address",
+        "name": "token",
+        "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "member",
+        "type": "address"
+      },
+      {
+        "internalType": "uint256",
+        "name": "newBalance",
+        "type": "uint256"
+      }
+    ],
+    "name": "snapshotMember",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "strategiesPaused",
+    "outputs": [
+      {
+        "internalType": "bool",
+        "name": "",
+        "type": "bool"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "strategyChangeDelay",
     "outputs": [
       {
         "internalType": "uint256",
@@ -981,6 +1027,25 @@
     "inputs": [
       {
         "internalType": "address",
+        "name": "token",
+        "type": "address"
+      }
+    ],
+    "name": "sweepFees",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "amount",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
         "name": "newOwner",
         "type": "address"
       }
@@ -988,19 +1053,6 @@
     "name": "transferOwnership",
     "outputs": [],
     "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "treasury",
-    "outputs": [
-      {
-        "internalType": "address",
-        "name": "",
-        "type": "address"
-      }
-    ],
-    "stateMutability": "view",
     "type": "function"
   },
   {
@@ -1023,103 +1075,10 @@
   },
   {
     "inputs": [],
-    "name": "vaultCount",
+    "name": "vaults",
     "outputs": [
       {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "uint256",
-        "name": "vaultId",
-        "type": "uint256"
-      },
-      {
-        "internalType": "address",
-        "name": "member",
-        "type": "address"
-      }
-    ],
-    "name": "vaultScopeOf",
-    "outputs": [
-      {
-        "internalType": "address",
-        "name": "",
-        "type": "address"
-      }
-    ],
-    "stateMutability": "pure",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "uint256",
-        "name": "vaultId",
-        "type": "uint256"
-      },
-      {
-        "internalType": "address",
-        "name": "token",
-        "type": "address"
-      },
-      {
-        "internalType": "uint256",
-        "name": "amount",
-        "type": "uint256"
-      },
-      {
-        "internalType": "address",
-        "name": "destination",
-        "type": "address"
-      }
-    ],
-    "name": "withdraw",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "uint256",
-        "name": "vaultId",
-        "type": "uint256"
-      },
-      {
-        "internalType": "address",
-        "name": "token",
-        "type": "address"
-      },
-      {
-        "internalType": "uint256",
-        "name": "amount",
-        "type": "uint256"
-      },
-      {
-        "internalType": "address",
-        "name": "destination",
-        "type": "address"
-      }
-    ],
-    "name": "withdrawWithPenalty",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "yieldModule",
-    "outputs": [
-      {
-        "internalType": "contract IVaultYieldModule",
+        "internalType": "contract ISavingsVaults",
         "name": "",
         "type": "address"
       }

@@ -1,6 +1,7 @@
 const { ethers, upgrades } = require("hardhat");
 const fs = require("fs");
 const path = require("path");
+const { syncAbis } = require("./sync-abis");
 
 const TARGET_NETWORK = hre.network.name === "hardhat" ? "localhost" : hre.network.name;
 const NETWORK_CONFIG_PATH = path.join(__dirname, "../../frontend/src/networkConfig.json");
@@ -442,83 +443,7 @@ async function main() {
     // Update ABI files
     console.log("\n📋 Updating contract ABIs...");
     try {
-      // Copy SavingsCore ABI
-      const savingsCoreArtifact = require("../artifacts/contracts/SavingsCore.sol/SavingsCore.json");
-      const frontendSavingsABIPath = path.join(__dirname, "../../frontend/src/SavingsABI.json");
-      fs.writeFileSync(frontendSavingsABIPath, JSON.stringify(savingsCoreArtifact.abi, null, 2));
-      console.log("✅ SavingsCore ABI updated");
-
-      // Copy module ABIs
-      const timePeriodLimitsArtifact = require("../artifacts/contracts/TimePeriodLimitsModule.sol/TimePeriodLimitsModule.json");
-      const frontendTimePeriodLimitsABIPath = path.join(__dirname, "../../frontend/src/TimePeriodLimitsModuleABI.json");
-      fs.writeFileSync(frontendTimePeriodLimitsABIPath, JSON.stringify(timePeriodLimitsArtifact.abi, null, 2));
-      console.log("✅ TimePeriodLimitsModule ABI updated");
-
-      const proposalSystemArtifact = require("../artifacts/contracts/ProposalSystemModule.sol/ProposalSystemModule.json");
-      const frontendProposalSystemABIPath = path.join(__dirname, "../../frontend/src/ProposalSystemModuleABI.json");
-      fs.writeFileSync(frontendProposalSystemABIPath, JSON.stringify(proposalSystemArtifact.abi, null, 2));
-      console.log("✅ ProposalSystemModule ABI updated");
-
-      const bypassSystemArtifact = require("../artifacts/contracts/BypassSystemModule.sol/BypassSystemModule.json");
-      const frontendBypassSystemABIPath = path.join(__dirname, "../../frontend/src/BypassSystemModuleABI.json");
-      fs.writeFileSync(frontendBypassSystemABIPath, JSON.stringify(bypassSystemArtifact.abi, null, 2));
-      console.log("✅ BypassSystemModule ABI updated");
-
-      const approvalSystemArtifact = require("../artifacts/contracts/ApprovalSystemModule.sol/ApprovalSystemModule.json");
-      const frontendApprovalSystemABIPath = path.join(__dirname, "../../frontend/src/ApprovalSystemModuleABI.json");
-      fs.writeFileSync(frontendApprovalSystemABIPath, JSON.stringify(approvalSystemArtifact.abi, null, 2));
-      console.log("✅ ApprovalSystemModule ABI updated");
-
-      const proxyDeploymentArtifact = require("../artifacts/contracts/ProxyDeploymentModule.sol/ProxyDeploymentModule.json");
-      const frontendProxyDeploymentABIPath = path.join(__dirname, "../../frontend/src/ProxyDeploymentModuleABI.json");
-      fs.writeFileSync(frontendProxyDeploymentABIPath, JSON.stringify(proxyDeploymentArtifact.abi, null, 2));
-      console.log("✅ ProxyDeploymentModule ABI updated");
-
-      const poolTogetherArtifact = require("../artifacts/contracts/PoolTogetherModule.sol/PoolTogetherModule.json");
-      const frontendPoolTogetherABIPath = path.join(__dirname, "../../frontend/src/PoolTogetherModuleABI.json");
-      fs.writeFileSync(frontendPoolTogetherABIPath, JSON.stringify(poolTogetherArtifact.abi, null, 2));
-      console.log("✅ PoolTogetherModule ABI updated");
-
-      const vaultSystemArtifact = require("../artifacts/contracts/VaultSystemModule.sol/VaultSystemModule.json");
-      const frontendVaultSystemABIPath = path.join(__dirname, "../../frontend/src/VaultSystemModuleABI.json");
-      fs.writeFileSync(frontendVaultSystemABIPath, JSON.stringify(vaultSystemArtifact.abi, null, 2));
-      console.log("✅ VaultSystemModule ABI updated");
-
-      const referralArtifact = require("../artifacts/contracts/ReferralModule.sol/ReferralModule.json");
-      const frontendReferralABIPath = path.join(__dirname, "../../frontend/src/ReferralModuleABI.json");
-      fs.writeFileSync(frontendReferralABIPath, JSON.stringify(referralArtifact.abi, null, 2));
-      console.log("✅ ReferralModule ABI updated");
-
-      const recoverySystemArtifact = require("../artifacts/contracts/RecoverySystemModule.sol/RecoverySystemModule.json");
-      const frontendRecoverySystemABIPath = path.join(__dirname, "../../frontend/src/RecoverySystemModuleABI.json");
-      fs.writeFileSync(frontendRecoverySystemABIPath, JSON.stringify(recoverySystemArtifact.abi, null, 2));
-      console.log("✅ RecoverySystemModule ABI updated");
-
-      const vaultRulesArtifact = require("../artifacts/contracts/VaultRulesModule.sol/VaultRulesModule.json");
-      fs.writeFileSync(
-        path.join(__dirname, "../../frontend/src/VaultRulesModuleABI.json"),
-        JSON.stringify(vaultRulesArtifact.abi, null, 2),
-      );
-      console.log("✅ VaultRulesModule ABI updated");
-
-      const yieldArtifact = require("../artifacts/contracts/YieldModule.sol/YieldModule.json");
-      const frontendYieldABIPath = path.join(__dirname, "../../frontend/src/YieldModuleABI.json");
-      fs.writeFileSync(frontendYieldABIPath, JSON.stringify(yieldArtifact.abi, null, 2));
-      console.log("✅ YieldModule ABI updated");
-
-      // Copy MockUSDT ABI
-      if (usdtAddress) {
-        const usdtArtifact = require("../artifacts/contracts/MockUSDT.sol/MockUSDT.json");
-        const frontendUSDTABIPath = path.join(__dirname, "../../frontend/src/MockUSDT_ABI.json");
-        fs.writeFileSync(frontendUSDTABIPath, JSON.stringify(usdtArtifact.abi, null, 2));
-        console.log("✅ MockUSDT ABI updated");
-      }
-
-      // Copy UserProxy ABI
-      const userProxyArtifact = require("../artifacts/contracts/UserProxy.sol/UserProxy.json");
-      const frontendUserProxyABIPath = path.join(__dirname, "../../frontend/src/UserProxyABI.json");
-      fs.writeFileSync(frontendUserProxyABIPath, JSON.stringify(userProxyArtifact.abi, null, 2));
-      console.log("✅ UserProxy ABI updated");
+      syncAbis();
 
     } catch (error) {
       console.log("⚠️  Warning: Could not update ABIs automatically");
