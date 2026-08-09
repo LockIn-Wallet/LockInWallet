@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react";
 import PropTypes from "prop-types";
+import BalanceEarningRow from "./BalanceEarningRow.js";
 
 // Import styles
 import {
@@ -55,6 +56,8 @@ const BalanceDisplay = ({
   onBalanceUpdate,
   connectWallet,
   refreshTrigger,
+  activeVaultAddress = null,
+  onEarningChanged,
 }) => {
   // PoolTogether state
   const [vaultStates, setVaultStates] = useState({});
@@ -412,6 +415,15 @@ const BalanceDisplay = ({
             )}
           </div>
         )}
+
+        {/* Earning belongs next to the money it applies to. The panel further
+            down still owns the three-way choice and the figures; this is the
+            everyday switch, and it hides itself when earning does not apply. */}
+        <BalanceEarningRow
+          transactionManager={transactionManager}
+          activeVaultAddress={activeVaultAddress}
+          onChanged={onEarningChanged}
+        />
       </div>
     </>
   );
@@ -442,6 +454,9 @@ BalanceDisplay.propTypes = {
 
   // Callbacks for App.js state updates
   onBalanceUpdate: PropTypes.func,
+  activeVaultAddress: PropTypes.string,
+  /** Refetch balances after earning moves funds into or out of the strategy. */
+  onEarningChanged: PropTypes.func,
   connectWallet: PropTypes.func.isRequired,
 };
 

@@ -311,3 +311,43 @@ export default {
   cardStyles,
   layoutStyles,
 };
+/**
+ * The earning switch under the balance.
+ *
+ * A hairline rule separates it from the balances above rather than a card of
+ * its own: it belongs to the balance, and boxing it would read as a different
+ * subject.
+ */
+export const balanceEarningStyles = {
+  row: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    // Wraps rather than crushing the sentence to two words per line on a phone
+    flexWrap: "wrap",
+    gap: spacing.lg,
+    marginTop: spacing.xl,
+    paddingTop: spacing.xl,
+    borderTop: `1px solid ${colors.border.default}`,
+  },
+  text: {
+    // Takes the leftover width so the switch keeps its size on a narrow screen
+    flex: "1 1 200px",
+    textAlign: "left",
+  },
+  headline: {
+    color: colors.text.primary,
+    fontSize: fontSize.normal,
+    fontWeight: fontWeight.semibold,
+  },
+  sub: {
+    color: colors.text.muted,
+    fontSize: fontSize.sm,
+    marginTop: spacing.xs,
+  },
+  error: {
+    color: colors.error.light,
+    fontSize: fontSize.sm,
+    marginTop: spacing.sm,
+  },
+};

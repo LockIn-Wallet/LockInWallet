@@ -105,3 +105,19 @@ export const YIELD_PRIZE_FEE_NOTE =
 export const YIELD_PRIZE_WON_NOTE =
   "Prizes are paid in the prize token, not the token you saved — so they arrive " +
   "separately rather than being added to your balance.";
+
+/**
+ * The earning switch that sits under the balance.
+ *
+ * Deliberately quieter than the panel below it: this is the everyday control,
+ * so it states the rate and the one thing people worry about — that they can
+ * still get their money — and leaves the explaining to the panel.
+ */
+export const BALANCE_EARNING = {
+  toggleLabel: "Earn interest on your savings",
+  on: (rate) => (rate ? `Earning ${rate.toFixed(2)}% a year` : "Earning"),
+  off: (rate) => (rate ? `Earn ${rate.toFixed(2)}% a year` : "Earn interest"),
+  mixed: "Earning on some of your coins",
+  onDetail: "Through Aave. Withdraw any time, under your usual limits.",
+  offDetail: "Your savings sit still. Switch this on to put them to work.",
+};

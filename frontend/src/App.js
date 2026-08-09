@@ -362,6 +362,8 @@ function MainFlow({
           onBalanceUpdate={(newBalances) => setBalances(newBalances)}
           connectWallet={() => {}}
           refreshTrigger={balanceRefreshTrigger}
+          activeVaultAddress={currentVaultAddress}
+          onEarningChanged={refreshBalances}
         />
       )}
 
