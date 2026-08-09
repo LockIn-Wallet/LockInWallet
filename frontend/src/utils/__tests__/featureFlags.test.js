@@ -49,7 +49,24 @@ describe("isYieldEnabled", () => {
   // Hardcoded off in featureFlags.js — this test is the tripwire that fails if
   // earning is switched on before a YieldModule and strategy are live
   test("is off until the yield module is deployed and verified", () => {
+    delete process.env.REACT_APP_ENABLE_YIELD;
     expect(isYieldEnabled()).toBe(false);
+  });
+
+  test("stays off for anything short of an explicit opt-in", () => {
+    // Only the exact string turns it on, so a stray "1" or "yes" in an
+    // environment file cannot ship the feature by accident.
+    for (const value of ["1", "yes", "TRUE", ""]) {
+      process.env.REACT_APP_ENABLE_YIELD = value;
+      expect(isYieldEnabled()).toBe(false);
+    }
+    delete process.env.REACT_APP_ENABLE_YIELD;
+  });
+
+  test("can be switched on locally to look at it", () => {
+    process.env.REACT_APP_ENABLE_YIELD = "true";
+    expect(isYieldEnabled()).toBe(true);
+    delete process.env.REACT_APP_ENABLE_YIELD;
   });
 });
 

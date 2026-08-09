@@ -19,14 +19,18 @@ export const isPrizePoolEnabled = () => PRIZE_POOL_ENABLED;
 
 /**
  * Earning on vault balances (the "Earn on your savings" section and its
- * configure dialog) stays hidden until the YieldModule and an Aave strategy are
- * deployed and verified on a live network. Hardcoded for the same reason as the
- * prize pool: it is off for everyone until it ships, so flip this line to bring
- * it in.
+ * configure dialog) stays hidden until the vault yield module and an Aave
+ * strategy are deployed and verified on a live network.
+ *
+ * Off for everyone by default, and the default is what ships: flip this line to
+ * release it. The environment override exists only so the feature can be looked
+ * at on a local chain — a build with `REACT_APP_ENABLE_YIELD=true` is a
+ * deliberate act, and the flag is still off in every build that does not set it.
  */
 const YIELD_ENABLED = false;
 
-export const isYieldEnabled = () => YIELD_ENABLED;
+export const isYieldEnabled = () =>
+  YIELD_ENABLED || process.env.REACT_APP_ENABLE_YIELD === "true";
 
 /**
  * Nav-link predicate: an entry carrying a `flag` only shows while that flag

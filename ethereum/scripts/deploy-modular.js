@@ -299,6 +299,48 @@ async function main() {
       console.log(`   ✅ Prize pool set: ${prizePoolAddress}`);
     }
 
+    // A lending market for the unified vault's earning, on a local chain only.
+    //
+    // Separate from the mock reserve below because a strategy's controller is
+    // immutable: one built for the old yield module cannot be handed to the new
+    // one, which checks that it owns its strategies. Idempotent, so re-running
+    // the deploy leaves an existing market alone — and it runs on an upgrade
+    // too, which is when a freshly added module has no strategy yet.
+    if (isLocalNetwork && usdtAddress && modules.vaultYield) {
+      const vaultYield = modules.vaultYield.contract;
+      const existing = await vaultYield.getStrategy(usdtAddress).catch(() => ethers.ZeroAddress);
+
+      if (existing === ethers.ZeroAddress) {
+        console.log("\n🌾 Deploying a mock lending market for vault earning...");
+        const MockAavePool = await ethers.getContractFactory("MockAavePool");
+        const pool = await MockAavePool.deploy();
+        await pool.waitForDeployment();
+
+        const MockAToken = await ethers.getContractFactory("MockAToken");
+        const aToken = await MockAToken.deploy(
+          "Aave USDT", "aUSDT", usdtAddress, await pool.getAddress(), 6,
+        );
+        await aToken.waitForDeployment();
+        await (await pool.registerReserve(usdtAddress, await aToken.getAddress())).wait();
+
+        // 5% a year, expressed the way Aave does it: an annual rate in rays.
+        await (await pool.setLiquidityRate(usdtAddress, (5n * 10n ** 27n) / 100n)).wait();
+
+        const AaveV3Strategy = await ethers.getContractFactory("AaveV3Strategy");
+        const strategy = await AaveV3Strategy.deploy(
+          usdtAddress,
+          await pool.getAddress(),
+          await aToken.getAddress(),
+          modules.vaultYield.address,
+        );
+        await strategy.waitForDeployment();
+        await (await vaultYield.setStrategy(usdtAddress, await strategy.getAddress())).wait();
+        console.log(`   ✅ USDT earns 5% a year via ${await strategy.getAddress()}`);
+      } else {
+        console.log(`\n🌾 Vault earning already has a USDT strategy at ${existing}`);
+      }
+    }
+
     // Deploy a mock Aave reserve for localhost so the earning UI has a live rate
     // to show and deposits actually get invested. Production points the same
     // strategy at the real Aave v3 pool via add-yield-module.js.
