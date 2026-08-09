@@ -409,24 +409,6 @@
         "internalType": "uint256",
         "name": "vaultId",
         "type": "uint256"
-      },
-      {
-        "internalType": "bytes32",
-        "name": "proposalId",
-        "type": "bytes32"
-      }
-    ],
-    "name": "cancelVaultLimitProposal",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "uint256",
-        "name": "vaultId",
-        "type": "uint256"
       }
     ],
     "name": "claimPenaltyRewards",
@@ -521,6 +503,92 @@
   {
     "inputs": [
       {
+        "components": [
+          {
+            "internalType": "string",
+            "name": "name",
+            "type": "string"
+          },
+          {
+            "internalType": "string",
+            "name": "description",
+            "type": "string"
+          },
+          {
+            "internalType": "uint8",
+            "name": "vaultType",
+            "type": "uint8"
+          },
+          {
+            "internalType": "address",
+            "name": "token",
+            "type": "address"
+          },
+          {
+            "internalType": "uint256",
+            "name": "dailyLimit",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "weeklyLimit",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "monthlyLimit",
+            "type": "uint256"
+          },
+          {
+            "internalType": "bool",
+            "name": "limitsArePercentage",
+            "type": "bool"
+          },
+          {
+            "internalType": "uint256",
+            "name": "penaltyRateBps",
+            "type": "uint256"
+          }
+        ],
+        "internalType": "struct VaultParams",
+        "name": "params",
+        "type": "tuple"
+      },
+      {
+        "internalType": "string[]",
+        "name": "names",
+        "type": "string[]"
+      },
+      {
+        "internalType": "uint256[]",
+        "name": "limits",
+        "type": "uint256[]"
+      },
+      {
+        "internalType": "uint256[]",
+        "name": "durations",
+        "type": "uint256[]"
+      },
+      {
+        "internalType": "uint256[]",
+        "name": "unlockDelays",
+        "type": "uint256[]"
+      }
+    ],
+    "name": "createVaultWithPeriods",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "vaultId",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
         "internalType": "uint256",
         "name": "vaultId",
         "type": "uint256"
@@ -597,24 +665,6 @@
       }
     ],
     "name": "executeVaultBypass",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "uint256",
-        "name": "vaultId",
-        "type": "uint256"
-      },
-      {
-        "internalType": "bytes32",
-        "name": "proposalId",
-        "type": "bytes32"
-      }
-    ],
-    "name": "executeVaultLimitProposal",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
@@ -1013,64 +1063,6 @@
       }
     ],
     "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "uint256",
-        "name": "vaultId",
-        "type": "uint256"
-      },
-      {
-        "internalType": "string",
-        "name": "periodName",
-        "type": "string"
-      },
-      {
-        "internalType": "uint256",
-        "name": "newLimit",
-        "type": "uint256"
-      }
-    ],
-    "name": "proposeVaultLimitChange",
-    "outputs": [
-      {
-        "internalType": "bytes32",
-        "name": "proposalId",
-        "type": "bytes32"
-      }
-    ],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "uint256",
-        "name": "vaultId",
-        "type": "uint256"
-      },
-      {
-        "internalType": "string",
-        "name": "periodName",
-        "type": "string"
-      },
-      {
-        "internalType": "uint256",
-        "name": "newUnlockDelay",
-        "type": "uint256"
-      }
-    ],
-    "name": "proposeVaultUnlockDelayChange",
-    "outputs": [
-      {
-        "internalType": "bytes32",
-        "name": "proposalId",
-        "type": "bytes32"
-      }
-    ],
-    "stateMutability": "nonpayable",
     "type": "function"
   },
   {

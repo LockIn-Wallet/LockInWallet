@@ -101,14 +101,60 @@ contract VaultSystemModule is Initializable, UUPSUpgradeable, OwnableUpgradeable
 
     // ========== VAULT LIFECYCLE ==========
 
+    /// @notice Create a vault with the same set of spending windows the savings
+    /// account supports — hourly through yearly, each with its own wait.
+    ///
+    /// `createVault` covers only daily/weekly/monthly because VaultParams
+    /// carries three limit fields. That was the whole shape of a vault's rules
+    /// before they moved into the shared module; it is not any more, and a
+    /// vault meant to replace the savings account cannot offer fewer windows
+    /// than the thing it replaces.
+    function createVaultWithPeriods(
+        VaultParams calldata params,
+        string[] calldata names,
+        uint256[] calldata limits,
+        uint256[] calldata durations,
+        uint256[] calldata unlockDelays
+    ) external returns (uint256 vaultId) {
+        require(names.length > 0, "No limits set");
+        require(
+            names.length == limits.length &&
+            names.length == durations.length &&
+            names.length == unlockDelays.length,
+            "Length mismatch"
+        );
+        require(params.vaultType == VAULT_TYPE_PERSONAL, "Personal vaults only");
+
+        vaultId = _createVault(params, true);
+        address scope = _vaultScope(vaultId, msg.sender);
+
+        ITimePeriodLimitsModule limitsModule = _limits();
+        limitsModule.setPeriodLimits(scope, names, limits, durations, unlockDelays);
+        limitsModule.setLimitsArePercentage(scope, params.limitsArePercentage);
+        _proposals().commitInitialSetup(scope);
+
+        emit VaultCreated(vaultId, msg.sender, params.token, params.name, params.vaultType);
+    }
+
     function createVault(VaultParams calldata params) external returns (uint256 vaultId) {
+        vaultId = _createVault(params, false);
+        _installMemberRules(vaultId, vaults[vaultId], msg.sender);
+        emit VaultCreated(vaultId, msg.sender, params.token, params.name, params.vaultType);
+    }
+
+    /// @param skipLimitValidation true when the caller supplies its own period
+    /// set, so the three template fields are not the source of truth.
+    function _createVault(VaultParams calldata params, bool skipLimitValidation)
+        private
+        returns (uint256 vaultId)
+    {
         require(params.vaultType <= VAULT_TYPE_COMMUNITY, "Invalid vault type");
         _validateVaultParams(
             params.name,
             params.description,
-            params.dailyLimit,
-            params.weeklyLimit,
-            params.monthlyLimit,
+            skipLimitValidation ? 1 : params.dailyLimit,
+            skipLimitValidation ? 0 : params.weeklyLimit,
+            skipLimitValidation ? 0 : params.monthlyLimit,
             params.limitsArePercentage,
             params.penaltyRateBps
         );
@@ -130,8 +176,6 @@ contract VaultSystemModule is Initializable, UUPSUpgradeable, OwnableUpgradeable
         vault.updatedAt = block.timestamp;
 
         _addMember(vaultId, msg.sender);
-        _installMemberRules(vaultId, vault, msg.sender);
-        emit VaultCreated(vaultId, msg.sender, params.token, params.name, params.vaultType);
     }
 
     function joinVault(uint256 vaultId) external {
@@ -163,55 +207,12 @@ contract VaultSystemModule is Initializable, UUPSUpgradeable, OwnableUpgradeable
         emit VaultLeft(vaultId, msg.sender);
     }
 
-    /// @notice Propose a change to one of this vault's spending limits.
-    ///
-    /// Vault rules live in the same modules as the savings account's, keyed by
-    /// a scope derived from (vault, member). That is deliberate: a vault should
-    /// not be a second, weaker implementation of the same protections. It
-    /// inherits the timelock, the per-period waits and the increase-rate
-    /// tracking exactly as the account has them.
-    function proposeVaultLimitChange(uint256 vaultId, string calldata periodName, uint256 newLimit)
-        external
-        onlyMember(vaultId)
-        returns (bytes32 proposalId)
-    {
-        VaultInfo storage vault = _activeVault(vaultId);
-        require(vault.vaultType == VAULT_TYPE_PERSONAL, "Community rules immutable");
-        return _proposals().proposeLimitChange(_vaultScope(vaultId, msg.sender), periodName, newLimit);
-    }
-
-    /// @notice Propose a change to how long this vault's limits take to change.
-    function proposeVaultUnlockDelayChange(
-        uint256 vaultId,
-        string calldata periodName,
-        uint256 newUnlockDelay
-    ) external onlyMember(vaultId) returns (bytes32 proposalId) {
-        VaultInfo storage vault = _activeVault(vaultId);
-        require(vault.vaultType == VAULT_TYPE_PERSONAL, "Community rules immutable");
-        return _proposals().proposeUnlockDelayChange(
-            _vaultScope(vaultId, msg.sender), periodName, newUnlockDelay
-        );
-    }
-
-    function executeVaultLimitProposal(uint256 vaultId, bytes32 proposalId)
-        external
-        onlyMember(vaultId)
-    {
-        _proposals().executeLimitProposal(_vaultScope(vaultId, msg.sender), proposalId);
-    }
-
-    function cancelVaultLimitProposal(uint256 vaultId, bytes32 proposalId)
-        external
-        onlyMember(vaultId)
-    {
-        _proposals().cancelLimitProposal(_vaultScope(vaultId, msg.sender), proposalId);
-    }
-
     // ========== EMERGENCY BYPASS ==========
+    //
+    // The request and its timelock live in BypassSystemModule; only the payout
+    // is here, because only this module holds vault funds. That is also why
+    // these could not move out with the rule proposals.
 
-    /// @notice Ask to withdraw past one of this vault's limits, after its wait.
-    /// The request and its timelock live in the shared bypass module; only the
-    /// payout happens here, because only this module holds the money.
     function requestVaultBypass(uint256 vaultId, uint256 amount, string calldata skipPeriod)
         external
         onlyMember(vaultId)
@@ -224,7 +225,6 @@ contract VaultSystemModule is Initializable, UUPSUpgradeable, OwnableUpgradeable
         );
     }
 
-    /// @notice Execute a matured bypass, paying out of vault funds.
     function executeVaultBypass(uint256 vaultId, bytes32 requestId, address destination)
         external
         nonReentrant
@@ -235,8 +235,6 @@ contract VaultSystemModule is Initializable, UUPSUpgradeable, OwnableUpgradeable
         VaultInfo storage vault = _activeVault(vaultId);
         VaultMemberInfo storage member = vaultMembers[vaultId][msg.sender];
 
-        // Settle first so the amount is measured against what the member
-        // actually has, exactly as an ordinary withdrawal does.
         _settlePenalties(vault, member);
         _settleYield(vaultId, vault, member, msg.sender);
 

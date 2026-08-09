@@ -310,12 +310,15 @@ interface IPoolTogetherModule {
 interface IVaultSystemModule {
     // Vault lifecycle
     function createVault(VaultParams calldata params) external returns (uint256 vaultId);
+    function createVaultWithPeriods(
+        VaultParams calldata params,
+        string[] calldata names,
+        uint256[] calldata limits,
+        uint256[] calldata durations,
+        uint256[] calldata unlockDelays
+    ) external returns (uint256 vaultId);
     function joinVault(uint256 vaultId) external;
     function leaveVault(uint256 vaultId) external;
-    function proposeVaultLimitChange(uint256 vaultId, string calldata periodName, uint256 newLimit) external returns (bytes32);
-    function proposeVaultUnlockDelayChange(uint256 vaultId, string calldata periodName, uint256 newUnlockDelay) external returns (bytes32);
-    function executeVaultLimitProposal(uint256 vaultId, bytes32 proposalId) external;
-    function cancelVaultLimitProposal(uint256 vaultId, bytes32 proposalId) external;
     function vaultScopeOf(uint256 vaultId, address member) external pure returns (address);
     function requestVaultBypass(uint256 vaultId, uint256 amount, string calldata skipPeriod) external returns (bytes32);
     function executeVaultBypass(uint256 vaultId, bytes32 requestId, address destination) external;
@@ -479,6 +482,7 @@ library ModuleIds {
     bytes32 public constant REFERRAL = keccak256("REFERRAL");
     bytes32 public constant RECOVERY_SYSTEM = keccak256("RECOVERY_SYSTEM");
     bytes32 public constant YIELD_SYSTEM = keccak256("YIELD_SYSTEM");
+    bytes32 public constant VAULT_RULES = keccak256("VAULT_RULES");
 }
 
 // ========== SHARED GUARDS ==========

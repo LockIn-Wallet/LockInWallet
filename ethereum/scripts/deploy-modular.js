@@ -152,6 +152,7 @@ async function main() {
       referral: await deployOrUpgradeModule("ReferralModule", "REFERRAL", "🤝"),
       recoverySystem: await deployOrUpgradeModule("RecoverySystemModule", "RECOVERY_SYSTEM", "🛟"),
       yieldSystem: await deployOrUpgradeModule("YieldModule", "YIELD_SYSTEM", "🌱"),
+      vaultRules: await deployOrUpgradeModule("VaultRulesModule", "VAULT_RULES", "📜"),
     };
     for (const [key, m] of Object.entries(modules)) moduleAddresses[key] = m.address;
     const proxyDeploymentModule = modules.proxyDeployment.contract;
@@ -493,6 +494,13 @@ async function main() {
       fs.writeFileSync(frontendRecoverySystemABIPath, JSON.stringify(recoverySystemArtifact.abi, null, 2));
       console.log("✅ RecoverySystemModule ABI updated");
 
+      const vaultRulesArtifact = require("../artifacts/contracts/VaultRulesModule.sol/VaultRulesModule.json");
+      fs.writeFileSync(
+        path.join(__dirname, "../../frontend/src/VaultRulesModuleABI.json"),
+        JSON.stringify(vaultRulesArtifact.abi, null, 2),
+      );
+      console.log("✅ VaultRulesModule ABI updated");
+
       const yieldArtifact = require("../artifacts/contracts/YieldModule.sol/YieldModule.json");
       const frontendYieldABIPath = path.join(__dirname, "../../frontend/src/YieldModuleABI.json");
       fs.writeFileSync(frontendYieldABIPath, JSON.stringify(yieldArtifact.abi, null, 2));
@@ -532,6 +540,7 @@ async function main() {
     console.log(`  VaultSystem:         ${moduleAddresses.vaultSystem}`);
     console.log(`  RecoverySystem:      ${moduleAddresses.recoverySystem}`);
     console.log(`  YieldSystem:         ${moduleAddresses.yieldSystem}`);
+    console.log(`  VaultRules:          ${moduleAddresses.vaultRules}`);
     if (usdtAddress) {
       console.log(`MockUSDT Address:      ${usdtAddress}`);
     }

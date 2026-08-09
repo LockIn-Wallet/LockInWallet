@@ -433,17 +433,6 @@ describe("VaultSystemModule", function () {
     });
   });
 
-  describe("Rule updates", function () {
-
-    it("keeps community vault rules immutable, even for the creator", async function () {
-      const { vaultModule, user1 } = await loadFixture(deployVaultSystemFixture);
-      await vaultModule.connect(user1).createVault(ethVaultParams({ vaultType: VAULT_TYPE_COMMUNITY }));
-      await expect(
-        vaultModule.connect(user1).proposeVaultLimitChange(1, "Daily", 100)
-      ).to.be.revertedWith("Community rules immutable");
-    });
-  });
-
   describe("Administration", function () {
     it("lets only the owner change the treasury", async function () {
       const { vaultModule, user1, user2 } = await loadFixture(deployVaultSystemFixture);
@@ -592,9 +581,11 @@ describe("VaultSystemModule — rules reuse the savings account's modules", func
     const limits = await deploy("TimePeriodLimitsModule");
     const proposals = await deploy("ProposalSystemModule");
     const bypass = await deploy("BypassSystemModule");
+    const rules = await deploy("VaultRulesModule");
     const reg = (id: string, t: any) =>
       savingsCore.registerModule(hre.ethers.keccak256(hre.ethers.toUtf8Bytes(id)), t);
     await reg("VAULT_SYSTEM", vaultModule.target);
+    await reg("VAULT_RULES", rules.target);
     await reg("TIME_PERIOD_LIMITS", limits.target);
     await reg("PROPOSAL_SYSTEM", proposals.target);
     await reg("BYPASS_SYSTEM", bypass.target);
@@ -612,7 +603,7 @@ describe("VaultSystemModule — rules reuse the savings account's modules", func
     await vaultModule.connect(user1).deposit(1, hre.ethers.parseEther("10"), {
       value: hre.ethers.parseEther("10"),
     });
-    return { savingsCore, vaultModule, limits, proposals, owner, user1, user2 };
+    return { savingsCore, vaultModule, limits, proposals, rules, owner, user1, user2 };
   }
 
   it("stores a vault's rules in the shared limits module, under its own scope", async function () {
@@ -663,10 +654,10 @@ describe("VaultSystemModule — rules reuse the savings account's modules", func
   });
 
   it("makes raising a vault limit serve the wait, then apply", async function () {
-    const { vaultModule, limits, proposals, user1 } = await loadFixture(fixture);
+    const { vaultModule, limits, proposals, rules, user1 } = await loadFixture(fixture);
     const scope = await vaultModule.vaultScopeOf(1, user1.address);
 
-    const tx = await vaultModule
+    const tx = await rules
       .connect(user1)
       .proposeVaultLimitChange(1, "Daily", hre.ethers.parseEther("3"));
     await tx.wait();
@@ -681,12 +672,27 @@ describe("VaultSystemModule — rules reuse the savings account's modules", func
       vaultModule.connect(user1).withdraw(1, hre.ethers.parseEther("1.1")),
     ).to.be.revertedWith("Exceeds limit");
     await expect(
-      vaultModule.connect(user1).executeVaultLimitProposal(1, proposalId),
+      rules.connect(user1).executeVaultLimitProposal(1, proposalId),
     ).to.be.revertedWith("Still in timelock");
 
     await time.increase(DAY);
-    await vaultModule.connect(user1).executeVaultLimitProposal(1, proposalId);
+    await rules.connect(user1).executeVaultLimitProposal(1, proposalId);
     expect(await limits.findPeriodLimit(scope, "Daily")).to.equal(hre.ethers.parseEther("3"));
+  });
+
+  it("keeps community vault rules immutable, even for the creator", async function () {
+    const { vaultModule, rules, user1 } = await loadFixture(fixture);
+    await vaultModule.connect(user1).createVault({
+      name: "Community", description: "", vaultType: VAULT_TYPE_COMMUNITY,
+      token: hre.ethers.ZeroAddress,
+      dailyLimit: hre.ethers.parseEther("1"),
+      weeklyLimit: hre.ethers.parseEther("5"),
+      monthlyLimit: hre.ethers.parseEther("15"),
+      limitsArePercentage: false, penaltyRateBps: 2000,
+    });
+    await expect(
+      rules.connect(user1).proposeVaultLimitChange(2, "Daily", 100),
+    ).to.be.revertedWith("Community rules immutable");
   });
 
   it("fails closed when the limits module is not registered", async function () {
@@ -719,9 +725,11 @@ describe("VaultSystemModule — emergency bypass", function () {
     const limits = await deploy("TimePeriodLimitsModule");
     const proposals = await deploy("ProposalSystemModule");
     const bypass = await deploy("BypassSystemModule");
+    const rules = await deploy("VaultRulesModule");
     const reg = (id: string, t: any) =>
       savingsCore.registerModule(hre.ethers.keccak256(hre.ethers.toUtf8Bytes(id)), t);
     await reg("VAULT_SYSTEM", vaultModule.target);
+    await reg("VAULT_RULES", rules.target);
     await reg("TIME_PERIOD_LIMITS", limits.target);
     await reg("PROPOSAL_SYSTEM", proposals.target);
     await reg("BYPASS_SYSTEM", bypass.target);
@@ -739,7 +747,7 @@ describe("VaultSystemModule — emergency bypass", function () {
     await vaultModule.connect(user1).deposit(1, hre.ethers.parseEther("10"), {
       value: hre.ethers.parseEther("10"),
     });
-    return { savingsCore, vaultModule, limits, bypass, owner, user1, user2 };
+    return { savingsCore, vaultModule, limits, bypass, rules, owner, user1, user2 };
   }
 
   async function requestId(bypass: any, vaultModule: any, user: any) {

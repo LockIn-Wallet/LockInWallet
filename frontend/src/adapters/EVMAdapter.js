@@ -12,6 +12,7 @@ import VaultSystemModuleABI from "../VaultSystemModuleABI.json";
 import SavingsTimelockABI from "../SavingsTimelockABI.json";
 import ReferralModuleABI from "../ReferralModuleABI.json";
 import RecoverySystemModuleABI from "../RecoverySystemModuleABI.json";
+import VaultRulesModuleABI from "../VaultRulesModuleABI.json";
 import YieldModuleABI from "../YieldModuleABI.json";
 import ERC20ABI from "../ERC20ABI.json";
 import { getTokenMeta } from "../utils/tokenUtils.js";
@@ -47,6 +48,10 @@ const MODULE_DEFS = {
   approvalSystem: { id: ethers.keccak256(ethers.toUtf8Bytes("APPROVAL_SYSTEM")), abi: ApprovalSystemModuleABI },
   proxyDeployment: { id: ethers.keccak256(ethers.toUtf8Bytes("PROXY_DEPLOYMENT")), abi: ProxyDeploymentModuleABI },
   poolTogether: { id: ethers.keccak256(ethers.toUtf8Bytes("POOL_TOGETHER")), abi: PoolTogetherModuleABI },
+  // Vault rule changes moved out of the vault module: that contract custodies
+  // funds and had reached the 24KB ceiling, so everything not needing custody
+  // lives here instead — the same split the savings account already uses.
+  vaultRules: { id: ethers.keccak256(ethers.toUtf8Bytes("VAULT_RULES")), abi: VaultRulesModuleABI },
 };
 const VAULT_TYPE_NAMES = ["Personal", "Community"];
 
@@ -1921,10 +1926,11 @@ export class EVMAdapter extends BlockchainAdapter {
 
     if (changes.length === 0) throw this._userError("No limit changes to make");
 
+    const rulesModule = await this._getModuleContract("vaultRules");
     const results = [];
     for (const [period, value] of changes) {
       const raw = this._toRawLimit(value, limitsArePercentage, decimals);
-      const tx = await vaultModule.proposeVaultLimitChange(vaultAddress, period, raw);
+      const tx = await rulesModule.proposeVaultLimitChange(vaultAddress, period, raw);
       await tx.wait();
       results.push({ period, txHash: tx.hash });
     }
@@ -1976,12 +1982,9 @@ export class EVMAdapter extends BlockchainAdapter {
 
   /** Queued rule changes for a vault, with when each can be applied. */
   async getPendingVaultRuleChanges(vaultAddress, memberAddress = null) {
-    const vaultModule = await this._getVaultModule();
-    const proposalModule = await this._getModuleContract("proposalSystem");
-    const scope = await vaultModule.vaultScopeOf(vaultAddress, memberAddress || this.userAddress);
-
+    const rulesModule = await this._getModuleContract("vaultRules");
     const [ids, categories, newLimits, executeAfters] =
-      await proposalModule.getUserPendingProposals(scope);
+      await rulesModule.getPendingVaultRuleChanges(vaultAddress, memberAddress || this.userAddress);
     return ids.map((id, i) => ({
       proposalId: id,
       period: categories[i],
@@ -1991,15 +1994,15 @@ export class EVMAdapter extends BlockchainAdapter {
   }
 
   async executeVaultRuleChange(vaultAddress, proposalId) {
-    const vaultModule = await this._getVaultModule();
-    const tx = await vaultModule.executeVaultLimitProposal(vaultAddress, proposalId);
+    const rulesModule = await this._getModuleContract("vaultRules");
+    const tx = await rulesModule.executeVaultLimitProposal(vaultAddress, proposalId);
     await tx.wait();
     return tx.hash;
   }
 
   async cancelVaultRuleChange(vaultAddress, proposalId) {
-    const vaultModule = await this._getVaultModule();
-    const tx = await vaultModule.cancelVaultLimitProposal(vaultAddress, proposalId);
+    const rulesModule = await this._getModuleContract("vaultRules");
+    const tx = await rulesModule.cancelVaultLimitProposal(vaultAddress, proposalId);
     await tx.wait();
     return tx.hash;
   }
