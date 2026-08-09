@@ -220,4 +220,143 @@ describe("SavingsVaultModule", function () {
       ).to.be.revertedWith("Withdrawal address not approved");
     });
   });
+
+  /**
+   * The penalty is what keeps the limits honest. They can be escaped, but only
+   * at a price the member agreed to when the vault was created — and in a
+   * community vault that price goes to the people who stayed.
+   */
+  describe("Leaving early costs what the vault said it would", function () {
+    async function makeCoinVault(ctx: any, signer: any, type = PERSONAL) {
+      await ctx.vaults.connect(signer).createVault(
+        "Pot", KIND_COIN, type, [ctx.usdt.target],
+        false, 2000, ["Daily"], [usd("100")], [DAY], [DAY],
+      );
+      return ctx.vaults.getVaultCount();
+    }
+    const put = async (ctx: any, signer: any, id: bigint, amount: bigint) => {
+      await ctx.usdt.connect(signer).approve(ctx.vaults.target, amount);
+      await ctx.vaults.connect(signer).deposit(id, ctx.usdt.target, amount);
+    };
+
+    it("lets a member exceed their limit by paying the penalty", async function () {
+      const ctx = await loadFixture(fixture);
+      const id = await makeCoinVault(ctx, ctx.user1);
+      await put(ctx, ctx.user1, id, usd("1000"));
+
+      // The ordinary path refuses: the daily cap is 100.
+      await expect(
+        ctx.vaults.connect(ctx.user1).withdraw(id, ctx.usdt.target, usd("500"), ctx.user1.address),
+      ).to.be.reverted;
+
+      const before = await ctx.usdt.balanceOf(ctx.user1.address);
+      await ctx.vaults.connect(ctx.user1)
+        .withdrawWithPenalty(id, ctx.usdt.target, usd("500"), ctx.user1.address);
+
+      // 20% of 500 stays behind; the rest arrives.
+      expect(await ctx.usdt.balanceOf(ctx.user1.address)).to.equal(before + usd("400"));
+      expect(await ctx.vaults.balanceOf(id, ctx.user1.address, ctx.usdt.target)).to.equal(usd("500"));
+    });
+
+    it("sends a personal vault's penalty to the treasury, having nobody to share with", async function () {
+      const ctx = await loadFixture(fixture);
+      await ctx.vaults.setTreasury(ctx.user2.address);
+      const id = await makeCoinVault(ctx, ctx.user1);
+      await put(ctx, ctx.user1, id, usd("1000"));
+
+      const before = await ctx.usdt.balanceOf(ctx.user2.address);
+      await ctx.vaults.connect(ctx.user1)
+        .withdrawWithPenalty(id, ctx.usdt.target, usd("500"), ctx.user1.address);
+      expect(await ctx.usdt.balanceOf(ctx.user2.address)).to.equal(before + usd("100"));
+    });
+
+    it("shares a community penalty with the members who stayed", async function () {
+      const ctx = await loadFixture(fixture);
+      const id = await makeCoinVault(ctx, ctx.user1, COMMUNITY);
+      await ctx.vaults.connect(ctx.user2).joinVault(id);
+      await put(ctx, ctx.user1, id, usd("1000"));
+      await put(ctx, ctx.user2, id, usd("1000"));
+
+      await ctx.vaults.connect(ctx.user1)
+        .withdrawWithPenalty(id, ctx.usdt.target, usd("500"), ctx.user1.address);
+
+      // 100 spread over the 1500 still in the vault: user2 holds 1000 of it.
+      expect(await ctx.vaults.pendingPenaltyRewards(id, ctx.usdt.target, ctx.user2.address))
+        .to.be.closeTo(usd("66.66"), usd("0.01"));
+      const before = await ctx.usdt.balanceOf(ctx.user2.address);
+      await ctx.vaults.connect(ctx.user2).claimPenaltyRewards(id, ctx.usdt.target);
+      expect(await ctx.usdt.balanceOf(ctx.user2.address)).to.be.closeTo(before + usd("66.66"), usd("0.01"));
+    });
+
+    it("excludes the withdrawer from the penalty they just paid", async function () {
+      const ctx = await loadFixture(fixture);
+      const id = await makeCoinVault(ctx, ctx.user1, COMMUNITY);
+      await ctx.vaults.connect(ctx.user2).joinVault(id);
+      await put(ctx, ctx.user1, id, usd("1000"));
+      await put(ctx, ctx.user2, id, usd("1000"));
+
+      await ctx.vaults.connect(ctx.user1)
+        .withdrawWithPenalty(id, ctx.usdt.target, usd("500"), ctx.user1.address);
+
+      // They still hold 500 in the vault, but none of their own penalty.
+      expect(await ctx.vaults.pendingPenaltyRewards(id, ctx.usdt.target, ctx.user1.address)).to.equal(0);
+    });
+
+    it("does not pay a member for penalties charged before they arrived", async function () {
+      const ctx = await loadFixture(fixture);
+      const id = await makeCoinVault(ctx, ctx.user1, COMMUNITY);
+      await ctx.vaults.connect(ctx.user2).joinVault(id);
+      await put(ctx, ctx.user1, id, usd("1000"));
+      await put(ctx, ctx.user2, id, usd("1000"));
+      await ctx.vaults.connect(ctx.user1)
+        .withdrawWithPenalty(id, ctx.usdt.target, usd("500"), ctx.user1.address);
+
+      // A third member joins only now and deposits into a moved accumulator.
+      await ctx.vaults.connect(ctx.owner).joinVault(id);
+      await ctx.usdt.connect(ctx.owner).approve(ctx.vaults.target, usd("1000"));
+      await ctx.vaults.connect(ctx.owner).deposit(id, ctx.usdt.target, usd("1000"));
+
+      expect(await ctx.vaults.pendingPenaltyRewards(id, ctx.usdt.target, ctx.owner.address)).to.equal(0);
+    });
+
+    it("keeps each coin's penalties in its own pot", async function () {
+      const ctx = await loadFixture(fixture);
+      await ctx.vaults.connect(ctx.user1).createVault(
+        "Club", KIND_STABLES, COMMUNITY, [ctx.usdt.target, ctx.dai.target],
+        false, 2000, ["Daily"], [usd("100")], [DAY], [DAY],
+      );
+      const id = await ctx.vaults.getVaultCount();
+      await ctx.vaults.connect(ctx.user2).joinVault(id);
+      await fund(ctx, ctx.user1, id);
+      await fund(ctx, ctx.user2, id);
+
+      await ctx.vaults.connect(ctx.user1)
+        .withdrawWithPenalty(id, ctx.usdt.target, usd("1000"), ctx.user1.address);
+
+      // The USDT pot moved; the DAI pot cannot have, because nobody paid into
+      // it — paying a USDT penalty out of DAI would take from the wrong people.
+      expect(await ctx.vaults.pendingPenaltyRewards(id, ctx.usdt.target, ctx.user2.address))
+        .to.be.greaterThan(0);
+      expect(await ctx.vaults.pendingPenaltyRewards(id, ctx.dai.target, ctx.user2.address)).to.equal(0);
+    });
+
+    it("refuses a destination the member has not saved", async function () {
+      const ctx = await loadFixture(fixture);
+      const id = await makeCoinVault(ctx, ctx.user1);
+      await put(ctx, ctx.user1, id, usd("1000"));
+      await expect(
+        ctx.vaults.connect(ctx.user1)
+          .withdrawWithPenalty(id, ctx.usdt.target, usd("500"), ctx.user2.address),
+      ).to.be.revertedWith("Withdrawal address not approved");
+    });
+
+    it("has nothing to claim when no penalty was ever paid", async function () {
+      const ctx = await loadFixture(fixture);
+      const id = await makeCoinVault(ctx, ctx.user1);
+      await put(ctx, ctx.user1, id, usd("1000"));
+      await expect(
+        ctx.vaults.connect(ctx.user1).claimPenaltyRewards(id, ctx.usdt.target),
+      ).to.be.revertedWith("Nothing to claim");
+    });
+  });
 });

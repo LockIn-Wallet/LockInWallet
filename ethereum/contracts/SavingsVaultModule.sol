@@ -78,6 +78,14 @@ contract SavingsVaultModule is Initializable, UUPSUpgradeable, OwnableUpgradeabl
 
     IVaultYieldModule public yieldModule;
 
+    /// @dev Early-exit penalties, per (vault, token). A stables vault charges
+    /// the penalty in whichever coin was pulled out, so the pot that pays the
+    /// members who stayed has to be per coin too — paying a USDC penalty out of
+    /// the DAI pot would take from people who had nothing to do with it.
+    mapping(uint256 => mapping(address => uint256)) private accPenaltyPerShare;
+    mapping(uint256 => mapping(address => mapping(address => uint256))) private penaltyDebt;
+    mapping(uint256 => mapping(address => mapping(address => uint256))) private unclaimedPenalties;
+
     uint8 private constant VAULT_TYPE_PERSONAL = 0;
     uint8 private constant VAULT_TYPE_COMMUNITY = 1;
     uint8 private constant DOLLAR_DECIMALS = 6;
@@ -85,11 +93,14 @@ contract SavingsVaultModule is Initializable, UUPSUpgradeable, OwnableUpgradeabl
     uint256 private constant MAX_PENALTY_BPS = 5000;
     uint256 private constant MAX_NAME_LENGTH = 32;
     uint256 private constant MAX_ACCEPTED_TOKENS = 8;
+    uint256 private constant PENALTY_PRECISION = 1e12;
 
     event VaultCreated(uint256 indexed vaultId, address indexed creator, uint8 kind, string name);
     event VaultJoined(uint256 indexed vaultId, address indexed member);
     event Deposited(uint256 indexed vaultId, address indexed member, address indexed token, uint256 amount);
     event Withdrawn(uint256 indexed vaultId, address indexed member, address indexed token, uint256 amount, address destination);
+    event PenaltyPaid(uint256 indexed vaultId, address indexed member, address indexed token, uint256 amount, uint256 penalty);
+    event PenaltyRewardsClaimed(uint256 indexed vaultId, address indexed member, address indexed token, uint256 amount);
 
     modifier nonReentrant() {
         require(!locked, "Reentrant call");
@@ -241,9 +252,11 @@ contract SavingsVaultModule is Initializable, UUPSUpgradeable, OwnableUpgradeabl
         // Settle before the balance moves and snapshot after, so the depositor
         // is credited for the yield earned on what they held and not a unit
         // more on what they are about to add.
+        _settlePenalties(vaultId, token, beneficiary);
         _settleYield(vaultId, token, beneficiary);
         balances[vaultId][beneficiary][token] += credited;
         vaultTotals[vaultId][token] += credited;
+        _snapshotPenalties(vaultId, token, beneficiary);
         _snapshotYield(vaultId, token, beneficiary);
         emit Deposited(vaultId, beneficiary, token, credited);
 
@@ -261,6 +274,7 @@ contract SavingsVaultModule is Initializable, UUPSUpgradeable, OwnableUpgradeabl
         // Earnings land in the balance first, so they can be withdrawn in the
         // same transaction and — where limits are a percentage — count toward
         // what the member is allowed to take.
+        _settlePenalties(vaultId, token, msg.sender);
         _settleYield(vaultId, token, msg.sender);
         require(amount > 0 && amount <= balances[vaultId][msg.sender][token], "Invalid amount");
 
@@ -277,9 +291,104 @@ contract SavingsVaultModule is Initializable, UUPSUpgradeable, OwnableUpgradeabl
 
         balances[vaultId][msg.sender][token] -= amount;
         vaultTotals[vaultId][token] -= amount;
+        _snapshotPenalties(vaultId, token, msg.sender);
         _snapshotYield(vaultId, token, msg.sender);
         _payOut(token, destination, amount);
         emit Withdrawn(vaultId, msg.sender, token, amount, destination);
+    }
+
+    /// @notice Take money out past the limits by paying the vault's penalty.
+    ///
+    /// This is the pressure valve that keeps the limits honest: they can be
+    /// escaped, but only at a price the member agreed to when the vault was
+    /// created, and the price goes to whoever stayed.
+    function withdrawWithPenalty(uint256 vaultId, address token, uint256 amount, address destination)
+        external
+        nonReentrant
+        onlyMember(vaultId)
+    {
+        enforceNotFrozen(savingsCore, msg.sender);
+        _requireApprovedDestination(msg.sender, destination);
+        Vault storage vault = _activeVault(vaultId);
+        require(accepted[vaultId][token], "Token not accepted here");
+
+        _settlePenalties(vaultId, token, msg.sender);
+        _settleYield(vaultId, token, msg.sender);
+        require(amount > 0 && amount <= balances[vaultId][msg.sender][token], "Invalid amount");
+
+        uint256 penalty = (amount * vault.penaltyRateBps) / MAX_BPS;
+        // The whole amount has to be liquid, not just the member's share: the
+        // penalty stays behind as idle tokens for the people it is owed to.
+        _ensureLiquidity(vaultId, token, amount);
+
+        balances[vaultId][msg.sender][token] -= amount;
+        vaultTotals[vaultId][token] -= amount;
+
+        bool redistribute = vault.vaultType == VAULT_TYPE_COMMUNITY && vaultTotals[vaultId][token] > 0;
+        if (redistribute) {
+            accPenaltyPerShare[vaultId][token] +=
+                (penalty * PENALTY_PRECISION) / vaultTotals[vaultId][token];
+        }
+        // Snapshot after the accrual, so the withdrawer's remaining balance is
+        // excluded from the penalty they just paid.
+        _snapshotPenalties(vaultId, token, msg.sender);
+        _snapshotYield(vaultId, token, msg.sender);
+
+        _payOut(token, destination, amount - penalty);
+        // A personal vault has nobody to share with, so its penalty is ours.
+        if (!redistribute && penalty > 0) _payOut(token, treasury, penalty);
+        emit PenaltyPaid(vaultId, msg.sender, token, amount, penalty);
+    }
+
+    /// @notice Collect the penalties other members paid while you stayed.
+    function claimPenaltyRewards(uint256 vaultId, address token)
+        external
+        nonReentrant
+        onlyMember(vaultId)
+    {
+        enforceNotFrozen(savingsCore, msg.sender);
+        _activeVault(vaultId);
+        _settlePenalties(vaultId, token, msg.sender);
+
+        uint256 amount = unclaimedPenalties[vaultId][token][msg.sender];
+        require(amount > 0, "Nothing to claim");
+        unclaimedPenalties[vaultId][token][msg.sender] = 0;
+
+        // No liquidity call: penalties are never invested — they sit outside
+        // vaultTotals, which is exactly what the yield module offers to the
+        // strategy — so they are always already here.
+        _payOut(token, msg.sender, amount);
+        emit PenaltyRewardsClaimed(vaultId, msg.sender, token, amount);
+    }
+
+    function pendingPenaltyRewards(uint256 vaultId, address token, address member)
+        external
+        view
+        returns (uint256)
+    {
+        uint256 accumulated =
+            (balances[vaultId][member][token] * accPenaltyPerShare[vaultId][token]) / PENALTY_PRECISION;
+        uint256 debt = penaltyDebt[vaultId][token][member];
+        if (debt > accumulated) debt = accumulated;
+        return unclaimedPenalties[vaultId][token][member] + (accumulated - debt);
+    }
+
+    /// @dev The clamp matters: a member who arrived after the accumulator moved
+    /// carries a debt above what their balance has accumulated, and without it
+    /// the subtraction would underflow rather than credit them nothing.
+    function _settlePenalties(uint256 vaultId, address token, address member) private {
+        uint256 acc = accPenaltyPerShare[vaultId][token];
+        if (acc == 0) return;
+        uint256 accumulated = (balances[vaultId][member][token] * acc) / PENALTY_PRECISION;
+        uint256 debt = penaltyDebt[vaultId][token][member];
+        if (debt > accumulated) debt = accumulated;
+        if (accumulated > debt) unclaimedPenalties[vaultId][token][member] += accumulated - debt;
+        penaltyDebt[vaultId][token][member] = accumulated;
+    }
+
+    function _snapshotPenalties(uint256 vaultId, address token, address member) private {
+        penaltyDebt[vaultId][token][member] =
+            (balances[vaultId][member][token] * accPenaltyPerShare[vaultId][token]) / PENALTY_PRECISION;
     }
 
     /// @dev Returns the amount as the limit counts it, and the balance a

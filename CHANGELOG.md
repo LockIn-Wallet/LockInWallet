@@ -86,6 +86,16 @@ these notes on the in-app **Governance** page before they execute.
   withdrawal-address list is keyed by the member's real address, so every
   vault a person owns shares one list: where money may go is a property of
   the person, not the asset.
+- **Early exit with a penalty, on the unified vault.** `withdrawWithPenalty`
+  is the pressure valve that keeps a limit honest: a member can always get past
+  it, but only at the rate the vault was created with, and the money goes to
+  whoever stayed. Penalties are kept per **(vault, token)** for the same reason
+  earning is — a stables vault charges the penalty in whichever coin was pulled
+  out, and paying a USDC penalty out of the DAI pot would take from people who
+  had nothing to do with it. A personal vault has nobody to share with, so its
+  penalty goes to the treasury. Penalties are never invested: they sit outside
+  `vaultTotals`, which is exactly the figure the yield module offers to a
+  strategy, so `claimPenaltyRewards` never has to redeem anything to pay out.
 - **Earning across the unified vault (`VaultYieldModule`).** Earning is now
   keyed per **(vault, token)** rather than per vault. A stables vault holds
   several assets at once and each earns in its own market — USDC's Aave
