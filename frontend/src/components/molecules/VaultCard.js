@@ -9,7 +9,13 @@ function VaultCard({ vault, onClick, isSelected = false }) {
     : isPersonal
     ? colors.success.main
     : colors.accent.purple;
-  const tokenLabel = getTokenSymbol(vault);
+  // What the vault holds. A stables vault holds several coins under one dollar
+  // cap, so it names them; a coin vault names its one coin. Falling back to a
+  // truncated address is for a coin the app has no metadata for.
+  const tokenLabel =
+    vault.tokens && vault.tokens.length > 1
+      ? vault.tokens.map((token) => token.symbol).join(" · ")
+      : getTokenSymbol(vault);
   const isClickable = !!onClick;
 
   return (

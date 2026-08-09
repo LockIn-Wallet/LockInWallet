@@ -4,6 +4,10 @@ export function getTokenDecimals(vault) {
 }
 
 export function getTokenSymbol(vault) {
+  // A vault holds a set of coins. One of them is the answer only when it is the
+  // only one; otherwise the vault's own label is, because no single coin speaks
+  // for the rest.
+  if (vault?.tokens?.length === 1) return vault.tokens[0].symbol;
   if (vault?.tokenSymbol) return vault.tokenSymbol;
   return vault?.isNativeToken ?? vault?.isSolVault ? "SOL" : "TOKEN";
 }

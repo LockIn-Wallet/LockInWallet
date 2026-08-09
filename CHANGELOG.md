@@ -81,6 +81,16 @@ these notes on the in-app **Governance** page before they execute.
   a stale invite link can never be the reason someone cannot start saving.
   Percentage caps are refused for this vault, because a percentage of a mixed
   balance would need the coins priced against each other.
+- The deposit and withdrawal coin pickers now offer only what the selected
+  vault actually holds, and the native-coin option appears only for a vault
+  that takes it. A vault refuses coins it was not created with, so the old
+  full-network list offered transactions guaranteed to revert. A vault that has
+  not loaded yet leaves the full list on offer rather than emptying the picker,
+  because an empty picker blocks a deposit just as thoroughly as a wrong one.
+- The logged-in vault list no longer fabricates a "Savings" card. Locking in
+  creates the savings vault, so it is a real card with real limits and a real
+  balance behind it. The placeholder card remains only for a wallet that locked
+  in before vaults existed, whose balance is still held by the account.
 - Vault balances are reported **per coin**. The old path formatted one symbol
   and one amount, which was only ever right for a one-coin vault and silently
   hid everything else. Deposits, withdrawals and penalty withdrawals now carry

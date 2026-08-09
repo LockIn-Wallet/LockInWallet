@@ -21,7 +21,7 @@
       "savingsContract": "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512",
       "tokens": {
         "USDT": {
-          "address": "0xE6E340D132b5f46d1e472DebcD681B2aBc16e57E",
+          "address": "0x36C02dA8a0983159322a80FFE9F24b1acfF8B570",
           "symbol": "USDT",
           "name": "Tether USD",
           "decimals": 6,

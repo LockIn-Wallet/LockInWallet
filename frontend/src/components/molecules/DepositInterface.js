@@ -16,6 +16,7 @@ import {
 
 // Import utility functions
 import { getCurrentNetwork } from "../../utils/walletUtils.js";
+import { useVaultTokens, filterToVaultTokens } from "../../hooks/useVaultTokens.js";
 
 // Network configuration constants
 const ETH_ADDRESS = "0x0000000000000000000000000000000000000000";
@@ -47,10 +48,15 @@ const DepositInterface = ({
   // Token state from parent (shared with withdrawal)
   selectedToken,
   setSelectedToken,
+  activeVaultAddress = null,
 
   // Callbacks for App.js state updates
   onBalanceUpdate,
 }) => {
+  // The coins this vault takes. Null while unknown, which leaves the full list
+  // on offer rather than an empty picker.
+  const vaultTokens = useVaultTokens(transactionManager, activeVaultAddress);
+
   // Internal state for deposit operations
   const [depositAmount, setDepositAmount] = useState("");
   const [isDepositing, setIsDepositing] = useState(false);
@@ -361,10 +367,15 @@ const DepositInterface = ({
           >
             <option value="">Select Token</option>
 
-            {/* Recommended Stablecoins Section */}
+            {/* Only what this vault actually takes. A vault is created holding
+                a specific set of coins and refuses the rest, so offering the
+                whole network's list would offer deposits guaranteed to revert. */}
             <optgroup label="🌟 Recommended Stablecoins">
               {Object.entries(
-                getCurrentNetwork(networkType, selectedNetwork).tokens
+                filterToVaultTokens(
+                  getCurrentNetwork(networkType, selectedNetwork).tokens,
+                  vaultTokens,
+                )
               )
                 .filter(
                   ([_, token]) =>

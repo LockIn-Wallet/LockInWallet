@@ -198,13 +198,16 @@ function MainFlow({
   };
 
   // The main wallet flow operates on the currently selected ("active") vault —
-  // the personal vault by default. Selecting a card switches the whole flow
-  // (balances, deposits, withdrawals, limits) to that vault. On EVM the initial
-  // setup lives in the legacy savings account rather than a vault, so it is
-  // represented by a synthetic "Savings" card.
+  // the savings vault by default. Selecting a card switches the whole flow
+  // (balances, deposits, withdrawals, limits) to that vault.
+  //
+  // Locking in creates the savings vault, so it is a real card like any other.
+  // The exception is a wallet that locked in before vaults existed: its balance
+  // is still in the account, and it gets a card with no address standing for it.
   const personalVaultAddress = transactionManager?.getPersonalVaultAddress?.() || null;
   const currentVaultAddress = transactionManager?.getActiveVaultAddress?.() || null;
   const hasPersonalVault = userVaults.some(({ vault }) => vault.address === personalVaultAddress);
+  const usesPreVaultAccount = !personalVaultAddress && !hasPersonalVault;
 
   const handleSelectVault = async (vaultAddress) => {
     // null selects the default: personal vault / legacy account
@@ -216,23 +219,24 @@ function MainFlow({
   };
 
   const displayVaults = [
-    ...(hasPersonalVault
-      ? []
-      : [{
+    // Only for a wallet whose savings predate vaults. Everyone else's savings
+    // vault is in userVaults, with real limits and a real balance behind it.
+    ...(usesPreVaultAccount
+      ? [{
           vault: {
             address: null,
+            kind: "Stables",
             vaultType: "Personal",
             name: "Savings",
+            tokens: [],
             tokenSymbol: "Stablecoins",
-            dailyLimit: 0,
-            weeklyLimit: 0,
-            monthlyLimit: 0,
             penaltyRateBps: 0,
             memberCount: 1,
           },
           membership: null,
           isCurrent: currentVaultAddress === null,
-        }]),
+        }]
+      : []),
     ...userVaults
       .map((entry) => ({ ...entry, isCurrent: entry.vault.address === currentVaultAddress }))
       .sort((a, b) => Number(b.isCurrent) - Number(a.isCurrent)),

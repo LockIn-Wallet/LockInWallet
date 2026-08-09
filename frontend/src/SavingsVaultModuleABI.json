@@ -521,6 +521,11 @@
         "internalType": "uint256[]",
         "name": "unlockDelays",
         "type": "uint256[]"
+      },
+      {
+        "internalType": "address",
+        "name": "referrer",
+        "type": "address"
       }
     ],
     "name": "createVault",

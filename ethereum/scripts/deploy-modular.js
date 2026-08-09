@@ -154,7 +154,23 @@ async function main() {
       recoverySystem: await deployOrUpgradeModule("RecoverySystemModule", "RECOVERY_SYSTEM", "🛟"),
       yieldSystem: await deployOrUpgradeModule("YieldModule", "YIELD_SYSTEM", "🌱"),
       vaultRules: await deployOrUpgradeModule("VaultRulesModule", "VAULT_RULES", "📜"),
+      // The unified vault: the main wallet and every pot are the same thing.
+      savingsVaults: await deployOrUpgradeModule("SavingsVaultModule", "SAVINGS_VAULTS", "🗄️"),
+      vaultYield: await deployOrUpgradeModule("VaultYieldModule", "VAULT_YIELD", "🌾"),
+      vaultDepositAddresses: await deployOrUpgradeModule(
+        "VaultDepositAddressModule", "VAULT_DEPOSIT_ADDRESSES", "📮",
+      ),
     };
+
+    // Earning needs the two modules pointed at each other, and neither can do
+    // it at deploy time because each needs the other's address.
+    try {
+      await (await modules.vaultYield.contract.setVaultModule(modules.savingsVaults.address)).wait();
+      await (await modules.savingsVaults.contract.setYieldModule(modules.vaultYield.address)).wait();
+      console.log("🌾 Vault earning wired up");
+    } catch (error) {
+      console.log(`⚠️  Could not wire vault earning: ${error.message}`);
+    }
     for (const [key, m] of Object.entries(modules)) moduleAddresses[key] = m.address;
     const proxyDeploymentModule = modules.proxyDeployment.contract;
     const poolTogetherModule = modules.poolTogether.contract;
