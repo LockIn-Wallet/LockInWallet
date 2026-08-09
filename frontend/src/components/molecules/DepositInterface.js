@@ -379,18 +379,12 @@ const DepositInterface = ({
                 ))}
             </optgroup>
 
-            {/* Native Token Section */}
-            <optgroup label="⚡ Native Token">
-              {Object.entries(
-                getCurrentNetwork(networkType, selectedNetwork).tokens
-              )
-                .filter(([_, token]) => !token.recommended)
-                .map(([key, token]) => (
-                  <option key={key} value={key}>
-                    {token.symbol} - {token.name}
-                  </option>
-                ))}
-            </optgroup>
+            {/* No native-coin option on purpose. This account applies one
+                spending limit across everything it holds, denominated in
+                dollars, and a coin whose value moves cannot be measured against
+                it — so the contract refuses it. Offering it here would be a
+                transaction guaranteed to fail. It belongs in a vault of its
+                own, where limits are set in that coin. */}
           </select>
 
           <input

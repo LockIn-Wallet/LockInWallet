@@ -223,7 +223,7 @@ function MainFlow({
             address: null,
             vaultType: "Personal",
             name: "Savings",
-            tokenSymbol: "All tokens",
+            tokenSymbol: "Stablecoins",
             dailyLimit: 0,
             weeklyLimit: 0,
             monthlyLimit: 0,
