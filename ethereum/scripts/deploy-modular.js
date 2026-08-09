@@ -322,6 +322,26 @@ async function main() {
       console.log(`   ✅ Prize pool set: ${prizePoolAddress}`);
     }
 
+    // Where the yield fee lands. Left at the deployer it is a hot key that also
+    // controls upgrades, which is exactly the address fee revenue should not
+    // accumulate in — and it is invisible until someone goes looking.
+    if (modules.savingsVaults) {
+      try {
+        const treasury = await modules.savingsVaults.contract.treasury();
+        if (treasury.toLowerCase() === deployer.address.toLowerCase()) {
+          console.log(
+            isProduction
+              ? `\n🚨 TREASURY IS THE DEPLOYER (${treasury}). Yield fees would accumulate in a hot key that also controls upgrades. Set it with setTreasury before enabling earning.`
+              : `\n⚠️  Treasury is the deployer (${treasury}) — fine locally, must be changed before a live network.`,
+          );
+        } else {
+          console.log(`\n💰 Yield fees go to ${treasury}`);
+        }
+      } catch (error) {
+        console.log(`⚠️  Could not read the treasury: ${error.message}`);
+      }
+    }
+
     // A lending market for the unified vault's earning, on a local chain only.
     //
     // Separate from the mock reserve below because a strategy's controller is

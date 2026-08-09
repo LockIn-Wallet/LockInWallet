@@ -22,6 +22,10 @@ export const RELEASE_NOTES = [
         text: "Your savings and your coin pots are now the same kind of thing. Your main wallet holds dollar-pegged coins together under one limit, because a hundred of one is a hundred of the other; anything whose price moves gets its own pot with its own limit, because there is no honest way to put a single dollar cap on things that are not worth the same. Either way the rules work exactly as they always have, and the list of addresses you are allowed to withdraw to is shared across all of them — where your money may go is about you, not about which coin it is.",
       },
       {
+        emoji: "🎚️",
+        text: "Each coin decides for itself whether it earns. Your balances now carry their own switch, showing that coin's own rate — because each one earns in a different market, at a different rate, and one may have options another does not. Tapping a switch asks how you want that coin to earn rather than picking for you, and it asks the same way when you are turning earning off, since that moves money back out of a protocol.",
+      },
+      {
         emoji: "🌱",
         text: "Your savings can now earn interest while they sit locked. You pick how — a steady rate, or a prize draw instead of a rate — and you can switch it off whenever you like, which returns everything to your vault. Nothing moves until your next deposit, so no money already in your vault goes anywhere without you doing something first. Worth knowing: earning means your balance is lent out through an outside protocol, and that is not risk-free. If you would rather it sat still, leaving earning off is a perfectly good answer.",
       },

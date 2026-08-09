@@ -1108,6 +1108,25 @@
         "internalType": "uint256",
         "name": "vaultId",
         "type": "uint256"
+      }
+    ],
+    "name": "vaultTypeOf",
+    "outputs": [
+      {
+        "internalType": "uint8",
+        "name": "",
+        "type": "uint8"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "vaultId",
+        "type": "uint256"
       },
       {
         "internalType": "address",

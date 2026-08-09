@@ -122,13 +122,13 @@ same M-of-N + delay chain:
 
 | Operation | Why it is dangerous |
 | --- | --- |
-| `setStrategy(token, mode, strategy)` | Decides where custodied funds go. **Additionally** guarded in-contract: replacing a live strategy must be queued and wait out `strategyChangeDelay` (7 days) before it can be set, so users can switch earning off first. A first-time assignment is immediate, since no funds are parked there yet. |
+| `setStrategy(token, strategy)` | Decides where custodied funds go. **Additionally** guarded in-contract: replacing a live strategy must be queued and wait out `strategyChangeDelay` (7 days) before it can be set, so users can switch earning off first. A first-time assignment is immediate, since no funds are parked there yet. |
 | `setManagementFeeBps` | Sets the fee. Capped at 200 bps in code, so no queued change can raise it beyond two percentage points of the rate. |
 | `setPrizeFeeBps` | Share taken from each claimed prize. Capped at 2000 bps in code. |
 | `pauseStrategies` | Halts new investment. Deliberately does **not** affect withdrawals. |
 | `emergencyExitVault` / `emergencyExitToken` | Divests a position back into the vault module and sets that vault to off. Cannot send funds anywhere else. |
 | `setYieldModule` on the vault module | Attaches the accountant. Until it is set, no vault balance is invested at all. |
-| `setYieldWatermark` | Decides which vaults default to earning. Only ever applies going forward. |
+| `setYieldMode` on the vault module | Switches one coin of one vault between earning and off. Restricted to that vault's creator, and for a community vault only while they are still its only member — so nobody's money moves into an outside protocol after they joined on other terms. Not a governance power at all; listed here because it is the only way a balance starts earning. |
 
 ## What governance cannot do
 
@@ -142,7 +142,7 @@ same M-of-N + delay chain:
 - Take user principal as a yield fee. The fee is funded only from realized
   surplus above principal; there is no code path from a deposit to a fee, and the
   rate is capped in the contract rather than by policy.
-- Invest a vault whose owner switched earning off, or invest a balance that was
-  already in custody before earning shipped — those need a fresh deposit or an
-  explicit opt-in from the owner.
+- Invest any balance at all without the vault owner switching that coin on.
+  Earning starts off for every coin of every vault; there is no watermark and no
+  default that turns it on for someone.
 - Send yield fees anywhere other than the vault module's configured treasury.

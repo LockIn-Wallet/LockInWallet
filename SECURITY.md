@@ -113,14 +113,17 @@ why signers are chosen by role and independence, not by token holdings).
 
 ## Third-party protocol exposure (earning on savings)
 
-Earning is **opt-out, off by default for any vault that existed before the
-feature shipped, and never on by default for a community vault at all.** A
+Earning is **off until you switch it on, per coin, and never on by default for
+a community vault at all.** A vault holds several coins and each earns in its
+own market, so the choice is made per coin rather than per vault — a coin with
+a prize pool sitting beside one that has only a steady rate cannot be described
+by a single setting. A
 community vault holds other people's money under rules fixed at creation, so
 defaulting it into an outside protocol would commit members who never agreed and
 — since those rules cannot change afterwards — leave them no way out. Its creator
 opts in explicitly while still its only member, so anyone joining can see the
-setting first. While earning is on, the vault's balance is supplied to an outside
-lending protocol (Aave v3). This is the one place where the wallet's
+setting first. While earning is on for a coin, that coin's balance is supplied
+to an outside lending protocol (Aave v3). This is the one place where the wallet's
 safety no longer depends only on our own contracts, so the honest statement of
 the risk:
 
@@ -138,19 +141,29 @@ the risk:
   cannot exercise is a real cost of earning, and it is why the emergency exits
   below exist.
 - **The fee cannot reach your principal.** The management fee is one percentage
-  point of the rate, capped in code at two, and it is funded exclusively from the
+  point a year, capped in code at two, and it is funded exclusively from the
   surplus above principal — there is no code path from a deposit to a fee. A
-  period that earns nothing is charged nothing.
-- **One vault can never spend another's funds.** What is available to a vault is
-  derived from its own recorded balance minus its own invested principal, never
-  from the module's pooled token balance. Penalties awaiting a claim are never
-  invested at all.
+  period that earns nothing is charged nothing, and the shortfall waits rather
+  than being taken later from capital.
+- **What that fee is as a share of your interest depends on the rate, and can be
+  large.** One percentage point of principal is a fifth of a 5% return, but most
+  of a 1.5% one. It is capped by what was actually earned, so it can never
+  exceed your interest — but in a low-rate year it can be the majority of it.
+  The app quotes the rate you receive, net of the fee, rather than the gross.
+- **One vault can never spend another's funds, and neither can one coin.** What
+  is available is derived from that vault's own recorded balance of that coin
+  minus its own invested principal, never from the module's pooled token
+  balance. Penalties awaiting a claim are never invested at all — they sit
+  outside the figure the yield module is ever offered.
 - **Escape hatches:** `pauseStrategies` halts new investment without affecting
   withdrawals; `emergencyExitVault` / `emergencyExitToken` divest everything back
   into the vault module and switch that vault to off. Any owner can switch their
   own vault off at any time, which fully divests it.
-- **Prize savings carries the same protocol exposure, plus two differences worth
-  stating.** Each member has their own position contract, so nobody else's win or
+- **Prize savings is not available yet** on the unified vault, and the option is
+  shown disabled rather than hidden so the choice the product makes is visible.
+  What follows describes it as built for the earlier vault module, and applies
+  again once it is brought across. **Prize savings carries the same protocol
+  exposure, plus two differences worth stating.** Each member has their own position contract, so nobody else's win or
   loss touches theirs, and a member's prize can never be paid out of another
   member's deposit. Prizes are paid in a **different token** from the deposit
   (WETH, not USDC): they are tracked and claimed separately and are never
