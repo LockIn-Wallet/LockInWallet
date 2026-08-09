@@ -5,6 +5,27 @@ import {
 import { expect } from "chai";
 import hre from "hardhat";
 
+/**
+ * Credit a native balance without going through deposit().
+ *
+ * The savings account no longer accepts native coin — its single spending limit
+ * is denominated in dollars, which cannot measure an asset whose value moves, so
+ * that belongs in a vault. Balances already held stay fully withdrawable, and
+ * that path still needs testing, so these seed one directly: fund the contract,
+ * then credit the ledger through an authorised module.
+ */
+async function seedNativeBalance(savingsCore: any, user: any, amount: bigint) {
+  const [owner] = await hre.ethers.getSigners();
+  const seederId = hre.ethers.keccak256(hre.ethers.toUtf8Bytes("TEST_SEEDER"));
+  if ((await savingsCore.getModule(seederId)) !== owner.address) {
+    await savingsCore.registerModule(seederId, owner.address);
+  }
+  await owner.sendTransaction({ to: savingsCore.target, value: amount });
+  await savingsCore.connect(owner).updateTokenBalance(
+    user.address, hre.ethers.ZeroAddress, amount, true,
+  );
+}
+
 describe("RecoverySystemModule", function () {
   // user1 = account key (potentially compromised), recoveryKey = cold key
   async function deployRecoveryFixture() {
@@ -50,7 +71,7 @@ describe("RecoverySystemModule", function () {
     await savingsCore.setupModuleCrossReferences();
 
     const depositAmount = hre.ethers.parseEther("10.0");
-    await savingsCore.connect(user1)["deposit(address,uint256)"](hre.ethers.ZeroAddress, depositAmount, { value: depositAmount });
+    await seedNativeBalance(savingsCore, user1, depositAmount);
 
     // Dev-mode timelocks: recovery key change 60s, withdrawal address 10s
     const RECOVERY_CHANGE_DELAY = 61;
@@ -209,9 +230,17 @@ describe("RecoverySystemModule", function () {
       await expect(savingsCore.connect(user1).withdrawTo(hre.ethers.parseEther("1.0"), hre.ethers.ZeroAddress, user1.address))
         .to.be.revertedWith("Account is frozen");
 
-      const extra = hre.ethers.parseEther("1.0");
-      await expect(savingsCore.connect(user1)["deposit(address,uint256)"](hre.ethers.ZeroAddress, extra, { value: extra }))
-        .not.to.be.reverted;
+      // A freeze stops money leaving, not arriving. Native coin is refused for
+      // an unrelated reason now — it belongs in a vault — so use a stablecoin,
+      // which is what this account takes.
+      const MockUSDT = await hre.ethers.getContractFactory("MockUSDT");
+      const usdt = await MockUSDT.deploy();
+      const extra = hre.ethers.parseUnits("100", 6);
+      await usdt.transfer(user1.address, extra);
+      await usdt.connect(user1).approve(savingsCore.target, extra);
+      await expect(
+        savingsCore.connect(user1)["deposit(address,uint256)"](usdt.target, extra),
+      ).not.to.be.reverted;
     });
 
     it("Should block bypass and withdrawal-address flows while frozen", async function () {

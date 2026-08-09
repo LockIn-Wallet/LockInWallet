@@ -156,7 +156,16 @@ contract SavingsCore is Initializable, UUPSUpgradeable, OwnableUpgradeable, ISav
     // ========== CORE DEPOSIT/WITHDRAW FUNCTIONALITY ==========
 
     function deposit(address token, uint256 amount) external payable {
-
+        // This account applies ONE spending limit across everything it holds,
+        // denominated in dollars — which only means something for assets pegged
+        // to one. A coin whose value moves cannot be measured against it:
+        // rescaling would let one ETH count as one dollar, and not rescaling
+        // caps it at a trillionth of its worth. Neither is a limit.
+        //
+        // So it belongs in a vault of its own, where limits are denominated in
+        // that coin or as a share of the balance. Anything already deposited
+        // here stays fully withdrawable.
+        require(token != address(0), "Native coin belongs in a vault");
         require(amount > 0, "Deposit must be greater than zero");
         if (token == address(0)) {
             // ETH deposit
@@ -169,16 +178,17 @@ contract SavingsCore is Initializable, UUPSUpgradeable, OwnableUpgradeable, ISav
         emit Deposited(msg.sender, token, amount);
     }
 
-    function depositTo(address to) external payable {
-        require(msg.value > 0, "Deposit must be greater than zero");
-        require(to != address(0), "Invalid recipient address");
-
-        userTokenBalances[to][address(0)] += msg.value;
-        emit DepositedTo(msg.sender, to, msg.value);
+    /// @dev Deposit addresses forward native coin through here. Refusing means
+    /// it bounces back to whoever sent it rather than landing somewhere its
+    /// value cannot be measured — nothing is stranded either way.
+    function depositTo(address) external payable {
+        revert("Native coin belongs in a vault");
     }
+
 
     // Enhanced deposit function that works with proxy forwarding
     function deposit(address token, uint256 amount, address beneficiary) external payable {
+        require(token != address(0), "Native coin belongs in a vault");
         require(amount > 0, "Deposit must be greater than zero");
 
         address recipient = beneficiary != address(0) ? beneficiary : msg.sender;
