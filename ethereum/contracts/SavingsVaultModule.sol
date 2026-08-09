@@ -9,7 +9,6 @@ import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "./SavingsInterfaces.sol";
 import "./YieldInterfaces.sol";
-import "./SavingsVaultDepositProxy.sol";
 
 // What a vault holds, and therefore how its limits can honestly be measured.
 uint8 constant VAULT_KIND_COIN = 0; // exactly one asset
@@ -87,8 +86,12 @@ contract SavingsVaultModule is Initializable, UUPSUpgradeable, OwnableUpgradeabl
     mapping(uint256 => mapping(address => mapping(address => uint256))) private penaltyDebt;
     mapping(uint256 => mapping(address => mapping(address => uint256))) private unclaimedPenalties;
 
-    /// @dev vaultId => member => their permanent deposit address, once deployed.
-    mapping(uint256 => mapping(address => address)) private depositProxies;
+
+    /// @dev Which asset a bypass request was made against. The bypass module
+    /// records the amount in the units limits are kept in, which for a stables
+    /// vault is dollars rather than any one coin — so the coin has to be
+    /// remembered here or the payout would not know what to send.
+    mapping(bytes32 => address) private bypassToken;
 
     uint8 private constant VAULT_TYPE_PERSONAL = 0;
     uint8 private constant VAULT_TYPE_COMMUNITY = 1;
@@ -105,7 +108,6 @@ contract SavingsVaultModule is Initializable, UUPSUpgradeable, OwnableUpgradeabl
     event Withdrawn(uint256 indexed vaultId, address indexed member, address indexed token, uint256 amount, address destination);
     event PenaltyPaid(uint256 indexed vaultId, address indexed member, address indexed token, uint256 amount, uint256 penalty);
     event PenaltyRewardsClaimed(uint256 indexed vaultId, address indexed member, address indexed token, uint256 amount);
-    event DepositAddressDeployed(uint256 indexed vaultId, address indexed member, address proxy);
 
     modifier nonReentrant() {
         require(!locked, "Reentrant call");
@@ -436,6 +438,16 @@ contract SavingsVaultModule is Initializable, UUPSUpgradeable, OwnableUpgradeabl
         return amount * (10 ** (DOLLAR_DECIMALS - decimals));
     }
 
+    /// @dev The inverse of _toDollars. Exact for a 6-decimal stable; for one
+    /// with more decimals it can drop sub-cent dust, which is the cost of
+    /// letting several coins share a single dollar cap.
+    function _fromDollars(address token, uint256 amount) private view returns (uint256) {
+        uint8 decimals = _decimalsOf(token);
+        if (decimals == DOLLAR_DECIMALS) return amount;
+        if (decimals > DOLLAR_DECIMALS) return amount * (10 ** (decimals - DOLLAR_DECIMALS));
+        return amount / (10 ** (DOLLAR_DECIMALS - decimals));
+    }
+
     function _decimalsOf(address token) private view returns (uint8) {
         if (token == address(0)) return 18;
         try IERC20Metadata(token).decimals() returns (uint8 d) {
@@ -482,6 +494,12 @@ contract SavingsVaultModule is Initializable, UUPSUpgradeable, OwnableUpgradeabl
 
     function totalOf(uint256 vaultId, address token) external view returns (uint256) {
         return vaultTotals[vaultId][token];
+    }
+
+    /// @notice Membership, for the modules that act on a member's behalf without
+    /// holding any of their money — the deposit-address factory, chiefly.
+    function isVaultMember(uint256 vaultId, address member) external view returns (bool) {
+        return isMember[vaultId][member];
     }
 
     function acceptsToken(uint256 vaultId, address token) external view returns (bool) {
@@ -571,57 +589,68 @@ contract SavingsVaultModule is Initializable, UUPSUpgradeable, OwnableUpgradeabl
         return IProposalSystemModule(module);
     }
 
-    // ========== PERMANENT DEPOSIT ADDRESSES ==========
+    // ========== EMERGENCY BYPASS ==========
+    //
+    // The request and its wait live in BypassSystemModule, under the same scope
+    // as the vault's limits — so bypassing a vault limit serves exactly the wait
+    // that limit was committed with. Only the payout is here, because only this
+    // module holds the money.
 
-    /// @notice Deploy the caller's permanent deposit address for this vault.
-    ///
-    /// It is deployed at the address `depositAddressOf` already predicted, so a
-    /// member can be shown their address and hand it to an exchange before any
-    /// contract exists there — and money sent in the meantime is not lost, it
-    /// simply waits to be swept once the address is deployed.
-    function deployDepositAddress(uint256 vaultId)
+    function requestBypass(uint256 vaultId, address token, uint256 amount, string calldata skipPeriod)
         external
         onlyMember(vaultId)
-        returns (address proxy)
+        returns (bytes32 requestId)
     {
-        _activeVault(vaultId);
-        require(depositProxies[vaultId][msg.sender] == address(0), "Already deployed");
+        Vault storage vault = _activeVault(vaultId);
+        require(accepted[vaultId][token], "Token not accepted here");
+        require(amount > 0 && amount <= balances[vaultId][msg.sender][token], "Invalid amount");
 
-        proxy = address(
-            new SavingsVaultDepositProxy{salt: _proxySalt(vaultId, msg.sender)}(
-                address(this), vaultId, msg.sender
-            )
+        (uint256 measured, uint256 against) = _measure(vaultId, vault, msg.sender, token, amount);
+        requestId = _bypass().requestBypassFor(
+            _scope(vaultId, msg.sender), measured, skipPeriod, token, against
         );
-        depositProxies[vaultId][msg.sender] = proxy;
-        emit DepositAddressDeployed(vaultId, msg.sender, proxy);
+        bypassToken[requestId] = token;
     }
 
-    /// @notice Where this member's deposit address is, or will be. Deterministic
-    /// and answerable before deployment, which is the whole point: the address
-    /// can be published first and paid for later.
-    function depositAddressOf(uint256 vaultId, address member) public view returns (address) {
-        bytes32 hash = keccak256(
-            abi.encodePacked(
-                bytes1(0xff),
-                address(this),
-                _proxySalt(vaultId, member),
-                keccak256(
-                    abi.encodePacked(
-                        type(SavingsVaultDepositProxy).creationCode,
-                        abi.encode(address(this), vaultId, member)
-                    )
-                )
-            )
-        );
-        return address(uint160(uint256(hash)));
+    function executeBypass(uint256 vaultId, bytes32 requestId, address destination)
+        external
+        nonReentrant
+        onlyMember(vaultId)
+    {
+        enforceNotFrozen(savingsCore, msg.sender);
+        _requireApprovedDestination(msg.sender, destination);
+        Vault storage vault = _activeVault(vaultId);
+
+        address token = bypassToken[requestId];
+        require(token != address(0) || accepted[vaultId][address(0)], "Request not found");
+        delete bypassToken[requestId];
+
+        _settlePenalties(vaultId, token, msg.sender);
+        _settleYield(vaultId, token, msg.sender);
+
+        (uint256 measured, ) = _bypass().consumeBypassRequest(_scope(vaultId, msg.sender), requestId);
+        uint256 amount = vault.kind == VAULT_KIND_STABLES ? _fromDollars(token, measured) : measured;
+        require(amount > 0 && amount <= balances[vaultId][msg.sender][token], "Invalid amount");
+
+        _ensureLiquidity(vaultId, token, amount);
+        balances[vaultId][msg.sender][token] -= amount;
+        vaultTotals[vaultId][token] -= amount;
+        _snapshotPenalties(vaultId, token, msg.sender);
+        _snapshotYield(vaultId, token, msg.sender);
+
+        _payOut(token, destination, amount);
+        emit Withdrawn(vaultId, msg.sender, token, amount, destination);
     }
 
-    function isDepositAddressDeployed(uint256 vaultId, address member) external view returns (bool) {
-        return depositProxies[vaultId][member] != address(0);
+    function cancelBypass(uint256 vaultId, bytes32 requestId) external onlyMember(vaultId) {
+        delete bypassToken[requestId];
+        _bypass().cancelBypassRequest(_scope(vaultId, msg.sender), requestId);
     }
 
-    function _proxySalt(uint256 vaultId, address member) private pure returns (bytes32) {
-        return keccak256(abi.encode(vaultId, member));
+    function _bypass() private view returns (IBypassSystemModule) {
+        address module = savingsCore.getModule(ModuleIds.BYPASS_SYSTEM);
+        require(module != address(0), "Bypass module not registered");
+        return IBypassSystemModule(module);
     }
 
     // ========== EARNING ==========

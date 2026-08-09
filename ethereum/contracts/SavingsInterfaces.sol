@@ -484,6 +484,8 @@ library ModuleIds {
     bytes32 public constant YIELD_SYSTEM = keccak256("YIELD_SYSTEM");
     bytes32 public constant VAULT_RULES = keccak256("VAULT_RULES");
     bytes32 public constant SAVINGS_VAULTS = keccak256("SAVINGS_VAULTS");
+    bytes32 public constant VAULT_DEPOSIT_ADDRESSES = keccak256("VAULT_DEPOSIT_ADDRESSES");
+    bytes32 public constant VAULT_YIELD = keccak256("VAULT_YIELD");
 }
 
 // ========== SHARED GUARDS ==========

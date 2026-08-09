@@ -28,6 +28,7 @@ const SYNCED_CONTRACTS = [
   "SavingsVaultModule",
   "VaultYieldModule",
   "SavingsVaultDepositProxy",
+  "VaultDepositAddressModule",
   "UserProxy",
   "MockUSDT",
 ];

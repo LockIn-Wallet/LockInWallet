@@ -31,12 +31,14 @@ describe("SavingsVaultModule", function () {
     const limits = await deploy("TimePeriodLimitsModule");
     const proposals = await deploy("ProposalSystemModule");
     const bypass = await deploy("BypassSystemModule");
+    const depositAddresses = await deploy("VaultDepositAddressModule");
     const reg = (id: string, t: any) =>
       savingsCore.registerModule(hre.ethers.keccak256(hre.ethers.toUtf8Bytes(id)), t);
     await reg("SAVINGS_VAULTS", vaults.target);
     await reg("TIME_PERIOD_LIMITS", limits.target);
     await reg("PROPOSAL_SYSTEM", proposals.target);
     await reg("BYPASS_SYSTEM", bypass.target);
+    await reg("VAULT_DEPOSIT_ADDRESSES", depositAddresses.target);
     await savingsCore.setupModuleCrossReferences();
     await savingsCore.setDevelopmentMode(false);
 
@@ -49,7 +51,7 @@ describe("SavingsVaultModule", function () {
       await usdt.transfer(u.address, usd("100000"));
       await dai.transfer(u.address, hre.ethers.parseEther("100000"));
     }
-    return { savingsCore, vaults, limits, proposals, usdt, dai, owner, user1, user2 };
+    return { savingsCore, vaults, limits, proposals, bypass, depositAddresses, usdt, dai, owner, user1, user2 };
   }
 
   /** The main wallet: several pegged assets under one dollar cap. */
@@ -370,12 +372,12 @@ describe("SavingsVaultModule", function () {
       const ctx = await loadFixture(fixture);
       const id = await makeStablesVault(ctx, ctx.user1);
 
-      const predicted = await ctx.vaults.depositAddressOf(id, ctx.user1.address);
+      const predicted = await ctx.depositAddresses.depositAddressOf(id, ctx.user1.address);
       expect(predicted).to.not.equal(hre.ethers.ZeroAddress);
-      expect(await ctx.vaults.isDepositAddressDeployed(id, ctx.user1.address)).to.equal(false);
+      expect(await ctx.depositAddresses.isDepositAddressDeployed(id, ctx.user1.address)).to.equal(false);
 
-      await ctx.vaults.connect(ctx.user1).deployDepositAddress(id);
-      expect(await ctx.vaults.isDepositAddressDeployed(id, ctx.user1.address)).to.equal(true);
+      await ctx.depositAddresses.connect(ctx.user1).deployDepositAddress(id);
+      expect(await ctx.depositAddresses.isDepositAddressDeployed(id, ctx.user1.address)).to.equal(true);
       // The address the member was shown is the address that got deployed —
       // otherwise publishing it early would have been a trap.
       expect(await hre.ethers.provider.getCode(predicted)).to.not.equal("0x");
@@ -384,11 +386,11 @@ describe("SavingsVaultModule", function () {
     it("does not lose money sent before the address was deployed", async function () {
       const ctx = await loadFixture(fixture);
       const id = await makeStablesVault(ctx, ctx.user1);
-      const predicted = await ctx.vaults.depositAddressOf(id, ctx.user1.address);
+      const predicted = await ctx.depositAddresses.depositAddressOf(id, ctx.user1.address);
 
       // The exchange pays out first. Nothing is there yet to forward it.
       await ctx.usdt.connect(ctx.user2).transfer(predicted, usd("300"));
-      await ctx.vaults.connect(ctx.user1).deployDepositAddress(id);
+      await ctx.depositAddresses.connect(ctx.user1).deployDepositAddress(id);
 
       const proxy = await hre.ethers.getContractAt("SavingsVaultDepositProxy", predicted);
       await proxy.connect(ctx.user2).sweep(ctx.usdt.target);
@@ -403,9 +405,9 @@ describe("SavingsVaultModule", function () {
       );
       const id = await ctx.vaults.getVaultCount();
       await ctx.vaults.connect(ctx.user2).joinVault(id);
-      await ctx.vaults.connect(ctx.user2).deployDepositAddress(id);
+      await ctx.depositAddresses.connect(ctx.user2).deployDepositAddress(id);
 
-      const address = await ctx.vaults.depositAddressOf(id, ctx.user2.address);
+      const address = await ctx.depositAddresses.depositAddressOf(id, ctx.user2.address);
       await ctx.usdt.connect(ctx.user1).transfer(address, usd("250"));
       const proxy = await hre.ethers.getContractAt("SavingsVaultDepositProxy", address);
       await proxy.sweep(ctx.usdt.target);
@@ -424,8 +426,8 @@ describe("SavingsVaultModule", function () {
       const id = await ctx.vaults.getVaultCount();
       await ctx.vaults.connect(ctx.user2).joinVault(id);
 
-      expect(await ctx.vaults.depositAddressOf(id, ctx.user1.address))
-        .to.not.equal(await ctx.vaults.depositAddressOf(id, ctx.user2.address));
+      expect(await ctx.depositAddresses.depositAddressOf(id, ctx.user1.address))
+        .to.not.equal(await ctx.depositAddresses.depositAddressOf(id, ctx.user2.address));
     });
 
     it("forwards native coin the moment it lands", async function () {
@@ -435,8 +437,8 @@ describe("SavingsVaultModule", function () {
         false, 2000, ["Daily"], [hre.ethers.parseEther("1")], [DAY], [DAY],
       );
       const id = await ctx.vaults.getVaultCount();
-      await ctx.vaults.connect(ctx.user1).deployDepositAddress(id);
-      const address = await ctx.vaults.depositAddressOf(id, ctx.user1.address);
+      await ctx.depositAddresses.connect(ctx.user1).deployDepositAddress(id);
+      const address = await ctx.depositAddresses.depositAddressOf(id, ctx.user1.address);
 
       await ctx.user2.sendTransaction({ to: address, value: hre.ethers.parseEther("2") });
 
@@ -450,17 +452,91 @@ describe("SavingsVaultModule", function () {
       const ctx = await loadFixture(fixture);
       const id = await makeStablesVault(ctx, ctx.user1);
       await expect(
-        ctx.vaults.connect(ctx.user2).deployDepositAddress(id),
+        ctx.depositAddresses.connect(ctx.user2).deployDepositAddress(id),
       ).to.be.revertedWith("Not a vault member");
     });
 
     it("deploys only once", async function () {
       const ctx = await loadFixture(fixture);
       const id = await makeStablesVault(ctx, ctx.user1);
-      await ctx.vaults.connect(ctx.user1).deployDepositAddress(id);
+      await ctx.depositAddresses.connect(ctx.user1).deployDepositAddress(id);
       await expect(
-        ctx.vaults.connect(ctx.user1).deployDepositAddress(id),
+        ctx.depositAddresses.connect(ctx.user1).deployDepositAddress(id),
       ).to.be.revertedWith("Already deployed");
+    });
+  });
+
+  /**
+   * The bypass is the other way past a limit, and the honest one: you wait.
+   * The wait is the limit's own, so a limit committed with a seven-day wait
+   * cannot be escaped in less than seven days.
+   */
+  describe("Waiting out a limit instead of paying to skip it", function () {
+    async function bypassFixture() {
+      const ctx = await loadFixture(fixture);
+      await ctx.vaults.connect(ctx.user1).createVault(
+        "Pot", KIND_COIN, PERSONAL, [ctx.usdt.target],
+        false, 2000, ["Daily"], [usd("100")], [DAY], [DAY],
+      );
+      const id = await ctx.vaults.getVaultCount();
+      await ctx.usdt.connect(ctx.user1).approve(ctx.vaults.target, usd("1000"));
+      await ctx.vaults.connect(ctx.user1).deposit(id, ctx.usdt.target, usd("1000"));
+      return { ...ctx, id };
+    }
+
+    it("pays out past the limit once the wait is served", async function () {
+      const ctx = await bypassFixture();
+      const tx = await ctx.vaults.connect(ctx.user1)
+        .requestBypass(ctx.id, ctx.usdt.target, usd("500"), "Daily");
+      const receipt = await tx.wait();
+      const requestId = receipt!.logs
+        .map((l: any) => { try { return ctx.bypass.interface.parseLog(l); } catch { return null; } })
+        .find((p: any) => p?.name === "BypassRequested")!.args.requestId;
+
+      await time.increase(DAY + 1);
+      const before = await ctx.usdt.balanceOf(ctx.user1.address);
+      await ctx.vaults.connect(ctx.user1).executeBypass(ctx.id, requestId, ctx.user1.address);
+
+      // The whole 500 arrives — no penalty, because the wait was the price.
+      expect(await ctx.usdt.balanceOf(ctx.user1.address)).to.equal(before + usd("500"));
+      expect(await ctx.vaults.balanceOf(ctx.id, ctx.user1.address, ctx.usdt.target)).to.equal(usd("500"));
+    });
+
+    it("refuses before the wait is up", async function () {
+      const ctx = await bypassFixture();
+      const tx = await ctx.vaults.connect(ctx.user1)
+        .requestBypass(ctx.id, ctx.usdt.target, usd("500"), "Daily");
+      const receipt = await tx.wait();
+      const requestId = receipt!.logs
+        .map((l: any) => { try { return ctx.bypass.interface.parseLog(l); } catch { return null; } })
+        .find((p: any) => p?.name === "BypassRequested")!.args.requestId;
+
+      await expect(
+        ctx.vaults.connect(ctx.user1).executeBypass(ctx.id, requestId, ctx.user1.address),
+      ).to.be.reverted;
+    });
+
+    it("refuses to request more than the member holds", async function () {
+      const ctx = await bypassFixture();
+      await expect(
+        ctx.vaults.connect(ctx.user1).requestBypass(ctx.id, ctx.usdt.target, usd("5000"), "Daily"),
+      ).to.be.revertedWith("Invalid amount");
+    });
+
+    it("cannot be executed twice", async function () {
+      const ctx = await bypassFixture();
+      const tx = await ctx.vaults.connect(ctx.user1)
+        .requestBypass(ctx.id, ctx.usdt.target, usd("500"), "Daily");
+      const receipt = await tx.wait();
+      const requestId = receipt!.logs
+        .map((l: any) => { try { return ctx.bypass.interface.parseLog(l); } catch { return null; } })
+        .find((p: any) => p?.name === "BypassRequested")!.args.requestId;
+
+      await time.increase(DAY + 1);
+      await ctx.vaults.connect(ctx.user1).executeBypass(ctx.id, requestId, ctx.user1.address);
+      await expect(
+        ctx.vaults.connect(ctx.user1).executeBypass(ctx.id, requestId, ctx.user1.address),
+      ).to.be.reverted;
     });
   });
 });

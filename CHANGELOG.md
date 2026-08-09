@@ -86,6 +86,16 @@ these notes on the in-app **Governance** page before they execute.
   withdrawal-address list is keyed by the member's real address, so every
   vault a person owns shares one list: where money may go is a property of
   the person, not the asset.
+- **Emergency bypass on the unified vault.** `requestBypass` /
+  `executeBypass` / `cancelBypass` are the other way past a limit, and the
+  honest one: instead of paying the penalty you wait, and the wait is the
+  limit's own — a limit committed with a seven-day wait cannot be escaped in
+  less than seven days. The request and its timer live in
+  `BypassSystemModule` under the same scope as the vault's limits, so this is
+  the account's bypass rather than a second implementation of it. Only the
+  payout is in the vault module, because only it holds the money. A request
+  records which coin it was made against, since a stables vault's amount is
+  measured in dollars and the payout has to know what to send.
 - **Permanent deposit addresses on the unified vault**
   (`SavingsVaultDepositProxy`). An exchange withdraws to an address, not to a
   contract call, so without one you have to route money through your own wallet
@@ -97,7 +107,11 @@ these notes on the in-app **Governance** page before they execute.
   published first and paid for later; money that arrives in the meantime waits
   and is swept in. Sweeps are permissionless, because every path ends at the
   same beneficiary's balance in the same vault — which also means a stuck
-  transfer can be rescued without the member needing gas.
+  transfer can be rescued without the member needing gas. The factory lives in
+  its own `VaultDepositAddressModule`: predicting an address means holding the
+  proxy's whole creation code, which cost the vault module 2.7KB and left it
+  inside 4KB of the 24KB ceiling — the same slope the old `VaultSystemModule`
+  slid down until it would not deploy. Nothing in the factory can move money.
 - **Early exit with a penalty, on the unified vault.** `withdrawWithPenalty`
   is the pressure valve that keeps a limit honest: a member can always get past
   it, but only at the rate the vault was created with, and the money goes to
