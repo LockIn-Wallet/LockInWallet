@@ -93,6 +93,10 @@ contract SavingsVaultModule is Initializable, UUPSUpgradeable, OwnableUpgradeabl
     /// remembered here or the payout would not know what to send.
     mapping(bytes32 => address) private bypassToken;
 
+    /// @dev 1-based position in memberList; 0 means "not in the list". Needed
+    /// only so leaving does not leave a hole that iteration would trip over.
+    mapping(uint256 => mapping(address => uint256)) private memberIndex;
+
     uint8 private constant VAULT_TYPE_PERSONAL = 0;
     uint8 private constant VAULT_TYPE_COMMUNITY = 1;
     uint8 private constant DOLLAR_DECIMALS = 6;
@@ -104,6 +108,7 @@ contract SavingsVaultModule is Initializable, UUPSUpgradeable, OwnableUpgradeabl
 
     event VaultCreated(uint256 indexed vaultId, address indexed creator, uint8 kind, string name);
     event VaultJoined(uint256 indexed vaultId, address indexed member);
+    event VaultLeft(uint256 indexed vaultId, address indexed member);
     event Deposited(uint256 indexed vaultId, address indexed member, address indexed token, uint256 amount);
     event Withdrawn(uint256 indexed vaultId, address indexed member, address indexed token, uint256 amount, address destination);
     event PenaltyPaid(uint256 indexed vaultId, address indexed member, address indexed token, uint256 amount, uint256 penalty);
@@ -541,7 +546,59 @@ contract SavingsVaultModule is Initializable, UUPSUpgradeable, OwnableUpgradeabl
         vaults[vaultId].memberCount++;
         isMember[vaultId][member] = true;
         memberList[vaultId].push(member);
+        memberIndex[vaultId][member] = memberList[vaultId].length;
         userVaultIds[member].push(vaultId);
+    }
+
+    /// @notice Leave a vault you have emptied.
+    ///
+    /// Everything has to be out first — balance, unclaimed penalties and any
+    /// earnings still owed — because leaving deletes the record those are paid
+    /// against, and a member who left with yield pending would simply lose it.
+    function leaveVault(uint256 vaultId) external nonReentrant onlyMember(vaultId) {
+        Vault storage vault = _activeVault(vaultId);
+        require(msg.sender != vault.creator, "Creator cannot leave");
+
+        address[] storage tokens = acceptedList[vaultId];
+        for (uint256 i = 0; i < tokens.length; i++) {
+            address token = tokens[i];
+            _settlePenalties(vaultId, token, msg.sender);
+            _settleYield(vaultId, token, msg.sender);
+            require(balances[vaultId][msg.sender][token] == 0, "Balance not zero");
+            require(unclaimedPenalties[vaultId][token][msg.sender] == 0, "Rewards not claimed");
+        }
+
+        vault.memberCount--;
+        isMember[vaultId][msg.sender] = false;
+        _removeFromMemberList(vaultId, msg.sender);
+        _removeUserVaultId(msg.sender, vaultId);
+        emit VaultLeft(vaultId, msg.sender);
+    }
+
+    /// @dev Swap-and-pop, with the moved member's index kept in step.
+    function _removeFromMemberList(uint256 vaultId, address member) private {
+        uint256 position = memberIndex[vaultId][member];
+        if (position == 0) return;
+        address[] storage list = memberList[vaultId];
+        uint256 last = list.length - 1;
+        if (position - 1 != last) {
+            address moved = list[last];
+            list[position - 1] = moved;
+            memberIndex[vaultId][moved] = position;
+        }
+        list.pop();
+        delete memberIndex[vaultId][member];
+    }
+
+    function _removeUserVaultId(address member, uint256 vaultId) private {
+        uint256[] storage ids = userVaultIds[member];
+        for (uint256 i = 0; i < ids.length; i++) {
+            if (ids[i] == vaultId) {
+                ids[i] = ids[ids.length - 1];
+                ids.pop();
+                return;
+            }
+        }
     }
 
     function _installRules(

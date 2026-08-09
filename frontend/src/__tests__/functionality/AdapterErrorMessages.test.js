@@ -57,7 +57,7 @@ describe("EVM revert translation", () => {
       "The savings protocol is temporarily out of liquidity — try a smaller amount, or try again shortly",
     ],
     ["Yield module not configured", "Earning on savings is not switched on for this network yet"],
-    ["Strategy asset mismatch", "That earning strategy does not match this vault's token"],
+    ["Strategy asset mismatch", "That earning strategy does not match this vault's coin"],
     ["No strategy for token", "This vault's token cannot earn yield yet"],
     ["Strategies paused", "Earning is paused right now — your savings are untouched"],
     [

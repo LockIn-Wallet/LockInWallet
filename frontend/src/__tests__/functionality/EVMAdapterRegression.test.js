@@ -21,6 +21,7 @@ const ReferralModuleABI = require('../../ReferralModuleABI.json');
  */
 
 const USER = '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266';
+const DAI = '0x6B175474E89094C44Da98b954EedeAC495271d0F';
 const USDT = '0x09635F643e140090A9A8Dcd712eD6285858ceBef';
 
 function makeAdapter(networkConfig = {}) {
@@ -165,19 +166,50 @@ describe('EVMAdapter withdrawal balance guard', () => {
     expect(adapter.savingsContract.withdrawTo).toHaveBeenCalled();
   });
 
-  test('vault withdrawals check the member balance, not the vault total', async () => {
+  test('vault withdrawals check the member balance for that coin', async () => {
     const adapter = makeAdapter();
+    // The balance now comes from the vault module per coin, because a vault
+    // holds several and one scalar could not say which.
     adapter._getVaultModule = jest.fn().mockResolvedValue({
       withdraw: jest.fn().mockResolvedValue(txResult),
+      balanceOf: jest.fn().mockResolvedValue(1000000n), // 1 USDT
     });
     adapter.getVaultInfo = jest.fn().mockResolvedValue({
+      tokens: [{ address: USDT, symbol: 'USDT', decimals: 6, isNative: false }],
       tokenSymbol: 'USDT',
       tokenDecimals: 6,
     });
-    adapter.getVaultMemberInfo = jest.fn().mockResolvedValue({ balance: 1000000 }); // 1 USDT
 
     await expect(adapter.withdrawFromVault('1', 20)).rejects.toThrow(
       'you have 1 USDT available'
+    );
+  });
+
+  test('refuses to guess which coin a multi-coin vault deposit is for', async () => {
+    const adapter = makeAdapter();
+    adapter._getVaultModule = jest.fn().mockResolvedValue({});
+    adapter.getVaultInfo = jest.fn().mockResolvedValue({
+      tokens: [
+        { address: USDT, symbol: 'USDT', decimals: 6, isNative: false },
+        { address: DAI, symbol: 'DAI', decimals: 18, isNative: false },
+      ],
+    });
+
+    // Silently picking the first would move the wrong asset.
+    await expect(adapter.depositToVault('1', 20)).rejects.toThrow(
+      'Choose which coin this is for'
+    );
+  });
+
+  test('refuses a coin the vault does not hold', async () => {
+    const adapter = makeAdapter();
+    adapter._getVaultModule = jest.fn().mockResolvedValue({});
+    adapter.getVaultInfo = jest.fn().mockResolvedValue({
+      tokens: [{ address: USDT, symbol: 'USDT', decimals: 6, isNative: false }],
+    });
+
+    await expect(adapter.depositToVault('1', 20, DAI)).rejects.toThrow(
+      'does not hold that coin'
     );
   });
 });

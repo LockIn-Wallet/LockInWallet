@@ -539,4 +539,61 @@ describe("SavingsVaultModule", function () {
       ).to.be.reverted;
     });
   });
+
+  describe("Leaving a vault you have emptied", function () {
+    async function clubFixture() {
+      const ctx = await loadFixture(fixture);
+      await ctx.vaults.connect(ctx.user1).createVault(
+        "Club", KIND_COIN, COMMUNITY, [ctx.usdt.target],
+        false, 2000, ["Daily"], [usd("100000")], [DAY], [DAY],
+      );
+      const id = await ctx.vaults.getVaultCount();
+      await ctx.vaults.connect(ctx.user2).joinVault(id);
+      return { ...ctx, id };
+    }
+
+    it("lets an empty member out and forgets them", async function () {
+      const ctx = await clubFixture();
+      await ctx.vaults.connect(ctx.user2).leaveVault(ctx.id);
+
+      expect(await ctx.vaults.isVaultMember(ctx.id, ctx.user2.address)).to.equal(false);
+      expect(await ctx.vaults.getVaultMembers(ctx.id)).to.deep.equal([ctx.user1.address]);
+      expect(await ctx.vaults.getUserVaultIds(ctx.user2.address)).to.deep.equal([]);
+    });
+
+    it("refuses while money is still in", async function () {
+      const ctx = await clubFixture();
+      await ctx.usdt.connect(ctx.user2).approve(ctx.vaults.target, usd("100"));
+      await ctx.vaults.connect(ctx.user2).deposit(ctx.id, ctx.usdt.target, usd("100"));
+
+      await expect(ctx.vaults.connect(ctx.user2).leaveVault(ctx.id))
+        .to.be.revertedWith("Balance not zero");
+    });
+
+    it("refuses while penalty rewards are unclaimed", async function () {
+      const ctx = await clubFixture();
+      await ctx.usdt.connect(ctx.user1).approve(ctx.vaults.target, usd("1000"));
+      await ctx.vaults.connect(ctx.user1).deposit(ctx.id, ctx.usdt.target, usd("1000"));
+      await ctx.usdt.connect(ctx.user2).approve(ctx.vaults.target, usd("1000"));
+      await ctx.vaults.connect(ctx.user2).deposit(ctx.id, ctx.usdt.target, usd("1000"));
+      await ctx.vaults.connect(ctx.user1)
+        .withdrawWithPenalty(ctx.id, ctx.usdt.target, usd("500"), ctx.user1.address);
+
+      // Empty the balance, but leave the share of the penalty unclaimed.
+      await ctx.vaults.connect(ctx.user2)
+        .withdrawWithPenalty(ctx.id, ctx.usdt.target, usd("1000"), ctx.user2.address);
+      await expect(ctx.vaults.connect(ctx.user2).leaveVault(ctx.id))
+        .to.be.revertedWith("Rewards not claimed");
+
+      await ctx.vaults.connect(ctx.user2).claimPenaltyRewards(ctx.id, ctx.usdt.target);
+      await ctx.vaults.connect(ctx.user2).leaveVault(ctx.id);
+      expect(await ctx.vaults.isVaultMember(ctx.id, ctx.user2.address)).to.equal(false);
+    });
+
+    it("keeps the creator in, since the vault is theirs", async function () {
+      const ctx = await clubFixture();
+      await expect(ctx.vaults.connect(ctx.user1).leaveVault(ctx.id))
+        .to.be.revertedWith("Creator cannot leave");
+    });
+  });
 });
