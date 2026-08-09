@@ -24,7 +24,15 @@ const TITLE_ID = "yield-options-title";
  * The choice is staged locally and only submitted on confirm — switching earning
  * off divests real funds, so it should not fire on a stray click.
  */
-const YieldModal = ({ open, currentMode, options, onClose, onConfirm, saving = false, error = null }) => {
+const YieldModal = ({
+  open,
+  currentMode = "off",
+  options = [],
+  onClose,
+  onConfirm,
+  saving = false,
+  error = null,
+}) => {
   const [choice, setChoice] = useState(currentMode);
 
   // Re-sync whenever the dialog reopens, so a cancelled edit does not persist.
@@ -142,11 +150,6 @@ YieldModal.propTypes = {
   onClose: PropTypes.func.isRequired,
   onConfirm: PropTypes.func.isRequired,
   saving: PropTypes.bool,
-};
-
-YieldModal.defaultProps = {
-  currentMode: "off",
-  options: [],
 };
 
 export default YieldModal;

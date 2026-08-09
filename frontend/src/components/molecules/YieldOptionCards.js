@@ -22,7 +22,7 @@ import { YIELD_OPTIONS } from "../../utils/yieldContent.js";
  * module. An option whose protocol is not configured (or whose feature flag is
  * off) renders greyed out rather than hidden, so the user can see what exists.
  */
-const YieldOptionCards = ({ options, selected, onSelect, disabled = false }) => {
+const YieldOptionCards = ({ options = [], selected, onSelect, disabled = false }) => {
   const rates = new Map(options.map((option) => [option.key, option]));
 
   return (
@@ -149,10 +149,6 @@ YieldOptionCards.propTypes = {
   selected: PropTypes.string,
   onSelect: PropTypes.func.isRequired,
   disabled: PropTypes.bool,
-};
-
-YieldOptionCards.defaultProps = {
-  options: [],
 };
 
 export default YieldOptionCards;
