@@ -298,3 +298,21 @@ interface IYieldModule {
     event YieldWatermarkSet(uint256 fromVaultId);
     event EmergencyExit(uint256 indexed vaultId, address indexed token, uint256 assets);
 }
+
+// ========== VAULT-SIDE ACCOUNTANT ==========
+
+/// @notice Earning, as SavingsVaultModule needs to call it. Keyed per
+/// (vault, token) because a stables vault holds several assets at once and each
+/// earns in its own market.
+interface IVaultYieldModule {
+    function setMode(uint256 vaultId, address token, uint8 mode) external;
+    function modeOf(uint256 vaultId, address token) external view returns (uint8);
+    function onDeposit(uint256 vaultId, address token) external;
+    function ensureLiquidity(uint256 vaultId, address token, uint256 needed, address recipient) external;
+    function divestAll(uint256 vaultId, address token, address recipient) external;
+    function settleMember(uint256 vaultId, address token, address member) external returns (uint256 credited);
+    function snapshotMember(uint256 vaultId, address token, address member, uint256 newBalance) external;
+    function pendingYield(uint256 vaultId, address token, address member) external view returns (uint256);
+    function investedPrincipal(uint256 vaultId, address token) external view returns (uint256);
+    function currentAprBps(address token) external view returns (uint256);
+}

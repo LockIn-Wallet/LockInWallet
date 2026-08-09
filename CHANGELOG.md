@@ -67,6 +67,37 @@ these notes on the in-app **Governance** page before they execute.
   auto-connect and the adapter's `autoConnect` until the user connects
   again — otherwise a reload would re-attach the same wallet within seconds.
   Frontend only — no contract change.
+- **One savings primitive: `SavingsVaultModule`.** The main wallet and a
+  single-coin pot are now the same thing — a vault — instead of a savings
+  account with its own custody and its own copy of the limit logic sitting
+  beside a separate vault system. A vault is one of two kinds, and the
+  difference is forced by what a limit can honestly mean: STABLES holds
+  several dollar-pegged assets under one cap (dividing out each token's
+  decimals restates them all in the same dollars, so no price feed is
+  involved), while COIN holds exactly one asset and caps it in that asset or
+  as a share of the balance. Pricing volatile assets against each other would
+  put an oracle in the enforcement path of a wallet whose whole promise is
+  enforcement, so neither kind does it.
+  **On-chain:** a **new** `SavingsVaultModule` proxy registered as
+  `SAVINGS_VAULTS`. Limits, timelocked changes, bypasses and withdrawal
+  addresses are not reimplemented — they are the savings account's own
+  modules, keyed by a scope derived from `(vaultId, member)`, so a vault's
+  rules behave exactly as an account's because they *are* an account's. The
+  withdrawal-address list is keyed by the member's real address, so every
+  vault a person owns shares one list: where money may go is a property of
+  the person, not the asset.
+- **Earning across the unified vault (`VaultYieldModule`).** Earning is now
+  keyed per **(vault, token)** rather than per vault. A stables vault holds
+  several assets at once and each earns in its own market — USDC's Aave
+  reserve knows nothing about DAI's — so a single per-vault position could
+  not represent it. Switching earning off divests the whole position,
+  earnings included, rather than merely stopping new investment. A community
+  vault's earning setting can only be chosen while the creator is still its
+  only member, so nobody's money is routed into an outside protocol after
+  they joined on other terms. The fee guarantee is carried over unchanged and
+  is still structural: one percentage point of the rate, funded only from the
+  surplus above principal, capped by the yield actually realized, with the
+  shortfall waiting in `feeDebt` and a protocol loss repaid before any fee.
 - **Earning on vault balances.** A vault holding a supported stablecoin can
   supply its idle balance to Aave v3 and share the interest across its members.
   The owner picks stable earning, prize savings or off from the new "Earn on your

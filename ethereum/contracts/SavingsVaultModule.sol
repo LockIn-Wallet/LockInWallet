@@ -8,6 +8,7 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "./SavingsInterfaces.sol";
+import "./YieldInterfaces.sol";
 
 // What a vault holds, and therefore how its limits can honestly be measured.
 uint8 constant VAULT_KIND_COIN = 0; // exactly one asset
@@ -74,6 +75,8 @@ contract SavingsVaultModule is Initializable, UUPSUpgradeable, OwnableUpgradeabl
     bool private locked;
 
     // ==== APPEND NEW STATE BELOW THIS LINE ONLY ====
+
+    IVaultYieldModule public yieldModule;
 
     uint8 private constant VAULT_TYPE_PERSONAL = 0;
     uint8 private constant VAULT_TYPE_COMMUNITY = 1;
@@ -217,7 +220,7 @@ contract SavingsVaultModule is Initializable, UUPSUpgradeable, OwnableUpgradeabl
     }
 
     function _deposit(uint256 vaultId, address token, uint256 amount, address beneficiary) private {
-        Vault storage vault = _activeVault(vaultId);
+        _activeVault(vaultId);
         require(amount > 0, "Invalid amount");
         require(accepted[vaultId][token], "Token not accepted here");
 
@@ -235,9 +238,16 @@ contract SavingsVaultModule is Initializable, UUPSUpgradeable, OwnableUpgradeabl
             require(credited > 0, "Nothing received");
         }
 
+        // Settle before the balance moves and snapshot after, so the depositor
+        // is credited for the yield earned on what they held and not a unit
+        // more on what they are about to add.
+        _settleYield(vaultId, token, beneficiary);
         balances[vaultId][beneficiary][token] += credited;
         vaultTotals[vaultId][token] += credited;
+        _snapshotYield(vaultId, token, beneficiary);
         emit Deposited(vaultId, beneficiary, token, credited);
+
+        _investIdle(vaultId, token);
     }
 
     function withdraw(uint256 vaultId, address token, uint256 amount, address destination)
@@ -248,6 +258,10 @@ contract SavingsVaultModule is Initializable, UUPSUpgradeable, OwnableUpgradeabl
         enforceNotFrozen(savingsCore, msg.sender);
         _requireApprovedDestination(msg.sender, destination);
         Vault storage vault = _activeVault(vaultId);
+        // Earnings land in the balance first, so they can be withdrawn in the
+        // same transaction and — where limits are a percentage — count toward
+        // what the member is allowed to take.
+        _settleYield(vaultId, token, msg.sender);
         require(amount > 0 && amount <= balances[vaultId][msg.sender][token], "Invalid amount");
 
         // How the amount is measured depends on what the vault holds. A stables
@@ -256,8 +270,14 @@ contract SavingsVaultModule is Initializable, UUPSUpgradeable, OwnableUpgradeabl
         (uint256 measured, uint256 against) = _measure(vaultId, vault, msg.sender, token, amount);
         _limits().checkAllTimePeriodLimitsFor(_scope(vaultId, msg.sender), measured, against);
 
+        // Bring back only the shortfall, measured against the balance as it
+        // still stands — netting it against the reduced total would divest more
+        // than the withdrawal needs and stop that much earning for nothing.
+        _ensureLiquidity(vaultId, token, amount);
+
         balances[vaultId][msg.sender][token] -= amount;
         vaultTotals[vaultId][token] -= amount;
+        _snapshotYield(vaultId, token, msg.sender);
         _payOut(token, destination, amount);
         emit Withdrawn(vaultId, msg.sender, token, amount, destination);
     }
@@ -435,6 +455,84 @@ contract SavingsVaultModule is Initializable, UUPSUpgradeable, OwnableUpgradeabl
         address module = savingsCore.getModule(ModuleIds.PROPOSAL_SYSTEM);
         require(module != address(0), "Proposal module not registered");
         return IProposalSystemModule(module);
+    }
+
+    // ========== EARNING ==========
+
+    /// @notice Point this module at the earning accountant. Until it is set,
+    /// every hook below is a no-op and nothing leaves the vault.
+    function setYieldModule(address module) external onlyOwner {
+        yieldModule = IVaultYieldModule(module);
+    }
+
+    /// @notice Turn earning on or off for one of this vault's assets.
+    ///
+    /// Only the creator, and only for a personal vault: a community vault's
+    /// terms are fixed at creation, and one member must not be able to route
+    /// everyone else's money into an outside protocol.
+    function setYieldMode(uint256 vaultId, address token, uint8 mode) external nonReentrant {
+        Vault storage vault = _activeVault(vaultId);
+        require(msg.sender == vault.creator, "Not the vault creator");
+        // A community vault's terms are what people join under, so its earning
+        // setting can only be chosen while the creator is still alone in it.
+        require(
+            vault.vaultType == VAULT_TYPE_PERSONAL || vault.memberCount == 1,
+            "Community yield immutable"
+        );
+        require(accepted[vaultId][token], "Token not accepted here");
+        require(address(yieldModule) != address(0), "Yield module not configured");
+
+        // Switching off has to bring the money home, not merely stop adding to
+        // it — otherwise "off" would leave the balance sitting in Aave.
+        if (mode == MODE_OFF) yieldModule.divestAll(vaultId, token, address(this));
+        yieldModule.setMode(vaultId, token, mode);
+        if (mode != MODE_OFF) _investIdle(vaultId, token);
+    }
+
+    /// @notice Credit a member their earnings without them having to move any
+    /// money. Permissionless, because it can only ever pay the named member.
+    function compoundYield(uint256 vaultId, address token, address member) external nonReentrant {
+        require(isMember[vaultId][member], "Not a vault member");
+        _settleYield(vaultId, token, member);
+        _snapshotYield(vaultId, token, member);
+    }
+
+    function pendingYield(uint256 vaultId, address token, address member) external view returns (uint256) {
+        if (address(yieldModule) == address(0)) return 0;
+        return yieldModule.pendingYield(vaultId, token, member);
+    }
+
+    /// @dev Yield already sits inside the strategy, so crediting it moves no
+    /// tokens — it becomes part of the member's balance and keeps earning.
+    function _settleYield(uint256 vaultId, address token, address member) private {
+        if (address(yieldModule) == address(0) || token == address(0)) return;
+        uint256 credited = yieldModule.settleMember(vaultId, token, member);
+        if (credited == 0) return;
+        balances[vaultId][member][token] += credited;
+        vaultTotals[vaultId][token] += credited;
+    }
+
+    function _snapshotYield(uint256 vaultId, address token, address member) private {
+        if (address(yieldModule) == address(0) || token == address(0)) return;
+        yieldModule.snapshotMember(vaultId, token, member, balances[vaultId][member][token]);
+    }
+
+    /// @dev The allowance is what makes this safe to grant: the yield module
+    /// pulls exactly what it is about to invest, and the approval is cleared
+    /// whether or not it took anything.
+    function _investIdle(uint256 vaultId, address token) private {
+        if (address(yieldModule) == address(0) || token == address(0)) return;
+        uint256 held = vaultTotals[vaultId][token];
+        if (held == 0) return;
+
+        IERC20(token).forceApprove(address(yieldModule), held);
+        yieldModule.onDeposit(vaultId, token);
+        IERC20(token).forceApprove(address(yieldModule), 0);
+    }
+
+    function _ensureLiquidity(uint256 vaultId, address token, uint256 amount) private {
+        if (address(yieldModule) == address(0) || token == address(0)) return;
+        yieldModule.ensureLiquidity(vaultId, token, amount, address(this));
     }
 
     function _payOut(address token, address to, uint256 amount) private {

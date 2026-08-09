@@ -66,6 +66,13 @@ contract MockAavePool {
         IERC20(asset).safeTransfer(msg.sender, amount);
     }
 
+    /// @notice Take underlying out of the reserve while leaving every position
+    /// reporting its full value — the shape of a real liquidity crunch, where
+    /// borrowers hold the assets the depositors are owed.
+    function drainLiquidity(address asset, uint256 amount) external {
+        IERC20(asset).safeTransfer(msg.sender, amount);
+    }
+
     function supply(address asset, uint256 amount, address onBehalfOf, uint16) external {
         require(!supplyPaused, "Reserve paused");
         address aToken = aTokens[asset];
