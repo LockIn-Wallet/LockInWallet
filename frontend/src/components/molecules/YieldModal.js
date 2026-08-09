@@ -28,6 +28,7 @@ const YieldModal = ({
   open,
   currentMode = "off",
   options = [],
+  coinSymbol = null,
   onClose,
   onConfirm,
   saving = false,
@@ -81,7 +82,9 @@ const YieldModal = ({
 
         <p style={modalStyles.eyebrow}>{YIELD_MODAL_EYEBROW}</p>
         <h2 id={TITLE_ID} style={modalStyles.title}>
-          {YIELD_MODAL_TITLE}
+          {/* Named, because the switch that opened this belongs to one coin and
+              the choice applies to that coin alone. */}
+          {coinSymbol ? `How should your ${coinSymbol} earn?` : YIELD_MODAL_TITLE}
         </h2>
         <p style={modalStyles.lede}>{YIELD_LEDE}</p>
 
@@ -147,6 +150,7 @@ YieldModal.propTypes = {
   open: PropTypes.bool.isRequired,
   currentMode: PropTypes.string,
   options: PropTypes.array,
+  coinSymbol: PropTypes.string,
   onClose: PropTypes.func.isRequired,
   onConfirm: PropTypes.func.isRequired,
   saving: PropTypes.bool,

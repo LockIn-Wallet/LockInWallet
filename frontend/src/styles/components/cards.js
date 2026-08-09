@@ -1,4 +1,4 @@
-import { colors, spacing, borderRadius, fontSize, fontWeight, shadows } from '../theme.js';
+import { colors, spacing, borderRadius, fontSize, fontWeight, fontFamily, shadows } from '../theme.js';
 
 // Card and container styles extracted from App.js
 export const cardStyles = {
@@ -312,64 +312,35 @@ export default {
   layoutStyles,
 };
 /**
- * The earning switch under the balance.
+ * The earning switch inside a balance card.
  *
- * A hairline rule separates it from the balances above rather than a card of
- * its own: it belongs to the balance, and boxing it would read as a different
- * subject.
+ * Sits on its own line under the amount, separated by a hairline rather than
+ * boxed: it belongs to that balance, and a box would read as a different
+ * subject sitting next to it.
  */
 export const balanceEarningStyles = {
   row: {
     display: "flex",
     alignItems: "center",
     justifyContent: "space-between",
-    // Wraps rather than crushing the sentence to two words per line on a phone
-    flexWrap: "wrap",
-    gap: spacing.lg,
-    marginTop: spacing.xl,
-    paddingTop: spacing.xl,
+    gap: spacing.sm,
+    marginTop: spacing.md,
+    paddingTop: spacing.sm,
     borderTop: `1px solid ${colors.border.default}`,
   },
-  text: {
-    // Takes the leftover width so the switch keeps its size on a narrow screen
-    flex: "1 1 200px",
+  label: {
+    color: colors.text.muted,
+    fontSize: fontSize.xs,
     textAlign: "left",
   },
-  headline: {
-    color: colors.text.primary,
-    fontSize: fontSize.normal,
-    fontWeight: fontWeight.semibold,
-  },
-  sub: {
-    color: colors.text.muted,
-    fontSize: fontSize.sm,
-    marginTop: spacing.xs,
+  labelOn: {
+    color: colors.success.light,
   },
   error: {
     color: colors.error.light,
-    fontSize: fontSize.sm,
-    marginTop: spacing.sm,
-  },
-  controls: {
-    display: "flex",
-    alignItems: "center",
-    gap: spacing.lg,
-    flexShrink: 0,
-  },
-  // Quiet on purpose: the switch is the action here, and a second filled
-  // control beside it would compete for the same glance.
-  configureButton: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    width: "32px",
-    height: "32px",
-    padding: 0,
-    margin: 0,
-    borderRadius: borderRadius.sm,
-    border: `1px solid ${colors.border.default}`,
-    backgroundColor: "transparent",
-    cursor: "pointer",
+    fontSize: fontSize.xs,
+    marginTop: spacing.xs,
+    textAlign: "left",
   },
 };
 
@@ -387,3 +358,4 @@ export const vaultCardStyles = {
     fontWeight: fontWeight.semibold,
   },
 };
+

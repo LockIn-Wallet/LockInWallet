@@ -681,7 +681,9 @@ export class TransactionManager {
   supportsYield() { return this.getAdapter().supportsYield?.() ?? false; }
   async getYieldStatus() { return this.getAdapter().getYieldStatus?.(this.getActiveVaultAddress()) ?? { supported: false }; }
   async getYieldOptions(tokenAddress) { return this.getAdapter().getYieldOptions?.(tokenAddress) ?? []; }
-  async setYieldMode(mode) { return this.getAdapter().setYieldMode?.(this._requireActiveVault(), mode); }
+  async setYieldMode(mode, tokenAddress = null) {
+    return this.getAdapter().setYieldMode?.(this._requireActiveVault(), mode, tokenAddress);
+  }
   async compoundActiveVaultYield() { return this.getAdapter().compoundVaultYield?.(this._requireActiveVault()); }
   async getClaimablePrizes() { return this.getAdapter().getClaimablePrizes?.(this.getActiveVaultAddress()) ?? null; }
   async claimActiveVaultPrizes() { return this.getAdapter().claimVaultPrizes?.(this._requireActiveVault()); }

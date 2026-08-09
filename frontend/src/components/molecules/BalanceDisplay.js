@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useCallback } from "react";
 import PropTypes from "prop-types";
-import BalanceEarningRow from "./BalanceEarningRow.js";
+import CoinEarningToggle from "./CoinEarningToggle.js";
+import YieldModal from "./YieldModal.js";
+import { useVaultEarning } from "../../hooks/useVaultEarning.js";
 
 // Import styles
 import {
@@ -59,6 +61,10 @@ const BalanceDisplay = ({
   activeVaultAddress = null,
   onEarningChanged,
 }) => {
+  // Earning is per coin, so the status is fetched once here and each balance
+  // card asks it about its own coin.
+  const earning = useVaultEarning(transactionManager, activeVaultAddress);
+  const [configuringCoin, setConfiguringCoin] = useState(null);
   // PoolTogether state
   const [vaultStates, setVaultStates] = useState({});
   const [grandPrizeWeth, setGrandPrizeWeth] = useState("0");
@@ -376,6 +382,14 @@ const BalanceDisplay = ({
                   <div style={{ fontSize: "1.2em", fontWeight: "bold" }}>
                     {balances[key] || "0"}
                   </div>
+
+                  {/* Only for a coin this vault actually holds and something
+                      will take — otherwise there is nothing to switch. */}
+                  <CoinEarningToggle
+                    earning={earning.earningFor(token.address)}
+                    busy={earning.savingToken === token.address}
+                    onOpen={() => setConfiguringCoin(earning.earningFor(token.address))}
+                  />
                   {vaultStates[key] && vaultStates[key].inVault && (
                     <div style={{ fontSize: "0.7em", marginTop: "4px", color: colors.accent.purple }}>
                       {"🎰 In vault: "}{parseFloat(vaultStates[key].assets || "0").toFixed(2)}{" "}{token.symbol}
@@ -416,15 +430,28 @@ const BalanceDisplay = ({
           </div>
         )}
 
-        {/* Earning belongs next to the money it applies to. The panel further
-            down still owns the three-way choice and the figures; this is the
-            everyday switch, and it hides itself when earning does not apply. */}
-        <BalanceEarningRow
-          transactionManager={transactionManager}
-          activeVaultAddress={activeVaultAddress}
-          onChanged={onEarningChanged}
-        />
       </div>
+
+      {/* One dialog, opened against whichever coin's switch was used. It is the
+          same dialog the earning panel opens, so the two cannot drift apart. */}
+      <YieldModal
+        open={configuringCoin !== null}
+        currentMode={configuringCoin?.mode || "off"}
+        options={configuringCoin?.options || []}
+        coinSymbol={configuringCoin?.symbol}
+        saving={earning.savingToken !== null}
+        error={earning.error}
+        onClose={() => {
+          earning.clearError();
+          setConfiguringCoin(null);
+        }}
+        onConfirm={async (mode) => {
+          const ok = await earning.setMode(configuringCoin.address, mode);
+          if (!ok) return;
+          setConfiguringCoin(null);
+          onEarningChanged?.();
+        }}
+      />
     </>
   );
 };

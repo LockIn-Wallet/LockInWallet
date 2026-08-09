@@ -80,6 +80,7 @@ export const YIELD_MODE_LABELS = {
   off: "Not earning",
 };
 
+
 /**
  * Shown on the legacy "Savings" account, which is not a vault: on EVM, locking
  * in writes spending limits and holds the balance in the core contract, so
@@ -114,40 +115,15 @@ export const YIELD_PRIZE_WON_NOTE =
  * still get their money — and leaves the explaining to the panel.
  */
 /**
- * "a, b and c" rather than "a and b and c" — join() cannot do this, and the
- * difference is visible the moment a vault holds three coins.
+ * The per-coin earning switch on a balance.
+ *
+ * Deliberately terse: it sits inside a balance card, so it has room for a rate
+ * and nothing else. Everything that needs explaining lives in the dialog the
+ * switch opens.
  */
-const listOf = (items) => {
-  if (items.length <= 1) return items[0] || "";
-  if (items.length === 2) return `${items[0]} and ${items[1]}`;
-  return `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}`;
-};
-
 export const BALANCE_EARNING = {
-  toggleLabel: "Earn interest on your savings",
-  configureLabel: "Change how your savings earn",
-  on: (rate, range) =>
-    range ? `Earning ${range} a year` : rate ? `Earning ${rate.toFixed(2)}% a year` : "Earning",
-  off: (rate, range) =>
-    range ? `Earn ${range} a year` : rate ? `Earn ${rate.toFixed(2)}% a year` : "Earn interest",
-  mixed: "Earning on some of your coins",
-
-  /**
-   * Which money this is actually about.
-   *
-   * A vault can hold several coins, so "earning" on its own leaves the obvious
-   * question unanswered: earning on what? These name the coins and the amount
-   * genuinely sitting in the protocol, which is not always the whole balance —
-   * a deposit made while earning was off stays put until it is invested.
-   */
-  onDetail: (amounts) =>
-    amounts.length > 0
-      ? `${listOf(amounts)} earning through Aave. Withdraw any time, under your usual limits.`
-      : "Through Aave. Withdraw any time, under your usual limits.",
-  offDetail: (coins) =>
-    coins.length > 0
-      ? `Your ${listOf(coins)} sits still. Switch this on to put it to work.`
-      : "Your savings sit still. Switch this on to put them to work.",
-  mixedDetail: (earning, idle) =>
-    `${listOf(earning)} earning; ${listOf(idle)} sitting still.`,
+  toggleLabel: (symbol) => `Choose how your ${symbol} earns`,
+  earning: (rate) => (rate ? `Earning ${rate.toFixed(2)}%` : "Earning"),
+  idle: (rate) => (rate ? `Earn ${rate.toFixed(2)}%` : "Earn interest"),
+  prize: "Prize savings",
 };
