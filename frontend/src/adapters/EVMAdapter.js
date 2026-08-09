@@ -119,7 +119,7 @@ const REVERT_MESSAGES = [
   ["Daily limit exceeded", "This is over your daily limit — request a bypass to withdraw it"],
   ["Weekly limit exceeded", "This is over your weekly limit — request a bypass to withdraw it"],
   ["Monthly limit exceeded", "This is over your monthly limit — request a bypass to withdraw it"],
-  ["Exceeds limit", "This is over your spending limit — request a bypass to withdraw it"],
+  ["Exceeds limit", "This is over one of your spending limits — request a bypass to withdraw it"],
 
   // Withdrawal destinations and approvals
   ["Cannot set own address as destination", "Your own address is always available — no need to add it"],
@@ -156,6 +156,12 @@ const REVERT_MESSAGES = [
   ["Creator cannot leave", "The creator cannot leave their own vault"],
   ["Balance not zero", "Withdraw your balance before leaving the vault"],
   ["Already a member", "You are already a member of this vault"],
+  // Vault protections
+  ["Withdrawal address not approved", "That address is not on your saved withdrawal list"],
+  ["Limits module not registered", "Spending limits are not set up on this network yet"],
+  ["Proposal module not registered", "Rule changes are not set up on this network yet"],
+  ["Bypass module not registered", "Bypasses are not set up on this network yet"],
+  ["Invalid destination", "Choose a withdrawal address"],
   ["Not a vault member", "You are not a member of this vault"],
   ["Not in member list", "You are not a member of this vault"],
   ["Vault not active", "This vault is no longer active"],
@@ -242,7 +248,12 @@ const WRITE_FALLBACKS = {
   createVault: "Could not create the vault",
   joinVault: "Could not join the vault",
   leaveVault: "Could not leave the vault",
-  updateVaultRules: "Could not update the vault rules",
+  updateVaultRules: "Could not propose the vault rule change",
+  executeVaultRuleChange: "Could not apply the vault rule change",
+  cancelVaultRuleChange: "Could not cancel the vault rule change",
+  requestVaultBypass: "Could not request the bypass",
+  executeVaultBypass: "Could not execute the bypass",
+  cancelVaultBypass: "Could not cancel the bypass request",
   depositToVault: "Deposit failed",
   withdrawFromVault: "Withdrawal failed",
   withdrawFromVaultWithPenalty: "Withdrawal failed",
@@ -1873,34 +1884,107 @@ export class EVMAdapter extends BlockchainAdapter {
     return tx.hash;
   }
 
+  /**
+   * Change a vault's spending limits.
+   *
+   * A vault's rules now live in the same modules as the savings account's, so
+   * changing one goes through the same timelock rather than applying on the
+   * spot. Each period is proposed separately, because that is how the proposal
+   * module models a change — and it is what gives each window its own wait.
+   *
+   * @returns {Promise<Array<{period: string, txHash: string}>>} one entry per
+   * period actually changed. Nothing takes effect until each is executed after
+   * its wait; use getPendingVaultRuleChanges to see them.
+   */
   async updateVaultRules(vaultAddress, rules = {}) {
     const vaultModule = await this._getVaultModule();
-    // Merge against the raw on-chain values so untouched limits keep their
-    // exact stored amounts (Number round-trips lose wei-level precision).
     const current = await vaultModule.getVault(vaultAddress);
 
     const limitsArePercentage = rules.limitsArePercentage ?? current.limitsArePercentage;
-    if (
-      limitsArePercentage !== current.limitsArePercentage &&
-      (rules.dailyLimit == null || rules.weeklyLimit == null || rules.monthlyLimit == null)
-    ) {
-      // Stored raw limits are meaningless under the other mode, so a mode
-      // switch must respecify every limit
-      throw this._userError("Provide daily, weekly and monthly limits when changing the limit type");
+    if (limitsArePercentage !== current.limitsArePercentage) {
+      // The stored numbers mean different things under each mode, and the
+      // proposal flow changes one limit at a time — so there is no coherent
+      // way to switch mode partway through.
+      throw this._userError(
+        "Changing between fixed and percentage limits is not supported on an existing vault",
+      );
     }
+
     const token = current.token === ethers.ZeroAddress ? null : current.token;
     const { decimals } = await this._resolveTokenMeta(token);
-    const mergeLimit = (value, rawCurrent) =>
-      value != null ? this._toRawLimit(value, limitsArePercentage, decimals) : rawCurrent;
 
-    const tx = await vaultModule.updateVaultRules(
+    const changes = [
+      ["Daily", rules.dailyLimit],
+      ["Weekly", rules.weeklyLimit],
+      ["Monthly", rules.monthlyLimit],
+    ].filter(([, value]) => value != null);
+
+    if (changes.length === 0) throw this._userError("No limit changes to make");
+
+    const results = [];
+    for (const [period, value] of changes) {
+      const raw = this._toRawLimit(value, limitsArePercentage, decimals);
+      const tx = await vaultModule.proposeVaultLimitChange(vaultAddress, period, raw);
+      await tx.wait();
+      results.push({ period, txHash: tx.hash });
+    }
+    return results;
+  }
+
+  /** Queued rule changes for a vault, with when each can be applied. */
+  async getPendingVaultRuleChanges(vaultAddress, memberAddress = null) {
+    const vaultModule = await this._getVaultModule();
+    const proposalModule = await this._getModuleContract("proposalSystem");
+    const scope = await vaultModule.vaultScopeOf(vaultAddress, memberAddress || this.userAddress);
+
+    const [ids, categories, newLimits, executeAfters] =
+      await proposalModule.getUserPendingProposals(scope);
+    return ids.map((id, i) => ({
+      proposalId: id,
+      period: categories[i],
+      newLimitRaw: newLimits[i],
+      executeAfter: new Date(Number(executeAfters[i]) * 1000),
+    }));
+  }
+
+  async executeVaultRuleChange(vaultAddress, proposalId) {
+    const vaultModule = await this._getVaultModule();
+    const tx = await vaultModule.executeVaultLimitProposal(vaultAddress, proposalId);
+    await tx.wait();
+    return tx.hash;
+  }
+
+  async cancelVaultRuleChange(vaultAddress, proposalId) {
+    const vaultModule = await this._getVaultModule();
+    const tx = await vaultModule.cancelVaultLimitProposal(vaultAddress, proposalId);
+    await tx.wait();
+    return tx.hash;
+  }
+
+  /** Ask to withdraw past one of a vault's limits, after that period's wait. */
+  async requestVaultBypass(vaultAddress, amount, skipPeriod) {
+    const vaultModule = await this._getVaultModule();
+    const vault = await this.getVaultInfo(vaultAddress);
+    const raw = this._toBaseUnits(amount, vault.tokenDecimals);
+    const tx = await vaultModule.requestVaultBypass(vaultAddress, raw, skipPeriod);
+    await tx.wait();
+    return tx.hash;
+  }
+
+  async executeVaultBypass(vaultAddress, requestId, destination = null) {
+    const vaultModule = await this._getVaultModule();
+    const tx = await vaultModule.executeVaultBypass(
       vaultAddress,
-      mergeLimit(rules.dailyLimit, current.dailyLimit),
-      mergeLimit(rules.weeklyLimit, current.weeklyLimit),
-      mergeLimit(rules.monthlyLimit, current.monthlyLimit),
-      limitsArePercentage,
-      rules.penaltyRateBps ?? current.penaltyRateBps
+      requestId,
+      destination || this.userAddress,
     );
+    await tx.wait();
+    return tx.hash;
+  }
+
+  async cancelVaultBypass(vaultAddress, requestId) {
+    const vaultModule = await this._getVaultModule();
+    const tx = await vaultModule.cancelVaultBypass(vaultAddress, requestId);
     await tx.wait();
     return tx.hash;
   }

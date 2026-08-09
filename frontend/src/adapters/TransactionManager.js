@@ -697,6 +697,29 @@ export class TransactionManager {
     return this.getAdapter().updateVaultRules(vaultAddress, rules);
   }
 
+  // ---- Vault rule changes and bypasses ----
+  //
+  // A vault's rules now go through the same timelock as the savings account's,
+  // so changing one is a proposal that has to be executed after its wait.
+  async getPendingVaultRuleChanges() {
+    return this.getAdapter().getPendingVaultRuleChanges?.(this._requireActiveVault()) ?? [];
+  }
+  async executeVaultRuleChange(proposalId) {
+    return this.getAdapter().executeVaultRuleChange?.(this._requireActiveVault(), proposalId);
+  }
+  async cancelVaultRuleChange(proposalId) {
+    return this.getAdapter().cancelVaultRuleChange?.(this._requireActiveVault(), proposalId);
+  }
+  async requestVaultBypass(amount, skipPeriod) {
+    return this.getAdapter().requestVaultBypass?.(this._requireActiveVault(), amount, skipPeriod);
+  }
+  async executeVaultBypass(requestId, destination) {
+    return this.getAdapter().executeVaultBypass?.(this._requireActiveVault(), requestId, destination);
+  }
+  async cancelVaultBypass(requestId) {
+    return this.getAdapter().cancelVaultBypass?.(this._requireActiveVault(), requestId);
+  }
+
   // ---- Withdrawal destinations (personal vault compat) ----
 
   async addWithdrawalAddress(title, destinationAddress) {

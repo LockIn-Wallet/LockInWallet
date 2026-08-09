@@ -224,6 +224,8 @@ interface IBypassSystemModule {
     // Bypass request management
     function requestLimitBypass(address user, uint256 amount, string calldata skipPeriod, address token) external returns (bytes32 requestId);
     function executeBypassWithdrawal(address user, bytes32 requestId) external;
+    function requestBypassFor(address user, uint256 amount, string calldata skipPeriod, address token, uint256 availableBalance) external returns (bytes32);
+    function consumeBypassRequest(address user, bytes32 requestId) external returns (uint256 amount, address token);
     function cancelBypassRequest(address user, bytes32 requestId) external;
 
     // View functions
@@ -315,6 +317,9 @@ interface IVaultSystemModule {
     function executeVaultLimitProposal(uint256 vaultId, bytes32 proposalId) external;
     function cancelVaultLimitProposal(uint256 vaultId, bytes32 proposalId) external;
     function vaultScopeOf(uint256 vaultId, address member) external pure returns (address);
+    function requestVaultBypass(uint256 vaultId, uint256 amount, string calldata skipPeriod) external returns (bytes32);
+    function executeVaultBypass(uint256 vaultId, bytes32 requestId, address destination) external;
+    function cancelVaultBypass(uint256 vaultId, bytes32 requestId) external;
 
     // Funds
     function deposit(uint256 vaultId, uint256 amount) external payable;

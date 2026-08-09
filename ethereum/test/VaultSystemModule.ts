@@ -701,3 +701,138 @@ describe("VaultSystemModule — rules reuse the savings account's modules", func
     ).to.be.revertedWith("Limits module not registered");
   });
 });
+
+describe("VaultSystemModule — emergency bypass", function () {
+  const DAY = 86400;
+
+  async function fixture() {
+    const [owner, user1, user2] = await hre.ethers.getSigners();
+    const SavingsCore = await hre.ethers.getContractFactory("SavingsCore");
+    const savingsCore = await hre.upgrades.deployProxy(SavingsCore, []);
+    const deploy = async (n: string) => {
+      const f = await hre.ethers.getContractFactory(n);
+      const p = await hre.upgrades.deployProxy(f, [savingsCore.target], { initializer: "initialize" });
+      await p.waitForDeployment();
+      return p;
+    };
+    const vaultModule = await deploy("VaultSystemModule");
+    const limits = await deploy("TimePeriodLimitsModule");
+    const proposals = await deploy("ProposalSystemModule");
+    const bypass = await deploy("BypassSystemModule");
+    const reg = (id: string, t: any) =>
+      savingsCore.registerModule(hre.ethers.keccak256(hre.ethers.toUtf8Bytes(id)), t);
+    await reg("VAULT_SYSTEM", vaultModule.target);
+    await reg("TIME_PERIOD_LIMITS", limits.target);
+    await reg("PROPOSAL_SYSTEM", proposals.target);
+    await reg("BYPASS_SYSTEM", bypass.target);
+    await savingsCore.setupModuleCrossReferences();
+    await savingsCore.setDevelopmentMode(false);
+
+    await vaultModule.connect(user1).createVault({
+      name: "Savings", description: "", vaultType: VAULT_TYPE_PERSONAL,
+      token: hre.ethers.ZeroAddress,
+      dailyLimit: hre.ethers.parseEther("1"),
+      weeklyLimit: hre.ethers.parseEther("5"),
+      monthlyLimit: hre.ethers.parseEther("15"),
+      limitsArePercentage: false, penaltyRateBps: 2000,
+    });
+    await vaultModule.connect(user1).deposit(1, hre.ethers.parseEther("10"), {
+      value: hre.ethers.parseEther("10"),
+    });
+    return { savingsCore, vaultModule, limits, bypass, owner, user1, user2 };
+  }
+
+  async function requestId(bypass: any, vaultModule: any, user: any) {
+    const scope = await vaultModule.vaultScopeOf(1, user.address);
+    const [ids] = await bypass.getUserActiveBypassRequests(scope);
+    return ids[0];
+  }
+
+  it("lets a member exit past a limit, after that period's own wait", async function () {
+    const { vaultModule, bypass, user1 } = await loadFixture(fixture);
+    // 3 ETH is over the 1 ETH daily cap.
+    await vaultModule.connect(user1).requestVaultBypass(1, hre.ethers.parseEther("3"), "Daily");
+    const id = await requestId(bypass, vaultModule, user1);
+
+    await expect(
+      vaultModule.connect(user1).executeVaultBypass(1, id, user1.address),
+    ).to.be.revertedWith("Still in timelock");
+
+    await time.increase(DAY);
+    const before = await hre.ethers.provider.getBalance(user1.address);
+    await vaultModule.connect(user1).executeVaultBypass(1, id, user1.address);
+    expect(await hre.ethers.provider.getBalance(user1.address)).to.be.gt(before);
+    expect((await vaultModule.getVaultMember(1, user1.address)).balance).to.equal(
+      hre.ethers.parseEther("7"),
+    );
+  });
+
+  it("pays out of vault funds, not the savings account", async function () {
+    // The whole reason the bypass module cannot execute this itself.
+    const { savingsCore, vaultModule, bypass, user1 } = await loadFixture(fixture);
+    await vaultModule.connect(user1).requestVaultBypass(1, hre.ethers.parseEther("3"), "Daily");
+    const id = await requestId(bypass, vaultModule, user1);
+    await time.increase(DAY);
+
+    await vaultModule.connect(user1).executeVaultBypass(1, id, user1.address);
+    expect(await hre.ethers.provider.getBalance(vaultModule.target)).to.equal(
+      hre.ethers.parseEther("7"),
+    );
+    expect(await savingsCore.getTokenBalance(user1.address, hre.ethers.ZeroAddress)).to.equal(0);
+  });
+
+  it("still honours every period it did not skip", async function () {
+    // A bypass skips one window, not all of them.
+    const { vaultModule, bypass, user1 } = await loadFixture(fixture);
+    await vaultModule.connect(user1).requestVaultBypass(1, hre.ethers.parseEther("6"), "Daily");
+    const id = await requestId(bypass, vaultModule, user1);
+    await time.increase(DAY);
+
+    // 6 ETH clears the skipped daily cap but breaches the 5 ETH weekly one.
+    await expect(
+      vaultModule.connect(user1).executeVaultBypass(1, id, user1.address),
+    ).to.be.revertedWith("Exceeds limit");
+  });
+
+  it("cannot be spent twice", async function () {
+    const { vaultModule, bypass, user1 } = await loadFixture(fixture);
+    await vaultModule.connect(user1).requestVaultBypass(1, hre.ethers.parseEther("2"), "Daily");
+    const id = await requestId(bypass, vaultModule, user1);
+    await time.increase(DAY);
+
+    await vaultModule.connect(user1).executeVaultBypass(1, id, user1.address);
+    await expect(
+      vaultModule.connect(user1).executeVaultBypass(1, id, user1.address),
+    ).to.be.revertedWith("Invalid request");
+  });
+
+  it("can be cancelled before it matures", async function () {
+    const { vaultModule, bypass, user1 } = await loadFixture(fixture);
+    await vaultModule.connect(user1).requestVaultBypass(1, hre.ethers.parseEther("3"), "Daily");
+    const id = await requestId(bypass, vaultModule, user1);
+
+    await vaultModule.connect(user1).cancelVaultBypass(1, id);
+    await time.increase(DAY);
+    await expect(
+      vaultModule.connect(user1).executeVaultBypass(1, id, user1.address),
+    ).to.be.revertedWith("Invalid request");
+  });
+
+  it("refuses to pay a bypass to an unapproved destination", async function () {
+    const { vaultModule, bypass, user1, user2 } = await loadFixture(fixture);
+    await vaultModule.connect(user1).requestVaultBypass(1, hre.ethers.parseEther("2"), "Daily");
+    const id = await requestId(bypass, vaultModule, user1);
+    await time.increase(DAY);
+
+    await expect(
+      vaultModule.connect(user1).executeVaultBypass(1, id, user2.address),
+    ).to.be.revertedWith("Withdrawal address not approved");
+  });
+
+  it("refuses a request larger than the member's balance", async function () {
+    const { vaultModule, user1 } = await loadFixture(fixture);
+    await expect(
+      vaultModule.connect(user1).requestVaultBypass(1, hre.ethers.parseEther("50"), "Daily"),
+    ).to.be.revertedWith("Insufficient balance");
+  });
+});

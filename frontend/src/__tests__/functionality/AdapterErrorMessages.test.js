@@ -36,7 +36,7 @@ function revert(reason) {
 
 describe("EVM revert translation", () => {
   const cases = [
-    ["Exceeds limit", "This is over your spending limit — request a bypass to withdraw it"],
+    ["Exceeds limit", "This is over one of your spending limits — request a bypass to withdraw it"],
     ["Not a vault member", "You are not a member of this vault"],
     ["Address already exists", "That address is already on your list"],
     ["Cannot set own address as destination", "Your own address is always available — no need to add it"],

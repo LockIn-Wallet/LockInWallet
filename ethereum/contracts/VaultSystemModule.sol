@@ -207,6 +207,63 @@ contract VaultSystemModule is Initializable, UUPSUpgradeable, OwnableUpgradeable
         _proposals().cancelLimitProposal(_vaultScope(vaultId, msg.sender), proposalId);
     }
 
+    // ========== EMERGENCY BYPASS ==========
+
+    /// @notice Ask to withdraw past one of this vault's limits, after its wait.
+    /// The request and its timelock live in the shared bypass module; only the
+    /// payout happens here, because only this module holds the money.
+    function requestVaultBypass(uint256 vaultId, uint256 amount, string calldata skipPeriod)
+        external
+        onlyMember(vaultId)
+        returns (bytes32 requestId)
+    {
+        VaultInfo storage vault = _activeVault(vaultId);
+        VaultMemberInfo storage member = vaultMembers[vaultId][msg.sender];
+        return _bypass().requestBypassFor(
+            _vaultScope(vaultId, msg.sender), amount, skipPeriod, vault.token, member.balance
+        );
+    }
+
+    /// @notice Execute a matured bypass, paying out of vault funds.
+    function executeVaultBypass(uint256 vaultId, bytes32 requestId, address destination)
+        external
+        nonReentrant
+        onlyMember(vaultId)
+    {
+        enforceNotFrozen(savingsCore, msg.sender);
+        _requireApprovedDestination(msg.sender, destination);
+        VaultInfo storage vault = _activeVault(vaultId);
+        VaultMemberInfo storage member = vaultMembers[vaultId][msg.sender];
+
+        // Settle first so the amount is measured against what the member
+        // actually has, exactly as an ordinary withdrawal does.
+        _settlePenalties(vault, member);
+        _settleYield(vaultId, vault, member, msg.sender);
+
+        (uint256 amount, ) = _bypass().consumeBypassRequest(_vaultScope(vaultId, msg.sender), requestId);
+        require(amount <= member.balance, "Invalid amount");
+
+        _ensureLiquidity(vaultId, vault, member, msg.sender, amount);
+        member.balance -= amount;
+        vault.totalBalance -= amount;
+        _snapshotDebt(vault, member);
+        _snapshotYield(vaultId, member, msg.sender);
+        vault.updatedAt = block.timestamp;
+
+        _payOut(vault.token, destination, amount);
+        emit VaultWithdrawal(vaultId, msg.sender, amount, 0);
+    }
+
+    function cancelVaultBypass(uint256 vaultId, bytes32 requestId) external onlyMember(vaultId) {
+        _bypass().cancelBypassRequest(_vaultScope(vaultId, msg.sender), requestId);
+    }
+
+    function _bypass() private view returns (IBypassSystemModule) {
+        address module = savingsCore.getModule(ModuleIds.BYPASS_SYSTEM);
+        require(module != address(0), "Bypass module not registered");
+        return IBypassSystemModule(module);
+    }
+
     /// @notice The scope a member's vault rules are stored under.
     ///
     /// Domain-separated so it cannot collide with a real account: an address
