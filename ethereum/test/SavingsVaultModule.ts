@@ -359,4 +359,108 @@ describe("SavingsVaultModule", function () {
       ).to.be.revertedWith("Nothing to claim");
     });
   });
+
+  /**
+   * Exchanges withdraw to an address, not to a contract call. Without a
+   * permanent one, funding a vault means routing through your own wallet
+   * first — two steps, and a window where the savings rules do not apply yet.
+   */
+  describe("A permanent address you can give an exchange", function () {
+    it("predicts the address before it exists, and deploys there", async function () {
+      const ctx = await loadFixture(fixture);
+      const id = await makeStablesVault(ctx, ctx.user1);
+
+      const predicted = await ctx.vaults.depositAddressOf(id, ctx.user1.address);
+      expect(predicted).to.not.equal(hre.ethers.ZeroAddress);
+      expect(await ctx.vaults.isDepositAddressDeployed(id, ctx.user1.address)).to.equal(false);
+
+      await ctx.vaults.connect(ctx.user1).deployDepositAddress(id);
+      expect(await ctx.vaults.isDepositAddressDeployed(id, ctx.user1.address)).to.equal(true);
+      // The address the member was shown is the address that got deployed —
+      // otherwise publishing it early would have been a trap.
+      expect(await hre.ethers.provider.getCode(predicted)).to.not.equal("0x");
+    });
+
+    it("does not lose money sent before the address was deployed", async function () {
+      const ctx = await loadFixture(fixture);
+      const id = await makeStablesVault(ctx, ctx.user1);
+      const predicted = await ctx.vaults.depositAddressOf(id, ctx.user1.address);
+
+      // The exchange pays out first. Nothing is there yet to forward it.
+      await ctx.usdt.connect(ctx.user2).transfer(predicted, usd("300"));
+      await ctx.vaults.connect(ctx.user1).deployDepositAddress(id);
+
+      const proxy = await hre.ethers.getContractAt("SavingsVaultDepositProxy", predicted);
+      await proxy.connect(ctx.user2).sweep(ctx.usdt.target);
+      expect(await ctx.vaults.balanceOf(id, ctx.user1.address, ctx.usdt.target)).to.equal(usd("300"));
+    });
+
+    it("credits the member it belongs to, not the vault's creator", async function () {
+      const ctx = await loadFixture(fixture);
+      await ctx.vaults.connect(ctx.user1).createVault(
+        "Club", KIND_STABLES, COMMUNITY, [ctx.usdt.target, ctx.dai.target],
+        false, 2000, ["Daily"], [usd("500")], [DAY], [DAY],
+      );
+      const id = await ctx.vaults.getVaultCount();
+      await ctx.vaults.connect(ctx.user2).joinVault(id);
+      await ctx.vaults.connect(ctx.user2).deployDepositAddress(id);
+
+      const address = await ctx.vaults.depositAddressOf(id, ctx.user2.address);
+      await ctx.usdt.connect(ctx.user1).transfer(address, usd("250"));
+      const proxy = await hre.ethers.getContractAt("SavingsVaultDepositProxy", address);
+      await proxy.sweep(ctx.usdt.target);
+
+      // Money arriving at user2's address is user2's, whoever sent it.
+      expect(await ctx.vaults.balanceOf(id, ctx.user2.address, ctx.usdt.target)).to.equal(usd("250"));
+      expect(await ctx.vaults.balanceOf(id, ctx.user1.address, ctx.usdt.target)).to.equal(0);
+    });
+
+    it("gives each member of a shared vault a different address", async function () {
+      const ctx = await loadFixture(fixture);
+      await ctx.vaults.connect(ctx.user1).createVault(
+        "Club", KIND_STABLES, COMMUNITY, [ctx.usdt.target, ctx.dai.target],
+        false, 2000, ["Daily"], [usd("500")], [DAY], [DAY],
+      );
+      const id = await ctx.vaults.getVaultCount();
+      await ctx.vaults.connect(ctx.user2).joinVault(id);
+
+      expect(await ctx.vaults.depositAddressOf(id, ctx.user1.address))
+        .to.not.equal(await ctx.vaults.depositAddressOf(id, ctx.user2.address));
+    });
+
+    it("forwards native coin the moment it lands", async function () {
+      const ctx = await loadFixture(fixture);
+      await ctx.vaults.connect(ctx.user1).createVault(
+        "ETH", KIND_COIN, PERSONAL, [hre.ethers.ZeroAddress],
+        false, 2000, ["Daily"], [hre.ethers.parseEther("1")], [DAY], [DAY],
+      );
+      const id = await ctx.vaults.getVaultCount();
+      await ctx.vaults.connect(ctx.user1).deployDepositAddress(id);
+      const address = await ctx.vaults.depositAddressOf(id, ctx.user1.address);
+
+      await ctx.user2.sendTransaction({ to: address, value: hre.ethers.parseEther("2") });
+
+      // Under the vault's rules in the same transaction that delivered it.
+      expect(await ctx.vaults.balanceOf(id, ctx.user1.address, hre.ethers.ZeroAddress))
+        .to.equal(hre.ethers.parseEther("2"));
+      expect(await hre.ethers.provider.getBalance(address)).to.equal(0);
+    });
+
+    it("refuses to deploy for someone who is not a member", async function () {
+      const ctx = await loadFixture(fixture);
+      const id = await makeStablesVault(ctx, ctx.user1);
+      await expect(
+        ctx.vaults.connect(ctx.user2).deployDepositAddress(id),
+      ).to.be.revertedWith("Not a vault member");
+    });
+
+    it("deploys only once", async function () {
+      const ctx = await loadFixture(fixture);
+      const id = await makeStablesVault(ctx, ctx.user1);
+      await ctx.vaults.connect(ctx.user1).deployDepositAddress(id);
+      await expect(
+        ctx.vaults.connect(ctx.user1).deployDepositAddress(id),
+      ).to.be.revertedWith("Already deployed");
+    });
+  });
 });

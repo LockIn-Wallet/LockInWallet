@@ -9,6 +9,7 @@ import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "./SavingsInterfaces.sol";
 import "./YieldInterfaces.sol";
+import "./SavingsVaultDepositProxy.sol";
 
 // What a vault holds, and therefore how its limits can honestly be measured.
 uint8 constant VAULT_KIND_COIN = 0; // exactly one asset
@@ -86,6 +87,9 @@ contract SavingsVaultModule is Initializable, UUPSUpgradeable, OwnableUpgradeabl
     mapping(uint256 => mapping(address => mapping(address => uint256))) private penaltyDebt;
     mapping(uint256 => mapping(address => mapping(address => uint256))) private unclaimedPenalties;
 
+    /// @dev vaultId => member => their permanent deposit address, once deployed.
+    mapping(uint256 => mapping(address => address)) private depositProxies;
+
     uint8 private constant VAULT_TYPE_PERSONAL = 0;
     uint8 private constant VAULT_TYPE_COMMUNITY = 1;
     uint8 private constant DOLLAR_DECIMALS = 6;
@@ -101,6 +105,7 @@ contract SavingsVaultModule is Initializable, UUPSUpgradeable, OwnableUpgradeabl
     event Withdrawn(uint256 indexed vaultId, address indexed member, address indexed token, uint256 amount, address destination);
     event PenaltyPaid(uint256 indexed vaultId, address indexed member, address indexed token, uint256 amount, uint256 penalty);
     event PenaltyRewardsClaimed(uint256 indexed vaultId, address indexed member, address indexed token, uint256 amount);
+    event DepositAddressDeployed(uint256 indexed vaultId, address indexed member, address proxy);
 
     modifier nonReentrant() {
         require(!locked, "Reentrant call");
@@ -564,6 +569,59 @@ contract SavingsVaultModule is Initializable, UUPSUpgradeable, OwnableUpgradeabl
         address module = savingsCore.getModule(ModuleIds.PROPOSAL_SYSTEM);
         require(module != address(0), "Proposal module not registered");
         return IProposalSystemModule(module);
+    }
+
+    // ========== PERMANENT DEPOSIT ADDRESSES ==========
+
+    /// @notice Deploy the caller's permanent deposit address for this vault.
+    ///
+    /// It is deployed at the address `depositAddressOf` already predicted, so a
+    /// member can be shown their address and hand it to an exchange before any
+    /// contract exists there — and money sent in the meantime is not lost, it
+    /// simply waits to be swept once the address is deployed.
+    function deployDepositAddress(uint256 vaultId)
+        external
+        onlyMember(vaultId)
+        returns (address proxy)
+    {
+        _activeVault(vaultId);
+        require(depositProxies[vaultId][msg.sender] == address(0), "Already deployed");
+
+        proxy = address(
+            new SavingsVaultDepositProxy{salt: _proxySalt(vaultId, msg.sender)}(
+                address(this), vaultId, msg.sender
+            )
+        );
+        depositProxies[vaultId][msg.sender] = proxy;
+        emit DepositAddressDeployed(vaultId, msg.sender, proxy);
+    }
+
+    /// @notice Where this member's deposit address is, or will be. Deterministic
+    /// and answerable before deployment, which is the whole point: the address
+    /// can be published first and paid for later.
+    function depositAddressOf(uint256 vaultId, address member) public view returns (address) {
+        bytes32 hash = keccak256(
+            abi.encodePacked(
+                bytes1(0xff),
+                address(this),
+                _proxySalt(vaultId, member),
+                keccak256(
+                    abi.encodePacked(
+                        type(SavingsVaultDepositProxy).creationCode,
+                        abi.encode(address(this), vaultId, member)
+                    )
+                )
+            )
+        );
+        return address(uint160(uint256(hash)));
+    }
+
+    function isDepositAddressDeployed(uint256 vaultId, address member) external view returns (bool) {
+        return depositProxies[vaultId][member] != address(0);
+    }
+
+    function _proxySalt(uint256 vaultId, address member) private pure returns (bytes32) {
+        return keccak256(abi.encode(vaultId, member));
     }
 
     // ========== EARNING ==========

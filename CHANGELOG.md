@@ -86,6 +86,18 @@ these notes on the in-app **Governance** page before they execute.
   withdrawal-address list is keyed by the member's real address, so every
   vault a person owns shares one list: where money may go is a property of
   the person, not the asset.
+- **Permanent deposit addresses on the unified vault**
+  (`SavingsVaultDepositProxy`). An exchange withdraws to an address, not to a
+  contract call, so without one you have to route money through your own wallet
+  first — two steps, and a window where the savings rules do not apply to it
+  yet. The address is bound to a **member**, not to the vault, so in a shared
+  vault an arriving transfer credits the person it came from rather than
+  whoever created the pot. It is CREATE2-derived from `(vaultId, member)` and
+  `depositAddressOf` answers before anything is deployed, so the address can be
+  published first and paid for later; money that arrives in the meantime waits
+  and is swept in. Sweeps are permissionless, because every path ends at the
+  same beneficiary's balance in the same vault — which also means a stuck
+  transfer can be rescued without the member needing gas.
 - **Early exit with a penalty, on the unified vault.** `withdrawWithPenalty`
   is the pressure valve that keeps a limit honest: a member can always get past
   it, but only at the rate the vault was created with, and the money goes to
