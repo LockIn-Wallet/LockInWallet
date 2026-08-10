@@ -123,9 +123,9 @@ async function fetchEvmBalances(params) {
     return {};
   }
 
-  // The transaction manager routes balances to the legacy account or the
-  // selected vault (and auto-sweeps deposit addresses) — always prefer it
-  // over querying the contract directly
+  // The transaction manager routes balances to the selected vault (and
+  // auto-sweeps deposit addresses) — always prefer it over querying the
+  // contract directly
   if (transactionManager) {
     try {
       const currentUserAddress = userAddress || (await transactionManager.getAddress());

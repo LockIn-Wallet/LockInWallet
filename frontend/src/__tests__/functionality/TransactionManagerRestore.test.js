@@ -48,8 +48,9 @@ describe('TransactionManager active-vault restore', () => {
 
     expect(tm.activeVaultAddress).toBeNull();
     expect(localStorage.getItem(KEY)).toBeNull();
-    // Legacy account becomes the target again, so spending limits resolve
-    expect(tm._usesLegacyAccount()).toBe(true);
+    // Nothing is selected, so nothing claims to be set up — there is no
+    // pre-vault account left to fall back to.
+    expect(tm.isSetupCommitted()).toBe(false);
   });
 
   test('does nothing when no selection is stored', async () => {
@@ -64,11 +65,12 @@ describe('TransactionManager active-vault restore', () => {
   });
 });
 
-describe('TransactionManager withdrawal address routing (legacy account)', () => {
+describe('TransactionManager withdrawal address routing', () => {
   test('routes adds through the commit-aware adapter method, never the direct add', async () => {
     // The contract rejects direct adds after lock-in ("use timelock method"),
     // so the manager must delegate to addWithdrawalDestination, which picks
-    // direct vs. timelock request based on commit status
+    // direct vs. timelock request based on commit status. A vault shares this
+    // list with its owner's account, so the routing is the same either way.
     const adapter = {
       userAddress: WALLET,
       addWithdrawalDestination: jest.fn().mockResolvedValue('0xhash'),

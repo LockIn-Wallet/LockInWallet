@@ -226,7 +226,7 @@ const WithdrawalInterface = ({
         alert(`✅ Solana withdrawal successful!\n\nTransaction: ${txHash}\nAmount: ${withdrawalAmount} ${selectedToken}\nDestination: ${destinationLabel}`);
       } else {
         // EVM withdrawal routed through the transaction manager so it targets
-        // the legacy account or the currently selected vault
+        // the currently selected vault
         console.log("💸 EVM: Withdrawing to destination", withdrawalAmount, selectedToken, selectedWithdrawalDestination);
 
         let destinationAddress = selectedWithdrawalDestination;

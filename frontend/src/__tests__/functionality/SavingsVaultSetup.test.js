@@ -118,11 +118,11 @@ describe("locking in", () => {
     await expect(tm.commitSetup(PERIODS, {})).rejects.toThrow("No stablecoins");
   });
 
-  test("still reports the pre-vault account as unknown until it is asked", () => {
+  test("reports not set up until a vault exists", () => {
     const tm = evmManager(creatingAdapter());
-    // Someone who locked in before vaults existed has their setup in the
-    // account, and only the account can answer.
-    expect(tm.isSetupCommitted()).toBeNull();
+    // The pre-vault account used to answer this on EVM. It is gone: a savings
+    // vault is the only thing that counts as being locked in.
+    expect(tm.isSetupCommitted()).toBe(false);
   });
 });
 
@@ -218,18 +218,21 @@ describe("knowing the savings vault is there after a reload", () => {
     expect(tm.adapter.getIsSetupCommitted).not.toHaveBeenCalled();
   });
 
-  test("still asks the account for a wallet whose savings predate vaults", async () => {
+  test("never falls back to the pre-vault account", async () => {
     const tm = evmManager(
       restoringAdapter({
         getUserVaults: jest.fn().mockResolvedValue([]),
         getVaultInfo: jest.fn().mockResolvedValue(null),
+        // Even an account that says it is committed no longer counts. Its
+        // balance lives in SavingsCore, which cannot earn and which the app no
+        // longer routes to at all.
         getIsSetupCommitted: jest.fn().mockResolvedValue(true),
       }),
     );
     await tm._loadPersonalVault();
 
-    await expect(tm.getIsSetupCommitted(WALLET)).resolves.toBe(true);
-    expect(tm.adapter.getIsSetupCommitted).toHaveBeenCalled();
+    await expect(tm.getIsSetupCommitted(WALLET)).resolves.toBe(false);
+    expect(tm.adapter.getIsSetupCommitted).not.toHaveBeenCalled();
   });
 
   test("refuses to lock in a second time", async () => {

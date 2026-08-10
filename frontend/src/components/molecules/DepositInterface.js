@@ -65,7 +65,7 @@ const DepositInterface = ({
   const [isProxyDeployed, setIsProxyDeployed] = useState(false);
 
   // Proxy status checking — the transaction manager resolves the deposit
-  // address for the legacy account or the currently selected vault
+  // address for the currently selected vault
   const checkProxyStatus = async () => {
     if (!transactionManager) {
       console.log("❌ No transaction manager available for proxy check");

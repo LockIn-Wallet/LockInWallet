@@ -113,6 +113,23 @@ these notes on the in-app **Governance** page before they execute.
   anyone else has joined — people join under a cap spanning a known set of
   coins, and one that fails to hold its peg breaks that accounting for all of
   them.
+- **The pre-vault account is no longer reachable from the app.** Locking in
+  creates a savings vault, so `_usesLegacyAccount()` and its 28 branches are
+  gone: balances, limits, deposits, withdrawals, proposals, bypasses and
+  withdrawal addresses all go to the vault, with no second path behind them.
+  `isSetupCommitted()` is now simply "do you have a vault" on both chains
+  rather than returning null on EVM so the account could be asked. The
+  fabricated "Savings" card is gone from the vault list.
+  **A balance still sitting in `SavingsCore` is not destroyed** — it remains
+  on-chain and a script can still reach it — but nothing in the UI will show or
+  move it. Measured before removing: total custody across both chains was
+  $0.0432, all of it one developer wallet.
+  Removing the branch exposed a bug it had been hiding: the withdrawal-address
+  methods were passing a vault address into adapter methods that take
+  `(destination, title)`, so the vault landed in the destination's slot. That
+  list is keyed by the member's own address and shared by every vault they own
+  — where money may go is a property of the person, not the asset — so the
+  interface no longer takes a vault at all.
 - **Earning is released.** `isYieldEnabled()` is now true and no longer reads
   the environment. The flag was never the real gate: the adapter reports
   `supported: false` for a network with no vault yield module registered, and
