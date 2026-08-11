@@ -120,6 +120,9 @@ interface ITimePeriodLimitsModule {
 
     // Limit checking and spending
     function checkAllTimePeriodLimits(address user, uint256 amount) external;
+    function checkAllTimePeriodLimitsFor(address user, uint256 amount, uint256 balance) external;
+    function setLimitsArePercentage(address user, bool arePercentage) external;
+    function limitsArePercentage(address user) external view returns (bool);
     function checkLimitsWithBypass(address user, uint256 amount, string calldata skipPeriod) external view;
     function updateSpendingWithBypass(address user, uint256 amount, string calldata skipPeriod) external;
 
@@ -151,6 +154,7 @@ interface ITimePeriodLimitsModule {
     event CategoryDeleted(address indexed user, string category);
     event UnlockDelaySet(address indexed user, string category, uint256 unlockDelay);
     event PeriodsMigrated(address indexed from, address indexed to, uint256 periodCount);
+    event LimitsArePercentageSet(address indexed user, bool arePercentage);
 }
 
 interface IProposalSystemModule {
@@ -220,6 +224,8 @@ interface IBypassSystemModule {
     // Bypass request management
     function requestLimitBypass(address user, uint256 amount, string calldata skipPeriod, address token) external returns (bytes32 requestId);
     function executeBypassWithdrawal(address user, bytes32 requestId) external;
+    function requestBypassFor(address user, uint256 amount, string calldata skipPeriod, address token, uint256 availableBalance) external returns (bytes32);
+    function consumeBypassRequest(address user, bytes32 requestId) external returns (uint256 amount, address token);
     function cancelBypassRequest(address user, bytes32 requestId) external;
 
     // View functions
@@ -304,27 +310,36 @@ interface IPoolTogetherModule {
 interface IVaultSystemModule {
     // Vault lifecycle
     function createVault(VaultParams calldata params) external returns (uint256 vaultId);
+    function createVaultWithPeriods(
+        VaultParams calldata params,
+        string[] calldata names,
+        uint256[] calldata limits,
+        uint256[] calldata durations,
+        uint256[] calldata unlockDelays
+    ) external returns (uint256 vaultId);
     function joinVault(uint256 vaultId) external;
     function leaveVault(uint256 vaultId) external;
-    function updateVaultRules(
-        uint256 vaultId,
-        uint256 dailyLimit,
-        uint256 weeklyLimit,
-        uint256 monthlyLimit,
-        bool limitsArePercentage,
-        uint256 penaltyRateBps
-    ) external;
+    function vaultScopeOf(uint256 vaultId, address member) external pure returns (address);
+    function requestVaultBypass(uint256 vaultId, uint256 amount, string calldata skipPeriod) external returns (bytes32);
+    function executeVaultBypass(uint256 vaultId, bytes32 requestId, address destination) external;
+    function cancelVaultBypass(uint256 vaultId, bytes32 requestId) external;
 
     // Funds
     function deposit(uint256 vaultId, uint256 amount) external payable;
     function depositFor(uint256 vaultId, uint256 amount, address beneficiary) external payable;
     function withdraw(uint256 vaultId, uint256 amount) external;
+    function withdrawTo(uint256 vaultId, uint256 amount, address destination) external;
     function withdrawWithPenalty(uint256 vaultId, uint256 amount) external;
     function claimPenaltyRewards(uint256 vaultId) external;
 
     // Permanent deposit addresses
     function deployVaultDepositAddress(uint256 vaultId) external returns (address proxy);
     function getVaultDepositAddress(uint256 vaultId) external view returns (address);
+
+    // Earning on vault balances — the module custodies the funds and delegates
+    // the accounting to the yield module
+    function setVaultYieldMode(uint256 vaultId, uint8 mode) external;
+    function compoundYield(uint256 vaultId, address member) external;
 
     // Views
     function getVault(uint256 vaultId) external view returns (VaultInfo memory);
@@ -333,6 +348,20 @@ interface IVaultSystemModule {
     function getVaultMembers(uint256 vaultId) external view returns (address[] memory);
     function getVaultCount() external view returns (uint256);
     function pendingPenaltyRewards(uint256 vaultId, address member) external view returns (uint256);
+    function pendingVaultYield(uint256 vaultId, address member) external view returns (uint256);
+    function getVaultYieldInfo(uint256 vaultId) external view returns (
+        uint8 mode,
+        address strategy,
+        uint256 invested,
+        uint256 currentValue,
+        uint256 lifetimeYield,
+        uint256 feeBps
+    );
+
+    /// @notice Where penalties and yield fees are sent. Already owner-configured
+    /// via setTreasury; exposed so the yield module can reuse it rather than
+    /// carrying a second treasury address.
+    function treasury() external view returns (address);
 
     // Events
     event VaultCreated(uint256 indexed vaultId, address indexed creator, address indexed token, string name, uint8 vaultType);
@@ -343,6 +372,8 @@ interface IVaultSystemModule {
     event VaultDepositAddressDeployed(uint256 indexed vaultId, address indexed proxy);
     event VaultWithdrawal(uint256 indexed vaultId, address indexed member, uint256 amount, uint256 penalty);
     event PenaltyRewardsClaimed(uint256 indexed vaultId, address indexed member, uint256 amount);
+    event VaultYieldModeSet(uint256 indexed vaultId, uint8 mode);
+    event VaultYieldCompounded(uint256 indexed vaultId, address indexed member, uint256 amount);
 }
 
 interface IRecoverySystemModule {
@@ -379,6 +410,13 @@ interface IRecoverySystemModule {
     event AccountFrozen(address indexed user, address frozenBy);
     event AccountUnfrozen(address indexed user);
     event OwnershipRecovered(address indexed oldOwner, address indexed newOwner, uint256 tokenCount);
+}
+
+/// @notice The unified vault, as the modules acting on its members need it.
+interface ISavingsVaultModule {
+    function isVaultMember(uint256 vaultId, address member) external view returns (bool);
+    function vaultTypeOf(uint256 vaultId) external view returns (uint8);
+    function vaultScopeOf(uint256 vaultId, address member) external pure returns (address);
 }
 
 interface IReferralModule {
@@ -450,6 +488,11 @@ library ModuleIds {
     bytes32 public constant VAULT_SYSTEM = keccak256("VAULT_SYSTEM");
     bytes32 public constant REFERRAL = keccak256("REFERRAL");
     bytes32 public constant RECOVERY_SYSTEM = keccak256("RECOVERY_SYSTEM");
+    bytes32 public constant YIELD_SYSTEM = keccak256("YIELD_SYSTEM");
+    bytes32 public constant VAULT_RULES = keccak256("VAULT_RULES");
+    bytes32 public constant SAVINGS_VAULTS = keccak256("SAVINGS_VAULTS");
+    bytes32 public constant VAULT_DEPOSIT_ADDRESSES = keccak256("VAULT_DEPOSIT_ADDRESSES");
+    bytes32 public constant VAULT_YIELD = keccak256("VAULT_YIELD");
 }
 
 // ========== SHARED GUARDS ==========

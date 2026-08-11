@@ -22,7 +22,7 @@ const TrustGrid = () => (
   <section id="security" style={landingStyles.section}>
     <div style={landingStyles.inner}>
       <SectionHeading
-        eyebrow="Verify, don't trust"
+      eyebrow="Verify, don't trust"
         title="Nothing here asks for your faith"
       />
 

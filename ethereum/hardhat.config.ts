@@ -36,6 +36,11 @@ const config: HardhatUserConfig = {
   networks: {
     hardhat: {
       allowUnlimitedContractSize: true,
+      // Forking is not configured here on purpose. The Aave fork test calls
+      // `hardhat_reset` with a forking config itself and resets afterwards, so
+      // the default `npx hardhat test` run never reaches for the network — it
+      // stays fast and offline. See test/AaveV3StrategyFork.ts and
+      // `npm run test:fork`.
     },
     // goerli: {
     //   url: process.env.ALCHEMY_API_URL,

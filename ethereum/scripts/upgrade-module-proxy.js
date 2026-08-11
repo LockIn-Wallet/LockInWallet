@@ -11,7 +11,10 @@ const MODULE_IDS = {
   'ProxyDeploymentModule': ethers.keccak256(ethers.toUtf8Bytes("PROXY_DEPLOYMENT")),
   'VaultSystemModule': ethers.keccak256(ethers.toUtf8Bytes("VAULT_SYSTEM")),
   'ReferralModule': ethers.keccak256(ethers.toUtf8Bytes("REFERRAL")),
-  'RecoverySystemModule': ethers.keccak256(ethers.toUtf8Bytes("RECOVERY_SYSTEM"))
+  'RecoverySystemModule': ethers.keccak256(ethers.toUtf8Bytes("RECOVERY_SYSTEM")),
+  'PoolTogetherModule': ethers.keccak256(ethers.toUtf8Bytes("POOL_TOGETHER")),
+  'YieldModule': ethers.keccak256(ethers.toUtf8Bytes("YIELD_SYSTEM")),
+  'VaultRulesModule': ethers.keccak256(ethers.toUtf8Bytes("VAULT_RULES"))
 };
 
 // ERC-1967 implementation slot

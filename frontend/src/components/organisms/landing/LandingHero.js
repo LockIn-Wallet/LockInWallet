@@ -17,7 +17,7 @@ const LandingHero = ({ onLaunch }) => (
     <div style={landingStyles.heroCopy}>
       <span style={landingStyles.badge}>
         <Icon name="shield" size={13} />
-        TIME-LOCKED WALLET
+        TIME-LOCKED ON-CHAIN WALLET
       </span>
 
       <h1 style={landingStyles.heroTitle}>

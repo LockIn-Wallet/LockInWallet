@@ -28,6 +28,18 @@ contract TimePeriodLimitsModule is Initializable, UUPSUpgradeable, OwnableUpgrad
     // 24-hour wait they were committed under.
     mapping(address => mapping(bytes32 => uint256)) private periodUnlockDelays;
 
+    // Appended for upgrades — when set, this scope's limits are basis points of
+    // a balance rather than fixed token amounts.
+    //
+    // Vaults need this: a cap on a volatile asset ("5% a day") has to be a
+    // fraction, because a fixed amount means nothing when the asset's value
+    // moves, and pricing it would put an oracle in the enforcement path. The
+    // balance is supplied by the caller at check time — this module never holds
+    // balances — so the percentage is resolved without any price at all.
+    mapping(address => bool) private scopeLimitsArePercentage;
+
+    /// @notice Basis-point scale for percentage limits (10000 = 100%).
+    uint256 public constant MAX_BPS = 10000;
     /// @notice Wait applied to periods with no explicit delay (legacy data).
     uint256 public constant DEFAULT_UNLOCK_DELAY = 24 hours;
     /// @notice A delay shorter than this would make the lock meaningless.
@@ -301,7 +313,45 @@ contract TimePeriodLimitsModule is Initializable, UUPSUpgradeable, OwnableUpgrad
     // ========== LIMIT CHECKING AND SPENDING ==========
 
     function checkAllTimePeriodLimits(address user, uint256 amount) external onlyAuthorized {
+        // A fixed-amount scope needs no balance, so pass zero — it is unused.
+        _checkAndSpend(user, amount, 0);
+    }
+
+    /// @notice Same check, for a scope whose limits are a share of a balance.
+    /// @param balance the balance the percentage applies to, supplied by the
+    /// caller because this module holds no balances of its own. Ignored for
+    /// scopes using fixed amounts, so one entry point serves both.
+    function checkAllTimePeriodLimitsFor(address user, uint256 amount, uint256 balance)
+        external
+        onlyAuthorized
+    {
+        _checkAndSpend(user, amount, balance);
+    }
+
+    /// @notice Whether this scope's limits are basis points of a balance.
+    function setLimitsArePercentage(address user, bool arePercentage) external onlyAuthorized {
+        scopeLimitsArePercentage[user] = arePercentage;
+        emit LimitsArePercentageSet(user, arePercentage);
+    }
+
+    function limitsArePercentage(address user) external view returns (bool) {
+        return scopeLimitsArePercentage[user];
+    }
+
+    /// @notice What a stored limit actually permits right now — the amount
+    /// itself, or that share of `balance` for a percentage scope.
+    function effectiveLimit(address user, uint256 storedLimit, uint256 balance)
+        public
+        view
+        returns (uint256)
+    {
+        if (!scopeLimitsArePercentage[user]) return storedLimit;
+        return (balance * storedLimit) / MAX_BPS;
+    }
+
+    function _checkAndSpend(address user, uint256 amount, uint256 balance) private {
         UserSpendingLimits storage userLimits = userSpendingLimits[user];
+        bool isPercentage = scopeLimitsArePercentage[user];
 
         // Check and update each active time period
         for (uint256 i = 0; i < userLimits.periods.length; i++) {
@@ -315,8 +365,10 @@ contract TimePeriodLimitsModule is Initializable, UUPSUpgradeable, OwnableUpgrad
                 period.spent = 0;
             }
 
-            // Check if this withdrawal would exceed the period limit
-            require(period.spent + amount <= period.limit, "Exceeds limit");
+            // Percentage caps resolve against the balance BEFORE this
+            // withdrawal, so the allowance cannot shrink mid-check.
+            uint256 limit = isPercentage ? (balance * period.limit) / MAX_BPS : period.limit;
+            require(period.spent + amount <= limit, "Exceeds limit");
         }
 
         // If all checks pass, deduct from all active periods

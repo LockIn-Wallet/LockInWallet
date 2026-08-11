@@ -1,4 +1,4 @@
-import React, { Suspense, lazy } from "react";
+import React from "react";
 
 import SectionHeading from "../atoms/SectionHeading.js";
 import LandingNav from "../organisms/landing/LandingNav.js";
@@ -17,7 +17,6 @@ import { landingStyles } from "../../styles";
 
 // Shares the lazy chunk with the standalone page, so chart.js still only
 // downloads when this section is actually reached
-const SavingsVisualiser = lazy(() => import("../pages/SavingsVisualiser.js"));
 
 /**
  * WalletConnectionPrompt - the logged-out landing page.
@@ -73,19 +72,6 @@ const WalletConnectionPrompt = ({
             lede="Cheap, fast transactions matter here: an hourly limit only makes sense if using it doesn't cost a fortune in gas."
           />
           <ChainAvailability />
-        </div>
-      </section>
-
-      <section style={landingStyles.section}>
-        <div style={landingStyles.inner}>
-          <SectionHeading
-            eyebrow="The long view"
-            title="Where will locking your savings take you"
-            lede="Set your spending split and watch four decades play out."
-          />
-          <Suspense fallback={null}>
-            <SavingsVisualiser compact title={null} subtitle={null} />
-          </Suspense>
         </div>
       </section>
 

@@ -16,6 +16,7 @@ import {
 
 // Import utility functions
 import { getCurrentNetwork } from "../../utils/walletUtils.js";
+import { useVaultTokens, filterToVaultTokens } from "../../hooks/useVaultTokens.js";
 
 // Network configuration constants
 const ETH_ADDRESS = "0x0000000000000000000000000000000000000000";
@@ -47,10 +48,15 @@ const DepositInterface = ({
   // Token state from parent (shared with withdrawal)
   selectedToken,
   setSelectedToken,
+  activeVaultAddress = null,
 
   // Callbacks for App.js state updates
   onBalanceUpdate,
 }) => {
+  // The coins this vault takes. Null while unknown, which leaves the full list
+  // on offer rather than an empty picker.
+  const vaultTokens = useVaultTokens(transactionManager, activeVaultAddress);
+
   // Internal state for deposit operations
   const [depositAmount, setDepositAmount] = useState("");
   const [isDepositing, setIsDepositing] = useState(false);
@@ -59,7 +65,7 @@ const DepositInterface = ({
   const [isProxyDeployed, setIsProxyDeployed] = useState(false);
 
   // Proxy status checking — the transaction manager resolves the deposit
-  // address for the legacy account or the currently selected vault
+  // address for the currently selected vault
   const checkProxyStatus = async () => {
     if (!transactionManager) {
       console.log("❌ No transaction manager available for proxy check");
@@ -361,10 +367,15 @@ const DepositInterface = ({
           >
             <option value="">Select Token</option>
 
-            {/* Recommended Stablecoins Section */}
+            {/* Only what this vault actually takes. A vault is created holding
+                a specific set of coins and refuses the rest, so offering the
+                whole network's list would offer deposits guaranteed to revert. */}
             <optgroup label="🌟 Recommended Stablecoins">
               {Object.entries(
-                getCurrentNetwork(networkType, selectedNetwork).tokens
+                filterToVaultTokens(
+                  getCurrentNetwork(networkType, selectedNetwork).tokens,
+                  vaultTokens,
+                )
               )
                 .filter(
                   ([_, token]) =>
@@ -379,18 +390,12 @@ const DepositInterface = ({
                 ))}
             </optgroup>
 
-            {/* Native Token Section */}
-            <optgroup label="⚡ Native Token">
-              {Object.entries(
-                getCurrentNetwork(networkType, selectedNetwork).tokens
-              )
-                .filter(([_, token]) => !token.recommended)
-                .map(([key, token]) => (
-                  <option key={key} value={key}>
-                    {token.symbol} - {token.name}
-                  </option>
-                ))}
-            </optgroup>
+            {/* No native-coin option on purpose. This account applies one
+                spending limit across everything it holds, denominated in
+                dollars, and a coin whose value moves cannot be measured against
+                it — so the contract refuses it. Offering it here would be a
+                transaction guaranteed to fail. It belongs in a vault of its
+                own, where limits are set in that coin. */}
           </select>
 
           <input

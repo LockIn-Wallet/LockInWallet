@@ -1,5 +1,10 @@
 import React, { useState, useEffect } from "react";
 import PropTypes from "prop-types";
+import {
+  useVaultTokens,
+  filterToVaultTokens,
+  vaultAcceptsNative,
+} from "../../hooks/useVaultTokens.js";
 
 // Import components
 import WithdrawalAddressSelector from "../WithdrawalAddressSelector.js";
@@ -68,6 +73,8 @@ const WithdrawalInterface = ({
   // Utilities
   currentTime,
 }) => {
+  // Only the coins this vault holds; null while unknown.
+  const vaultTokens = useVaultTokens(transactionManager, activeVaultAddress);
   // Internal withdrawal state
   const [withdrawalAmount, setWithdrawalAmount] = useState("");
   const [selectedWithdrawalDestination, setSelectedWithdrawalDestination] = useState("self");
@@ -219,7 +226,7 @@ const WithdrawalInterface = ({
         alert(`✅ Solana withdrawal successful!\n\nTransaction: ${txHash}\nAmount: ${withdrawalAmount} ${selectedToken}\nDestination: ${destinationLabel}`);
       } else {
         // EVM withdrawal routed through the transaction manager so it targets
-        // the legacy account or the currently selected vault
+        // the currently selected vault
         console.log("💸 EVM: Withdrawing to destination", withdrawalAmount, selectedToken, selectedWithdrawalDestination);
 
         let destinationAddress = selectedWithdrawalDestination;
@@ -584,9 +591,15 @@ const WithdrawalInterface = ({
               minWidth: "120px",
             }}
           >
-            <option value="ETH">ETH</option>
+            {/* Native coin only where the vault actually holds it. A dollar
+                cap cannot measure a coin whose value moves, so a stablecoins
+                vault refuses it outright. */}
+            {vaultAcceptsNative(vaultTokens) && <option value="ETH">ETH</option>}
             {Object.entries(
-              getCurrentNetwork(networkType, selectedNetwork).tokens
+              filterToVaultTokens(
+                getCurrentNetwork(networkType, selectedNetwork).tokens,
+                vaultTokens,
+              )
             )
               .filter(
                 ([_, token]) =>

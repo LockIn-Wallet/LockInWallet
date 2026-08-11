@@ -3,6 +3,11 @@ import { SolanaAdapter } from "./SolanaAdapter.js";
 import { getTokenMeta } from "../utils/tokenUtils.js";
 import { clearPendingReferrer } from "../services/referral.service.js";
 import { SPENDING_PERIODS, getPeriodDuration } from "../utils/spendingPeriods.js";
+import { getStablecoins } from "../utils/stablecoins.js";
+
+/** Same address, whatever case it arrived in. */
+const sameAddress = (a, b) =>
+  typeof a === "string" && typeof b === "string" && a.toLowerCase() === b.toLowerCase();
 
 const PERSONAL_VAULT_KEY = "personal_vault_address";
 const ACTIVE_VAULT_KEY = "active_vault_address";
@@ -21,7 +26,7 @@ export class TransactionManager {
     this.networkConfig = null;
     this.personalVaultAddress = null;
     // The vault the main wallet UI currently operates on.
-    // null = the default: the personal vault (Solana) or legacy account (EVM).
+    // null = the default: the savings vault that locking in created.
     this.activeVaultAddress = null;
   }
 
@@ -32,6 +37,11 @@ export class TransactionManager {
     if (networkType === "evm") {
       this.adapter = new EVMAdapter(networkConfig);
       await this.adapter.connect(walletConfig);
+      // Locking in creates a vault on EVM too now, so the same restore has to
+      // run here. Without it the app reloads knowing nothing about the vault it
+      // just made, decides setup never happened, and locks in again — one more
+      // vault every time.
+      await this._loadPersonalVault();
     } else if (networkType === "solana") {
       const { wallet, connection } = walletConfig;
       if (!wallet || !connection) {
@@ -93,12 +103,6 @@ export class TransactionManager {
     return !!this.activeVaultAddress;
   }
 
-  _usesLegacyAccount() {
-    // EVM's initial setup lives in the legacy savings account; only an
-    // explicitly selected vault routes through the vault module
-    return this.networkType === "evm" && !this.activeVaultAddress;
-  }
-
   _requireActiveVault() {
     const address = this.getActiveVaultAddress();
     if (!address) throw new Error("No vault selected. Complete setup first.");
@@ -107,10 +111,9 @@ export class TransactionManager {
 
   /** Feature support of the currently selected vault. */
   getActiveVaultCapabilities() {
-    // The EVM vault module has no timelocked rule proposals, bypass requests
-    // or destination whitelists yet — rule changes apply immediately there
-    const full = this.networkType !== "evm" || !this.activeVaultAddress;
-    return { proposals: full, bypass: full, destinations: full };
+    // Vaults reuse the savings account's own modules for limits, proposals,
+    // bypasses and withdrawal addresses, so there is nothing left to withhold.
+    return { proposals: true, bypass: true, destinations: true };
   }
 
   _requireCapability(name) {
@@ -139,13 +142,18 @@ export class TransactionManager {
   }
 
   async _loadPersonalVault() {
-    const walletAddr = this.getAddress();
+    // _walletKey, not getAddress: getAddress is async on EVM, so using it here
+    // stored and looked up under the string "[object Promise]" — one key shared
+    // by every wallet, and never the one the vault was saved under.
+    const walletAddr = this._walletKey();
     if (!walletAddr) return;
 
     const stored = localStorage.getItem(`${PERSONAL_VAULT_KEY}_${walletAddr}`);
     if (stored) {
       const info = await this.getAdapter().getVaultInfo(stored).catch(() => null);
-      if (info && info.vaultType === "Personal" && info.creator === walletAddr) {
+      // Addresses compared case-insensitively: a checksummed address from the
+      // contract and a lowercase one from the wallet are the same address.
+      if (info && info.vaultType === "Personal" && sameAddress(info.creator, walletAddr)) {
         this.personalVaultAddress = stored;
         return;
       }
@@ -154,7 +162,7 @@ export class TransactionManager {
 
     const userVaults = await this.getAdapter().getUserVaults().catch(() => []);
     const personal = userVaults.find(
-      (v) => v.vault.vaultType === "Personal" && v.vault.creator === walletAddr
+      (v) => v.vault.vaultType === "Personal" && sameAddress(v.vault.creator, walletAddr)
     );
     if (personal) {
       this.personalVaultAddress = personal.vault.address;
@@ -166,8 +174,12 @@ export class TransactionManager {
     return this.personalVaultAddress;
   }
 
+  /**
+   * Locking in produces a savings vault, on either chain, so having one is the
+   * whole answer. The pre-vault account that used to answer this on EVM is no
+   * longer reachable from the app.
+   */
   isSetupCommitted() {
-    if (this.networkType === "evm") return null;
     return !!this.personalVaultAddress;
   }
 
@@ -177,9 +189,10 @@ export class TransactionManager {
   }
 
   supportsPercentSetupLimits() {
-    // Solana setup creates a personal vault, which supports percent-of-balance
-    // limits; EVM setup still uses the legacy TimePeriodLimits module, which
-    // only knows fixed amounts
+    // Locking in creates a stablecoins vault, and its cap is in dollars across
+    // every coin it holds. A percentage of a mixed balance would need the coins
+    // priced against each other, which is the one thing a dollar cap avoids —
+    // percentages belong to a single-coin pot.
     return this.networkType === "solana";
   }
 
@@ -203,15 +216,16 @@ export class TransactionManager {
    * classic three until those programs gain the extra windows.
    */
   getSupportedSpendingPeriods() {
-    if (this.networkType === "evm" && !this.activeVaultAddress) {
-      return SPENDING_PERIODS.map((period) => period.name);
-    }
+    // EVM vaults keep their limits in the same module the account uses, so
+    // every window is available. Solana's vault program still has three fixed
+    // fields.
+    if (this.networkType === "evm") return SPENDING_PERIODS.map((period) => period.name);
     return ["Daily", "Weekly", "Monthly"];
   }
 
   /** True when the user can choose their own bypass/limit-change wait times. */
   supportsCustomUnlockDelays() {
-    return this.networkType === "evm" && !this.activeVaultAddress;
+    return this.networkType === "evm";
   }
 
   /**
@@ -227,9 +241,7 @@ export class TransactionManager {
     }
 
     if (this.networkType === "evm") {
-      const hash = await this.getAdapter().commitSetup(periods, referrer);
-      clearPendingReferrer();
-      return hash;
+      return this._createSavingsVault(periods, { limitsArePercentage, referrer });
     }
 
     const limitOf = (name) => periods.find((period) => period.name === name)?.limit || 0;
@@ -252,15 +264,60 @@ export class TransactionManager {
       limitsArePercentage,
     });
 
-    this.personalVaultAddress = result.vaultAddress;
-    const walletAddr = this.getAddress();
-    if (walletAddr) {
-      localStorage.setItem(`${PERSONAL_VAULT_KEY}_${walletAddr}`, result.vaultAddress);
-    }
+    this._rememberPersonalVault(result.vaultAddress);
     // Referral recording isn't supported on this chain yet, but the signup is
     // complete, so the captured referrer is no longer pending
     clearPendingReferrer();
     return result.signature;
+  }
+
+  /**
+   * Lock in on EVM by creating the savings vault itself.
+   *
+   * The main wallet is a vault — the same primitive as any pot, with the same
+   * rules in the same modules — so locking in creates one rather than writing
+   * to a separate account with its own custody and its own copy of the limit
+   * logic. It holds the network's dollar-pegged coins under one cap, which is
+   * what makes several coins share a limit without pricing them.
+   */
+  async _createSavingsVault(periods, { limitsArePercentage, referrer }) {
+    // Locking in twice is never intended. Left unguarded it is also silent —
+    // it just makes another vault, and the money is split across them.
+    if (this.personalVaultAddress) {
+      throw new Error("Your savings are already locked in");
+    }
+    const stablecoins = getStablecoins(this.networkConfig);
+    if (stablecoins.length === 0) {
+      throw new Error("No stablecoins are available on this network yet");
+    }
+    if (limitsArePercentage) {
+      // A percentage of a mixed balance needs the coins priced against each
+      // other, which is the one thing a shared dollar cap avoids.
+      throw new Error("Your savings are capped in dollars, not a percentage");
+    }
+
+    const result = await this.getAdapter().createVault({
+      name: "Savings",
+      vaultType: "Personal",
+      kind: "stables",
+      tokens: stablecoins.map((token) => token.address),
+      periods,
+      penaltyRateBps: 2000,
+      limitsArePercentage: false,
+      referrer,
+    });
+
+    this._rememberPersonalVault(result.vaultAddress);
+    clearPendingReferrer();
+    return result.signature;
+  }
+
+  _rememberPersonalVault(vaultAddress) {
+    this.personalVaultAddress = vaultAddress;
+    const walletAddr = this._walletKey();
+    if (walletAddr) {
+      localStorage.setItem(`${PERSONAL_VAULT_KEY}_${walletAddr}`, vaultAddress);
+    }
   }
 
   // ---- Governance ----
@@ -313,10 +370,6 @@ export class TransactionManager {
   }
 
   async getAllBalances(userAddress) {
-    if (this._usesLegacyAccount()) {
-      return this.getAdapter().getAllBalances(userAddress);
-    }
-
     // Credit anything sitting on the vault's permanent deposit address first
     if (this.networkType === "evm") {
       await this.getAdapter().checkAndSweepVaultProxy?.(this.getActiveVaultAddress());
@@ -325,6 +378,16 @@ export class TransactionManager {
     const vault = await this.getActiveVault();
     const membership = await this.getActiveMembership();
     if (!vault || !membership) return {};
+
+    // One row per coin the vault holds. A single row was only ever right for a
+    // one-coin vault, and it silently hid everything else a stables vault held.
+    if (membership.balances) {
+      const balances = {};
+      for (const entry of Object.values(membership.balances)) {
+        balances[entry.symbol] = this._formatTokenAmount(Number(entry.raw), entry.decimals);
+      }
+      return balances;
+    }
 
     const decimals = this._getTokenDecimals(vault);
     const symbol = this._getTokenSymbol(vault);
@@ -340,16 +403,20 @@ export class TransactionManager {
     return parseFloat(formatted).toString();
   }
 
-  async depositToActiveVault(amount) {
-    return this.getAdapter().depositToVault(this._requireActiveVault(), amount);
+  async depositToActiveVault(amount, tokenAddress = null) {
+    return this.getAdapter().depositToVault(this._requireActiveVault(), amount, tokenAddress);
   }
 
-  async withdrawFromActiveVault(amount) {
-    return this.getAdapter().withdrawFromVault(this._requireActiveVault(), amount);
+  async withdrawFromActiveVault(amount, tokenAddress = null, destination = null) {
+    return this.getAdapter().withdrawFromVault(
+      this._requireActiveVault(), amount, tokenAddress, destination,
+    );
   }
 
-  async penaltyWithdrawFromActiveVault(amount) {
-    return this.getAdapter().withdrawFromVaultWithPenalty(this._requireActiveVault(), amount);
+  async penaltyWithdrawFromActiveVault(amount, tokenAddress = null, destination = null) {
+    return this.getAdapter().withdrawFromVaultWithPenalty(
+      this._requireActiveVault(), amount, tokenAddress, destination,
+    );
   }
 
   async updateActiveVaultRules(rules) {
@@ -361,10 +428,22 @@ export class TransactionManager {
   getCurrentAdapter() { return this.getAdapter(); }
 
   async getSpendingLimits(userAddress) {
-    if (this._usesLegacyAccount()) {
-      return this.getAdapter().getSpendingLimits(userAddress);
-    }
+    // A vault's limits come from the same module as the account's, so the two
+    // return the same shape and the UI needs no idea which it is showing.
+    const vaultLimits = this.getAdapter().getVaultSpendingLimits;
+    if (vaultLimits) return vaultLimits.call(this.getAdapter(), this._requireActiveVault());
+    // Chains whose vault program keeps its own counters still rebuild them.
+    return this._reconstructVaultLimits();
+  }
 
+  /**
+   * Vault limits rebuilt from the vault program's own records.
+   *
+   * Only for chains whose vault program still keeps its own spent counters —
+   * Solana. On EVM those counters moved into the shared limits module, and
+   * reading the stale ones here reported every window as unspent.
+   */
+  async _reconstructVaultLimits() {
     const vault = await this.getActiveVault();
     const membership = await this.getActiveMembership();
     if (!vault || !membership) {
@@ -419,10 +498,8 @@ export class TransactionManager {
     return { limits, isSetupCommitted: true, limitsArePercentage: isPercentage, tokenSymbol };
   }
 
+
   async getPendingWithdrawalDestinationRequests(userAddress) {
-    if (this._usesLegacyAccount()) {
-      return this.getAdapter().getPendingWithdrawalDestinationRequests(userAddress);
-    }
 
     const pending = await this.getPendingWithdrawalAddresses();
     return pending.map((p) => ({
@@ -435,9 +512,6 @@ export class TransactionManager {
   }
 
   async fetchPendingBypassRequests(userAddress) {
-    if (this._usesLegacyAccount()) {
-      return this.getAdapter().fetchPendingBypassRequests(userAddress);
-    }
     if (!this.getActiveVaultCapabilities().bypass) return [];
 
     const req = await this.getBypassRequest();
@@ -464,7 +538,6 @@ export class TransactionManager {
   }
 
   async isProxyDeployed(userAddress) {
-    if (this._usesLegacyAccount()) return this.getAdapter().isProxyDeployed(userAddress);
     if (this.networkType === "evm") {
       return !!(await this.getAdapter().getVaultDepositAddress(this.getActiveVaultAddress()));
     }
@@ -472,7 +545,6 @@ export class TransactionManager {
   }
 
   async getDepositAddress(userAddress) {
-    if (this._usesLegacyAccount()) return this.getAdapter().getDepositAddress(userAddress);
     if (this.networkType === "evm") {
       return (await this.getAdapter().getVaultDepositAddress(this.getActiveVaultAddress())) || "";
     }
@@ -480,12 +552,10 @@ export class TransactionManager {
   }
 
   async deposit(tokenAddress, amount, decimals) {
-    if (this._usesLegacyAccount()) {
-      return this.getAdapter().deposit(tokenAddress, amount, decimals);
-    }
 
-    // A vault holds a single token, so the deposit always uses the vault's own
-    const sig = await this.depositToActiveVault(parseFloat(amount));
+    // The coin the caller chose, passed through. A vault holds several, so
+    // dropping it here would deposit whichever one happened to be first.
+    const sig = await this.depositToActiveVault(parseFloat(amount), tokenAddress);
     return { hash: sig };
   }
 
@@ -496,7 +566,6 @@ export class TransactionManager {
 
   // ---- Legacy-shaped proposal methods ----
   async proposeLimitChange(periodName, newLimit) {
-    if (this._usesLegacyAccount()) return this.getAdapter().proposeLimitChange(periodName, newLimit);
     return this.proposeRuleChange({ [`${periodName.toLowerCase()}Limit`]: newLimit });
   }
   /**
@@ -505,9 +574,6 @@ export class TransactionManager {
    * unlike changing an existing one, which is timelocked.
    */
   async addSpendingLimit(periodName, limit, unlockDelay = null) {
-    if (this._usesLegacyAccount()) {
-      return this.getAdapter().addSpendingLimit(periodName, limit, unlockDelay);
-    }
     // Vault rules hold every period at once, so a new one is a rule change
     return this.proposeLimitChange(periodName, limit);
   }
@@ -519,47 +585,38 @@ export class TransactionManager {
     return this.getAdapter().proposeUnlockDelayChange(periodName, newUnlockDelay);
   }
   async fetchPendingProposals(userAddress) {
-    if (this._usesLegacyAccount()) return this.getAdapter().fetchPendingProposals(userAddress);
     const proposal = await this.getRuleChangeProposal();
     return proposal ? [proposal] : [];
   }
   async executeLimitProposal(proposalId) {
-    if (this._usesLegacyAccount()) return this.getAdapter().executeLimitProposal(proposalId);
     return this.executeRuleChange();
   }
   async cancelLimitProposal(proposalId) {
-    if (this._usesLegacyAccount()) return this.getAdapter().cancelLimitProposal(proposalId);
     return this.cancelRuleChange();
   }
 
   // ---- Legacy-shaped withdrawal address methods ----
   async fetchWithdrawalAddresses(userAddress) {
-    if (this._usesLegacyAccount()) return this.getAdapter().fetchWithdrawalAddresses(userAddress);
     return this.getWithdrawalAddresses();
   }
   async addWithdrawalDestinationDirect(address, title) {
-    if (this._usesLegacyAccount()) return this.getAdapter().addWithdrawalDestinationDirect(address, title);
     return this.addWithdrawalAddress(title, address);
   }
   async requestWithdrawalDestinationAddition(address, title) {
-    if (this._usesLegacyAccount()) return this.getAdapter().requestWithdrawalDestinationAddition(address, title);
     return this.requestWithdrawalAddress(title, address);
   }
 
   // ---- EVM proxy/setup methods ----
   async deployProxy() {
-    if (this._usesLegacyAccount()) return this.getAdapter().deployProxy();
     if (this.networkType === "evm") {
       return this.getAdapter().deployVaultDepositAddress(this.getActiveVaultAddress());
     }
     throw new Error("Proxy deployment is only available on EVM");
   }
-  async getIsSetupCommitted(userAddress) {
-    if (this.networkType === "evm") return this.getAdapter().getIsSetupCommitted(userAddress);
+  async getIsSetupCommitted() {
     return !!this.personalVaultAddress;
   }
   async setSpendingLimits(daily, weekly, monthly) {
-    if (this._usesLegacyAccount()) return this.getAdapter().setSpendingLimits(daily, weekly, monthly);
     return this.updateActiveVaultRules({ dailyLimit: daily, weeklyLimit: weekly, monthlyLimit: monthly });
   }
 
@@ -571,17 +628,28 @@ export class TransactionManager {
   async withdrawFromPoolTogether(tokenAddress, shares) { return this.getAdapter().withdrawFromPoolTogether?.(tokenAddress, shares); }
   async claimPoolTogetherPrize(tokenAddress, tier) { return this.getAdapter().claimPoolTogetherPrize?.(tokenAddress, tier); }
 
+  // ---- Earning on savings ----
+  //
+  // Optional capability: an adapter without these degrades to "not supported"
+  // rather than throwing, so the UI needs no network awareness.
+  supportsYield() { return this.getAdapter().supportsYield?.() ?? false; }
+  async getYieldStatus() { return this.getAdapter().getYieldStatus?.(this.getActiveVaultAddress()) ?? { supported: false }; }
+  async getYieldOptions(tokenAddress) { return this.getAdapter().getYieldOptions?.(tokenAddress) ?? []; }
+  async setYieldMode(mode, tokenAddress = null) {
+    return this.getAdapter().setYieldMode?.(this._requireActiveVault(), mode, tokenAddress);
+  }
+  async compoundActiveVaultYield() { return this.getAdapter().compoundVaultYield?.(this._requireActiveVault()); }
+  async getClaimablePrizes() { return this.getAdapter().getClaimablePrizes?.(this.getActiveVaultAddress()) ?? null; }
+  async claimActiveVaultPrizes() { return this.getAdapter().claimVaultPrizes?.(this._requireActiveVault()); }
+
   // ---- EVM withdraw ----
   async withdraw(amount, tokenAddress, destination) {
-    if (this._usesLegacyAccount()) return this.getAdapter().withdraw(amount, tokenAddress, destination);
-    return this.withdrawFromActiveVault(amount);
+    return this.withdrawFromActiveVault(amount, tokenAddress, destination);
   }
-  async withdrawWithPenalty(tokenAddress, amount, tokenDecimals) {
-    if (this._usesLegacyAccount()) throw new Error("Penalty withdrawal not supported on EVM");
-    return this.penaltyWithdrawFromActiveVault(amount);
+  async withdrawWithPenalty(tokenAddress, amount, tokenDecimals, destination = null) {
+    return this.penaltyWithdrawFromActiveVault(amount, tokenAddress, destination);
   }
   async getPenaltyRate() {
-    if (this._usesLegacyAccount()) return 0;
     const vault = await this.getActiveVault();
     return vault ? vault.penaltyRateBps / 100 : 0;
   }
@@ -663,6 +731,9 @@ export class TransactionManager {
   createVault(params) { return this.getAdapter().createVault(params); }
   joinVault(vaultAddress) { return this.getAdapter().joinVault(vaultAddress); }
   leaveVault(vaultAddress) { return this.getAdapter().leaveVault(vaultAddress); }
+  addVaultToken(vaultAddress, tokenAddress) {
+    return this.getAdapter().addVaultToken?.(vaultAddress, tokenAddress);
+  }
 
   // ---- Deposits / withdrawals (chain-agnostic, business units) ----
   depositToVault(vaultAddress, amount) {
@@ -685,56 +756,69 @@ export class TransactionManager {
     return this.getAdapter().updateVaultRules(vaultAddress, rules);
   }
 
-  // ---- Withdrawal destinations (personal vault compat) ----
+  // ---- Vault rule changes and bypasses ----
+  //
+  // A vault's rules now go through the same timelock as the savings account's,
+  // so changing one is a proposal that has to be executed after its wait.
+  async getPendingVaultRuleChanges() {
+    return this.getAdapter().getPendingVaultRuleChanges?.(this._requireActiveVault()) ?? [];
+  }
+  async executeVaultRuleChange(proposalId) {
+    return this.getAdapter().executeVaultRuleChange?.(this._requireActiveVault(), proposalId);
+  }
+  async cancelVaultRuleChange(proposalId) {
+    return this.getAdapter().cancelVaultRuleChange?.(this._requireActiveVault(), proposalId);
+  }
+  async requestVaultBypass(amount, skipPeriod) {
+    return this.getAdapter().requestVaultBypass?.(this._requireActiveVault(), amount, skipPeriod);
+  }
+  async executeVaultBypass(requestId, destination) {
+    return this.getAdapter().executeVaultBypass?.(this._requireActiveVault(), requestId, destination);
+  }
+  async cancelVaultBypass(requestId) {
+    return this.getAdapter().cancelVaultBypass?.(this._requireActiveVault(), requestId);
+  }
+
+  // ---- Withdrawal destinations ----
+  //
+  // Deliberately not vault-scoped. The list lives under the member's own
+  // address and every vault they own shares it: where money may go is a
+  // property of the person, not of the asset. Passing a vault here would
+  // suggest otherwise, and used to put the vault in the destination's slot.
 
   async addWithdrawalAddress(title, destinationAddress) {
-    if (this._usesLegacyAccount()) {
-      // Routes to a direct add before lock-in and to the 24h timelock
-      // request after — the contract rejects direct adds once committed
-      return this.getAdapter().addWithdrawalDestination(destinationAddress, title);
-    }
     this._requireCapability("destinations");
-    return this.getAdapter().addWithdrawalDestination(this._requireActiveVault(), destinationAddress, title);
+    return this.getAdapter().addWithdrawalDestination(destinationAddress, title);
   }
 
   async requestWithdrawalAddress(title, destinationAddress) {
-    if (this._usesLegacyAccount()) return this.getAdapter().requestWithdrawalDestinationAddition(destinationAddress, title);
     this._requireCapability("destinations");
-    return this.getAdapter().requestWithdrawalDestination(this._requireActiveVault(), destinationAddress, title);
+    return this.getAdapter().requestWithdrawalDestinationAddition(destinationAddress, title);
   }
 
   async executeWithdrawalAddressRequest(destinationAddress) {
-    if (this._usesLegacyAccount()) return this.getAdapter().executeWithdrawalAddressRequest(destinationAddress);
     this._requireCapability("destinations");
-    return this.getAdapter().executeDestinationRequest(this._requireActiveVault(), destinationAddress);
+    return this.getAdapter().executeWithdrawalAddressRequest(destinationAddress);
   }
 
   async cancelWithdrawalAddressRequest(destinationAddress) {
-    if (this._usesLegacyAccount()) return this.getAdapter().cancelWithdrawalAddressRequest?.(destinationAddress);
     this._requireCapability("destinations");
-    return this.getAdapter().cancelDestinationRequest(this._requireActiveVault(), destinationAddress);
+    return this.getAdapter().cancelWithdrawalAddressRequest?.(destinationAddress);
   }
 
   async removeWithdrawalAddress(destinationAddress) {
-    if (this._usesLegacyAccount()) return this.getAdapter().removeWithdrawalAddress(destinationAddress);
     this._requireCapability("destinations");
-    return this.getAdapter().removeWithdrawalDestination(this._requireActiveVault(), destinationAddress);
+    return this.getAdapter().removeWithdrawalAddress(destinationAddress);
   }
 
   async getWithdrawalAddresses() {
-    if (this._usesLegacyAccount()) return this.getAdapter().fetchWithdrawalAddresses();
     if (!this.getActiveVaultCapabilities().destinations) return [];
-    const vaultAddress = this.getActiveVaultAddress();
-    if (!vaultAddress) return [];
-    return this.getAdapter().getWithdrawalDestinations(vaultAddress);
+    return this.getAdapter().fetchWithdrawalAddresses();
   }
 
   async getPendingWithdrawalAddresses() {
-    if (this._usesLegacyAccount()) return this.getAdapter().getPendingWithdrawalDestinationRequests();
     if (!this.getActiveVaultCapabilities().destinations) return [];
-    const vaultAddress = this.getActiveVaultAddress();
-    if (!vaultAddress) return [];
-    return this.getAdapter().getPendingDestinationRequests(vaultAddress);
+    return this.getAdapter().getPendingWithdrawalDestinationRequests();
   }
 
   // ---- Rule change proposals (personal vault compat) ----

@@ -36,7 +36,7 @@ import {
   getDefaultNetwork,
   getAvailableNetworks,
 } from "./utils/networkFilter.js";
-import { isSolanaEnabled, isPrizePoolEnabled } from "./utils/featureFlags.js";
+import { isSolanaEnabled, isPrizePoolEnabled, isYieldEnabled } from "./utils/featureFlags.js";
 import { createEmptyLimitEdits } from "./utils/spendingPeriods.js";
 import { initAnalytics } from "./utils/analytics.js";
 import { PRIZE_SAVINGS_PATH } from "./utils/prizeSavingsContent.js";
@@ -70,6 +70,7 @@ import SolanaWalletProvider from "./components/SolanaWalletProvider.js";
 import SocialLinks from "./components/atoms/SocialLinks.js";
 import Footer from "./components/atoms/Footer.js";
 import CollapsibleSection from "./components/atoms/CollapsibleSection.js";
+import YieldSection from "./components/organisms/YieldSection.js";
 import StatusHeader from "./components/molecules/StatusHeader.js";
 import WalletConnectionPrompt from "./components/molecules/WalletConnectionPrompt.js";
 import WalletOnboardingModal from "./components/molecules/WalletOnboardingModal.js";
@@ -198,16 +199,15 @@ function MainFlow({
   };
 
   // The main wallet flow operates on the currently selected ("active") vault —
-  // the personal vault by default. Selecting a card switches the whole flow
-  // (balances, deposits, withdrawals, limits) to that vault. On EVM the initial
-  // setup lives in the legacy savings account rather than a vault, so it is
-  // represented by a synthetic "Savings" card.
+  // the savings vault by default. Selecting a card switches the whole flow
+  // (balances, deposits, withdrawals, limits) to that vault.
+  //
+  // Locking in creates the savings vault, so every card is a real vault.
   const personalVaultAddress = transactionManager?.getPersonalVaultAddress?.() || null;
   const currentVaultAddress = transactionManager?.getActiveVaultAddress?.() || null;
-  const hasPersonalVault = userVaults.some(({ vault }) => vault.address === personalVaultAddress);
 
   const handleSelectVault = async (vaultAddress) => {
-    // null selects the default: personal vault / legacy account
+    // null selects the default: the savings vault
     transactionManager.setActiveVault(
       vaultAddress === personalVaultAddress ? null : vaultAddress
     );
@@ -216,26 +216,14 @@ function MainFlow({
   };
 
   const displayVaults = [
-    ...(hasPersonalVault
-      ? []
-      : [{
-          vault: {
-            address: null,
-            vaultType: "Personal",
-            name: "Savings",
-            tokenSymbol: "All tokens",
-            dailyLimit: 0,
-            weeklyLimit: 0,
-            monthlyLimit: 0,
-            penaltyRateBps: 0,
-            memberCount: 1,
-          },
-          membership: null,
-          isCurrent: currentVaultAddress === null,
-        }]),
-    ...userVaults
-      .map((entry) => ({ ...entry, isCurrent: entry.vault.address === currentVaultAddress }))
-      .sort((a, b) => Number(b.isCurrent) - Number(a.isCurrent)),
+    // Deliberately not reordered. Sorting the selected vault to the front means
+    // the "Current" badge is always on the first card, so switching vaults looks
+    // like nothing moved except the balances — which reads as a bug even though
+    // the right vault is selected. A stable order is what makes the change legible.
+    ...userVaults.map((entry) => ({
+      ...entry,
+      isCurrent: entry.vault.address === currentVaultAddress,
+    })),
   ];
 
   const refreshBalances = useCallback(async () => {
@@ -303,10 +291,11 @@ function MainFlow({
             gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))",
             gap: spacing.lg,
           }}>
-            {displayVaults.map(({ vault, isCurrent }) => (
+            {displayVaults.map(({ vault, membership, isCurrent }) => (
               <VaultCard
                 key={vault.address || "default"}
                 vault={vault}
+                membership={membership}
                 isSelected={isCurrent}
                 onClick={isCurrent ? undefined : () => handleSelectVault(vault.address)}
               />
@@ -358,6 +347,8 @@ function MainFlow({
           onBalanceUpdate={(newBalances) => setBalances(newBalances)}
           connectWallet={() => {}}
           refreshTrigger={balanceRefreshTrigger}
+          activeVaultAddress={currentVaultAddress}
+          onEarningChanged={refreshBalances}
         />
       )}
 
@@ -409,6 +400,13 @@ function MainFlow({
           />
         </CollapsibleSection>
       )}
+
+      {/* Earning on savings. Sits with the money-movement sections, and inside
+          the vault-keyed wrapper above so switching vaults refetches it. The
+          section hides itself when earning does not apply to this vault. */}
+      {isSetupCommitted && isYieldEnabled() && transactionManager?.supportsYield?.() ? (
+        <YieldSection transactionManager={transactionManager} />
+      ) : null}
 
       {/* Spending Limits Setup / Management */}
       {isSetupCommitted ? (

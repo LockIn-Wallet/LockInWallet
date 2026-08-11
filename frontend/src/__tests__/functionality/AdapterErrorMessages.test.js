@@ -36,7 +36,7 @@ function revert(reason) {
 
 describe("EVM revert translation", () => {
   const cases = [
-    ["Exceeds limit", "This is over your spending limit — request a bypass to withdraw it"],
+    ["Exceeds limit", "This is over one of your spending limits — request a bypass to withdraw it"],
     ["Not a vault member", "You are not a member of this vault"],
     ["Address already exists", "That address is already on your list"],
     ["Cannot set own address as destination", "Your own address is always available — no need to add it"],
@@ -49,6 +49,45 @@ describe("EVM revert translation", () => {
 
   test.each(cases)("%s is rewritten for the user", (reason, expected) => {
     expect(makeEvmAdapter()._translateError(revert(reason)).message).toBe(expected);
+  });
+
+  const yieldCases = [
+    [
+      "Insufficient strategy liquidity",
+      "The savings protocol is temporarily out of liquidity — try a smaller amount, or try again shortly",
+    ],
+    ["Yield module not configured", "Earning on savings is not switched on for this network yet"],
+    ["Strategy asset mismatch", "That earning strategy does not match this vault's coin"],
+    ["No strategy for token", "This vault's token cannot earn yield yet"],
+    ["Strategies paused", "Earning is paused right now — your savings are untouched"],
+    [
+      "Community yield immutable",
+      "A community vault's earning setting is fixed when it is created",
+    ],
+    ["Pending yield not zero", "Collect your earnings before leaving the vault"],
+    ["Yield mode unchanged", "That is already your setting"],
+    ["Fee above maximum", "That fee is above the allowed maximum"],
+  ];
+
+  test.each(yieldCases)("earning revert %s is rewritten for the user", (reason, expected) => {
+    expect(makeEvmAdapter()._translateError(revert(reason)).message).toBe(expected);
+  });
+
+  // The table is scanned in order, so a short entry placed above a longer one
+  // that contains it would swallow the longer message. These are the pairs that
+  // actually overlap.
+  test("a longer earning revert is not shadowed by a shorter one it contains", () => {
+    const adapter = makeEvmAdapter();
+    expect(adapter._translateError(revert("Strategy change not ready")).message).toBe(
+      "That strategy change is still in its waiting period",
+    );
+    expect(adapter._translateError(revert("Strategy change not queued")).message).toBe(
+      "That strategy change has not been queued yet",
+    );
+    // "No vault for token" (prize pool) must not capture "No strategy for token"
+    expect(adapter._translateError(revert("No strategy for token")).message).toBe(
+      "This vault's token cannot earn yield yet",
+    );
   });
 
   test("keeps the ethers blob out of the message when nothing matches", () => {

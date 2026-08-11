@@ -105,8 +105,8 @@ async function fetchSolanaWithdrawalAddresses(params) {
 async function fetchEvmWithdrawalAddresses(params) {
   const { savingsContract, userAddress, transactionManager } = params;
 
-  // The transaction manager routes to the legacy account or the selected
-  // vault (which has no destination whitelist on EVM yet, so it returns [])
+  // The transaction manager routes to the member's own withdrawal list, which
+  // every vault they own shares.
   if (transactionManager) {
     const addresses = await transactionManager.getWithdrawalAddresses();
     return (addresses || []).map((a) => {

@@ -18,6 +18,30 @@ export const RELEASE_NOTES = [
         text: "You can now lock in on Base as well as Optimism. The reason is simple: we want you to be able to buy savings with a bank card, and the card provider doesn't sell dollars on Optimism — only ETH. On Base it does. Optimism is still what you get by default, and nothing moves on its own: if your savings are on Optimism they stay there, and picking Base means starting a separate wallet on that chain.",
       },
       {
+        emoji: "🗄️",
+        text: "Your savings and your coin pots are now the same kind of thing. Your main wallet holds dollar-pegged coins together under one limit, because a hundred of one is a hundred of the other; anything whose price moves gets its own pot with its own limit, because there is no honest way to put a single dollar cap on things that are not worth the same. Either way the rules work exactly as they always have, and the list of addresses you are allowed to withdraw to is shared across all of them — where your money may go is about you, not about which coin it is.",
+      },
+      {
+        emoji: "➕",
+        text: "You can add another dollar coin to your savings later, rather than being stuck with whatever was supported the day you locked in. Your limit does not change when you do — it is a dollar limit covering everything your savings hold, so a new coin shares the allowance you already had rather than quietly widening it.",
+      },
+      {
+        emoji: "🎚️",
+        text: "Each coin decides for itself whether it earns. Your balances now carry their own switch, showing that coin's own rate — because each one earns in a different market, at a different rate, and one may have options another does not. Tapping a switch asks how you want that coin to earn rather than picking for you, and it asks the same way when you are turning earning off, since that moves money back out of a protocol.",
+      },
+      {
+        emoji: "🌱",
+        text: "Your savings can now earn interest while they sit locked. You pick how — a steady rate, or a prize draw instead of a rate — and you can switch it off whenever you like, which returns everything to your vault. Nothing moves until your next deposit, so no money already in your vault goes anywhere without you doing something first. Worth knowing: earning means your balance is lent out through an outside protocol, and that is not risk-free. If you would rather it sat still, leaving earning off is a perfectly good answer.",
+      },
+      {
+        emoji: "🎟️",
+        text: "Prize savings is here as a second way to earn. Instead of a steady rate, the interest your savings would have earned goes into a prize draw — and you get your own entry, so anything you win is yours alone rather than split with everyone else. Two things worth knowing. Your deposit is never at stake, only the interest it would have made. And prizes are paid in ETH rather than the coin you saved, so they arrive separately for you to claim instead of being added to your balance. Most months you win nothing; occasionally you win a lot. If that is not for you, steady earning is one tap away.",
+      },
+      {
+        emoji: "🤝",
+        text: "We keep one percentage point of the interest rate — so a 5% rate pays you 4%. On prize savings there is no rate at all, so instead we keep a small share of anything you actually win, and nothing whatsoever if you never win. Two promises about that. First, we never take more than what your savings actually earned: a month that earns nothing costs you nothing, and the shortfall waits for interest rather than coming out of your deposit. Second, your deposit is never the source of our fee, and that is enforced in the contract rather than promised in a document — there is no path in the code from your principal to our revenue.",
+      },
+      {
         emoji: "🕵️",
         text: "Inviting someone no longer lets you watch their money. Before, anyone who shared a referral link could pull up the list of wallets that joined through it — and every balance on this chain is public, so that was a window into what those people had saved. Now you only ever see a number: how many people locked in through your link. Being paid for a referral and being able to spy on that person are two different things, and only one of them is part of the deal.",
       },

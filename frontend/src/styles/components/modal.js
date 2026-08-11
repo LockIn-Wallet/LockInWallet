@@ -198,11 +198,46 @@ export const modalStyles = {
     marginTop: space[5],
   },
 
+  // Same shape as `note`, in the error palette — used when a save fails and
+  // the dialog stays open.
+  errorNote: {
+    ...alignLeft,
+    display: "flex",
+    gap: space[3],
+    alignItems: "flex-start",
+    margin: `${space[4]} 0 0 0`,
+    padding: space[4],
+    backgroundColor: colors.error.bg,
+    border: `1px solid ${colors.error.dark}`,
+    borderRadius: borderRadius.lg,
+    fontSize: type.small,
+    color: colors.error.light,
+    lineHeight: 1.6,
+  },
+
+  // index.css gives every bare <button> `margin: 10px auto`, and auto margins on
+  // a flex item push the footer's buttons to opposite ends. Spread this onto
+  // each one so the gap above is what actually separates them.
+  footerButton: {
+    margin: 0,
+  },
+
   footnote: {
     ...alignLeft,
     fontFamily: fontFamily.mono,
     fontSize: type.micro,
     color: colors.text.gray,
+    margin: `${space[4]} 0 0 0`,
+  },
+
+  // ---- Option grid --------------------------------------------------------
+  //
+  // A one-per-row stack rather than side-by-side columns: these options are
+  // read and compared, not scanned, and the panel is only 560px wide.
+  optionGrid: {
+    display: "grid",
+    gridTemplateColumns: "1fr",
+    gap: space[3],
     margin: `${space[4]} 0 0 0`,
   },
 };

@@ -5,6 +5,7 @@ import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import "./SavingsInterfaces.sol";
 
 /**
@@ -91,6 +92,55 @@ contract SavingsCore is Initializable, UUPSUpgradeable, OwnableUpgradeable, ISav
         return modules[moduleId];
     }
 
+    /// @notice Decimals spending limits are stored in, so amounts in different
+    ///         stablecoins can be measured against one shared cap.
+    uint8 public constant LIMIT_DECIMALS = 6;
+
+    /// @notice Restate a token amount in the units spending limits are kept in.
+    ///
+    /// This account holds several stablecoins at once and applies ONE limit
+    /// across them, so the amounts have to share a scale. Limits are stored at
+    /// 6 decimals, and a stablecoin is worth a dollar, so dividing out the
+    /// token's own decimals turns any of them into the same dollar figure:
+    /// 100 USDT (100e6) and 100 DAI (100e18) both become 100e6.
+    ///
+    /// Without this, the limit was compared against raw amounts. A "$100 a day"
+    /// cap read as 100e6, so 100 DAI measured as 100e18 — a trillion times over
+    /// — and DAI was effectively unwithdrawable, while a token with fewer
+    /// decimals would have slipped through almost unmetered.
+    ///
+    /// No price feed is involved, and none is needed: the peg is what makes a
+    /// shared limit meaningful here. That is exactly why this account takes
+    /// stablecoins and anything else belongs in a vault of its own, where its
+    /// limits are denominated in that coin.
+    function _toLimitUnits(address token, uint256 amount) internal view returns (uint256) {
+        // Native coin is deliberately NOT rescaled. Rescaling assumes a unit is
+        // worth a dollar, which is true of a stablecoin and wildly false of ETH:
+        // it would let one ETH count as one dollar against the cap and turn a
+        // "$100 a day" limit into thousands. Left at face value, the existing
+        // conservative behaviour stands: a native withdrawal is measured at
+        // face value, so the cap binds hard rather than loosely. Closing native
+        // deposits is a separate change — it is a product decision with a much
+        // wider blast radius than this bug fix.
+        if (token == address(0)) return amount;
+
+        uint8 decimals = _tokenDecimals(token);
+        if (decimals == LIMIT_DECIMALS) return amount;
+        if (decimals > LIMIT_DECIMALS) return amount / (10 ** (decimals - LIMIT_DECIMALS));
+        return amount * (10 ** (LIMIT_DECIMALS - decimals));
+    }
+
+    /// @dev decimals() is optional in ERC20, so a token that omits it is read
+    /// as 18 — the same assumption every wallet makes.
+    function _tokenDecimals(address token) internal view returns (uint8) {
+        if (token == address(0)) return 18; // native coin
+        try IERC20Metadata(token).decimals() returns (uint8 d) {
+            return d;
+        } catch {
+            return 18;
+        }
+    }
+
     function isAuthorizedModule(address moduleAddress) external view returns (bool) {
         return authorizedModules[moduleAddress];
     }
@@ -106,6 +156,16 @@ contract SavingsCore is Initializable, UUPSUpgradeable, OwnableUpgradeable, ISav
     // ========== CORE DEPOSIT/WITHDRAW FUNCTIONALITY ==========
 
     function deposit(address token, uint256 amount) external payable {
+        // This account applies ONE spending limit across everything it holds,
+        // denominated in dollars — which only means something for assets pegged
+        // to one. A coin whose value moves cannot be measured against it:
+        // rescaling would let one ETH count as one dollar, and not rescaling
+        // caps it at a trillionth of its worth. Neither is a limit.
+        //
+        // So it belongs in a vault of its own, where limits are denominated in
+        // that coin or as a share of the balance. Anything already deposited
+        // here stays fully withdrawable.
+        require(token != address(0), "Native coin belongs in a vault");
         require(amount > 0, "Deposit must be greater than zero");
         if (token == address(0)) {
             // ETH deposit
@@ -118,16 +178,17 @@ contract SavingsCore is Initializable, UUPSUpgradeable, OwnableUpgradeable, ISav
         emit Deposited(msg.sender, token, amount);
     }
 
-    function depositTo(address to) external payable {
-        require(msg.value > 0, "Deposit must be greater than zero");
-        require(to != address(0), "Invalid recipient address");
-
-        userTokenBalances[to][address(0)] += msg.value;
-        emit DepositedTo(msg.sender, to, msg.value);
+    /// @dev Deposit addresses forward native coin through here. Refusing means
+    /// it bounces back to whoever sent it rather than landing somewhere its
+    /// value cannot be measured — nothing is stranded either way.
+    function depositTo(address) external payable {
+        revert("Native coin belongs in a vault");
     }
+
 
     // Enhanced deposit function that works with proxy forwarding
     function deposit(address token, uint256 amount, address beneficiary) external payable {
+        require(token != address(0), "Native coin belongs in a vault");
         require(amount > 0, "Deposit must be greater than zero");
 
         address recipient = beneficiary != address(0) ? beneficiary : msg.sender;
@@ -216,7 +277,7 @@ contract SavingsCore is Initializable, UUPSUpgradeable, OwnableUpgradeable, ISav
         // Check against all active time period limits
         ITimePeriodLimitsModule limitsModule = ITimePeriodLimitsModule(modules[ModuleIds.TIME_PERIOD_LIMITS]);
         if (address(limitsModule) != address(0)) {
-            limitsModule.checkAllTimePeriodLimits(msg.sender, amount);
+            limitsModule.checkAllTimePeriodLimits(msg.sender, _toLimitUnits(token, amount));
         }
 
         userTokenBalances[msg.sender][token] -= amount;
@@ -251,7 +312,7 @@ contract SavingsCore is Initializable, UUPSUpgradeable, OwnableUpgradeable, ISav
         // Check against all active time period limits
         ITimePeriodLimitsModule limitsModule = ITimePeriodLimitsModule(modules[ModuleIds.TIME_PERIOD_LIMITS]);
         if (address(limitsModule) != address(0)) {
-            limitsModule.checkAllTimePeriodLimits(msg.sender, amount);
+            limitsModule.checkAllTimePeriodLimits(msg.sender, _toLimitUnits(token, amount));
         }
 
         userTokenBalances[msg.sender][token] -= amount;

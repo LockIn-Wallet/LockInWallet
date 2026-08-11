@@ -67,6 +67,257 @@ these notes on the in-app **Governance** page before they execute.
   auto-connect and the adapter's `autoConnect` until the user connects
   again — otherwise a reload would re-attach the same wallet within seconds.
   Frontend only — no contract change.
+- `VaultRulesModule` now serves the **unified vault**, not the old
+  `VaultSystemModule`. It looked membership up in the old module, so changing a
+  spending limit on a vault created by locking in reverted with "Not a vault
+  member" — the timelocked rule change was unreachable for every new vault.
+  A module cannot look membership up in two places at once, so rule changes for
+  the old module's vaults are no longer served; those vaults hold nothing and
+  the module is being retired behind the unified one.
+- **Locking in now creates the savings vault itself.** The main wallet is a
+  vault, so setup produces one rather than writing to a separate account with
+  its own custody and its own copy of the limit logic. It is a stablecoins
+  vault holding every dollar-pegged coin the network offers, under one dollar
+  cap. Which coins count as dollars is a **frontend** list
+  (`frontend/src/utils/stablecoins.js`) and deliberately not a contract's: a
+  contract cannot know what is pegged without an oracle or a governed list, and
+  both put something in the enforcement path. Adding a coin is one line there
+  plus a `networkConfig` entry; coins the network has no address for are left
+  out, so a vault never accepts something nobody can send. `createVault` takes
+  the referrer so lock-in stays a single transaction — recorded best-effort, so
+  a stale invite link can never be the reason someone cannot start saving.
+  Percentage caps are refused for this vault, because a percentage of a mixed
+  balance would need the coins priced against each other.
+- The deposit and withdrawal coin pickers now offer only what the selected
+  vault actually holds, and the native-coin option appears only for a vault
+  that takes it. A vault refuses coins it was not created with, so the old
+  full-network list offered transactions guaranteed to revert. A vault that has
+  not loaded yet leaves the full list on offer rather than emptying the picker,
+  because an empty picker blocks a deposit just as thoroughly as a wrong one.
+- The logged-in vault list no longer fabricates a "Savings" card. Locking in
+  creates the savings vault, so it is a real card with real limits and a real
+  balance behind it. The placeholder card remains only for a wallet that locked
+  in before vaults existed, whose balance is still held by the account.
+- Vault balances are reported **per coin**. The old path formatted one symbol
+  and one amount, which was only ever right for a one-coin vault and silently
+  hid everything else. Deposits, withdrawals and penalty withdrawals now carry
+  the coin the user chose instead of dropping it.
+- **A stables vault can accept another coin after it exists**
+  (`addAcceptedToken`). The accepted set was written only at creation, so a
+  stablecoin added to the app's list later was reachable only by vaults created
+  after it — everyone else would have had to start again. The cap does not
+  change: it is denominated in dollars across whatever the vault holds, so a new
+  coin shares the existing allowance rather than adding to it, and it starts
+  with earning off like any other. Refused for a single-coin vault, whose one
+  asset is what makes its cap mean anything, and for a community vault once
+  anyone else has joined — people join under a cap spanning a known set of
+  coins, and one that fails to hold its peg breaks that accounting for all of
+  them.
+- **The pre-vault account is no longer reachable from the app.** Locking in
+  creates a savings vault, so `_usesLegacyAccount()` and its 28 branches are
+  gone: balances, limits, deposits, withdrawals, proposals, bypasses and
+  withdrawal addresses all go to the vault, with no second path behind them.
+  `isSetupCommitted()` is now simply "do you have a vault" on both chains
+  rather than returning null on EVM so the account could be asked. The
+  fabricated "Savings" card is gone from the vault list.
+  **A balance still sitting in `SavingsCore` is not destroyed** — it remains
+  on-chain and a script can still reach it — but nothing in the UI will show or
+  move it. Measured before removing: total custody across both chains was
+  $0.0432, all of it one developer wallet.
+  Removing the branch exposed a bug it had been hiding: the withdrawal-address
+  methods were passing a vault address into adapter methods that take
+  `(destination, title)`, so the vault landed in the destination's slot. That
+  list is keyed by the member's own address and shared by every vault they own
+  — where money may go is a property of the person, not the asset — so the
+  interface no longer takes a vault at all.
+- **Earning is released.** `isYieldEnabled()` is now true and no longer reads
+  the environment. The flag was never the real gate: the adapter reports
+  `supported: false` for a network with no vault yield module registered, and
+  every earning surface renders nothing in that case — so on a chain where
+  earning is not deployed, this changes nothing. The real switch is
+  `registerModule("VAULT_YIELD", …)`, and `RELEASING.md` now spells out the
+  order that has to precede it: treasury pointed at the Safe, then verified
+  strategies, then registration. Done in the wrong order, money moves into a
+  protocol before the guard rails exist. Prize savings stays off.
+- **One savings primitive: `SavingsVaultModule`.** The main wallet and a
+  single-coin pot are now the same thing — a vault — instead of a savings
+  account with its own custody and its own copy of the limit logic sitting
+  beside a separate vault system. A vault is one of two kinds, and the
+  difference is forced by what a limit can honestly mean: STABLES holds
+  several dollar-pegged assets under one cap (dividing out each token's
+  decimals restates them all in the same dollars, so no price feed is
+  involved), while COIN holds exactly one asset and caps it in that asset or
+  as a share of the balance. Pricing volatile assets against each other would
+  put an oracle in the enforcement path of a wallet whose whole promise is
+  enforcement, so neither kind does it.
+  **On-chain:** a **new** `SavingsVaultModule` proxy registered as
+  `SAVINGS_VAULTS`. Limits, timelocked changes, bypasses and withdrawal
+  addresses are not reimplemented — they are the savings account's own
+  modules, keyed by a scope derived from `(vaultId, member)`, so a vault's
+  rules behave exactly as an account's because they *are* an account's. The
+  withdrawal-address list is keyed by the member's real address, so every
+  vault a person owns shares one list: where money may go is a property of
+  the person, not the asset.
+- **Emergency bypass on the unified vault.** `requestBypass` /
+  `executeBypass` / `cancelBypass` are the other way past a limit, and the
+  honest one: instead of paying the penalty you wait, and the wait is the
+  limit's own — a limit committed with a seven-day wait cannot be escaped in
+  less than seven days. The request and its timer live in
+  `BypassSystemModule` under the same scope as the vault's limits, so this is
+  the account's bypass rather than a second implementation of it. Only the
+  payout is in the vault module, because only it holds the money. A request
+  records which coin it was made against, since a stables vault's amount is
+  measured in dollars and the payout has to know what to send.
+- **Permanent deposit addresses on the unified vault**
+  (`SavingsVaultDepositProxy`). An exchange withdraws to an address, not to a
+  contract call, so without one you have to route money through your own wallet
+  first — two steps, and a window where the savings rules do not apply to it
+  yet. The address is bound to a **member**, not to the vault, so in a shared
+  vault an arriving transfer credits the person it came from rather than
+  whoever created the pot. It is CREATE2-derived from `(vaultId, member)` and
+  `depositAddressOf` answers before anything is deployed, so the address can be
+  published first and paid for later; money that arrives in the meantime waits
+  and is swept in. Sweeps are permissionless, because every path ends at the
+  same beneficiary's balance in the same vault — which also means a stuck
+  transfer can be rescued without the member needing gas. The factory lives in
+  its own `VaultDepositAddressModule`: predicting an address means holding the
+  proxy's whole creation code, which cost the vault module 2.7KB and left it
+  inside 4KB of the 24KB ceiling — the same slope the old `VaultSystemModule`
+  slid down until it would not deploy. Nothing in the factory can move money.
+- **Early exit with a penalty, on the unified vault.** `withdrawWithPenalty`
+  is the pressure valve that keeps a limit honest: a member can always get past
+  it, but only at the rate the vault was created with, and the money goes to
+  whoever stayed. Penalties are kept per **(vault, token)** for the same reason
+  earning is — a stables vault charges the penalty in whichever coin was pulled
+  out, and paying a USDC penalty out of the DAI pot would take from people who
+  had nothing to do with it. A personal vault has nobody to share with, so its
+  penalty goes to the treasury. Penalties are never invested: they sit outside
+  `vaultTotals`, which is exactly the figure the yield module offers to a
+  strategy, so `claimPenaltyRewards` never has to redeem anything to pay out.
+- **Earning across the unified vault (`VaultYieldModule`).** Earning is now
+  keyed per **(vault, token)** rather than per vault. A stables vault holds
+  several assets at once and each earns in its own market — USDC's Aave
+  reserve knows nothing about DAI's — so a single per-vault position could
+  not represent it. Switching earning off divests the whole position,
+  earnings included, rather than merely stopping new investment. A community
+  vault's earning setting can only be chosen while the creator is still its
+  only member, so nobody's money is routed into an outside protocol after
+  they joined on other terms. The fee guarantee is carried over unchanged and
+  is still structural: one percentage point of the rate, funded only from the
+  surplus above principal, capped by the yield actually realized, with the
+  shortfall waiting in `feeDebt` and a protocol loss repaid before any fee.
+- **Earning on vault balances.** A vault holding a supported stablecoin can
+  supply its idle balance to Aave v3 and share the interest across its members.
+  The owner picks stable earning, prize savings or off from the new "Earn on your
+  savings" section; the whole feature ships behind `isYieldEnabled()` in
+  `frontend/src/utils/featureFlags.js`, currently off.
+  **On-chain:** a **new** `YieldModule` proxy registered as `YIELD_SYSTEM`, plus
+  a non-upgradeable `AaveV3Strategy` per token per mode. Strategies are
+  owner-set, and *replacing* a live one must be queued and wait out
+  `strategyChangeDelay` (7 days) first, so users can exit before their funds are
+  pointed at a different protocol. `VaultSystemModule` is upgraded **in place**
+  with exactly one appended storage slot (`yieldModule`) — nothing reordered, no
+  struct changed, and custodied vault funds untouched. Deposits and withdrawals
+  now route through the module: a deposit invests that vault's idle balance, a
+  withdrawal redeems only the shortfall it cannot cover from that vault's own
+  idle share (so one vault can never spend another's), and penalties awaiting a
+  claim are never invested at all.
+- **Yield fee: one percentage point of the rate, and never more than what was
+  earned.** `managementFeeBps` (100, capped at 200 in code) accrues
+  time-weighted on principal and is routed to the existing
+  `VaultSystemModule.treasury` — no second treasury address. The cap is
+  structural, not just arithmetic: the fee is funded exclusively from the
+  surplus above principal, so there is no code path from a user's deposit to a
+  fee. A period that earns nothing charges nothing; the shortfall waits in
+  `feeDebt` and settles out of later yield. A realized protocol loss is recorded
+  as a `deficit` and repaid from future yield **before** any fee, and never
+  reduces a member's recorded balance.
+- Yield is distributed per vault through an `accYieldPerShare` accumulator
+  mirroring the existing penalty accumulator, at `1e18` precision (deliberately
+  not the penalty accumulator's `1e12`, which would truncate a small harvest on a
+  6-decimal stablecoin to zero and lose it). Settled yield becomes principal
+  inside the same position, so it compounds with no extra transfer.
+  `compoundYield(vaultId, member)` is permissionless.
+- **Earning is on by default only for vaults created from the on-chain watermark
+  forward** (`yieldEnabledFromVaultId`). Locking in does not create a vault on
+  EVM, so there is no vault at that moment to attach a preference to; the
+  watermark is what makes "on by default" possible without touching anything
+  already in custody. Vaults that predate it stay off until their owner opts in,
+  and in every case funds only move on the next deposit.
+- Percentage spending limits now apply to compounded yield, because settled yield
+  lands in `member.balance` — a 10% daily limit on a balance that grew to 1100 is
+  110, not 100.
+- `AaveV3Strategy` is verified against the **live** Aave v3 pool on Optimism over
+  a fork (`npm run test:fork`, opt-in via `FORK_OPTIMISM=true` so the default
+  suite stays offline). It pins the two things a mock cannot: that
+  `AaveReserveData` still matches Aave's `getReserveData` struct — confirmed at
+  15 words with `aTokenAddress` at index 8, so a future Aave reshape would be
+  caught rather than silently quoting every user 0% — and that supply/withdraw
+  round-trip through the real pool.
+- **Fixed before shipping, found only by that fork test:** Aave reports
+  `balanceOf` as `scaledBalance * liquidityIndex` rounded down, so supplying
+  1,000,000,000 USDC leaves a position worth 999,999,999. The strategy's
+  exact-receipt check rejected that, which would have made **every real deposit**
+  fall back to idle. It now tolerates two units of rounding — still far below any
+  fee-on-transfer loss — and issues shares against the amount actually credited,
+  so the rounding cannot dilute other vaults in the same strategy. The unit is
+  recorded as a deficit and repaid by the first interest, never taken from a
+  member's balance. `MockAavePool.setSupplyShortfall` reproduces both this and a
+  lossy token in the offline suite.
+- **Community vaults are never defaulted into earning.** The watermark applies to
+  personal vaults only. A community vault holds other people's money under rules
+  fixed at creation, so defaulting it into Aave would commit members who never
+  agreed and leave them no way out — `setVaultYieldMode` rejects community vaults
+  once anyone else has joined. Its creator now opts in while still the only
+  member, so members see the setting before joining, exactly as they do the
+  penalty rate and the limits.
+- Earning applies **regardless of balance or deposit size** — there is no minimum
+  anywhere, by design. An amount too small to buy a single strategy share is left
+  idle and swept in with the next deposit rather than stranded.
+- `YieldDeficit` is only emitted once the shortfall exceeds a millionth of the
+  vault's principal, so Aave's routine one-unit rounding no longer reads as a
+  protocol loss in monitoring. The deficit itself is still recorded in full.
+- **Prize savings**, via a new `PoolTogetherStrategy`. Two facts about
+  PoolTogether v5, both verified against the live Optimism deployment rather than
+  assumed, shaped it:
+  - **Odds are per depositing address.** So each member gets their own
+    `PrizePosition` (an EIP-1167 clone) and their own real odds, including a real
+    shot at the grand prize. A shared position would have made every member one
+    large depositor whose prizes had to be split — a variable bonus rate, not a
+    lottery. This is why the yield hooks are now member-aware.
+  - **Prizes are paid in a different token from the deposit** — WETH, not USDC
+    (`prizeToken()` on the live pool) — and are *not* claimed by the depositor.
+    Only the prize vault may call `claimPrize`, third-party claimer bots do it,
+    and the token is transferred straight to the winner. So a position never
+    claims; prizes simply arrive and are swept. Members' winnings are therefore
+    tracked and claimed **separately** from their balance, never swapped and
+    never folded into the USDC ledger.
+  The prize fee is a flat share of each prize claimed (500 bps, capped at 1000),
+  which is the only thing it could come from: a prize vault pays no rate. A
+  member who never wins is never charged.
+- Prize savings reuses the prize vault **already configured in production**:
+  `PoolTogetherModule.prizeVaults(USDC)` on the live SavingsCore points at
+  PoolTogether's `przUSDC` (`0x03D3CE84…`), sharing prize pool
+  `0xF35fE10f…`. `add-yield-module.js` records both, so the new strategy points
+  at the same venue rather than introducing a second one.
+- `PoolTogetherStrategy` is verified against that **live** vault over a fork
+  (`npm run test:fork` now runs both fork suites). It pins what a mock cannot:
+  that the configured vault really is an ERC4626 over USDC sharing the expected
+  prize pool, that prize-vault shares do **not** appreciate (1,000 USDC in →
+  1,000 USDC withdrawable, because the yield funds the draw), and that two
+  members hold genuinely separate positions against the real TWAB-tracking
+  vault — the property the per-member design exists to buy.
+- Corrected `IPrizePool`: the old module declared `claimPrize(address,uint8)`,
+  whose selector is **absent** from the deployed v5 prize pool — it only ever
+  worked against the mock. The real one takes six arguments, and we now do not
+  call it at all.
+- Escape hatches for the new third-party dependency: `pauseStrategies` stops new
+  investment without affecting withdrawals, and `emergencyExitVault` /
+  `emergencyExitToken` divest everything back into `VaultSystemModule` and set
+  the vault to off. A withdrawal that the protocol cannot fund reverts
+  ("Insufficient strategy liquidity") rather than paying out short, and a
+  protocol that refuses a deposit leaves the funds idle rather than failing the
+  user's deposit.
 
 - **Base (chain 8453) as a deployment target**, selectable in the network
   dropdown alongside Optimism. The reason is the card on-ramp: Transak sells

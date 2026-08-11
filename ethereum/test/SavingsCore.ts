@@ -6,6 +6,27 @@ import { anyValue } from "@nomicfoundation/hardhat-chai-matchers/withArgs";
 import { expect } from "chai";
 import hre from "hardhat";
 
+/**
+ * Credit a native balance without going through deposit().
+ *
+ * The savings account no longer accepts native coin — its single spending limit
+ * is denominated in dollars, which cannot measure an asset whose value moves, so
+ * that belongs in a vault. Balances already held stay fully withdrawable, and
+ * that path still needs testing, so these seed one directly: fund the contract,
+ * then credit the ledger through an authorised module.
+ */
+async function seedNativeBalance(savingsCore: any, user: any, amount: bigint) {
+  const [owner] = await hre.ethers.getSigners();
+  const seederId = hre.ethers.keccak256(hre.ethers.toUtf8Bytes("TEST_SEEDER"));
+  if ((await savingsCore.getModule(seederId)) !== owner.address) {
+    await savingsCore.registerModule(seederId, owner.address);
+  }
+  await owner.sendTransaction({ to: savingsCore.target, value: amount });
+  await savingsCore.connect(owner).updateTokenBalance(
+    user.address, hre.ethers.ZeroAddress, amount, true,
+  );
+}
+
 describe("SavingsCore", function () {
   // We define a fixture to reuse the same setup in every test.
   async function deploySavingsWalletFixture() {
@@ -115,28 +136,30 @@ describe("SavingsCore", function () {
   });
 
   describe("Deposits", function () {
-    it("Should accept ETH deposits", async function () {
+    it("refuses native deposits — they belong in a vault", async function () {
       const { savingsCore, user1 } = await loadFixture(deploySavingsWalletFixture);
-
       const depositAmount = hre.ethers.parseEther("1.0");
-
+      // One spending limit spans this account, denominated in dollars, and a
+      // coin whose value moves cannot be measured against it.
       await expect(
-        savingsCore.connect(user1)["deposit(address,uint256)"](hre.ethers.ZeroAddress, depositAmount, { value: depositAmount })
-      ).not.to.be.reverted;
-
-      const balance = await savingsCore.getTokenBalance(user1.address, hre.ethers.ZeroAddress);
-      expect(balance).to.equal(depositAmount);
+        savingsCore.connect(user1)["deposit(address,uint256)"](
+          hre.ethers.ZeroAddress, depositAmount, { value: depositAmount },
+        ),
+      ).to.be.revertedWith("Native coin belongs in a vault");
     });
 
     it("Should emit deposit events", async function () {
       const { savingsCore, user1 } = await loadFixture(deploySavingsWalletFixture);
-
-      const depositAmount = hre.ethers.parseEther("1.0");
-
+      const MockUSDT = await hre.ethers.getContractFactory("MockUSDT");
+      const mockUSDT = await MockUSDT.deploy();
+      const depositAmount = hre.ethers.parseUnits("100", 6);
+      await mockUSDT.transfer(user1.address, depositAmount);
+      await mockUSDT.connect(user1).approve(savingsCore.target, depositAmount);
       await expect(
-        savingsCore.connect(user1)["deposit(address,uint256)"](hre.ethers.ZeroAddress, depositAmount, { value: depositAmount })
-      ).to.emit(savingsCore, "Deposited")
-       .withArgs(user1.address, hre.ethers.ZeroAddress, depositAmount);
+        savingsCore.connect(user1)["deposit(address,uint256)"](mockUSDT.target, depositAmount),
+      )
+        .to.emit(savingsCore, "Deposited")
+        .withArgs(user1.address, mockUSDT.target, depositAmount);
     });
 
     it("Should handle ERC20 token deposits", async function () {
@@ -165,7 +188,7 @@ describe("SavingsCore", function () {
 
       // First deposit some ETH
       const depositAmount = hre.ethers.parseEther("1.0");
-      await savingsCore.connect(user1)["deposit(address,uint256)"](hre.ethers.ZeroAddress, depositAmount, { value: depositAmount });
+      await seedNativeBalance(savingsCore, user1, depositAmount);
 
       const withdrawAmount = hre.ethers.parseEther("0.5");
 
@@ -182,7 +205,7 @@ describe("SavingsCore", function () {
 
       // First deposit some ETH
       const depositAmount = hre.ethers.parseEther("1.0");
-      await savingsCore.connect(user1)["deposit(address,uint256)"](hre.ethers.ZeroAddress, depositAmount, { value: depositAmount });
+      await seedNativeBalance(savingsCore, user1, depositAmount);
 
       const withdrawAmount = hre.ethers.parseEther("2.0"); // More than deposited
 
@@ -196,7 +219,7 @@ describe("SavingsCore", function () {
 
       // First deposit some ETH
       const depositAmount = hre.ethers.parseEther("1.0");
-      await savingsCore.connect(user1)["deposit(address,uint256)"](hre.ethers.ZeroAddress, depositAmount, { value: depositAmount });
+      await seedNativeBalance(savingsCore, user1, depositAmount);
 
       // Register user2 as an approved withdrawal address (direct add since dev mode allows it)
       await approvalModule.connect(user1).addWithdrawalAddressDirect(user1.address, "user2", user2.address);
@@ -243,7 +266,7 @@ describe("SavingsCore", function () {
       const { savingsCore, user1 } = await loadFixture(deploySavingsWalletFixture);
 
       const depositAmount = hre.ethers.parseEther("1.0");
-      await savingsCore.connect(user1)["deposit(address,uint256)"](hre.ethers.ZeroAddress, depositAmount, { value: depositAmount });
+      await seedNativeBalance(savingsCore, user1, depositAmount);
 
       const withdrawAmount = hre.ethers.parseEther("0.5");
 

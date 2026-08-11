@@ -111,6 +111,75 @@ all contracts. Once deployed:
 [GOVERNANCE.md](GOVERNANCE.md) for the signer-selection design (including
 why signers are chosen by role and independence, not by token holdings).
 
+## Third-party protocol exposure (earning on savings)
+
+Earning is **off until you switch it on, per coin, and never on by default for
+a community vault at all.** A vault holds several coins and each earns in its
+own market, so the choice is made per coin rather than per vault — a coin with
+a prize pool sitting beside one that has only a steady rate cannot be described
+by a single setting. A
+community vault holds other people's money under rules fixed at creation, so
+defaulting it into an outside protocol would commit members who never agreed and
+— since those rules cannot change afterwards — leave them no way out. Its creator
+opts in explicitly while still its only member, so anyone joining can see the
+setting first. While earning is on for a coin, that coin's balance is supplied
+to an outside lending protocol (Aave v3). This is the one place where the wallet's
+safety no longer depends only on our own contracts, so the honest statement of
+the risk:
+
+- **Your principal is exposed to that protocol.** If Aave suffers bad debt, an
+  exploit or an oracle failure, savings supplied to it can lose value. Our
+  accounting records such a loss as a `deficit` and repays it from future yield
+  before anyone earns or is charged, and it never silently reduces your recorded
+  balance — but that is bookkeeping, not insurance. **Earning is not
+  risk-free.** Leaving it off is a legitimate choice, and the balance then never
+  leaves the vault.
+- **Withdrawal liquidity is not guaranteed.** Funds are redeemed on demand, with
+  no buffer held back (a buffer would cost every user yield without surviving
+  the case it is meant to cover). If Aave's reserve is fully utilized or paused,
+  a withdrawal **reverts** rather than paying out short. A spending limit you
+  cannot exercise is a real cost of earning, and it is why the emergency exits
+  below exist.
+- **The fee cannot reach your principal.** The management fee is one percentage
+  point a year, capped in code at two, and it is funded exclusively from the
+  surplus above principal — there is no code path from a deposit to a fee. A
+  period that earns nothing is charged nothing, and the shortfall waits rather
+  than being taken later from capital.
+- **What that fee is as a share of your interest depends on the rate, and can be
+  large.** One percentage point of principal is a fifth of a 5% return, but most
+  of a 1.5% one. It is capped by what was actually earned, so it can never
+  exceed your interest — but in a low-rate year it can be the majority of it.
+  The app quotes the rate you receive, net of the fee, rather than the gross.
+- **One vault can never spend another's funds, and neither can one coin.** What
+  is available is derived from that vault's own recorded balance of that coin
+  minus its own invested principal, never from the module's pooled token
+  balance. Penalties awaiting a claim are never invested at all — they sit
+  outside the figure the yield module is ever offered.
+- **Escape hatches:** `pauseStrategies` halts new investment without affecting
+  withdrawals; `emergencyExitVault` / `emergencyExitToken` divest everything back
+  into the vault module and switch that vault to off. Any owner can switch their
+  own vault off at any time, which fully divests it.
+- **Prize savings is not available yet** on the unified vault, and the option is
+  shown disabled rather than hidden so the choice the product makes is visible.
+  What follows describes it as built for the earlier vault module, and applies
+  again once it is brought across. **Prize savings carries the same protocol
+  exposure, plus two differences worth stating.** Each member has their own position contract, so nobody else's win or
+  loss touches theirs, and a member's prize can never be paid out of another
+  member's deposit. Prizes are paid in a **different token** from the deposit
+  (WETH, not USDC): they are tracked and claimed separately and are never
+  swapped, so the wallet takes no price or slippage risk on your behalf. The
+  prize fee is a share of what you actually win — a prize vault pays no interest
+  of its own, so there is nothing else it could come from, and a member who never
+  wins is never charged. A prize position also earns **no steady interest at all**:
+  if you never win, you end with exactly what you put in, minus nothing.
+- **Known simplification:** a member's yield is credited against the vault's
+  recorded balance, which excludes yield not yet folded in. So interest earned
+  *by* an unsettled member's interest is shared across all principal holders
+  rather than going to that member alone. The effect is small (on the order of
+  0.16% a year of principal, shared) and is why `compoundYield` is
+  permissionless — anyone, including the app, can settle an idle member's
+  accounting at any time.
+
 ## What an upgrade cannot do quietly
 
 - It cannot execute before the timelock delay elapses (once governance is
@@ -118,6 +187,14 @@ why signers are chosen by role and independence, not by token holdings).
 - It cannot bypass the Safe's signature threshold (once expanded to M-of-N).
 - It cannot retroactively change these guarantees without itself going
   through the same queue.
+- It cannot take your principal as a yield fee. That is structural rather than
+  procedural: the fee is only ever funded from realized surplus, and the rate is
+  capped in the contract.
+- It **can** point a token at a different yield protocol — this is a genuine new
+  power that came with earning. Replacing a live strategy therefore has to be
+  queued and wait out a 7-day delay first, so you can see it and switch earning
+  off before your funds move. A first-time assignment for a token is immediate,
+  because no funds are parked there yet.
 
 ## Reporting a vulnerability
 

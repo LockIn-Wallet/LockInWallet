@@ -6,6 +6,27 @@ import { anyValue } from "@nomicfoundation/hardhat-chai-matchers/withArgs";
 import { expect } from "chai";
 import hre from "hardhat";
 
+/**
+ * Credit a native balance without going through deposit().
+ *
+ * The savings account no longer accepts native coin — its single spending limit
+ * is denominated in dollars, which cannot measure an asset whose value moves, so
+ * that belongs in a vault. Balances already held stay fully withdrawable, and
+ * that path still needs testing, so these seed one directly: fund the contract,
+ * then credit the ledger through an authorised module.
+ */
+async function seedNativeBalance(savingsCore: any, user: any, amount: bigint) {
+  const [owner] = await hre.ethers.getSigners();
+  const seederId = hre.ethers.keccak256(hre.ethers.toUtf8Bytes("TEST_SEEDER"));
+  if ((await savingsCore.getModule(seederId)) !== owner.address) {
+    await savingsCore.registerModule(seederId, owner.address);
+  }
+  await owner.sendTransaction({ to: savingsCore.target, value: amount });
+  await savingsCore.connect(owner).updateTokenBalance(
+    user.address, hre.ethers.ZeroAddress, amount, true,
+  );
+}
+
 describe("Savings Wallet Modules", function () {
   // Shared fixture for all module tests
   async function deployModulesFixture() {
@@ -58,7 +79,7 @@ describe("Savings Wallet Modules", function () {
 
     // Setup some user funds for testing
     const depositAmount = hre.ethers.parseEther("10.0");
-    await savingsCore.connect(user1)["deposit(address,uint256)"](hre.ethers.ZeroAddress, depositAmount, { value: depositAmount });
+    await seedNativeBalance(savingsCore, user1, depositAmount);
 
     return {
       savingsCore,

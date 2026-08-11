@@ -131,6 +131,48 @@ export class BlockchainAdapter {
     throw new Error("Recovery protection is not available on this network yet");
   }
 
+  // ---- Earning on savings ----
+  //
+  // Optional capability: a chain with no yield module reports false and the UI
+  // hides the section entirely, so no component needs to know which chain it is
+  // talking to.
+
+  /** Whether this chain can route vault balances into a yield protocol at all. */
+  supportsYield() {
+    return false;
+  }
+
+  /**
+   * Current earning setting and figures for one vault.
+   * @returns {Promise<{supported: boolean}>} `{supported: false}` when earning is
+   * unavailable — the UI treats that as "hide the section".
+   */
+  async getYieldStatus(vaultAddress = null) {
+    return { supported: false };
+  }
+
+  /** The earning options available for a token, with live rates. */
+  async getYieldOptions(tokenAddress) {
+    return [];
+  }
+
+  async setYieldMode(vaultAddress, mode) {
+    throw new Error("Earning on your savings is not available on this network yet");
+  }
+
+  async compoundVaultYield(vaultAddress, memberAddress) {
+    throw new Error("Earning on your savings is not available on this network yet");
+  }
+
+  /** Unclaimed prize winnings, or null when prize savings is unavailable. */
+  async getClaimablePrizes(vaultAddress) {
+    return null;
+  }
+
+  async claimVaultPrizes(vaultAddress, memberAddress) {
+    throw new Error("Earning on your savings is not available on this network yet");
+  }
+
   // ---- User-facing errors ----
   //
   // Raw chain failures are unreadable: EVM hands back a page-long ethers blob

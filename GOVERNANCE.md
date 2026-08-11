@@ -15,7 +15,8 @@ M-of-N signers (Gnosis Safe — audited, battle-tested, full web UI)
 We deliberately do **not** run a custom multisig — the Safe is the
 industry-standard, audited implementation and its UI is how signers review
 and confirm. Every owner power — UUPS upgrades, module (de)registration,
-cross-reference wiring, treasury configuration — flows through this chain:
+cross-reference wiring, treasury configuration, and the yield controls below —
+flows through this chain:
 the Safe's M-of-N confirmation schedules an action, it sits in **public
 view for the full delay** (48h on production), and then **anyone** may
 execute it (open executor role) — content approval stays M-of-N; only
@@ -113,6 +114,22 @@ M-of-N confirmation, so a compromised minority cannot rotate the set.
 Changing the timelock's roles (e.g. pointing it at a new Safe) goes through
 the timelock queue itself and is publicly visible for the full delay.
 
+## Yield controls (timelocked)
+
+Earning on vault balances added a second indirect custody power: a strategy
+decides which outside protocol holds invested funds. These all flow through the
+same M-of-N + delay chain:
+
+| Operation | Why it is dangerous |
+| --- | --- |
+| `setStrategy(token, strategy)` | Decides where custodied funds go. **Additionally** guarded in-contract: replacing a live strategy must be queued and wait out `strategyChangeDelay` (7 days) before it can be set, so users can switch earning off first. A first-time assignment is immediate, since no funds are parked there yet. |
+| `setManagementFeeBps` | Sets the fee. Capped at 200 bps in code, so no queued change can raise it beyond two percentage points of the rate. |
+| `setPrizeFeeBps` | Share taken from each claimed prize. Capped at 2000 bps in code. |
+| `pauseStrategies` | Halts new investment. Deliberately does **not** affect withdrawals. |
+| `emergencyExitVault` / `emergencyExitToken` | Divests a position back into the vault module and sets that vault to off. Cannot send funds anywhere else. |
+| `setYieldModule` on the vault module | Attaches the accountant. Until it is set, no vault balance is invested at all. |
+| `setYieldMode` on the vault module | Switches one coin of one vault between earning and off. Restricted to that vault's creator, and for a community vault only while they are still its only member — so nobody's money moves into an outside protocol after they joined on other terms. Not a governance power at all; listed here because it is the only way a balance starts earning. |
+
 ## What governance cannot do
 
 - Execute anything without the public delay (once Phase 1 is live).
@@ -122,3 +139,10 @@ the timelock queue itself and is publicly visible for the full delay.
   M-of-N + delay as upgrades, visible in the queue like everything else.
 - Shorten your exit: any delay reduction is itself a queued, delayed,
   publicly visible operation.
+- Take user principal as a yield fee. The fee is funded only from realized
+  surplus above principal; there is no code path from a deposit to a fee, and the
+  rate is capped in the contract rather than by policy.
+- Invest any balance at all without the vault owner switching that coin on.
+  Earning starts off for every coin of every vault; there is no watermark and no
+  default that turns it on for someone.
+- Send yield fees anywhere other than the vault module's configured treasury.

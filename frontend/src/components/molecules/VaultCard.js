@@ -1,15 +1,21 @@
 import React from "react";
-import { colors, spacing, fontSize, borderRadius } from "../../styles";
-import { getTokenSymbol, formatPenalty } from "../../utils/formatUtils";
+import { colors, spacing, fontSize, borderRadius, vaultCardStyles } from "../../styles";
+import { getTokenSymbol, formatPenalty, formatTokenAmount } from "../../utils/formatUtils";
 
-function VaultCard({ vault, onClick, isSelected = false }) {
+function VaultCard({ vault, membership = null, onClick, isSelected = false }) {
   const isPersonal = vault.vaultType === "Personal";
   const borderColor = isSelected
     ? colors.success.light
     : isPersonal
     ? colors.success.main
     : colors.accent.purple;
-  const tokenLabel = getTokenSymbol(vault);
+  // What the vault holds. A stables vault holds several coins under one dollar
+  // cap, so it names them; a coin vault names its one coin. Falling back to a
+  // truncated address is for a coin the app has no metadata for.
+  const tokenLabel =
+    vault.tokens && vault.tokens.length > 1
+      ? vault.tokens.map((token) => token.symbol).join(" · ")
+      : getTokenSymbol(vault);
   const isClickable = !!onClick;
 
   return (
@@ -67,11 +73,21 @@ function VaultCard({ vault, onClick, isSelected = false }) {
         </div>
       </div>
 
-      {/* Token */}
-      <div style={{ fontSize: fontSize.sm, color: colors.text.secondary }}>
-        {tokenLabel !== "TOKEN" || !vault.tokenMint
-          ? tokenLabel
-          : `${vault.tokenMint.slice(0, 8)}...`}
+      {/* What it holds, and how much of it. Several vaults can hold the same
+          coins under the same name, so the balance is what actually tells them
+          apart — without it, switching vaults looks like nothing happened. */}
+      <div style={vaultCardStyles.detailRow}>
+        <span style={{ fontSize: fontSize.sm, color: colors.text.secondary }}>
+          {tokenLabel !== "TOKEN" || !vault.tokenMint
+            ? tokenLabel
+            : `${vault.tokenMint.slice(0, 8)}...`}
+        </span>
+        {membership ? (
+          <span style={vaultCardStyles.balance}>
+            {formatTokenAmount(Number(membership.balance), membership.balanceDecimals ?? 6)}
+            {vault.tokens?.length > 1 ? " USD" : ""}
+          </span>
+        ) : null}
       </div>
 
       {/* Footer stats (community only — members and penalty are meaningless on a personal vault) */}

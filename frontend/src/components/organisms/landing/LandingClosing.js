@@ -13,10 +13,11 @@ const LandingClosing = ({ networkType, connectWallet, onConnectPhantom }) => (
   <section id="connect" style={landingStyles.closing}>
     <div style={landingStyles.closingGlow} aria-hidden="true" />
     <div style={landingStyles.closingInner}>
-      <h2 style={landingStyles.sectionTitle}>Don&apos;t trust. Verify.</h2>
+      <h2 style={landingStyles.sectionTitle}>
+        The <span style={landingStyles.heroAccent}>Wallet</span> you don&apos;t have to <span style={landingStyles.heroAccent}>Trust.</span>
+      </h2>
       <p style={landingStyles.closingBody}>
-        Read the code, set your limits, and let a contract keep the promise
-        willpower can&apos;t always keep.
+        Publicly verifiable. Enforced on-chain.
       </p>
       <WalletConnectButtons
         networkType={networkType}

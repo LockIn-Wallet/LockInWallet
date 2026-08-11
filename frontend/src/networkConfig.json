@@ -21,21 +21,21 @@
       "savingsContract": "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512",
       "tokens": {
         "USDT": {
-          "address": "0xE6E340D132b5f46d1e472DebcD681B2aBc16e57E",
+          "address": "0x36C02dA8a0983159322a80FFE9F24b1acfF8B570",
           "symbol": "USDT",
           "name": "Tether USD",
           "decimals": 6,
           "recommended": true
         },
         "USDC": {
-          "address": "0x0000000000000000000000000000000000000000",
+          "address": "0xD42912755319665397FF090fBB63B1a31aE87Cee",
           "symbol": "USDC",
           "name": "USD Coin",
           "decimals": 6,
           "recommended": true
         },
         "DAI": {
-          "address": "0x0000000000000000000000000000000000000000",
+          "address": "0xfcDB4564c18A9134002b9771816092C9693622e3",
           "symbol": "DAI",
           "name": "Dai Stablecoin",
           "decimals": 18,

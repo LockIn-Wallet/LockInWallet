@@ -213,3 +213,47 @@ export const buttonHoverEffects = {
 };
 
 export default buttonStyles;
+/**
+ * The on/off switch.
+ *
+ * Sized in absolute pixels rather than the relative `fontSize` scale, because a
+ * switch has to stay a fixed hit target wherever it is dropped — the in-app
+ * screens nest `em` inside sized parents, and a track that shrank with its
+ * context would end up unhittable on a phone.
+ */
+export const toggleStyles = {
+  track: {
+    position: "relative",
+    width: "44px",
+    height: "24px",
+    padding: 0,
+    margin: 0,
+    borderRadius: borderRadius.pill,
+    cursor: "pointer",
+    transition: "background-color 0.15s, border-color 0.15s",
+    flexShrink: 0,
+  },
+  trackOn: {
+    backgroundColor: colors.success.main,
+    border: `1px solid ${colors.success.main}`,
+  },
+  trackOff: {
+    backgroundColor: colors.background.secondary,
+    border: `1px solid ${colors.border.strong}`,
+  },
+  trackInactive: {
+    cursor: "not-allowed",
+    opacity: 0.6,
+  },
+  knob: {
+    position: "absolute",
+    top: "2px",
+    width: "18px",
+    height: "18px",
+    borderRadius: borderRadius.pill,
+    backgroundColor: colors.text.primary,
+    transition: "left 0.15s",
+  },
+  knobOn: { left: "23px", backgroundColor: colors.text.onAccent },
+  knobOff: { left: "2px", backgroundColor: colors.text.muted },
+};

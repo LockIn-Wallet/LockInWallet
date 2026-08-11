@@ -38,6 +38,15 @@ const PATHS = {
       <path d="M12 7v5l3.5 2" />
     </>
   ),
+  // A seedling: growth, for earning on savings. `gift` is already the deposit
+  // section, so earning needs its own mark.
+  sprout: (
+    <>
+      <path d="M12 21v-9" />
+      <path d="M12 12C12 8 9 5 5 5c0 4 3 7 7 7z" />
+      <path d="M12 12c0-3.3 2.7-6 6-6 0 3.3-2.7 6-6 6z" />
+    </>
+  ),
   key: (
     <>
       <circle cx="8" cy="8" r="4" />
@@ -71,6 +80,15 @@ const PATHS = {
       <line x1="12" y1="10" x2="12" y2="20" />
       <path d="M12 10C12 6 9 5 8 6.2 7 7.4 8.7 10 12 10z" />
       <path d="M12 10c0-4 3-5 4-3.8 1 1.2-.7 3.8-4 3.8z" />
+    </>
+  ),
+  // Three sliders: "adjust this", rather than a cog's "system settings"
+  sliders: (
+    <>
+      <line x1="4" y1="8" x2="20" y2="8" />
+      <line x1="4" y1="16" x2="20" y2="16" />
+      <circle cx="9" cy="8" r="2.2" />
+      <circle cx="16" cy="16" r="2.2" />
     </>
   ),
 };

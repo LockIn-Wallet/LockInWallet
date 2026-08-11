@@ -25,6 +25,23 @@ describe("VaultSystemModule", function () {
     const vaultModuleId = hre.ethers.keccak256(hre.ethers.toUtf8Bytes("VAULT_SYSTEM"));
     await savingsCore.registerModule(vaultModuleId, vaultModule.target);
 
+    // Vault rules live in the shared modules now, so a fixture that creates a
+    // vault has to register them — the vault module fails closed without them.
+    const deployShared = async (name: string) => {
+      const f = await hre.ethers.getContractFactory(name);
+      const proxy = await hre.upgrades.deployProxy(f, [savingsCore.target], { initializer: "initialize" });
+      await proxy.waitForDeployment();
+      return proxy;
+    };
+    const limitsModule = await deployShared("TimePeriodLimitsModule");
+    const proposalModule2 = await deployShared("ProposalSystemModule");
+    const bypassModule = await deployShared("BypassSystemModule");
+    const reg = (id: string, t: any) => savingsCore.registerModule(hre.ethers.keccak256(hre.ethers.toUtf8Bytes(id)), t);
+    await reg("TIME_PERIOD_LIMITS", limitsModule.target);
+    await reg("PROPOSAL_SYSTEM", proposalModule2.target);
+    await reg("BYPASS_SYSTEM", bypassModule.target);
+    await savingsCore.setupModuleCrossReferences();
+
     const MockUSDT = await hre.ethers.getContractFactory("MockUSDT");
     const usdt = await MockUSDT.deploy();
     await usdt.waitForDeployment();
@@ -187,7 +204,7 @@ describe("VaultSystemModule", function () {
       const daily = hre.ethers.parseEther("1");
       await expect(vaultModule.connect(user1).withdraw(1, daily))
         .to.changeEtherBalance(user1, daily);
-      await expect(vaultModule.connect(user1).withdraw(1, 1n)).to.be.revertedWith("Daily limit exceeded");
+      await expect(vaultModule.connect(user1).withdraw(1, 1n)).to.be.revertedWith("Exceeds limit");
 
       await time.increase(DAY + 1);
       await expect(vaultModule.connect(user1).withdraw(1, daily))
@@ -209,7 +226,7 @@ describe("VaultSystemModule", function () {
       // Daily window has reset, but only 1 ETH remains within the weekly window
       await expect(
         vaultModule.connect(user1).withdraw(1, hre.ethers.parseEther("2"))
-      ).to.be.revertedWith("Weekly limit exceeded");
+      ).to.be.revertedWith("Exceeds limit");
       await vaultModule.connect(user1).withdraw(1, hre.ethers.parseEther("1"));
 
       await time.increase(WEEK + 1);
@@ -240,14 +257,14 @@ describe("VaultSystemModule", function () {
       // 10% of 10 ETH = 1 ETH
       await expect(
         vaultModule.connect(user1).withdraw(1, hre.ethers.parseEther("1") + 1n)
-      ).to.be.revertedWith("Daily limit exceeded");
+      ).to.be.revertedWith("Exceeds limit");
       await vaultModule.connect(user1).withdraw(1, hre.ethers.parseEther("1"));
 
       // Next day the cap shrinks with the balance: 10% of 9 ETH = 0.9 ETH
       await time.increase(DAY + 1);
       await expect(
         vaultModule.connect(user1).withdraw(1, hre.ethers.parseEther("1"))
-      ).to.be.revertedWith("Daily limit exceeded");
+      ).to.be.revertedWith("Exceeds limit");
       await vaultModule.connect(user1).withdraw(1, hre.ethers.parseEther("0.9"));
     });
   });
@@ -416,34 +433,6 @@ describe("VaultSystemModule", function () {
     });
   });
 
-  describe("Rule updates", function () {
-    it("lets only the creator update personal vault rules, with validation", async function () {
-      const { vaultModule, user1, user2 } = await loadFixture(deployVaultSystemFixture);
-      await vaultModule.connect(user1).createVault(ethVaultParams());
-
-      await expect(
-        vaultModule.connect(user2).updateVaultRules(1, 100, 200, 300, false, 1000)
-      ).to.be.revertedWith("Only creator");
-      await expect(
-        vaultModule.connect(user1).updateVaultRules(1, 0, 0, 0, false, 1000)
-      ).to.be.revertedWith("No limits set");
-
-      await expect(vaultModule.connect(user1).updateVaultRules(1, 100, 200, 300, false, 1000))
-        .to.emit(vaultModule, "VaultRulesUpdated").withArgs(1);
-      const vault = await vaultModule.getVault(1);
-      expect(vault.dailyLimit).to.equal(100);
-      expect(vault.penaltyRateBps).to.equal(1000);
-    });
-
-    it("keeps community vault rules immutable, even for the creator", async function () {
-      const { vaultModule, user1 } = await loadFixture(deployVaultSystemFixture);
-      await vaultModule.connect(user1).createVault(ethVaultParams({ vaultType: VAULT_TYPE_COMMUNITY }));
-      await expect(
-        vaultModule.connect(user1).updateVaultRules(1, 100, 200, 300, false, 1000)
-      ).to.be.revertedWith("Community rules immutable");
-    });
-  });
-
   describe("Administration", function () {
     it("lets only the owner change the treasury", async function () {
       const { vaultModule, user1, user2 } = await loadFixture(deployVaultSystemFixture);
@@ -452,5 +441,374 @@ describe("VaultSystemModule", function () {
       await vaultModule.setTreasury(user2.address);
       expect(await vaultModule.treasury()).to.equal(user2.address);
     });
+  });
+});
+
+describe("VaultSystemModule — shared withdrawal addresses", function () {
+  async function deployWithApprovalFixture() {
+    const [owner, user1, user2, stranger] = await hre.ethers.getSigners();
+
+    const SavingsCore = await hre.ethers.getContractFactory("SavingsCore");
+    const savingsCore = await hre.upgrades.deployProxy(SavingsCore, []);
+
+    const VaultSystemModule = await hre.ethers.getContractFactory("VaultSystemModule");
+    const vaultModule = await hre.upgrades.deployProxy(VaultSystemModule, [savingsCore.target]);
+    await savingsCore.registerModule(
+      hre.ethers.keccak256(hre.ethers.toUtf8Bytes("VAULT_SYSTEM")),
+      vaultModule.target,
+    );
+
+    // Vault rules live in the shared modules now, so a fixture that creates a
+    // vault has to register them — the vault module fails closed without them.
+    const deployShared = async (name: string) => {
+      const f = await hre.ethers.getContractFactory(name);
+      const proxy = await hre.upgrades.deployProxy(f, [savingsCore.target], { initializer: "initialize" });
+      await proxy.waitForDeployment();
+      return proxy;
+    };
+    const limitsModule = await deployShared("TimePeriodLimitsModule");
+    const proposalModule2 = await deployShared("ProposalSystemModule");
+    const bypassModule = await deployShared("BypassSystemModule");
+    const reg = (id: string, t: any) => savingsCore.registerModule(hre.ethers.keccak256(hre.ethers.toUtf8Bytes(id)), t);
+    await reg("TIME_PERIOD_LIMITS", limitsModule.target);
+    await reg("PROPOSAL_SYSTEM", proposalModule2.target);
+    await reg("BYPASS_SYSTEM", bypassModule.target);
+    await savingsCore.setupModuleCrossReferences();
+
+    const ApprovalSystemModule = await hre.ethers.getContractFactory("ApprovalSystemModule");
+    const approvalModule = await hre.upgrades.deployProxy(ApprovalSystemModule, [savingsCore.target]);
+    await savingsCore.registerModule(
+      hre.ethers.keccak256(hre.ethers.toUtf8Bytes("APPROVAL_SYSTEM")),
+      approvalModule.target,
+    );
+
+    const MockUSDT = await hre.ethers.getContractFactory("MockUSDT");
+    const usdt = await MockUSDT.deploy();
+    await usdt.transfer(user1.address, hre.ethers.parseUnits("10000", 6));
+
+    // A funded personal vault to withdraw from.
+    await vaultModule.connect(user1).createVault({
+      name: "Savings",
+      description: "",
+      vaultType: VAULT_TYPE_PERSONAL,
+      token: usdt.target,
+      dailyLimit: hre.ethers.parseUnits("10000", 6),
+      weeklyLimit: hre.ethers.parseUnits("10000", 6),
+      monthlyLimit: hre.ethers.parseUnits("10000", 6),
+      limitsArePercentage: false,
+      penaltyRateBps: 2000,
+    });
+    await usdt.connect(user1).approve(vaultModule.target, hre.ethers.parseUnits("1000", 6));
+    await vaultModule.connect(user1).deposit(1, hre.ethers.parseUnits("1000", 6));
+
+    return { savingsCore, vaultModule, approvalModule, usdt, owner, user1, user2, stranger };
+  }
+
+  it("pays a vault withdrawal to your own address without any approval", async function () {
+    const { vaultModule, usdt, user1 } = await loadFixture(deployWithApprovalFixture);
+    const before = await usdt.balanceOf(user1.address);
+
+    await vaultModule.connect(user1).withdrawTo(1, hre.ethers.parseUnits("100", 6), user1.address);
+
+    expect((await usdt.balanceOf(user1.address)) - before).to.equal(hre.ethers.parseUnits("100", 6));
+  });
+
+  it("refuses a destination the member has not saved", async function () {
+    const { vaultModule, stranger, user1 } = await loadFixture(deployWithApprovalFixture);
+
+    await expect(
+      vaultModule.connect(user1).withdrawTo(1, hre.ethers.parseUnits("100", 6), stranger.address),
+    ).to.be.revertedWith("Withdrawal address not approved");
+  });
+
+  it("accepts a destination from the member's existing savings list", async function () {
+    // The point of the shared list: an address saved for the savings account
+    // works in every vault, with no per-vault re-approval.
+    const { vaultModule, approvalModule, usdt, user1, user2 } =
+      await loadFixture(deployWithApprovalFixture);
+    await approvalModule.connect(user1).addWithdrawalAddressDirect(user1.address, "Cold", user2.address);
+
+    const before = await usdt.balanceOf(user2.address);
+    await vaultModule.connect(user1).withdrawTo(1, hre.ethers.parseUnits("250", 6), user2.address);
+
+    expect((await usdt.balanceOf(user2.address)) - before).to.equal(hre.ethers.parseUnits("250", 6));
+  });
+
+  it("keeps one member's saved list from authorising another's withdrawal", async function () {
+    const { vaultModule, approvalModule, user1, user2, stranger } =
+      await loadFixture(deployWithApprovalFixture);
+    // user2 approves the stranger — that must not help user1.
+    await approvalModule.connect(user2).addWithdrawalAddressDirect(user2.address, "Theirs", stranger.address);
+
+    await expect(
+      vaultModule.connect(user1).withdrawTo(1, hre.ethers.parseUnits("100", 6), stranger.address),
+    ).to.be.revertedWith("Withdrawal address not approved");
+  });
+
+  it("rejects the zero address", async function () {
+    const { vaultModule, user1 } = await loadFixture(deployWithApprovalFixture);
+    await expect(
+      vaultModule.connect(user1).withdrawTo(1, hre.ethers.parseUnits("100", 6), hre.ethers.ZeroAddress),
+    ).to.be.revertedWith("Invalid destination");
+  });
+
+  it("still enforces the vault's spending limits on a whitelisted destination", async function () {
+    // A saved address is not a way around the limits.
+    const { vaultModule, approvalModule, user1, user2 } =
+      await loadFixture(deployWithApprovalFixture);
+    await approvalModule.connect(user1).addWithdrawalAddressDirect(user1.address, "Cold", user2.address);
+
+    await expect(
+      vaultModule.connect(user1).withdrawTo(1, hre.ethers.parseUnits("5000", 6), user2.address),
+    ).to.be.revertedWith("Invalid amount");
+  });
+});
+
+describe("VaultSystemModule — rules reuse the savings account's modules", function () {
+  const DAY = 86400;
+
+  async function fixture() {
+    const [owner, user1, user2] = await hre.ethers.getSigners();
+    const SavingsCore = await hre.ethers.getContractFactory("SavingsCore");
+    const savingsCore = await hre.upgrades.deployProxy(SavingsCore, []);
+    const deploy = async (n: string) => {
+      const f = await hre.ethers.getContractFactory(n);
+      const p = await hre.upgrades.deployProxy(f, [savingsCore.target], { initializer: "initialize" });
+      await p.waitForDeployment();
+      return p;
+    };
+    const vaultModule = await deploy("VaultSystemModule");
+    const limits = await deploy("TimePeriodLimitsModule");
+    const proposals = await deploy("ProposalSystemModule");
+    const bypass = await deploy("BypassSystemModule");
+    const rules = await deploy("VaultRulesModule");
+    const reg = (id: string, t: any) =>
+      savingsCore.registerModule(hre.ethers.keccak256(hre.ethers.toUtf8Bytes(id)), t);
+    await reg("VAULT_SYSTEM", vaultModule.target);
+    await reg("VAULT_RULES", rules.target);
+    await reg("TIME_PERIOD_LIMITS", limits.target);
+    await reg("PROPOSAL_SYSTEM", proposals.target);
+    await reg("BYPASS_SYSTEM", bypass.target);
+    await savingsCore.setupModuleCrossReferences();
+    await savingsCore.setDevelopmentMode(false); // real waits
+
+    await vaultModule.connect(user1).createVault({
+      name: "Savings", description: "", vaultType: VAULT_TYPE_PERSONAL,
+      token: hre.ethers.ZeroAddress,
+      dailyLimit: hre.ethers.parseEther("1"),
+      weeklyLimit: hre.ethers.parseEther("5"),
+      monthlyLimit: hre.ethers.parseEther("15"),
+      limitsArePercentage: false, penaltyRateBps: 2000,
+    });
+    await vaultModule.connect(user1).deposit(1, hre.ethers.parseEther("10"), {
+      value: hre.ethers.parseEther("10"),
+    });
+    return { savingsCore, vaultModule, limits, proposals, rules, owner, user1, user2 };
+  }
+
+  it("stores a vault's rules in the shared limits module, under its own scope", async function () {
+    const { vaultModule, limits, user1 } = await loadFixture(fixture);
+    const scope = await vaultModule.vaultScopeOf(1, user1.address);
+
+    expect(await limits.findPeriodLimit(scope, "Daily")).to.equal(hre.ethers.parseEther("1"));
+    expect(await limits.findPeriodLimit(scope, "Weekly")).to.equal(hre.ethers.parseEther("5"));
+  });
+
+  it("keeps a vault scope distinct from the member's own savings account", async function () {
+    // A collision would merge a vault's rules with someone's account, so the
+    // derivation is domain-separated rather than merely improbable.
+    const { vaultModule, limits, user1 } = await loadFixture(fixture);
+    const scope = await vaultModule.vaultScopeOf(1, user1.address);
+
+    expect(scope).to.not.equal(user1.address);
+    expect(await limits.findPeriodLimit(user1.address, "Daily")).to.equal(0);
+  });
+
+  it("gives every member their own scope, so counters are never shared", async function () {
+    const { vaultModule, user1, user2 } = await loadFixture(fixture);
+    expect(await vaultModule.vaultScopeOf(1, user1.address)).to.not.equal(
+      await vaultModule.vaultScopeOf(1, user2.address),
+    );
+    expect(await vaultModule.vaultScopeOf(1, user1.address)).to.not.equal(
+      await vaultModule.vaultScopeOf(2, user1.address),
+    );
+  });
+
+  it("enforces the vault's limits through the shared module", async function () {
+    const { vaultModule, user1 } = await loadFixture(fixture);
+    await expect(
+      vaultModule.connect(user1).withdraw(1, hre.ethers.parseEther("1.1")),
+    ).to.be.revertedWith("Exceeds limit");
+    await vaultModule.connect(user1).withdraw(1, hre.ethers.parseEther("1"));
+  });
+
+  it("locks a vault in at creation, so no limit can be rewritten on the spot", async function () {
+    // This is what makes every later change serve the timelock — the same
+    // state the savings account reaches when its owner locks in.
+    const { vaultModule, limits, user1 } = await loadFixture(fixture);
+    const scope = await vaultModule.vaultScopeOf(1, user1.address);
+
+    await expect(
+      limits.connect(user1).setPeriodLimit(scope, "Daily", hre.ethers.parseEther("100"), DAY, DAY),
+    ).to.be.revertedWith("Not authorized");
+  });
+
+  /**
+   * Rule changes for these vaults are gone on purpose.
+   *
+   * VaultRulesModule now serves SavingsVaultModule — the unified vault that
+   * replaces this one — and a module cannot look membership up in two places at
+   * once. The tests that covered this path moved to SavingsVaultModule.ts along
+   * with the capability. Everything below still covers what this module does on
+   * its own: custody, limits, penalties and the ledger.
+   */
+
+  it("fails closed when the limits module is not registered", async function () {
+    // A vault whose limit check silently no-opped would be worse than having
+    // no limits, because the app would still promise them.
+    const { savingsCore, vaultModule, user1 } = await loadFixture(fixture);
+    await savingsCore.unregisterModule(
+      hre.ethers.keccak256(hre.ethers.toUtf8Bytes("TIME_PERIOD_LIMITS")),
+    );
+    await expect(
+      vaultModule.connect(user1).withdraw(1, hre.ethers.parseEther("0.1")),
+    ).to.be.revertedWith("Limits module not registered");
+  });
+});
+
+describe("VaultSystemModule — emergency bypass", function () {
+  const DAY = 86400;
+
+  async function fixture() {
+    const [owner, user1, user2] = await hre.ethers.getSigners();
+    const SavingsCore = await hre.ethers.getContractFactory("SavingsCore");
+    const savingsCore = await hre.upgrades.deployProxy(SavingsCore, []);
+    const deploy = async (n: string) => {
+      const f = await hre.ethers.getContractFactory(n);
+      const p = await hre.upgrades.deployProxy(f, [savingsCore.target], { initializer: "initialize" });
+      await p.waitForDeployment();
+      return p;
+    };
+    const vaultModule = await deploy("VaultSystemModule");
+    const limits = await deploy("TimePeriodLimitsModule");
+    const proposals = await deploy("ProposalSystemModule");
+    const bypass = await deploy("BypassSystemModule");
+    const rules = await deploy("VaultRulesModule");
+    const reg = (id: string, t: any) =>
+      savingsCore.registerModule(hre.ethers.keccak256(hre.ethers.toUtf8Bytes(id)), t);
+    await reg("VAULT_SYSTEM", vaultModule.target);
+    await reg("VAULT_RULES", rules.target);
+    await reg("TIME_PERIOD_LIMITS", limits.target);
+    await reg("PROPOSAL_SYSTEM", proposals.target);
+    await reg("BYPASS_SYSTEM", bypass.target);
+    await savingsCore.setupModuleCrossReferences();
+    await savingsCore.setDevelopmentMode(false);
+
+    await vaultModule.connect(user1).createVault({
+      name: "Savings", description: "", vaultType: VAULT_TYPE_PERSONAL,
+      token: hre.ethers.ZeroAddress,
+      dailyLimit: hre.ethers.parseEther("1"),
+      weeklyLimit: hre.ethers.parseEther("5"),
+      monthlyLimit: hre.ethers.parseEther("15"),
+      limitsArePercentage: false, penaltyRateBps: 2000,
+    });
+    await vaultModule.connect(user1).deposit(1, hre.ethers.parseEther("10"), {
+      value: hre.ethers.parseEther("10"),
+    });
+    return { savingsCore, vaultModule, limits, bypass, rules, owner, user1, user2 };
+  }
+
+  async function requestId(bypass: any, vaultModule: any, user: any) {
+    const scope = await vaultModule.vaultScopeOf(1, user.address);
+    const [ids] = await bypass.getUserActiveBypassRequests(scope);
+    return ids[0];
+  }
+
+  it("lets a member exit past a limit, after that period's own wait", async function () {
+    const { vaultModule, bypass, user1 } = await loadFixture(fixture);
+    // 3 ETH is over the 1 ETH daily cap.
+    await vaultModule.connect(user1).requestVaultBypass(1, hre.ethers.parseEther("3"), "Daily");
+    const id = await requestId(bypass, vaultModule, user1);
+
+    await expect(
+      vaultModule.connect(user1).executeVaultBypass(1, id, user1.address),
+    ).to.be.revertedWith("Still in timelock");
+
+    await time.increase(DAY);
+    const before = await hre.ethers.provider.getBalance(user1.address);
+    await vaultModule.connect(user1).executeVaultBypass(1, id, user1.address);
+    expect(await hre.ethers.provider.getBalance(user1.address)).to.be.gt(before);
+    expect((await vaultModule.getVaultMember(1, user1.address)).balance).to.equal(
+      hre.ethers.parseEther("7"),
+    );
+  });
+
+  it("pays out of vault funds, not the savings account", async function () {
+    // The whole reason the bypass module cannot execute this itself.
+    const { savingsCore, vaultModule, bypass, user1 } = await loadFixture(fixture);
+    await vaultModule.connect(user1).requestVaultBypass(1, hre.ethers.parseEther("3"), "Daily");
+    const id = await requestId(bypass, vaultModule, user1);
+    await time.increase(DAY);
+
+    await vaultModule.connect(user1).executeVaultBypass(1, id, user1.address);
+    expect(await hre.ethers.provider.getBalance(vaultModule.target)).to.equal(
+      hre.ethers.parseEther("7"),
+    );
+    expect(await savingsCore.getTokenBalance(user1.address, hre.ethers.ZeroAddress)).to.equal(0);
+  });
+
+  it("still honours every period it did not skip", async function () {
+    // A bypass skips one window, not all of them.
+    const { vaultModule, bypass, user1 } = await loadFixture(fixture);
+    await vaultModule.connect(user1).requestVaultBypass(1, hre.ethers.parseEther("6"), "Daily");
+    const id = await requestId(bypass, vaultModule, user1);
+    await time.increase(DAY);
+
+    // 6 ETH clears the skipped daily cap but breaches the 5 ETH weekly one.
+    await expect(
+      vaultModule.connect(user1).executeVaultBypass(1, id, user1.address),
+    ).to.be.revertedWith("Exceeds limit");
+  });
+
+  it("cannot be spent twice", async function () {
+    const { vaultModule, bypass, user1 } = await loadFixture(fixture);
+    await vaultModule.connect(user1).requestVaultBypass(1, hre.ethers.parseEther("2"), "Daily");
+    const id = await requestId(bypass, vaultModule, user1);
+    await time.increase(DAY);
+
+    await vaultModule.connect(user1).executeVaultBypass(1, id, user1.address);
+    await expect(
+      vaultModule.connect(user1).executeVaultBypass(1, id, user1.address),
+    ).to.be.revertedWith("Invalid request");
+  });
+
+  it("can be cancelled before it matures", async function () {
+    const { vaultModule, bypass, user1 } = await loadFixture(fixture);
+    await vaultModule.connect(user1).requestVaultBypass(1, hre.ethers.parseEther("3"), "Daily");
+    const id = await requestId(bypass, vaultModule, user1);
+
+    await vaultModule.connect(user1).cancelVaultBypass(1, id);
+    await time.increase(DAY);
+    await expect(
+      vaultModule.connect(user1).executeVaultBypass(1, id, user1.address),
+    ).to.be.revertedWith("Invalid request");
+  });
+
+  it("refuses to pay a bypass to an unapproved destination", async function () {
+    const { vaultModule, bypass, user1, user2 } = await loadFixture(fixture);
+    await vaultModule.connect(user1).requestVaultBypass(1, hre.ethers.parseEther("2"), "Daily");
+    const id = await requestId(bypass, vaultModule, user1);
+    await time.increase(DAY);
+
+    await expect(
+      vaultModule.connect(user1).executeVaultBypass(1, id, user2.address),
+    ).to.be.revertedWith("Withdrawal address not approved");
+  });
+
+  it("refuses a request larger than the member's balance", async function () {
+    const { vaultModule, user1 } = await loadFixture(fixture);
+    await expect(
+      vaultModule.connect(user1).requestVaultBypass(1, hre.ethers.parseEther("50"), "Daily"),
+    ).to.be.revertedWith("Insufficient balance");
   });
 });

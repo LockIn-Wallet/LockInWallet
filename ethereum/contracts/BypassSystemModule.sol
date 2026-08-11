@@ -86,9 +86,62 @@ contract BypassSystemModule is Initializable, UUPSUpgradeable, OwnableUpgradeabl
         string calldata skipPeriod,
         address token
     ) external onlyAuthorizedOrSelf(user) returns (bytes32 requestId) {
+        return _request(user, amount, skipPeriod, token, savingsCore.getTokenBalance(user, token));
+    }
+
+    /// @notice Request a bypass for a scope whose funds this module does not
+    /// hold — a vault, whose balance lives in VaultSystemModule. The caller
+    /// supplies the balance for the same reason it supplies one to the limits
+    /// module: this module is the bookkeeper, not the custodian.
+    function requestBypassFor(
+        address user,
+        uint256 amount,
+        string calldata skipPeriod,
+        address token,
+        uint256 availableBalance
+    ) external onlyAuthorized returns (bytes32 requestId) {
+        return _request(user, amount, skipPeriod, token, availableBalance);
+    }
+
+    /// @notice Spend a matured request WITHOUT moving any money, returning what
+    /// it authorises so the custodian can pay it out itself.
+    ///
+    /// executeBypassWithdrawal moves SavingsCore balances, which is right for
+    /// the savings account and wrong for a vault — vault funds live elsewhere.
+    /// Splitting the bookkeeping from the payout is what lets both share one
+    /// timelock rather than having two.
+    function consumeBypassRequest(address user, bytes32 requestId)
+        external
+        onlyAuthorized
+        returns (uint256 amount, address token)
+    {
+        enforceNotFrozen(savingsCore, user);
+        BypassRequest storage request = userBypassRequests[user][requestId];
+        require(request.exists && !request.executed, "Invalid request");
+        require(block.timestamp >= request.executeAfter, "Still in timelock");
+
+        // Every other period still binds — a bypass skips one window, not all.
+        timePeriodLimitsModule.checkLimitsWithBypass(user, request.amount, request.skipPeriod);
+
+        request.executed = true;
+        _removeRequestFromTracking(user, requestId);
+        timePeriodLimitsModule.updateSpendingWithBypass(user, request.amount, request.skipPeriod);
+
+        amount = request.amount;
+        token = request.token;
+        emit BypassExecuted(user, requestId, request.skipPeriod, amount, token);
+    }
+
+    function _request(
+        address user,
+        uint256 amount,
+        string calldata skipPeriod,
+        address token,
+        uint256 availableBalance
+    ) private returns (bytes32 requestId) {
         enforceNotFrozen(savingsCore, user);
         require(amount > 0 && bytes(skipPeriod).length > 0, "Invalid input");
-        require(amount <= savingsCore.getTokenBalance(user, token), "Insufficient balance");
+        require(amount <= availableBalance, "Insufficient balance");
 
         // Verify the period exists
         require(timePeriodLimitsModule.findPeriodLimit(user, skipPeriod) > 0, "Period not found");

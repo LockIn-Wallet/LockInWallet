@@ -8,10 +8,13 @@ import ProposalSystemModuleABI from "../ProposalSystemModuleABI.json";
 import BypassSystemModuleABI from "../BypassSystemModuleABI.json";
 import ApprovalSystemModuleABI from "../ApprovalSystemModuleABI.json";
 import PoolTogetherModuleABI from "../PoolTogetherModuleABI.json";
-import VaultSystemModuleABI from "../VaultSystemModuleABI.json";
+import SavingsVaultModuleABI from "../SavingsVaultModuleABI.json";
+import VaultDepositAddressModuleABI from "../VaultDepositAddressModuleABI.json";
+import VaultYieldModuleABI from "../VaultYieldModuleABI.json";
 import SavingsTimelockABI from "../SavingsTimelockABI.json";
 import ReferralModuleABI from "../ReferralModuleABI.json";
 import RecoverySystemModuleABI from "../RecoverySystemModuleABI.json";
+import VaultRulesModuleABI from "../VaultRulesModuleABI.json";
 import ERC20ABI from "../ERC20ABI.json";
 import { getTokenMeta } from "../utils/tokenUtils.js";
 import {
@@ -19,10 +22,17 @@ import {
   getPeriodDuration,
   getDefaultUnlockDelay,
 } from "../utils/spendingPeriods.js";
+import { aprBpsToApyPercent, netApyPercent } from "../utils/yieldMath.js";
 
-const VAULT_SYSTEM_MODULE_ID = ethers.keccak256(ethers.toUtf8Bytes("VAULT_SYSTEM"));
+const SAVINGS_VAULTS_MODULE_ID = ethers.keccak256(ethers.toUtf8Bytes("SAVINGS_VAULTS"));
 const REFERRAL_MODULE_ID = ethers.keccak256(ethers.toUtf8Bytes("REFERRAL"));
 const RECOVERY_SYSTEM_MODULE_ID = ethers.keccak256(ethers.toUtf8Bytes("RECOVERY_SYSTEM"));
+
+// Earning modes, mirroring YieldInterfaces.sol. The numbers stay inside this
+// adapter — components only ever see the string names.
+const YIELD_MODES = { off: 1, stable: 2, prize: 3 };
+
+const YIELD_MODE_NAMES = { 0: "off", 1: "off", 2: "stable", 3: "prize" };
 
 // User-facing modules are called directly (Pattern B): each authenticates the
 // caller via msg.sender, so no calls route through SavingsCore forwarders
@@ -33,7 +43,28 @@ const MODULE_DEFS = {
   approvalSystem: { id: ethers.keccak256(ethers.toUtf8Bytes("APPROVAL_SYSTEM")), abi: ApprovalSystemModuleABI },
   proxyDeployment: { id: ethers.keccak256(ethers.toUtf8Bytes("PROXY_DEPLOYMENT")), abi: ProxyDeploymentModuleABI },
   poolTogether: { id: ethers.keccak256(ethers.toUtf8Bytes("POOL_TOGETHER")), abi: PoolTogetherModuleABI },
+  // Vault rule changes moved out of the vault module: that contract custodies
+  // funds and had reached the 24KB ceiling, so everything not needing custody
+  // lives here instead — the same split the savings account already uses.
+  vaultRules: { id: ethers.keccak256(ethers.toUtf8Bytes("VAULT_RULES")), abi: VaultRulesModuleABI },
+  // Deploying a member's permanent deposit address means holding the proxy's
+  // whole creation code, which is 2.7KB the custody module cannot spare.
+  vaultDepositAddresses: {
+    id: ethers.keccak256(ethers.toUtf8Bytes("VAULT_DEPOSIT_ADDRESSES")),
+    abi: VaultDepositAddressModuleABI,
+  },
+  vaultYield: { id: ethers.keccak256(ethers.toUtf8Bytes("VAULT_YIELD")), abi: VaultYieldModuleABI },
 };
+
+// What a vault holds, and therefore how its limits read. Mirrors
+// SavingsVaultModule; the numbers never leave this adapter.
+const VAULT_KINDS = { coin: 0, stables: 1 };
+const VAULT_KIND_NAMES = { 0: "Coin", 1: "Stables" };
+
+// A stables vault's cap is in dollars, and every pegged coin is restated into
+// them by dividing out its decimals — so the cap needs no price feed, and this
+// is the scale it is kept at.
+const DOLLAR_DECIMALS = 6;
 const VAULT_TYPE_NAMES = ["Personal", "Community"];
 
 // Human-readable labels for calls wrapped inside timelock operations, so the
@@ -105,7 +136,7 @@ const REVERT_MESSAGES = [
   ["Daily limit exceeded", "This is over your daily limit — request a bypass to withdraw it"],
   ["Weekly limit exceeded", "This is over your weekly limit — request a bypass to withdraw it"],
   ["Monthly limit exceeded", "This is over your monthly limit — request a bypass to withdraw it"],
-  ["Exceeds limit", "This is over your spending limit — request a bypass to withdraw it"],
+  ["Exceeds limit", "This is over one of your spending limits — request a bypass to withdraw it"],
 
   // Withdrawal destinations and approvals
   ["Cannot set own address as destination", "Your own address is always available — no need to add it"],
@@ -142,7 +173,25 @@ const REVERT_MESSAGES = [
   ["Creator cannot leave", "The creator cannot leave their own vault"],
   ["Balance not zero", "Withdraw your balance before leaving the vault"],
   ["Already a member", "You are already a member of this vault"],
+  // Vault protections
+  ["Withdrawal address not approved", "That address is not on your saved withdrawal list"],
+  ["Limits module not registered", "Spending limits are not set up on this network yet"],
+  ["Proposal module not registered", "Rule changes are not set up on this network yet"],
+  ["Bypass module not registered", "Bypasses are not set up on this network yet"],
+  ["Invalid destination", "Choose a withdrawal address"],
   ["Not a vault member", "You are not a member of this vault"],
+  // The unified vault: what a vault holds is what it accepts, and a limit can
+  // only mean what its kind allows.
+  ["Token not accepted here", "This vault does not hold that coin"],
+  ["Community coins immutable", "A community vault's coins are fixed once anyone has joined"],
+  ["Native coin belongs in its own vault", "A stablecoins vault cannot hold a coin whose value moves"],
+  ["Duplicate token", "That coin is already in this vault"],
+  ["Too many tokens", "This vault already holds as many coins as it can"],
+  ["Coin vault takes one token", "A vault for a single coin takes exactly one coin"],
+  ["Stables vault uses dollar limits", "A stablecoins vault caps dollars, not a percentage"],
+  ["Not the vault creator", "Only the vault's creator can do this"],
+  ["Rewards not claimed", "Claim your share of the penalties before leaving the vault"],
+  ["Request not found", "That request no longer exists"],
   ["Not in member list", "You are not a member of this vault"],
   ["Vault not active", "This vault is no longer active"],
   ["Vault not found", "That vault no longer exists"],
@@ -164,6 +213,25 @@ const REVERT_MESSAGES = [
   ["Invalid tier", "That prize tier does not exist"],
   ["Zero redeem", "There is nothing to withdraw from the prize pool"],
   ["Zero deposit", "Enter a deposit greater than zero"],
+
+  // Earning on savings. Longer strings come first so they are not shadowed by
+  // a shorter one they contain.
+  ["Insufficient strategy liquidity", "The savings protocol is temporarily out of liquidity — try a smaller amount, or try again shortly"],
+  ["Yield module not configured", "Earning on savings is not switched on for this network yet"],
+  ["Strategy deposit shortfall", "The savings protocol short-changed the deposit, so it was rejected — your funds stayed in your vault"],
+  ["Strategy controller mismatch", "That earning strategy is not controlled by this wallet's contracts"],
+  ["Strategy asset mismatch", "That earning strategy does not match this vault's coin"],
+  ["Yield module not configured", "Earning on savings is not switched on for this network yet"],
+  ["Strategy mode mismatch", "That earning strategy does not match the chosen option"],
+  ["Strategy change not queued", "That strategy change has not been queued yet"],
+  ["Strategy change not ready", "That strategy change is still in its waiting period"],
+  ["Community yield immutable", "A community vault's earning setting is fixed when it is created"],
+  ["Pending yield not zero", "Collect your earnings before leaving the vault"],
+  ["Yield mode unchanged", "That is already your setting"],
+  ["No strategy for token", "This vault's token cannot earn yield yet"],
+  ["Strategies paused", "Earning is paused right now — your savings are untouched"],
+  ["Fee above maximum", "That fee is above the allowed maximum"],
+  ["Nothing invested", "This vault has nothing invested"],
 
   // Referrals and proxies
   ["Cannot refer yourself", "You cannot refer yourself"],
@@ -210,12 +278,21 @@ const WRITE_FALLBACKS = {
   createVault: "Could not create the vault",
   joinVault: "Could not join the vault",
   leaveVault: "Could not leave the vault",
-  updateVaultRules: "Could not update the vault rules",
+  addVaultToken: "Could not add that coin to the vault",
+  updateVaultRules: "Could not propose the vault rule change",
+  executeVaultRuleChange: "Could not apply the vault rule change",
+  cancelVaultRuleChange: "Could not cancel the vault rule change",
+  requestVaultBypass: "Could not request the bypass",
+  executeVaultBypass: "Could not execute the bypass",
+  cancelVaultBypass: "Could not cancel the bypass request",
   depositToVault: "Deposit failed",
   withdrawFromVault: "Withdrawal failed",
   withdrawFromVaultWithPenalty: "Withdrawal failed",
   claimVaultPenaltyRewards: "Could not claim your rewards",
   deployVaultDepositAddress: "Could not create the vault deposit address",
+  setYieldMode: "Could not change how your savings earn",
+  compoundVaultYield: "Could not add your earnings to your balance",
+  claimVaultPrizes: "Could not claim your winnings",
 };
 
 /**
@@ -1010,8 +1087,8 @@ export class EVMAdapter extends BlockchainAdapter {
       }
       const referralAddress = await this.savingsContract.getModule(REFERRAL_MODULE_ID).catch(() => null);
       if (referralAddress && referralAddress !== ethers.ZeroAddress) moduleNames[referralAddress.toLowerCase()] = "referral";
-      const vaultAddress = await this.savingsContract.getModule(VAULT_SYSTEM_MODULE_ID).catch(() => null);
-      if (vaultAddress && vaultAddress !== ethers.ZeroAddress) moduleNames[vaultAddress.toLowerCase()] = "vaultSystem";
+      const vaultAddress = await this.savingsContract.getModule(SAVINGS_VAULTS_MODULE_ID).catch(() => null);
+      if (vaultAddress && vaultAddress !== ethers.ZeroAddress) moduleNames[vaultAddress.toLowerCase()] = "savingsVaults";
       const recoveryAddress = await this.savingsContract.getModule(RECOVERY_SYSTEM_MODULE_ID).catch(() => null);
       if (recoveryAddress && recoveryAddress !== ethers.ZeroAddress) moduleNames[recoveryAddress.toLowerCase()] = "recoverySystem";
 
@@ -1673,11 +1750,11 @@ export class EVMAdapter extends BlockchainAdapter {
   async _getVaultModule() {
     if (this.vaultModule) return this.vaultModule;
     if (!this.savingsContract) throw new Error("Contract not initialized");
-    const moduleAddress = await this.savingsContract.getModule(VAULT_SYSTEM_MODULE_ID);
+    const moduleAddress = await this.savingsContract.getModule(SAVINGS_VAULTS_MODULE_ID);
     if (moduleAddress === ethers.ZeroAddress) {
       throw new Error("Vaults are not available on this network yet");
     }
-    this.vaultModule = new ethers.Contract(moduleAddress, VaultSystemModuleABI, this.signer);
+    this.vaultModule = new ethers.Contract(moduleAddress, SavingsVaultModuleABI, this.signer);
     return this.vaultModule;
   }
 
@@ -1701,46 +1778,50 @@ export class EVMAdapter extends BlockchainAdapter {
     return resolved;
   }
 
-  _mapVault(vaultId, raw, meta) {
-    const token = raw.token === ethers.ZeroAddress ? null : raw.token;
+  /**
+   * A vault, in the shape the UI wants.
+   *
+   * A vault holds a set of tokens, not one, so `tokens` is the truth here. The
+   * single-token fields below it are kept because a coin vault genuinely has
+   * one asset and every amount in the UI is denominated in it — they are the
+   * honest answer for that kind and deliberately blank for a stables vault,
+   * rather than a first token pretending to speak for the rest.
+   *
+   * `limitDecimals` / `limitSymbol` are separate from the token's own, because
+   * a limit is not always in a token: a stables cap is in dollars and a
+   * percentage cap is in percent.
+   */
+  _mapVault(vaultId, raw, tokenMetas) {
+    const kind = Number(raw.kind);
+    const isStables = kind === VAULT_KINDS.stables;
+    const tokens = raw.tokens.map((address, i) => ({
+      address: address === ethers.ZeroAddress ? null : address,
+      isNative: tokenMetas[i].isNative,
+      symbol: tokenMetas[i].symbol,
+      decimals: tokenMetas[i].decimals,
+    }));
+    const only = isStables ? null : tokens[0];
+
     return {
       address: vaultId.toString(),
       creator: raw.creator,
+      kind: VAULT_KIND_NAMES[kind] || "Coin",
       vaultType: VAULT_TYPE_NAMES[Number(raw.vaultType)] || "Personal",
-      tokenMint: token,
-      isNativeToken: meta.isNative,
-      tokenSymbol: meta.symbol,
-      tokenDecimals: meta.decimals,
       name: raw.name,
-      description: raw.description,
-      dailyLimit: Number(raw.dailyLimit),
-      weeklyLimit: Number(raw.weeklyLimit),
-      monthlyLimit: Number(raw.monthlyLimit),
+      tokens,
+      // Single-asset view. Null for a stables vault on purpose: there is no one
+      // token, and code that quietly used the first would be wrong every time
+      // the member held any of the others.
+      tokenMint: only ? only.address : null,
+      isNativeToken: only ? only.isNative : false,
+      tokenSymbol: only ? only.symbol : "Stablecoins",
+      tokenDecimals: only ? only.decimals : DOLLAR_DECIMALS,
       limitsArePercentage: raw.limitsArePercentage,
+      limitDecimals: raw.limitsArePercentage ? 2 : (only ? only.decimals : DOLLAR_DECIMALS),
+      limitSymbol: raw.limitsArePercentage ? "%" : (only ? only.symbol : "USD"),
       penaltyRateBps: Number(raw.penaltyRateBps),
       memberCount: Number(raw.memberCount),
-      totalBalance: Number(raw.totalBalance),
-      accumulatedPenalty: Number(raw.accPenaltyPerShare),
       isActive: raw.isActive,
-      createdAt: Number(raw.createdAt),
-      updatedAt: Number(raw.updatedAt),
-    };
-  }
-
-  _mapVaultMember(vaultId, memberAddress, raw) {
-    return {
-      vault: vaultId.toString(),
-      member: memberAddress,
-      balance: Number(raw.balance),
-      dailySpent: Number(raw.dailySpent),
-      dailyLastReset: Number(raw.dailyLastReset),
-      weeklySpent: Number(raw.weeklySpent),
-      weeklyLastReset: Number(raw.weeklyLastReset),
-      monthlySpent: Number(raw.monthlySpent),
-      monthlyLastReset: Number(raw.monthlyLastReset),
-      penaltyDebt: Number(raw.penaltyDebt),
-      unclaimedPenalties: Number(raw.unclaimedPenalties),
-      joinedAt: Number(raw.joinedAt),
     };
   }
 
@@ -1780,32 +1861,88 @@ export class EVMAdapter extends BlockchainAdapter {
     return this._toBaseUnits(value, decimals);
   }
 
+  /**
+   * Which token an operation is about.
+   *
+   * A coin vault has one, so naming it is optional. A stables vault has
+   * several and there is no sensible default — picking one would silently move
+   * the wrong asset — so the caller has to say.
+   */
+  _resolveVaultToken(vault, tokenAddress) {
+    const wanted = tokenAddress === this.ETH_ADDRESS ? null : tokenAddress;
+    if (wanted == null) {
+      if (vault.tokens.length === 1) return vault.tokens[0];
+      throw this._userError("Choose which coin this is for");
+    }
+    const match = vault.tokens.find(
+      (t) => (t.address || "").toLowerCase() === wanted.toLowerCase(),
+    );
+    if (!match) throw this._userError("This vault does not hold that coin");
+    return match;
+  }
+
+  /** The on-chain address for a token entry, with native coin as the zero address. */
+  _tokenArg(token) {
+    return token.address || ethers.ZeroAddress;
+  }
+
   async createVault({
     name,
-    description = "",
     vaultType = "Personal",
+    kind = null,
     tokenMint = null,
+    tokens = null,
+    periods = null,
     dailyLimit = 0,
     weeklyLimit = 0,
     monthlyLimit = 0,
     penaltyRateBps = 2000,
     limitsArePercentage = false,
+    referrer = null,
   }) {
     const vaultModule = await this._getVaultModule();
-    const token = tokenMint || ethers.ZeroAddress;
-    const { decimals } = await this._resolveTokenMeta(tokenMint);
 
-    const tx = await vaultModule.createVault({
+    // A list of coins means a stables vault; one coin means a coin vault. The
+    // caller can say outright, but the shape of what they passed already says it.
+    const tokenList = tokens && tokens.length > 0 ? tokens : [tokenMint ?? null];
+    const resolvedKind =
+      kind != null
+        ? VAULT_KINDS[String(kind).toLowerCase()] ?? VAULT_KINDS.coin
+        : tokenList.length > 1
+          ? VAULT_KINDS.stables
+          : VAULT_KINDS.coin;
+
+    const isStables = resolvedKind === VAULT_KINDS.stables;
+    // A stables cap is in dollars across every coin; a coin cap is in that coin.
+    const limitDecimals = isStables
+      ? DOLLAR_DECIMALS
+      : (await this._resolveTokenMeta(tokenList[0])).decimals;
+
+    const schedule =
+      periods && periods.length > 0
+        ? periods
+        : [
+            { name: "Daily", limit: dailyLimit },
+            { name: "Weekly", limit: weeklyLimit },
+            { name: "Monthly", limit: monthlyLimit },
+          ].filter((p) => p.limit > 0);
+    if (schedule.length === 0) throw this._userError("Set at least one spending limit");
+
+    const tx = await vaultModule.createVault(
       name,
-      description,
-      vaultType: vaultType === "Community" ? 1 : 0,
-      token,
-      dailyLimit: this._toRawLimit(dailyLimit, limitsArePercentage, decimals),
-      weeklyLimit: this._toRawLimit(weeklyLimit, limitsArePercentage, decimals),
-      monthlyLimit: this._toRawLimit(monthlyLimit, limitsArePercentage, decimals),
+      resolvedKind,
+      vaultType === "Community" ? 1 : 0,
+      tokenList.map((t) => t ?? ethers.ZeroAddress),
       limitsArePercentage,
       penaltyRateBps,
-    });
+      schedule.map((p) => p.name),
+      schedule.map((p) => this._toRawLimit(p.limit, limitsArePercentage, limitDecimals)),
+      schedule.map((p) => getPeriodDuration(p.name)),
+      schedule.map((p) => p.unlockDelay ?? getDefaultUnlockDelay(p.name)),
+      // Recording a referrer must never block someone starting to save: an
+      // unusable one becomes no referrer, and the contract shrugs off the rest.
+      referrer && ethers.isAddress(referrer) ? referrer : ethers.ZeroAddress,
+    );
     const receipt = await tx.wait();
 
     let vaultId = null;
@@ -1831,6 +1968,19 @@ export class EVMAdapter extends BlockchainAdapter {
     return tx.hash;
   }
 
+  /**
+   * Accept another dollar coin into an existing vault.
+   *
+   * The cap does not change — it is in dollars across whatever the vault holds
+   * — so the new coin shares the existing allowance rather than adding to it.
+   */
+  async addVaultToken(vaultAddress, tokenAddress) {
+    const vaultModule = await this._getVaultModule();
+    const tx = await vaultModule.addAcceptedToken(vaultAddress, tokenAddress);
+    await tx.wait();
+    return tx.hash;
+  }
+
   async leaveVault(vaultAddress) {
     const vaultModule = await this._getVaultModule();
     const tx = await vaultModule.leaveVault(vaultAddress);
@@ -1838,144 +1988,277 @@ export class EVMAdapter extends BlockchainAdapter {
     return tx.hash;
   }
 
+  /**
+   * Change a vault's spending limits.
+   *
+   * A vault's rules live in the same modules as the savings account's, so
+   * changing one goes through the same timelock rather than applying on the
+   * spot. Each period is proposed separately, because that is how the proposal
+   * module models a change — and it is what gives each window its own wait.
+   *
+   * @returns {Promise<Array<{period: string, txHash: string}>>} one entry per
+   * period actually changed. Nothing takes effect until each is executed after
+   * its wait; use getPendingVaultRuleChanges to see them.
+   */
   async updateVaultRules(vaultAddress, rules = {}) {
-    const vaultModule = await this._getVaultModule();
-    // Merge against the raw on-chain values so untouched limits keep their
-    // exact stored amounts (Number round-trips lose wei-level precision).
-    const current = await vaultModule.getVault(vaultAddress);
+    const vault = await this.getVaultInfo(vaultAddress);
+    if (!vault) throw this._userError("Vault not found");
 
-    const limitsArePercentage = rules.limitsArePercentage ?? current.limitsArePercentage;
-    if (
-      limitsArePercentage !== current.limitsArePercentage &&
-      (rules.dailyLimit == null || rules.weeklyLimit == null || rules.monthlyLimit == null)
-    ) {
-      // Stored raw limits are meaningless under the other mode, so a mode
-      // switch must respecify every limit
-      throw this._userError("Provide daily, weekly and monthly limits when changing the limit type");
+    const limitsArePercentage = rules.limitsArePercentage ?? vault.limitsArePercentage;
+    if (limitsArePercentage !== vault.limitsArePercentage) {
+      // The stored numbers mean different things under each mode, and the
+      // proposal flow changes one limit at a time — so there is no coherent
+      // way to switch mode partway through.
+      throw this._userError(
+        "Changing between fixed and percentage limits is not supported on an existing vault",
+      );
     }
-    const token = current.token === ethers.ZeroAddress ? null : current.token;
-    const { decimals } = await this._resolveTokenMeta(token);
-    const mergeLimit = (value, rawCurrent) =>
-      value != null ? this._toRawLimit(value, limitsArePercentage, decimals) : rawCurrent;
 
-    const tx = await vaultModule.updateVaultRules(
+    const changes = (
+      rules.periods ?? [
+        { name: "Daily", limit: rules.dailyLimit },
+        { name: "Weekly", limit: rules.weeklyLimit },
+        { name: "Monthly", limit: rules.monthlyLimit },
+      ]
+    ).filter((p) => p.limit != null);
+    if (changes.length === 0) throw this._userError("No limit changes to make");
+
+    const rulesModule = await this._getModuleContract("vaultRules");
+    const results = [];
+    for (const { name, limit } of changes) {
+      const raw = this._toRawLimit(limit, limitsArePercentage, vault.limitDecimals);
+      const tx = await rulesModule.proposeVaultLimitChange(vaultAddress, name, raw);
+      await tx.wait();
+      results.push({ period: name, txHash: tx.hash });
+    }
+    return results;
+  }
+
+  /**
+   * A vault's spending limits, in exactly the shape the savings account
+   * returns — because they now come from exactly the same place.
+   *
+   * Vault rules live in TimePeriodLimitsModule under a per-member scope, so the
+   * spent counters, remaining amounts and per-period waits are all real rather
+   * than reconstructed. That is what lets one set of components render a vault
+   * and the savings account without knowing which it is looking at.
+   */
+  async getVaultSpendingLimits(vaultAddress, memberAddress = null) {
+    const vaultModule = await this._getVaultModule();
+    const member = memberAddress || this.userAddress;
+    const scope = await vaultModule.vaultScopeOf(vaultAddress, member);
+
+    const vault = await this.getVaultInfo(vaultAddress);
+    const decimals = vault?.limitDecimals ?? DOLLAR_DECIMALS;
+
+    const limitsModule = await this._getModuleContract("timePeriodLimits");
+    const [names, limits, spent, remaining, durations, active, unlockDelays] =
+      await limitsModule.getUserSpendingLimits(scope);
+
+    const resetData = await this._fetchLimitResetTimes(scope, names, durations, active);
+
+    const fetchedLimits = [];
+    for (let i = 0; i < names.length; i++) {
+      fetchedLimits.push({
+        name: names[i],
+        limit: this.formatAmount(limits[i], decimals),
+        spent: this.formatAmount(spent[i], decimals),
+        remaining: Number(this.formatAmount(remaining[i], decimals)),
+        duration: durations[i].toString(),
+        active: active[i],
+        resetAt: resetData[i],
+        unlockDelay: Number(unlockDelays[i]),
+      });
+    }
+
+    // A vault is committed the moment it is created, so its rules always go
+    // through the timelock.
+    return { limits: fetchedLimits, isSetupCommitted: true };
+  }
+
+  /** Queued rule changes for a vault, with when each can be applied. */
+  async getPendingVaultRuleChanges(vaultAddress, memberAddress = null) {
+    const rulesModule = await this._getModuleContract("vaultRules");
+    const [ids, categories, newLimits, executeAfters] =
+      await rulesModule.getPendingVaultRuleChanges(vaultAddress, memberAddress || this.userAddress);
+    return ids.map((id, i) => ({
+      proposalId: id,
+      period: categories[i],
+      newLimitRaw: newLimits[i],
+      executeAfter: new Date(Number(executeAfters[i]) * 1000),
+    }));
+  }
+
+  async executeVaultRuleChange(vaultAddress, proposalId) {
+    const rulesModule = await this._getModuleContract("vaultRules");
+    const tx = await rulesModule.executeVaultLimitProposal(vaultAddress, proposalId);
+    await tx.wait();
+    return tx.hash;
+  }
+
+  async cancelVaultRuleChange(vaultAddress, proposalId) {
+    const rulesModule = await this._getModuleContract("vaultRules");
+    const tx = await rulesModule.cancelVaultLimitProposal(vaultAddress, proposalId);
+    await tx.wait();
+    return tx.hash;
+  }
+
+  /** Ask to withdraw past one of a vault's limits, after that period's wait. */
+  async requestVaultBypass(vaultAddress, amount, skipPeriod, tokenAddress = null) {
+    const vaultModule = await this._getVaultModule();
+    const vault = await this.getVaultInfo(vaultAddress);
+    const token = this._resolveVaultToken(vault, tokenAddress);
+    const raw = this._toBaseUnits(amount, token.decimals);
+    const tx = await vaultModule.requestBypass(
       vaultAddress,
-      mergeLimit(rules.dailyLimit, current.dailyLimit),
-      mergeLimit(rules.weeklyLimit, current.weeklyLimit),
-      mergeLimit(rules.monthlyLimit, current.monthlyLimit),
-      limitsArePercentage,
-      rules.penaltyRateBps ?? current.penaltyRateBps
+      this._tokenArg(token),
+      raw,
+      skipPeriod,
     );
     await tx.wait();
     return tx.hash;
   }
 
-  async depositToVault(vaultAddress, amount) {
+  async executeVaultBypass(vaultAddress, requestId, destination = null) {
+    const vaultModule = await this._getVaultModule();
+    const tx = await vaultModule.executeBypass(
+      vaultAddress,
+      requestId,
+      destination || this.userAddress,
+    );
+    await tx.wait();
+    return tx.hash;
+  }
+
+  async cancelVaultBypass(vaultAddress, requestId) {
+    const vaultModule = await this._getVaultModule();
+    const tx = await vaultModule.cancelBypass(vaultAddress, requestId);
+    await tx.wait();
+    return tx.hash;
+  }
+
+  async depositToVault(vaultAddress, amount, tokenAddress = null) {
     const vaultModule = await this._getVaultModule();
     const vault = await this.getVaultInfo(vaultAddress);
     if (!vault) throw this._userError("Vault not found");
 
-    const rawAmount = this._toBaseUnits(amount, vault.tokenDecimals);
-    if (vault.isNativeToken) {
-      const tx = await vaultModule.deposit(vaultAddress, rawAmount, { value: rawAmount });
+    const token = this._resolveVaultToken(vault, tokenAddress);
+    const rawAmount = this._toBaseUnits(amount, token.decimals);
+    await this._assertWalletBalance(token.address, rawAmount);
+
+    if (token.isNative) {
+      const tx = await vaultModule.deposit(vaultAddress, ethers.ZeroAddress, rawAmount, {
+        value: rawAmount,
+      });
       await tx.wait();
       return tx.hash;
     }
 
-    const token = new ethers.Contract(vault.tokenMint, ERC20ABI, this.signer);
+    const erc20 = new ethers.Contract(token.address, ERC20ABI, this.signer);
     const moduleAddress = await vaultModule.getAddress();
-    const allowance = await token.allowance(this.userAddress, moduleAddress);
+    const allowance = await erc20.allowance(this.userAddress, moduleAddress);
     if (allowance < rawAmount) {
       if (allowance > 0n) {
         // Tokens like USDT reject raising a non-zero allowance directly
-        const resetTx = await token.approve(moduleAddress, 0);
+        const resetTx = await erc20.approve(moduleAddress, 0);
         await resetTx.wait();
       }
-      const approveTx = await token.approve(moduleAddress, rawAmount);
+      const approveTx = await erc20.approve(moduleAddress, rawAmount);
       await approveTx.wait();
     }
-    const tx = await vaultModule.deposit(vaultAddress, rawAmount);
+    const tx = await vaultModule.deposit(vaultAddress, token.address, rawAmount);
     await tx.wait();
     return tx.hash;
   }
 
-  async _withdrawFromVault(vaultAddress, amount, withPenalty) {
+  async _withdrawFromVault(vaultAddress, amount, withPenalty, tokenAddress, destination) {
     const vaultModule = await this._getVaultModule();
     const vault = await this.getVaultInfo(vaultAddress);
     if (!vault) throw this._userError("Vault not found");
 
-    const rawAmount = this._toBaseUnits(amount, vault.tokenDecimals);
-    const membership = await this.getVaultMemberInfo(vaultAddress);
-    if (!membership) throw this._userError("You are not a member of this vault");
-    this._assertSufficientBalance(
-      rawAmount,
-      membership.balance,
-      vault.tokenSymbol,
-      vault.tokenDecimals,
-    );
+    const token = this._resolveVaultToken(vault, tokenAddress);
+    const rawAmount = this._toBaseUnits(amount, token.decimals);
+    const held = await vaultModule.balanceOf(vaultAddress, this.userAddress, this._tokenArg(token));
+    this._assertSufficientBalance(rawAmount, held, token.symbol, token.decimals);
 
+    const to = destination || this.userAddress;
     const tx = withPenalty
-      ? await vaultModule.withdrawWithPenalty(vaultAddress, rawAmount)
-      : await vaultModule.withdraw(vaultAddress, rawAmount);
+      ? await vaultModule.withdrawWithPenalty(vaultAddress, this._tokenArg(token), rawAmount, to)
+      : await vaultModule.withdraw(vaultAddress, this._tokenArg(token), rawAmount, to);
     await tx.wait();
     return tx.hash;
   }
 
-  async withdrawFromVault(vaultAddress, amount) {
-    return this._withdrawFromVault(vaultAddress, amount, false);
+  async withdrawFromVault(vaultAddress, amount, tokenAddress = null, destination = null) {
+    return this._withdrawFromVault(vaultAddress, amount, false, tokenAddress, destination);
   }
 
-  async withdrawFromVaultWithPenalty(vaultAddress, amount) {
-    return this._withdrawFromVault(vaultAddress, amount, true);
+  async withdrawFromVaultWithPenalty(vaultAddress, amount, tokenAddress = null, destination = null) {
+    return this._withdrawFromVault(vaultAddress, amount, true, tokenAddress, destination);
   }
 
-  async claimVaultPenaltyRewards(vaultAddress) {
+  async claimVaultPenaltyRewards(vaultAddress, tokenAddress = null) {
     const vaultModule = await this._getVaultModule();
-    const tx = await vaultModule.claimPenaltyRewards(vaultAddress);
+    const vault = await this.getVaultInfo(vaultAddress);
+    const token = this._resolveVaultToken(vault, tokenAddress);
+    const tx = await vaultModule.claimPenaltyRewards(vaultAddress, this._tokenArg(token));
     await tx.wait();
     return tx.hash;
   }
 
-  // ---- Permanent per-vault deposit addresses ----
+  // ---- Permanent per-member deposit addresses ----
 
-  async getVaultDepositAddress(vaultId) {
-    const vaultModule = await this._getVaultModule();
-    const address = await vaultModule.getVaultDepositAddress(vaultId);
-    return address === ethers.ZeroAddress ? null : address;
+  /**
+   * The member's address for this vault. Answered even before the proxy is
+   * deployed, which is the point: the address can be handed to an exchange
+   * first, and anything that arrives waits there to be swept in.
+   */
+  async getVaultDepositAddress(vaultId, memberAddress = null) {
+    const module = await this._getModuleContract("vaultDepositAddresses");
+    return module.depositAddressOf(vaultId, memberAddress || this.userAddress);
+  }
+
+  async isVaultDepositAddressDeployed(vaultId, memberAddress = null) {
+    const module = await this._getModuleContract("vaultDepositAddresses");
+    return module.isDepositAddressDeployed(vaultId, memberAddress || this.userAddress);
   }
 
   async deployVaultDepositAddress(vaultId) {
-    const vaultModule = await this._getVaultModule();
-    const tx = await vaultModule.deployVaultDepositAddress(vaultId);
+    const module = await this._getModuleContract("vaultDepositAddresses");
+    const tx = await module.deployDepositAddress(vaultId);
     await tx.wait();
     return this.getVaultDepositAddress(vaultId);
   }
 
-  /** Forward any funds sitting on the vault's deposit address into the vault. */
+  /** Forward anything sitting on the member's deposit address into the vault. */
   async checkAndSweepVaultProxy(vaultId) {
     try {
+      if (!(await this.isVaultDepositAddressDeployed(vaultId))) return;
       const proxyAddress = await this.getVaultDepositAddress(vaultId);
-      if (!proxyAddress) return;
       const vault = await this.getVaultInfo(vaultId);
       if (!vault) return;
 
       const proxy = new ethers.Contract(
         proxyAddress,
-        ["function sweepETH() external", "function sweepERC20(address token) external"],
+        ["function sweepNative() external", "function sweep(address token) external"],
         this.signer,
       );
 
-      if (vault.isNativeToken) {
-        // receive() forwards ETH automatically; sweep only catches strays
-        const balance = await this.provider.getBalance(proxyAddress);
-        if (balance > 0n) await (await proxy.sweepETH()).wait();
-      } else {
-        const token = new ethers.Contract(vault.tokenMint, ERC20ABI, this.provider);
-        const balance = await token.balanceOf(proxyAddress);
-        if (balance > 0n) await (await proxy.sweepERC20(vault.tokenMint)).wait();
+      // Every coin the vault takes, because a stables vault can be paid in any
+      // of them and sweeping only the first would strand the rest.
+      for (const token of vault.tokens) {
+        if (token.isNative) {
+          // receive() forwards automatically; the sweep only catches strays
+          const balance = await this.provider.getBalance(proxyAddress);
+          if (balance > 0n) await (await proxy.sweepNative()).wait();
+        } else {
+          const erc20 = new ethers.Contract(token.address, ERC20ABI, this.provider);
+          const balance = await erc20.balanceOf(proxyAddress);
+          if (balance > 0n) await (await proxy.sweep(token.address)).wait();
+        }
       }
     } catch (error) {
-      console.warn("Vault proxy sweep check failed:", error.message);
+      console.warn("Vault deposit address sweep failed:", error.message);
     }
   }
 
@@ -1988,17 +2271,57 @@ export class EVMAdapter extends BlockchainAdapter {
       // getVault reverts with "Vault not found" for unknown ids
       return null;
     }
-    const token = raw.token === ethers.ZeroAddress ? null : raw.token;
-    const meta = await this._resolveTokenMeta(token);
-    return this._mapVault(vaultAddress, raw, meta);
+    if (!raw.creator || raw.creator === ethers.ZeroAddress) return null;
+
+    const metas = await Promise.all(
+      raw.tokens.map((address) =>
+        this._resolveTokenMeta(address === ethers.ZeroAddress ? null : address),
+      ),
+    );
+    return this._mapVault(vaultAddress, raw, metas);
   }
 
+  /**
+   * What a member holds in a vault, per coin.
+   *
+   * There is no member struct on chain any more — balances are keyed by coin —
+   * so this is assembled here. `balances` is the truth; `balance` is the single
+   * number the older single-asset screens want, and for a stables vault that is
+   * deliberately the dollar total rather than any one coin.
+   */
   async getVaultMemberInfo(vaultAddress, memberAddress = null) {
     const vaultModule = await this._getVaultModule();
     const member = memberAddress || this.userAddress;
-    const raw = await vaultModule.getVaultMember(vaultAddress, member);
-    if (!raw.exists) return null;
-    return this._mapVaultMember(vaultAddress, member, raw);
+    const vault = await this.getVaultInfo(vaultAddress);
+    if (!vault) return null;
+
+    const members = await vaultModule.getVaultMembers(vaultAddress);
+    const isMember = members.some((a) => a.toLowerCase() === member.toLowerCase());
+    if (!isMember) return null;
+
+    const balances = {};
+    let single = 0n;
+    for (const token of vault.tokens) {
+      const raw = await vaultModule.balanceOf(vaultAddress, member, this._tokenArg(token));
+      balances[token.address || this.ETH_ADDRESS] = {
+        raw,
+        symbol: token.symbol,
+        decimals: token.decimals,
+        formatted: this.formatAmount(raw, token.decimals),
+      };
+      if (vault.tokens.length === 1) single = raw;
+    }
+    if (vault.tokens.length > 1) {
+      single = await vaultModule.dollarBalanceOf(vaultAddress, member);
+    }
+
+    return {
+      vault: vaultAddress.toString(),
+      member,
+      balances,
+      balance: single,
+      balanceDecimals: vault.tokens.length > 1 ? DOLLAR_DECIMALS : vault.tokens[0].decimals,
+    };
   }
 
   async getUserVaults() {
@@ -2025,7 +2348,13 @@ export class EVMAdapter extends BlockchainAdapter {
       const vault = await this.getVaultInfo(vaultId.toString());
       if (!vault || !vault.isActive) continue;
       if (vaultType && vault.vaultType !== vaultType) continue;
-      if (tokenMint && vault.tokenMint !== tokenMint) continue;
+      // "Holds this coin", not "is this coin" — a stables vault holds several.
+      if (
+        tokenMint &&
+        !vault.tokens.some((t) => (t.address || "").toLowerCase() === tokenMint.toLowerCase())
+      ) {
+        continue;
+      }
       vaults.push(vault);
     }
     return vaults;
@@ -2042,4 +2371,232 @@ export class EVMAdapter extends BlockchainAdapter {
     }
     return members;
   }
+
+
+  // ========== EARNING ON SAVINGS ==========
+
+  /** EVM has a yield module; whether a given network has one is reported by getYieldStatus. */
+  supportsYield() {
+    return true;
+  }
+
+  /** Resolve the yield module, or null when this network has none registered. */
+  async _getYieldModule() {
+    if (this.vaultYieldModule !== undefined) return this.vaultYieldModule;
+    try {
+      this.vaultYieldModule = await this._getModuleContract("vaultYield");
+    } catch {
+      this.vaultYieldModule = null;
+    }
+    return this.vaultYieldModule;
+  }
+
+  async _requireYieldModule() {
+    const module = await this._getYieldModule();
+    if (!module) throw this._userError("Earning on savings is not switched on for this network yet");
+    return module;
+  }
+
+  /**
+   * The earning options for one coin, with live rates read from the strategy
+   * itself. The gross rate is compounded into an APY here so no contract has to
+   * do floating-point maths.
+   *
+   * @returns {Promise<Array<{key: string, protocol: string, apyPercent: number,
+   *   netApyPercent: number, grandPrize: number|null, available: boolean}>>}
+   */
+  async getYieldOptions(tokenAddress) {
+    const module = await this._getYieldModule();
+    if (!module || !tokenAddress) return [];
+
+    const feeBps = Number(await module.managementFeeBps());
+    const strategy = await module.getStrategy(tokenAddress);
+    const available = Boolean(strategy && strategy !== ethers.ZeroAddress);
+    const gross = aprBpsToApyPercent(available ? await module.currentAprBps(tokenAddress) : 0);
+
+    return [
+      {
+        key: "stable",
+        protocol: "Aave",
+        apyPercent: gross,
+        netApyPercent: netApyPercent(gross, feeBps),
+        grandPrize: null,
+        available,
+      },
+      {
+        // Prize savings has not been brought across to the per-coin positions
+        // yet. Offered but unavailable, rather than hidden, so the choice the
+        // product makes is still visible.
+        key: "prize",
+        protocol: "PoolTogether",
+        apyPercent: 0,
+        netApyPercent: 0,
+        grandPrize: null,
+        available: false,
+      },
+      // Switching earning off is always on offer.
+      { key: "off", protocol: null, apyPercent: 0, netApyPercent: 0, grandPrize: null, available: true },
+    ];
+  }
+
+  /** Not yet available on the per-coin positions. */
+  async getClaimablePrizes() {
+    return null;
+  }
+
+  async claimVaultPrizes() {
+    throw this._userError("Prize savings is not available yet");
+  }
+
+  /**
+   * Current earning setting and figures for a vault.
+   *
+   * Earning is per coin, because each coin earns in its own market — so
+   * `tokens` is the real answer and the top-level figures are the vault's
+   * totals. `mode` is "mixed" when a stables vault has some coins earning and
+   * some not, which is a state the UI has to be able to say out loud rather
+   * than round to one or the other.
+   *
+   * `supported: false` means "hide the earning UI": either this network has no
+   * yield module, or there is no vault to configure.
+   */
+  async getYieldStatus(vaultAddress = null) {
+    const module = await this._getYieldModule();
+    if (!module) return { supported: false };
+    if (!vaultAddress) return { supported: false, reason: "no-vault" };
+
+    const vault = await this.getVaultInfo(vaultAddress);
+    if (!vault) return { supported: false };
+
+    const feeBps = Number(await module.managementFeeBps());
+    const tokens = [];
+    for (const token of vault.tokens) {
+      // Native coin has no lending market here, so it can only ever be off.
+      if (token.isNative) continue;
+      const [modeRaw, position, pendingRaw, options] = await Promise.all([
+        module.modeOf(vaultAddress, token.address),
+        module.getPosition(vaultAddress, token.address),
+        module.pendingYield(vaultAddress, token.address, this.userAddress),
+        this.getYieldOptions(token.address),
+      ]);
+      const format = (raw) => ethers.formatUnits(raw, token.decimals);
+
+      const canEarn = options.some((option) => option.key !== "off" && option.available);
+      tokens.push({
+        address: token.address,
+        symbol: token.symbol,
+        decimals: token.decimals,
+        // A coin with no strategy cannot earn whatever its stored mode says.
+        // Reporting it as earning would put "0 DAI earning" in front of someone
+        // whose DAI is doing nothing at all.
+        mode: canEarn ? YIELD_MODE_NAMES[Number(modeRaw)] || "off" : "off",
+        options,
+        canEarn,
+        // Raw values kept alongside the formatted strings: these are token
+        // amounts, and Number() would quietly lose precision on large balances.
+        investedRaw: position.principal,
+        invested: format(position.principal),
+        pendingYieldRaw: pendingRaw,
+        pendingYield: format(pendingRaw),
+        lifetimeYieldRaw: position.lifetimeYield,
+        lifetimeYield: format(position.lifetimeYield),
+      });
+    }
+
+    const earning = tokens.filter((t) => t.mode !== "off");
+    const mode =
+      earning.length === 0 ? "off" : earning.length === tokens.length ? earning[0].mode : "mixed";
+    const sum = (field) => tokens.reduce((total, t) => total + Number(t[field]), 0).toString();
+
+    // Each coin earns in its own market at its own rate, so a vault holding
+    // several has no single rate. Quoting the first one would be quoting USDT's
+    // rate for someone's DAI.
+    const netRates = tokens
+      .filter((t) => t.canEarn)
+      .map((t) => t.options.find((o) => o.key === "stable")?.netApyPercent ?? 0);
+    const lowest = netRates.length > 0 ? Math.min(...netRates) : 0;
+    const highest = netRates.length > 0 ? Math.max(...netRates) : 0;
+    const rangeLabel =
+      lowest.toFixed(2) === highest.toFixed(2)
+        ? null
+        : `${lowest.toFixed(2)}\u2013${highest.toFixed(2)}%`;
+
+    // The dialog shows one set of options for the vault, so its rate has to be
+    // the whole range too.
+    const dialogOptions = (tokens[0]?.options ?? []).map((option) =>
+      option.key === "stable" ? { ...option, netApyPercent: highest, rangeLabel } : option,
+    );
+
+    return {
+      supported: true,
+      tokenSupported: tokens.some((t) => t.canEarn),
+      // What the amounts below are counted in. Several pegged coins add up to
+      // dollars — that is the whole basis of a stables vault — whereas one coin
+      // counts in itself. "Stablecoins" names what is earning, not a unit, so
+      // it must never end up suffixed to a number.
+      amountSymbol: tokens.length === 1 ? tokens[0].symbol : "USD",
+      invested: sum("invested"),
+      // The one-coin view the single-asset screens read. For a stables vault
+      // this is the vault's label rather than any one coin, which is honest:
+      // there is no single coin to name.
+      tokenSymbol: vault.tokenSymbol,
+      tokens,
+      mode,
+      options: dialogOptions,
+      netRateLow: lowest,
+      netRateHigh: highest,
+      netRateRangeLabel: rangeLabel,
+      pendingYield: sum("pendingYield"),
+      lifetimeYield: sum("lifetimeYield"),
+      feeBps,
+      // 100 bps of the rate reads to a user as "one percentage point".
+      feePercentagePoints: feeBps / 100,
+    };
+  }
+
+  /**
+   * Switch a coin between stable earning and off.
+   *
+   * A stables vault holds several coins in several markets, so with no coin
+   * named this applies to all of them — which is what "turn earning off" has to
+   * mean for a vault, rather than off for whichever coin happened to be first.
+   */
+  async setYieldMode(vaultAddress, mode, tokenAddress = null) {
+    await this._requireYieldModule();
+    const modeValue = YIELD_MODES[mode];
+    if (!modeValue) throw this._userError("Choose a valid earning option");
+    if (mode === "prize") throw this._userError("Prize savings is not available yet");
+
+    const vaultModule = await this._getVaultModule();
+    const vault = await this.getVaultInfo(vaultAddress);
+    const targets = tokenAddress
+      ? [this._resolveVaultToken(vault, tokenAddress)]
+      : vault.tokens.filter((t) => !t.isNative);
+    if (targets.length === 0) throw this._userError("This vault's coin cannot earn yield yet");
+
+    let lastHash = null;
+    for (const token of targets) {
+      const tx = await vaultModule.setYieldMode(vaultAddress, token.address, modeValue);
+      await tx.wait();
+      lastHash = tx.hash;
+    }
+    return lastHash;
+  }
+
+  /** Fold earned yield into the member's balance so it compounds. */
+  async compoundVaultYield(vaultAddress, memberAddress = null) {
+    await this._requireYieldModule();
+    const vaultModule = await this._getVaultModule();
+    const vault = await this.getVaultInfo(vaultAddress);
+    const member = memberAddress || this.userAddress;
+
+    let lastHash = null;
+    for (const token of vault.tokens.filter((t) => !t.isNative)) {
+      const tx = await vaultModule.compoundYield(vaultAddress, token.address, member);
+      await tx.wait();
+      lastHash = tx.hash;
+    }
+    return lastHash;
+  }
+
 }

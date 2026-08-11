@@ -1,6 +1,7 @@
 const { ethers, upgrades } = require("hardhat");
 const fs = require("fs");
 const path = require("path");
+const { syncAbis } = require("./sync-abis");
 
 const TARGET_NETWORK = hre.network.name === "hardhat" ? "localhost" : hre.network.name;
 const NETWORK_CONFIG_PATH = path.join(__dirname, "../../frontend/src/networkConfig.json");
@@ -151,10 +152,30 @@ async function main() {
       vaultSystem: await deployOrUpgradeModule("VaultSystemModule", "VAULT_SYSTEM", "🏦"),
       referral: await deployOrUpgradeModule("ReferralModule", "REFERRAL", "🤝"),
       recoverySystem: await deployOrUpgradeModule("RecoverySystemModule", "RECOVERY_SYSTEM", "🛟"),
+      yieldSystem: await deployOrUpgradeModule("YieldModule", "YIELD_SYSTEM", "🌱"),
+      vaultRules: await deployOrUpgradeModule("VaultRulesModule", "VAULT_RULES", "📜"),
+      // The unified vault: the main wallet and every pot are the same thing.
+      savingsVaults: await deployOrUpgradeModule("SavingsVaultModule", "SAVINGS_VAULTS", "🗄️"),
+      vaultYield: await deployOrUpgradeModule("VaultYieldModule", "VAULT_YIELD", "🌾"),
+      vaultDepositAddresses: await deployOrUpgradeModule(
+        "VaultDepositAddressModule", "VAULT_DEPOSIT_ADDRESSES", "📮",
+      ),
     };
+
+    // Earning needs the two modules pointed at each other, and neither can do
+    // it at deploy time because each needs the other's address.
+    try {
+      await (await modules.vaultYield.contract.setVaultModule(modules.savingsVaults.address)).wait();
+      await (await modules.savingsVaults.contract.setYieldModule(modules.vaultYield.address)).wait();
+      console.log("🌾 Vault earning wired up");
+    } catch (error) {
+      console.log(`⚠️  Could not wire vault earning: ${error.message}`);
+    }
     for (const [key, m] of Object.entries(modules)) moduleAddresses[key] = m.address;
     const proxyDeploymentModule = modules.proxyDeployment.contract;
     const poolTogetherModule = modules.poolTogether.contract;
+    const vaultSystemModule = modules.vaultSystem.contract;
+    const yieldModule = modules.yieldSystem.contract;
 
     // Register newly deployed modules with the core contract (upgraded-in-place
     // modules keep their existing registration)
@@ -205,6 +226,29 @@ async function main() {
         }
       } catch (error) {
         console.log("\n⚠️  Could not read network config for USDT address");
+      }
+    }
+
+    // The other dollar coins, on a local chain only.
+    //
+    // A stablecoins vault exists to hold several pegged assets under one dollar
+    // cap, and with a single coin deployed that is never exercised outside unit
+    // tests. DAI carries 18 decimals on purpose: it is what proves the vault
+    // counts 100 DAI (100e18) and 100 USDT (100e6) as the same $100.
+    const extraStables = {};
+    if (isLocalNetwork) {
+      const MockStablecoin = await ethers.getContractFactory("MockStablecoin");
+      for (const [symbol, name, decimals] of [
+        ["USDC", "Mock USD Coin", 6],
+        ["DAI", "Mock Dai Stablecoin", 18],
+      ]) {
+        const existing = readNetworkConfig().evm?.[TARGET_NETWORK]?.tokens?.[symbol]?.address;
+        if (!isUpgrade || !existing || existing === ethers.ZeroAddress) {
+          const token = await MockStablecoin.deploy(name, symbol, decimals);
+          await token.waitForDeployment();
+          extraStables[symbol] = await token.getAddress();
+          console.log(`📄 Mock ${symbol} (${decimals}dp) deployed to: ${extraStables[symbol]}`);
+        }
       }
     }
 
@@ -278,6 +322,171 @@ async function main() {
       console.log(`   ✅ Prize pool set: ${prizePoolAddress}`);
     }
 
+    // Where the yield fee lands. Left at the deployer it is a hot key that also
+    // controls upgrades, which is exactly the address fee revenue should not
+    // accumulate in — and it is invisible until someone goes looking.
+    if (modules.savingsVaults) {
+      try {
+        const treasury = await modules.savingsVaults.contract.treasury();
+        if (treasury.toLowerCase() === deployer.address.toLowerCase()) {
+          console.log(
+            isProduction
+              ? `\n🚨 TREASURY IS THE DEPLOYER (${treasury}). Yield fees would accumulate in a hot key that also controls upgrades. Set it with setTreasury before enabling earning.`
+              : `\n⚠️  Treasury is the deployer (${treasury}) — fine locally, must be changed before a live network.`,
+          );
+        } else {
+          console.log(`\n💰 Yield fees go to ${treasury}`);
+        }
+      } catch (error) {
+        console.log(`⚠️  Could not read the treasury: ${error.message}`);
+      }
+    }
+
+    // A lending market for the unified vault's earning, on a local chain only.
+    //
+    // Separate from the mock reserve below because a strategy's controller is
+    // immutable: one built for the old yield module cannot be handed to the new
+    // one, which checks that it owns its strategies. Idempotent, so re-running
+    // the deploy leaves an existing market alone — and it runs on an upgrade
+    // too, which is when a freshly added module has no strategy yet.
+    if (isLocalNetwork && usdtAddress && modules.vaultYield) {
+      const vaultYield = modules.vaultYield.contract;
+      const MockAavePool = await ethers.getContractFactory("MockAavePool");
+      const MockAToken = await ethers.getContractFactory("MockAToken");
+      const AaveV3Strategy = await ethers.getContractFactory("AaveV3Strategy");
+
+      // One reserve per coin, as in the real thing: USDC's Aave market knows
+      // nothing about DAI's, which is why a position is per (vault, coin).
+      // Rates differ so the UI cannot accidentally pass by showing one number
+      // everywhere.
+      const config = readNetworkConfig().evm?.[TARGET_NETWORK]?.tokens || {};
+      const markets = [
+        ["USDT", usdtAddress, 6, 5],
+        ["USDC", extraStables.USDC || config.USDC?.address, 6, 4],
+        ["DAI", extraStables.DAI || config.DAI?.address, 18, 3.5],
+      ];
+
+      const pool = await MockAavePool.deploy();
+      await pool.waitForDeployment();
+      let deployed = false;
+
+      for (const [symbol, address, decimals, percent] of markets) {
+        if (!address || address === ethers.ZeroAddress) continue;
+        const existing = await vaultYield.getStrategy(address).catch(() => ethers.ZeroAddress);
+        if (existing !== ethers.ZeroAddress) {
+          console.log(`   🌾 ${symbol} already earns via ${existing}`);
+          continue;
+        }
+
+        const aToken = await MockAToken.deploy(
+          `Aave ${symbol}`, `a${symbol}`, address, await pool.getAddress(), decimals,
+        );
+        await aToken.waitForDeployment();
+        await (await pool.registerReserve(address, await aToken.getAddress())).wait();
+
+        // Aave states an annual rate in rays.
+        const rateRay = (BigInt(Math.round(percent * 100)) * 10n ** 27n) / 10000n;
+        await (await pool.setLiquidityRate(address, rateRay)).wait();
+
+        const strategy = await AaveV3Strategy.deploy(
+          address, await pool.getAddress(), await aToken.getAddress(), modules.vaultYield.address,
+        );
+        await strategy.waitForDeployment();
+        await (await vaultYield.setStrategy(address, await strategy.getAddress())).wait();
+        console.log(`   ✅ ${symbol} earns ${percent}% a year`);
+        deployed = true;
+      }
+      if (deployed) console.log("🌾 Mock lending markets ready");
+    }
+
+    // Deploy a mock Aave reserve for localhost so the earning UI has a live rate
+    // to show and deposits actually get invested. Production points the same
+    // strategy at the real Aave v3 pool via add-yield-module.js.
+    if (!isUpgrade && !isProduction && usdtAddress) {
+      console.log("\n🌱 Deploying mock Aave reserve for earning...");
+
+      const MockAavePool = await ethers.getContractFactory("MockAavePool");
+      const mockAavePool = await MockAavePool.deploy();
+      await mockAavePool.waitForDeployment();
+      const aavePoolAddress = await mockAavePool.getAddress();
+      console.log(`   ✅ MockAavePool deployed to: ${aavePoolAddress}`);
+
+      const MockAToken = await ethers.getContractFactory("MockAToken");
+      const mockAToken = await MockAToken.deploy("Aave USDT", "aUSDT", usdtAddress, aavePoolAddress, 6);
+      await mockAToken.waitForDeployment();
+      const aTokenAddress = await mockAToken.getAddress();
+      console.log(`   ✅ MockAToken deployed to: ${aTokenAddress}`);
+
+      tx = await mockAavePool.registerReserve(usdtAddress, aTokenAddress);
+      await tx.wait();
+
+      // 5% a year, expressed the way Aave does (annual rate in rays)
+      const fivePercentRay = (5n * 10n ** 27n) / 100n;
+      tx = await mockAavePool.setLiquidityRate(usdtAddress, fivePercentRay);
+      await tx.wait();
+      console.log("   ✅ Mock supply rate set to 5% a year");
+
+      const AaveV3Strategy = await ethers.getContractFactory("AaveV3Strategy");
+      const aaveStrategy = await AaveV3Strategy.deploy(
+        usdtAddress,
+        aavePoolAddress,
+        aTokenAddress,
+        moduleAddresses.yieldSystem,
+      );
+      await aaveStrategy.waitForDeployment();
+      const strategyAddress = await aaveStrategy.getAddress();
+      console.log(`   ✅ AaveV3Strategy deployed to: ${strategyAddress}`);
+
+      console.log("   Wiring the yield module...");
+      tx = await yieldModule.setVaultModule(moduleAddresses.vaultSystem);
+      await tx.wait();
+
+      const MODE_STABLE = 2;
+      tx = await yieldModule.setStrategy(usdtAddress, MODE_STABLE, strategyAddress);
+      await tx.wait();
+      console.log(`   ✅ Stable-earning strategy set for USDT`);
+
+      // Prize savings, so the localhost UI can exercise the third option.
+      // Prizes are paid in a DIFFERENT token from the deposit — WETH on
+      // Optimism — so the mock pool mirrors that rather than paying USDT.
+      console.log("   Deploying mock prize savings...");
+      const MockWETH = await ethers.getContractFactory("MockWETH");
+      const mockWeth = await MockWETH.deploy();
+      await mockWeth.waitForDeployment();
+      const wethAddress = await mockWeth.getAddress();
+
+      const MockV5PrizeVault = await ethers.getContractFactory("MockV5PrizeVault");
+      const mockPrizeVaultV5 = await MockV5PrizeVault.deploy(usdtAddress, 6);
+      await mockPrizeVaultV5.waitForDeployment();
+
+      const MockPrizePoolV5 = await ethers.getContractFactory("MockPrizePoolV5");
+      const mockPrizePoolV5 = await MockPrizePoolV5.deploy(wethAddress, ethers.parseEther("3.16"));
+      await mockPrizePoolV5.waitForDeployment();
+
+      const PoolTogetherStrategy = await ethers.getContractFactory("PoolTogetherStrategy");
+      const prizeStrategy = await PoolTogetherStrategy.deploy(
+        await mockPrizeVaultV5.getAddress(),
+        await mockPrizePoolV5.getAddress(),
+        moduleAddresses.yieldSystem,
+      );
+      await prizeStrategy.waitForDeployment();
+      const prizeStrategyAddress = await prizeStrategy.getAddress();
+
+      const MODE_PRIZE = 3;
+      tx = await yieldModule.setStrategy(usdtAddress, MODE_PRIZE, prizeStrategyAddress);
+      await tx.wait();
+      console.log(`   ✅ Prize-savings strategy set for USDT: ${prizeStrategyAddress}`);
+      console.log(`      prize token (mock WETH): ${wethAddress}`);
+
+      // Vault funds only start moving once the vault module knows the yield
+      // module — deliberately the last step.
+      tx = await vaultSystemModule.setYieldModule(moduleAddresses.yieldSystem);
+      await tx.wait();
+      tx = await yieldModule.setYieldWatermark();
+      await tx.wait();
+      console.log("   ✅ Earning is on by default for vaults created from now on");
+    }
+
     // Set production mode if requested (disable dev mode for production)
     if (isProduction) {
       console.log("\n🏭 Setting production mode (disabling dev mode)...");
@@ -310,6 +519,18 @@ async function main() {
         console.log(`   Updated Savings address: ${savingsAddress}`);
       } else {
         console.log(`   Savings address unchanged: ${savingsAddress}`);
+      }
+
+      for (const [symbol, address] of Object.entries(extraStables)) {
+        if (!networkConfig.evm[TARGET_NETWORK].tokens) networkConfig.evm[TARGET_NETWORK].tokens = {};
+        if (!networkConfig.evm[TARGET_NETWORK].tokens[symbol]) {
+          networkConfig.evm[TARGET_NETWORK].tokens[symbol] = {};
+        }
+        if (networkConfig.evm[TARGET_NETWORK].tokens[symbol].address !== address) {
+          networkConfig.evm[TARGET_NETWORK].tokens[symbol].address = address;
+          addressChanged = true;
+          console.log(`   Updated ${symbol} address: ${address}`);
+        }
       }
 
       // Update USDT address only if we have a new one
@@ -350,71 +571,7 @@ async function main() {
     // Update ABI files
     console.log("\n📋 Updating contract ABIs...");
     try {
-      // Copy SavingsCore ABI
-      const savingsCoreArtifact = require("../artifacts/contracts/SavingsCore.sol/SavingsCore.json");
-      const frontendSavingsABIPath = path.join(__dirname, "../../frontend/src/SavingsABI.json");
-      fs.writeFileSync(frontendSavingsABIPath, JSON.stringify(savingsCoreArtifact.abi, null, 2));
-      console.log("✅ SavingsCore ABI updated");
-
-      // Copy module ABIs
-      const timePeriodLimitsArtifact = require("../artifacts/contracts/TimePeriodLimitsModule.sol/TimePeriodLimitsModule.json");
-      const frontendTimePeriodLimitsABIPath = path.join(__dirname, "../../frontend/src/TimePeriodLimitsModuleABI.json");
-      fs.writeFileSync(frontendTimePeriodLimitsABIPath, JSON.stringify(timePeriodLimitsArtifact.abi, null, 2));
-      console.log("✅ TimePeriodLimitsModule ABI updated");
-
-      const proposalSystemArtifact = require("../artifacts/contracts/ProposalSystemModule.sol/ProposalSystemModule.json");
-      const frontendProposalSystemABIPath = path.join(__dirname, "../../frontend/src/ProposalSystemModuleABI.json");
-      fs.writeFileSync(frontendProposalSystemABIPath, JSON.stringify(proposalSystemArtifact.abi, null, 2));
-      console.log("✅ ProposalSystemModule ABI updated");
-
-      const bypassSystemArtifact = require("../artifacts/contracts/BypassSystemModule.sol/BypassSystemModule.json");
-      const frontendBypassSystemABIPath = path.join(__dirname, "../../frontend/src/BypassSystemModuleABI.json");
-      fs.writeFileSync(frontendBypassSystemABIPath, JSON.stringify(bypassSystemArtifact.abi, null, 2));
-      console.log("✅ BypassSystemModule ABI updated");
-
-      const approvalSystemArtifact = require("../artifacts/contracts/ApprovalSystemModule.sol/ApprovalSystemModule.json");
-      const frontendApprovalSystemABIPath = path.join(__dirname, "../../frontend/src/ApprovalSystemModuleABI.json");
-      fs.writeFileSync(frontendApprovalSystemABIPath, JSON.stringify(approvalSystemArtifact.abi, null, 2));
-      console.log("✅ ApprovalSystemModule ABI updated");
-
-      const proxyDeploymentArtifact = require("../artifacts/contracts/ProxyDeploymentModule.sol/ProxyDeploymentModule.json");
-      const frontendProxyDeploymentABIPath = path.join(__dirname, "../../frontend/src/ProxyDeploymentModuleABI.json");
-      fs.writeFileSync(frontendProxyDeploymentABIPath, JSON.stringify(proxyDeploymentArtifact.abi, null, 2));
-      console.log("✅ ProxyDeploymentModule ABI updated");
-
-      const poolTogetherArtifact = require("../artifacts/contracts/PoolTogetherModule.sol/PoolTogetherModule.json");
-      const frontendPoolTogetherABIPath = path.join(__dirname, "../../frontend/src/PoolTogetherModuleABI.json");
-      fs.writeFileSync(frontendPoolTogetherABIPath, JSON.stringify(poolTogetherArtifact.abi, null, 2));
-      console.log("✅ PoolTogetherModule ABI updated");
-
-      const vaultSystemArtifact = require("../artifacts/contracts/VaultSystemModule.sol/VaultSystemModule.json");
-      const frontendVaultSystemABIPath = path.join(__dirname, "../../frontend/src/VaultSystemModuleABI.json");
-      fs.writeFileSync(frontendVaultSystemABIPath, JSON.stringify(vaultSystemArtifact.abi, null, 2));
-      console.log("✅ VaultSystemModule ABI updated");
-
-      const referralArtifact = require("../artifacts/contracts/ReferralModule.sol/ReferralModule.json");
-      const frontendReferralABIPath = path.join(__dirname, "../../frontend/src/ReferralModuleABI.json");
-      fs.writeFileSync(frontendReferralABIPath, JSON.stringify(referralArtifact.abi, null, 2));
-      console.log("✅ ReferralModule ABI updated");
-
-      const recoverySystemArtifact = require("../artifacts/contracts/RecoverySystemModule.sol/RecoverySystemModule.json");
-      const frontendRecoverySystemABIPath = path.join(__dirname, "../../frontend/src/RecoverySystemModuleABI.json");
-      fs.writeFileSync(frontendRecoverySystemABIPath, JSON.stringify(recoverySystemArtifact.abi, null, 2));
-      console.log("✅ RecoverySystemModule ABI updated");
-
-      // Copy MockUSDT ABI
-      if (usdtAddress) {
-        const usdtArtifact = require("../artifacts/contracts/MockUSDT.sol/MockUSDT.json");
-        const frontendUSDTABIPath = path.join(__dirname, "../../frontend/src/MockUSDT_ABI.json");
-        fs.writeFileSync(frontendUSDTABIPath, JSON.stringify(usdtArtifact.abi, null, 2));
-        console.log("✅ MockUSDT ABI updated");
-      }
-
-      // Copy UserProxy ABI
-      const userProxyArtifact = require("../artifacts/contracts/UserProxy.sol/UserProxy.json");
-      const frontendUserProxyABIPath = path.join(__dirname, "../../frontend/src/UserProxyABI.json");
-      fs.writeFileSync(frontendUserProxyABIPath, JSON.stringify(userProxyArtifact.abi, null, 2));
-      console.log("✅ UserProxy ABI updated");
+      syncAbis();
 
     } catch (error) {
       console.log("⚠️  Warning: Could not update ABIs automatically");
@@ -435,6 +592,8 @@ async function main() {
     console.log(`  PoolTogether:        ${moduleAddresses.poolTogether}`);
     console.log(`  VaultSystem:         ${moduleAddresses.vaultSystem}`);
     console.log(`  RecoverySystem:      ${moduleAddresses.recoverySystem}`);
+    console.log(`  YieldSystem:         ${moduleAddresses.yieldSystem}`);
+    console.log(`  VaultRules:          ${moduleAddresses.vaultRules}`);
     if (usdtAddress) {
       console.log(`MockUSDT Address:      ${usdtAddress}`);
     }
