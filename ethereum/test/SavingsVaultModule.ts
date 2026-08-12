@@ -383,6 +383,49 @@ describe("SavingsVaultModule", function () {
       expect(await hre.ethers.provider.getCode(predicted)).to.not.equal("0x");
     });
 
+    it("lets someone else pay to create a member's address", async function () {
+      // How a saver who arrives with a bank card and no coin at all gets the
+      // one transaction they cannot yet afford to make.
+      const ctx = await loadFixture(fixture);
+      const id = await makeStablesVault(ctx, ctx.user1);
+
+      const predicted = await ctx.depositAddresses.depositAddressOf(id, ctx.user1.address);
+
+      await expect(
+        ctx.depositAddresses.connect(ctx.user2).deployDepositAddressFor(id, ctx.user1.address)
+      )
+        .to.emit(ctx.depositAddresses, "DepositAddressDeployed")
+        .withArgs(id, ctx.user1.address, predicted);
+
+      expect(await ctx.depositAddresses.isDepositAddressDeployed(id, ctx.user1.address)).to.equal(true);
+      // The sponsor gets nothing out of it — not even an address of their own.
+      expect(await ctx.depositAddresses.isDepositAddressDeployed(id, ctx.user2.address)).to.equal(false);
+    });
+
+    it("will not create an address for someone who is not a member", async function () {
+      const ctx = await loadFixture(fixture);
+      const id = await makeStablesVault(ctx, ctx.user1);
+
+      await expect(
+        ctx.depositAddresses.connect(ctx.user1).deployDepositAddressFor(id, ctx.user2.address)
+      ).to.be.revertedWith("Not a vault member");
+    });
+
+    it("keeps reporting the deployed address, not a fresh prediction", async function () {
+      // The prediction is derived from the proxy's creation code as it is
+      // today. Once an address exists, the record has to win — otherwise
+      // changing that contract would send a member's next deposit somewhere
+      // nobody can ever sweep.
+      const ctx = await loadFixture(fixture);
+      const id = await makeStablesVault(ctx, ctx.user1);
+
+      await ctx.depositAddresses.connect(ctx.user1).deployDepositAddress(id);
+      const deployed = await ctx.depositAddresses.depositAddressOf(id, ctx.user1.address);
+
+      expect(await hre.ethers.provider.getCode(deployed)).to.not.equal("0x");
+      expect(await ctx.depositAddresses.depositAddressOf(id, ctx.user1.address)).to.equal(deployed);
+    });
+
     it("does not lose money sent before the address was deployed", async function () {
       const ctx = await loadFixture(fixture);
       const id = await makeStablesVault(ctx, ctx.user1);

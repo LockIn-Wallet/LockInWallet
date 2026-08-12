@@ -662,7 +662,8 @@ export class EVMAdapter extends BlockchainAdapter {
   async deployProxy() {
     const proxyModule = await this._getModuleContract("proxyDeployment");
 
-    // Approve USDT fee before deploying
+    // The deposit address is free. The fee is still owner-settable on-chain, so
+    // honour one if a deployment has it set rather than assuming zero.
     const fee = await proxyModule.getProxyDeploymentFee();
     if (fee > 0n) {
       const paymentTokenAddress = await proxyModule.paymentToken();

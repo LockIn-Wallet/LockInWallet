@@ -6,6 +6,7 @@ import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
+import "@openzeppelin/contracts/utils/Address.sol";
 import "./SavingsInterfaces.sol";
 
 /**
@@ -205,14 +206,14 @@ contract SavingsCore is Initializable, UUPSUpgradeable, OwnableUpgradeable, ISav
         emit Deposited(recipient, token, amount);
     }
 
-    function withdraw(address user, uint256 amount, address token) external onlyAuthorizedModule notFrozen(user) {
+    function withdraw(address user, uint256 amount, address token) external onlyAuthorizedModule nonReentrant notFrozen(user) {
         require(amount > 0 && amount <= userTokenBalances[user][token], "Invalid amount");
 
         userTokenBalances[user][token] -= amount;
 
         if (token == address(0)) {
             // ETH withdrawal
-            payable(user).transfer(amount);
+            Address.sendValue(payable(user), amount);
         } else {
             // ERC20 withdrawal
             IERC20(token).transfer(user, amount);
@@ -221,7 +222,7 @@ contract SavingsCore is Initializable, UUPSUpgradeable, OwnableUpgradeable, ISav
         emit Withdrawal(user, "Module", amount, token);
     }
 
-    function withdrawAll(address user) external onlyAuthorizedModule notFrozen(user) {
+    function withdrawAll(address user) external onlyAuthorizedModule nonReentrant notFrozen(user) {
         // Get approval module
         IApprovalSystemModule approvalModule = IApprovalSystemModule(modules[ModuleIds.APPROVAL_SYSTEM]);
         require(address(approvalModule) != address(0), "Approval module not found");
@@ -234,7 +235,7 @@ contract SavingsCore is Initializable, UUPSUpgradeable, OwnableUpgradeable, ISav
         userTokenBalances[user][address(0)] = 0;
         approvalModule.resetFullWithdrawalApproval(user);
 
-        payable(user).transfer(amount);
+        Address.sendValue(payable(user), amount);
         emit Withdrawal(user, "ALL", amount, address(0));
     }
 
@@ -284,7 +285,7 @@ contract SavingsCore is Initializable, UUPSUpgradeable, OwnableUpgradeable, ISav
 
         if (token == address(0)) {
             // ETH withdrawal
-            payable(msg.sender).transfer(amount);
+            Address.sendValue(payable(msg.sender), amount);
         } else {
             // ERC20 withdrawal
             IERC20(token).transfer(msg.sender, amount);
@@ -319,7 +320,7 @@ contract SavingsCore is Initializable, UUPSUpgradeable, OwnableUpgradeable, ISav
 
         if (token == address(0)) {
             // ETH withdrawal
-            payable(destination).transfer(amount);
+            Address.sendValue(payable(destination), amount);
         } else {
             // ERC20 withdrawal
             IERC20(token).transfer(destination, amount);
@@ -341,7 +342,7 @@ contract SavingsCore is Initializable, UUPSUpgradeable, OwnableUpgradeable, ISav
         userTokenBalances[msg.sender][address(0)] = 0;
         approvalModule.resetFullWithdrawalApproval(msg.sender);
 
-        payable(msg.sender).transfer(amount);
+        Address.sendValue(payable(msg.sender), amount);
         emit Withdrawal(msg.sender, "ALL", amount, address(0));
     }
 
