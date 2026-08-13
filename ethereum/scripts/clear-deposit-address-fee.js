@@ -81,7 +81,15 @@ async function main() {
   console.log(`Sent: ${tx.hash}`);
   await tx.wait();
 
-  const newFee = await module.getProxyDeploymentFee();
+  // A public RPC can answer from a node that has not caught up, reporting the
+  // old fee for a transaction that landed fine. Poll before crying failure.
+  let newFee = null;
+  for (let attempt = 0; attempt < 10; attempt++) {
+    newFee = await module.getProxyDeploymentFee();
+    if (newFee === 0n) break;
+    await new Promise((resolve) => setTimeout(resolve, 3000));
+  }
+
   if (newFee !== 0n) {
     console.log(`Fee is still ${newFee.toString()} — the change did not stick.`);
     process.exit(1);
