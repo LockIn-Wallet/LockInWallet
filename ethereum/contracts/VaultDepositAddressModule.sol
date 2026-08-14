@@ -55,19 +55,47 @@ contract VaultDepositAddressModule is Initializable, UUPSUpgradeable, OwnableUpg
     /// exists there — and money that arrives meanwhile is not lost, it waits to
     /// be swept in once the address is deployed.
     function deployDepositAddress(uint256 vaultId) external returns (address proxy) {
+        return _deployDepositAddress(vaultId, msg.sender);
+    }
+
+    /// @notice Deploy `member`'s deposit address on their behalf, paying the gas.
+    ///
+    /// Permissionless, and safe for the same reason the proxy's own sweep is:
+    /// the address is derived from (vault, member) and everything that lands on
+    /// it can only ever settle into that member's balance in that vault. A
+    /// stranger who calls this can do nothing but pay for someone's setup.
+    ///
+    /// This is what lets a new saver arrive with a bank card and no coin at all:
+    /// somebody else can afford them the one transaction they cannot yet make.
+    function deployDepositAddressFor(uint256 vaultId, address member) external returns (address proxy) {
+        require(member != address(0), "Invalid member");
+        return _deployDepositAddress(vaultId, member);
+    }
+
+    function _deployDepositAddress(uint256 vaultId, address member) private returns (address proxy) {
         address vaults = _vaults();
-        require(ISavingsVaultMembership(vaults).isVaultMember(vaultId, msg.sender), "Not a vault member");
-        require(proxies[vaultId][msg.sender] == address(0), "Already deployed");
+        require(ISavingsVaultMembership(vaults).isVaultMember(vaultId, member), "Not a vault member");
+        require(proxies[vaultId][member] == address(0), "Already deployed");
 
         proxy = address(
-            new SavingsVaultDepositProxy{salt: _salt(vaultId, msg.sender)}(vaults, vaultId, msg.sender)
+            new SavingsVaultDepositProxy{salt: _salt(vaultId, member)}(vaults, vaultId, member)
         );
-        proxies[vaultId][msg.sender] = proxy;
-        emit DepositAddressDeployed(vaultId, msg.sender, proxy);
+        proxies[vaultId][member] = proxy;
+        emit DepositAddressDeployed(vaultId, member, proxy);
     }
 
     /// @notice Where this member's deposit address is, or will be.
+    /// @dev The deployed address wins over the prediction. The prediction is
+    /// derived from `SavingsVaultDepositProxy`'s creation code as it is *today*,
+    /// so any change to that contract would otherwise hand existing members an
+    /// address other than the proxy they already hold — and a deposit sent there
+    /// could never be swept, because a second deployment is refused.
     function depositAddressOf(uint256 vaultId, address member) public view returns (address) {
+        address deployed = proxies[vaultId][member];
+        if (deployed != address(0)) {
+            return deployed;
+        }
+
         bytes32 hash = keccak256(
             abi.encodePacked(
                 bytes1(0xff),

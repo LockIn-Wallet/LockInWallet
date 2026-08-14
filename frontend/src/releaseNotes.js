@@ -9,10 +9,18 @@
 
 export const RELEASE_NOTES = [
   {
-    version: "Unreleased",
-    date: "",
+    version: "0.4.0",
+    date: "2026-08-13",
     title: "A home page you can check",
     highlights: [
+      {
+        emoji: "🆓",
+        text: "The deposit screen said your permanent address cost 3 dollars. It did not — that charge belonged to an older version and has not applied for some time, so the screen was telling you something untrue and now says the truth: it is free, and you pay only the network's own fee to create it. We are working on covering that fee for you too. Groundwork for it is in this release: somebody else can now create the address on your behalf. That sounds alarming until you know the address is worked out from your own wallet and everything sent to it can only ever land in your savings — whoever creates it can do you a favour and nothing else.",
+      },
+      {
+        emoji: "🔐",
+        text: "If your wallet is itself a contract — a Safe, or one of the newer app wallets — you can now withdraw ETH from your savings. Before this you could put it in but not take it out, because of the way the contract sent it. Ordinary wallets were never affected, and no money was ever at risk: the balance stayed yours the whole time and is withdrawable now.",
+      },
       {
         emoji: "🔵",
         text: "You can now lock in on Base as well as Optimism. The reason is simple: we want you to be able to buy savings with a bank card, and the card provider doesn't sell dollars on Optimism — only ETH. On Base it does. Optimism is still what you get by default, and nothing moves on its own: if your savings are on Optimism they stay there, and picking Base means starting a separate wallet on that chain.",

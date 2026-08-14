@@ -242,7 +242,6 @@ const DepositInterface = ({
         setIsDeploying(true);
         console.log("Deploying EVM user proxy...");
 
-        // Deploy proxy through adapter (handles fee approval internally)
         const result = await transactionManager.deployProxy();
         console.log("EVM proxy deployment result:", result);
 
@@ -250,7 +249,7 @@ const DepositInterface = ({
         await checkProxyStatus();
 
         alert(
-          "🎉 Permanent deposit address generated successfully! A 3 USDT fee has been charged. This address is permanently tied to your wallet and you can use it for all future deposits from exchanges."
+          "🎉 Your permanent deposit address is ready. It is tied to your wallet for good — use it for every future deposit from an exchange."
         );
       } catch (error) {
         console.error("Error deploying EVM proxy:", error);
@@ -499,7 +498,7 @@ const DepositInterface = ({
               }}
             >
               <p style={{ margin: `${spacing.xs} 0` }}>
-                ✨ One-time setup • 3 USDT fee + gas required
+                ✨ One-time setup • free, you only pay gas
               </p>
               <p style={{ margin: `${spacing.xs} 0` }}>
                 🎯 Direct exchange withdrawals • Permanent address you

@@ -2,6 +2,7 @@
 pragma solidity ^0.8.19;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/utils/Address.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
@@ -196,7 +197,7 @@ contract BypassSystemModule is Initializable, UUPSUpgradeable, OwnableUpgradeabl
         // Transfer funds
         if (request.token == address(0)) {
             // ETH withdrawal
-            payable(user).transfer(request.amount);
+            Address.sendValue(payable(user), request.amount);
         } else {
             // ERC20 withdrawal
             IERC20(request.token).transfer(user, request.amount);

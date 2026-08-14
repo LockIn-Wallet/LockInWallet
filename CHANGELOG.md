@@ -21,6 +21,8 @@ these notes on the in-app **Governance** page before they execute.
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-08-13
+
 ### Added
 - Yearly spending limits, plus an hourly window, alongside the existing
   daily/weekly/monthly. Periods are now defined in one catalog
@@ -462,14 +464,42 @@ these notes on the in-app **Governance** page before they execute.
   page.
 
 ### Fixed
+- Native withdrawals to contract wallets no longer revert. Every native send in
+  the core used `address.transfer()`, which forwards a 2300-gas stipend — enough
+  for an EOA, but not for a contract wallet (a Safe, or an ERC-4337 account),
+  whose `receive()` does real work. Any such account could deposit but could
+  never withdraw its native balance. All five sends in `SavingsCore` and the one
+  in `BypassSystemModule` now use OpenZeppelin's `Address.sendValue`, which
+  forwards the remaining gas. **On-chain:** upgrade `SavingsCore` and
+  `BypassSystemModule` in place; no storage changed. Because `sendValue`
+  forwards all gas, the two module-facing entry points that lacked one
+  (`withdraw(address,uint256,address)` and `withdrawAll(address)`) now carry
+  `nonReentrant`; both already followed checks-effects-interactions.
+
+  `UserProxy` carries the same pattern in `emergencyWithdraw` and is deliberately
+  left alone: its creation code determines every user's CREATE2 deposit address,
+  so changing it would move those addresses. Fixing it needs a migration, not an
+  edit.
+
+- A user's permanent deposit address is now read from the deployment record
+  rather than recomputed on every call. `getUserDepositAddress` derived the
+  CREATE2 address from `UserProxy`'s creation code as of the current
+  deployment, so any future change to `UserProxy` would have silently shown
+  every existing user an address other than the proxy they already hold — and
+  deposits sent there would have been unreachable, since a second deployment is
+  refused. It now returns the stored proxy whenever one exists and falls back to
+  the counterfactual only before deployment. **On-chain:** upgrade
+  `ProxyDeploymentModule` in place; no storage changed, and the address returned
+  for every existing user is unchanged.
+
 - `deploy-modular` no longer deploys mock tokens to live chains. It gated mock
   deployment on the `PRODUCTION` env flag, so a fresh deploy to any real
   network — with or without `PRODUCTION=true` — deployed `MockUSDT`, wrote
   that address into `networkConfig.json` as the real USDT, and priced the
   deposit-address fee at 3 of those unobtainable mock tokens, leaving the
   feature unusable. Mocks are now gated on the network being localhost. Live
-  chains keep the token addresses already in `networkConfig.json` and charge
-  the fee in native ETH, which a user arriving with only a card can pay.
+  chains keep the token addresses already in `networkConfig.json`. (The fee
+  itself has since been removed entirely — see Removed below.)
 
 - The Ethereum mainnet `USDC` entry in `networkConfig.json` was not USDC —
   it pointed at an unrelated contract, and is corrected here. Nothing was
@@ -497,6 +527,30 @@ these notes on the in-app **Governance** page before they execute.
   heading that the component beneath them already renders.
 
 ### Removed
+- The deposit-address fee, and the stale UI copy that advertised it. The deposit
+  screen told users a permanent address cost "3 USDT", which had not been true
+  since deposit addresses moved to `VaultDepositAddressModule` — the live path
+  has always been free. The charge belonged to the older per-user
+  `ProxyDeploymentModule` route, which the app no longer calls. The copy is
+  corrected, and the legacy fee is removed rather than left lying around: fresh
+  deployments set none, and `scripts/clear-deposit-address-fee.js` zeroes it on
+  chains already carrying one (owner-only, so a governed deployment queues
+  `setProxyDeploymentFee(0)` through the timelock instead).
+
+  Both address factories can now be paid for by somebody else — a new
+  `deployDepositAddressFor(vaultId, member)` on `VaultDepositAddressModule`, and
+  `deployUserProxy` on `ProxyDeploymentModule` made permissionless while no fee
+  is set. This is what lets a sponsor cover the one transaction a saver who
+  arrives with a bank card and no coin cannot yet make. It is safe for the same
+  reason the proxies' own sweeps are permissionless: each address is derived
+  from its owner, and everything landing on it can only ever settle into that
+  owner's balance. Membership is still checked, so an address cannot be created
+  for a non-member. On `ProxyDeploymentModule`, a non-zero fee restricts
+  deployment to the user and core again, so nobody can spend someone else's
+  token approval. **On-chain:** upgrade `VaultDepositAddressModule` and
+  `ProxyDeploymentModule` in place; no storage changed, and the fee machinery is
+  retained and still owner-settable, so it is reversible without an upgrade.
+
 - The prize pool is hidden behind a feature flag until it is finished: the
   `/prize-savings` page (route dropped from the sitemap and redirected home),
   its entries in the landing nav and the in-app top-right links, and the

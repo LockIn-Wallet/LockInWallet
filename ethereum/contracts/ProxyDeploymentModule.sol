@@ -31,14 +31,13 @@ contract ProxyDeploymentModule is Initializable, UUPSUpgradeable, OwnableUpgrade
 
     // Users act on their own data directly; the core and modules keep access
     // for cross-module orchestration (Pattern B self-authentication)
-    modifier onlyAuthorizedOrSelf(address user) {
+    function _requireAuthorizedOrSelf(address user) internal view {
         require(
             msg.sender == user ||
             msg.sender == address(savingsCore) ||
             savingsCore.isAuthorizedModule(msg.sender),
             "Not authorized"
         );
-        _;
     }
 
     /// @custom:oz-upgrades-unsafe-allow constructor
@@ -55,10 +54,23 @@ contract ProxyDeploymentModule is Initializable, UUPSUpgradeable, OwnableUpgrade
 
     function _authorizeUpgrade(address) internal override onlyOwner {}
 
-    function deployUserProxy(address user) external payable onlyAuthorizedOrSelf(user) returns (address proxy) {
+    /// @notice Deploy a user's permanent deposit address.
+    /// @dev Permissionless while no fee is charged. The proxy address is
+    /// derived from `user`, and everything that lands on it can only ever reach
+    /// that user's savings — so a stranger who deploys it can do nothing but a
+    /// favour, and paying the gas on a new saver's behalf is exactly the
+    /// favour we want. It is the same reasoning that makes `sweepERC20`
+    /// permissionless.
+    ///
+    /// A non-zero fee is charged to `user`, so that path stays restricted to
+    /// the user (or the core) — otherwise anyone could spend someone else's
+    /// ERC20 approval by deploying for them.
+    function deployUserProxy(address user) external payable returns (address proxy) {
+        require(user != address(0), "Invalid user");
         require(userProxies[user] == address(0), "Already deployed");
 
         if (proxyDeploymentFee > 0) {
+            _requireAuthorizedOrSelf(user);
             require(treasuryAddress != address(0), "Treasury address not configured");
             if (paymentToken == address(0)) {
                 // Pay in native ETH
@@ -88,7 +100,19 @@ contract ProxyDeploymentModule is Initializable, UUPSUpgradeable, OwnableUpgrade
         return userProxies[user];
     }
 
+    /// @notice A user's permanent deposit address: the deployed proxy if one
+    /// exists, otherwise the CREATE2 address `deployUserProxy` would produce.
+    /// @dev The stored address wins deliberately. The counterfactual is derived
+    /// from `type(UserProxy).creationCode` as it is *today*, so any change to
+    /// UserProxy would otherwise silently hand every existing user a different
+    /// address than the proxy they already have — and funds sent there could
+    /// never be reached, since `deployUserProxy` refuses a second deployment.
     function getUserDepositAddress(address user) external view returns (address) {
+        address deployed = userProxies[user];
+        if (deployed != address(0)) {
+            return deployed;
+        }
+
         bytes32 salt = keccak256(abi.encodePacked(user));
         bytes32 bytecodeHash = keccak256(abi.encodePacked(
             type(UserProxy).creationCode,

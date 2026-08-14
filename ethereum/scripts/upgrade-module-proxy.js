@@ -14,7 +14,13 @@ const MODULE_IDS = {
   'RecoverySystemModule': ethers.keccak256(ethers.toUtf8Bytes("RECOVERY_SYSTEM")),
   'PoolTogetherModule': ethers.keccak256(ethers.toUtf8Bytes("POOL_TOGETHER")),
   'YieldModule': ethers.keccak256(ethers.toUtf8Bytes("YIELD_SYSTEM")),
-  'VaultRulesModule': ethers.keccak256(ethers.toUtf8Bytes("VAULT_RULES"))
+  'VaultRulesModule': ethers.keccak256(ethers.toUtf8Bytes("VAULT_RULES")),
+  // The vault generation. SavingsVaultModule custodies deposits, so this
+  // script — which upgrades the implementation behind the existing proxy — is
+  // the only way it may ever be changed.
+  'SavingsVaultModule': ethers.keccak256(ethers.toUtf8Bytes("SAVINGS_VAULTS")),
+  'VaultDepositAddressModule': ethers.keccak256(ethers.toUtf8Bytes("VAULT_DEPOSIT_ADDRESSES")),
+  'VaultYieldModule': ethers.keccak256(ethers.toUtf8Bytes("VAULT_YIELD"))
 };
 
 // ERC-1967 implementation slot

@@ -120,7 +120,7 @@ const EnforcementConsole = () => {
 
       <div className="landing-console-body" style={landingStyles.consoleBody}>
         <div style={landingStyles.consoleColumn}>
-          <p style={landingStyles.balanceLabel}>VAULT BALANCE</p>
+          <p style={landingStyles.balanceLabel}>WALLET BALANCE</p>
           <p style={landingStyles.balanceAmount}>
             {formatUSD(DEMO_VAULT_BALANCE)}{" "}
             <span style={landingStyles.balanceUnit}>USDC</span>
