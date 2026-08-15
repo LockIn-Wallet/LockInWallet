@@ -31,18 +31,32 @@ const PAYMASTER_URL = process.env.REACT_APP_PAYMASTER_URL || '';
  * in its path — so the configured value may contain a `{chain}` placeholder,
  * filled from the same network key the rest of the app uses. A URL without one
  * is used as given, for providers that route by chainId in the request body.
+ *
+ * The result is always absolute. This URL is not fetched by us: it is handed to
+ * the wallet, which calls it from its own origin — a smart wallet's signer runs
+ * on the provider's domain, not ours. A relative path would therefore be
+ * resolved against *their* host and quietly 404, so sponsorship would fail with
+ * no sign that the address was ever wrong.
  */
 const paymasterUrlFor = (chainId) => {
   if (!PAYMASTER_URL) return '';
-  if (!PAYMASTER_URL.includes('{chain}')) return PAYMASTER_URL;
 
-  const key = Object.entries(networkConfig.evm || {}).find(
-    ([, config]) => config.chainId === Number(chainId)
-  )?.[0];
+  let url = PAYMASTER_URL;
 
-  // No name for this chain means no endpoint to build; the caller treats an
-  // empty URL as "nobody is paying", which is the safe reading.
-  return key ? PAYMASTER_URL.replace('{chain}', key) : '';
+  if (url.includes('{chain}')) {
+    const key = Object.entries(networkConfig.evm || {}).find(
+      ([, config]) => config.chainId === Number(chainId)
+    )?.[0];
+
+    // No name for this chain means no endpoint to build; the caller treats an
+    // empty URL as "nobody is paying", which is the safe reading.
+    if (!key) return '';
+    url = url.replace('{chain}', key);
+  }
+
+  if (/^https?:\/\//i.test(url)) return url;
+  if (typeof window === 'undefined') return '';
+  return new URL(url, window.location.origin).toString();
 };
 
 // EIP-5792 bundle status. 1xx pending, 2xx confirmed, everything above failed.

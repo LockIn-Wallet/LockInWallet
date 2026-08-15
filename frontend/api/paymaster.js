@@ -136,6 +136,22 @@ const reject = (response, id, message) =>
   });
 
 module.exports = async function handler(request, response) {
+  // The caller is the wallet, not our own page: a smart wallet's signer runs on
+  // the provider's domain and fetches this URL from there, so every request is
+  // cross-origin and the browser will preflight it.
+  //
+  // Any origin is allowed, and that is not a gap. CORS only restrains browsers
+  // — anyone can reach this with curl regardless — so it was never the defence
+  // here. What actually protects the budget is the contract allowlist below and
+  // the provider's spending cap, neither of which cares who is asking.
+  response.setHeader('Access-Control-Allow-Origin', '*');
+  response.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  response.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+  if (request.method === 'OPTIONS') {
+    return response.status(204).end();
+  }
+
   if (request.method !== 'POST') {
     return response.status(405).json({ error: 'Method not allowed' });
   }

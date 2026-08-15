@@ -46,12 +46,19 @@ const makeResponse = () => {
   const res = {
     statusCode: null,
     body: null,
+    headers: {},
+    setHeader(name, value) {
+      this.headers[name] = value;
+    },
     status(code) {
       this.statusCode = code;
       return this;
     },
     json(payload) {
       this.body = payload;
+      return this;
+    },
+    end() {
       return this;
     },
   };
@@ -129,6 +136,17 @@ describe('paymaster proxy', () => {
 
       expect(res.body.error.message).toMatch(/could not read/i);
       expect(global.fetch).not.toHaveBeenCalled();
+    });
+
+    it('answers the preflight the wallet sends', async () => {
+      // The caller is the provider's signer domain, not our page, so every
+      // request is cross-origin and preflighted. Without this, sponsorship
+      // fails before the policy check is ever reached.
+      const res = makeResponse();
+      await handler({ method: 'OPTIONS' }, res);
+
+      expect(res.statusCode).toBe(204);
+      expect(res.headers['Access-Control-Allow-Origin']).toBe('*');
     });
 
     it('refuses a GET', async () => {
