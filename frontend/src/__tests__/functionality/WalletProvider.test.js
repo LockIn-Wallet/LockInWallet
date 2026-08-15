@@ -24,6 +24,7 @@ const {
   hasInjectedWallet,
   getInjectedWalletName,
   getInjectedAccount,
+  canReachChain,
 } = walletProvider;
 
 /** A minimal EIP-1193 provider. */
@@ -211,16 +212,38 @@ describe('walletProvider', () => {
   });
 
   describe('changing network', () => {
-    it('lets an extension be asked', () => {
+    it('lets either kind be asked', () => {
+      // A smart wallet implements wallet_switchEthereumChain just as an
+      // extension does; what differs is the range, not the ability.
       window.ethereum = makeProvider();
+      expect(supportsChainSwitching()).toBe(true);
+
+      setEmbeddedProvider(makeProvider(), { chainIds: [8453] });
       expect(supportsChainSwitching()).toBe(true);
     });
 
-    it('does not ask a signed-in wallet', () => {
-      // It is created against one chain and simply is on it. Asking anyway
-      // throws an RPC error on a wallet already exactly where it belongs.
-      setEmbeddedProvider(makeProvider());
-      expect(supportsChainSwitching()).toBe(false);
+    it('treats every chain as reachable with an extension', () => {
+      window.ethereum = makeProvider();
+      expect(canReachChain(8453)).toBe(true);
+      expect(canReachChain(31337)).toBe(true);
+    });
+
+    it('limits a signed-in wallet to the chains it was created against', () => {
+      setEmbeddedProvider(makeProvider(), { chainIds: [10, 8453] });
+
+      expect(canReachChain(10)).toBe(true);
+      expect(canReachChain(8453)).toBe(true);
+      // A hosted signer cannot see a node running on this machine, so a local
+      // dev chain is not merely absent — it can never be added.
+      expect(canReachChain(31337)).toBe(false);
+    });
+
+    it('forgets those chains on sign-out', () => {
+      setEmbeddedProvider(makeProvider(), { chainIds: [8453] });
+      setEmbeddedProvider(null);
+      window.ethereum = makeProvider();
+
+      expect(canReachChain(31337)).toBe(true);
     });
   });
 });

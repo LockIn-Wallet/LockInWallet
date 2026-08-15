@@ -91,7 +91,7 @@ export const signInWithPasskey = async () => {
   // Registers the wallet before requesting accounts, so everything downstream
   // — providerManager, the adapters, the network hook — is already talking to
   // it by the time the address comes back.
-  setEmbeddedProvider(provider);
+  setEmbeddedProvider(provider, { chainIds: supportedChainIds() });
 
   try {
     const accounts = await provider.request({ method: 'eth_requestAccounts' });
@@ -119,7 +119,7 @@ export const restorePasskeySession = async () => {
   if (!isPasskeySupported()) return null;
 
   const provider = getSdk().getProvider();
-  setEmbeddedProvider(provider);
+  setEmbeddedProvider(provider, { chainIds: supportedChainIds() });
 
   try {
     const accounts = await provider.request({ method: 'eth_accounts' });

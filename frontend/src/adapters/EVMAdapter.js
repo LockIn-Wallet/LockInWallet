@@ -6,7 +6,7 @@ import {
   getChainId,
   getActiveProvider,
   requestAccounts,
-  supportsChainSwitching,
+  canReachChain,
 } from "../utils/walletProvider.js";
 import SavingsABI from "../SavingsABI.json";
 import MockUSDT_ABI from "../MockUSDT_ABI.json";
@@ -408,12 +408,13 @@ export class EVMAdapter extends BlockchainAdapter {
 
   async switchNetwork(networkConfig) {
     try {
-      // An embedded wallet is created against one chain and cannot be moved;
-      // asking would throw an RPC error on a wallet already where it belongs.
-      if (!supportsChainSwitching()) {
-        this.networkConfig = networkConfig;
-        await this._initializeContracts();
-        return;
+      // A signed-in wallet can move between the chains it knows and no
+      // further, so asking for one it cannot reach only opens a popup to have
+      // it rejected.
+      if (!canReachChain(networkConfig.chainId)) {
+        throw new Error(
+          `${networkConfig.name} is not available on the wallet you signed in with`
+        );
       }
       await getActiveProvider().request({
         method: "wallet_switchEthereumChain",

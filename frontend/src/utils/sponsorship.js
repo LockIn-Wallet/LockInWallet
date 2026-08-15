@@ -19,9 +19,31 @@
  */
 
 import { AbstractSigner } from 'ethers';
+import networkConfig from '../networkConfig.json';
 
 /** Configured per deployment; absent means nobody is offering to pay. */
 const PAYMASTER_URL = process.env.REACT_APP_PAYMASTER_URL || '';
+
+/**
+ * The paymaster endpoint for a chain.
+ *
+ * Most providers address chains separately — Pimlico's URL carries the network
+ * in its path — so the configured value may contain a `{chain}` placeholder,
+ * filled from the same network key the rest of the app uses. A URL without one
+ * is used as given, for providers that route by chainId in the request body.
+ */
+const paymasterUrlFor = (chainId) => {
+  if (!PAYMASTER_URL) return '';
+  if (!PAYMASTER_URL.includes('{chain}')) return PAYMASTER_URL;
+
+  const key = Object.entries(networkConfig.evm || {}).find(
+    ([, config]) => config.chainId === Number(chainId)
+  )?.[0];
+
+  // No name for this chain means no endpoint to build; the caller treats an
+  // empty URL as "nobody is paying", which is the safe reading.
+  return key ? PAYMASTER_URL.replace('{chain}', key) : '';
+};
 
 // EIP-5792 bundle status. 1xx pending, 2xx confirmed, everything above failed.
 const STATUS_PENDING = 200;
@@ -40,7 +62,7 @@ export const isSponsorshipConfigured = () => !!PAYMASTER_URL;
  * offer.
  */
 export const canSponsor = async (provider, chainId) => {
-  if (!PAYMASTER_URL || !provider?.request) return false;
+  if (!paymasterUrlFor(chainId) || !provider?.request) return false;
 
   try {
     const from = (await provider.request({ method: 'eth_accounts' }))?.[0];
@@ -148,7 +170,7 @@ class SponsoredSigner extends AbstractSigner {
             // Optional, so a paymaster that declines — out of budget, policy
             // rejected the call — leaves the user able to pay for themselves
             // instead of leaving them stuck with no way through at all.
-            paymasterService: { url: PAYMASTER_URL, optional: true },
+            paymasterService: { url: paymasterUrlFor(this.chainId), optional: true },
           },
         },
       ],

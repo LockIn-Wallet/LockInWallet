@@ -115,6 +115,31 @@ describe('sponsorship', () => {
     });
   });
 
+  describe('addressing the right chain', () => {
+    it('fills the chain into a per-chain endpoint', async () => {
+      // Pimlico and friends carry the network in the URL path, so one
+      // configured value has to serve every chain the app is on.
+      process.env.REACT_APP_PAYMASTER_URL = 'https://api.example/v2/{chain}/rpc?apikey=k';
+      load();
+
+      const signer = await withSponsorship(makeInnerSigner(), makeWalletProvider(), BASE_CHAIN_ID);
+      await signer.sendTransaction({ to: '0xdef', data: '0x' });
+
+      expect(makeWalletProvider.lastSendCalls.capabilities.paymasterService.url).toBe(
+        'https://api.example/v2/base/rpc?apikey=k'
+      );
+    });
+
+    it('offers nothing on a chain it cannot name', async () => {
+      process.env.REACT_APP_PAYMASTER_URL = 'https://api.example/v2/{chain}/rpc?apikey=k';
+      load();
+
+      // 999 is in no config, so there is no endpoint to build — and an empty
+      // URL has to read as "nobody is paying" rather than a malformed request.
+      expect(await canSponsor(makeWalletProvider(), 999)).toBe(false);
+    });
+  });
+
   describe('sending a sponsored transaction', () => {
     it('sends through the bundle API with the paymaster attached', async () => {
       const wallet = makeWalletProvider();

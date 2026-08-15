@@ -13,7 +13,7 @@ import {
   getAccounts,
   hasWallet,
   isEmbeddedWallet,
-  supportsChainSwitching,
+  canReachChain,
 } from './walletProvider';
 import { withSponsorship } from './sponsorship';
 
@@ -273,18 +273,14 @@ export const ensureCorrectNetwork = async (networkKey) => {
     const browserProvider = new BrowserProvider(getActiveProvider());
     const currentNetwork = await browserProvider.getNetwork();
 
-    // An embedded wallet is created against one chain and simply is on it.
-    // There is no menu to change and no prompt to show, so a mismatch here is
-    // a wallet built for a different network — say so rather than firing an
-    // RPC method it does not implement.
-    if (!supportsChainSwitching()) {
-      const onExpected = Number(currentNetwork.chainId) === expectedChainId;
-      if (!onExpected) {
-        console.error(
-          `❌ Signed-in wallet is on chain ${Number(currentNetwork.chainId)}, not ${expectedChainId}`
-        );
-      }
-      return onExpected;
+    // A signed-in wallet can move between the chains it was created against,
+    // but no further — the signer is hosted and cannot see a local dev node.
+    // Asking anyway would open a popup only to have it rejected.
+    if (!canReachChain(expectedChainId)) {
+      console.error(
+        `❌ The signed-in wallet cannot reach ${networkKey} (chain ${expectedChainId})`
+      );
+      return false;
     }
 
     if (Number(currentNetwork.chainId) === expectedChainId) {

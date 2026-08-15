@@ -20,11 +20,20 @@
  * answer as the UI does.
  */
 let embeddedProvider = null;
+let embeddedChainIds = [];
 const listeners = new Set();
 
-/** Register the embedded wallet's EIP-1193 provider (or null on sign-out). */
-export const setEmbeddedProvider = (provider) => {
+/**
+ * Register the embedded wallet's EIP-1193 provider (or null on sign-out).
+ *
+ * `chainIds` is the set of chains it was created against. A signed-in wallet is
+ * a hosted signer: it can move between the chains it knows and can never reach
+ * any other, so this is what lets the app tell "switch networks" apart from
+ * "that network is not reachable from this wallet".
+ */
+export const setEmbeddedProvider = (provider, { chainIds = [] } = {}) => {
   embeddedProvider = provider || null;
+  embeddedChainIds = provider ? chainIds : [];
   listeners.forEach((notify) => notify());
 };
 
@@ -139,11 +148,26 @@ export const onWalletEvent = (event, handler) => {
 };
 
 /**
- * Whether this wallet can be asked to change network.
+ * Whether this wallet can be asked to change network at all.
  *
- * An extension prompts the user. An embedded wallet is created against one
- * chain and simply is on it, so there is nothing to ask and no prompt to show
- * — asking anyway would throw an unhandled RPC error on a wallet that is
- * already exactly where it should be.
+ * Both kinds can: a smart wallet implements `wallet_switchEthereumChain` just
+ * as an extension does. What differs is the range — see `canReachChain`.
  */
-export const supportsChainSwitching = () => !isEmbeddedWallet();
+export const supportsChainSwitching = () => hasWallet();
+
+/**
+ * Whether the active wallet can operate on this chain.
+ *
+ * An extension can be asked to add any network, so anything is reachable. A
+ * signed-in wallet only knows the chains it was created against, and a local
+ * dev chain is not among them and never can be — the signer is hosted and
+ * cannot see a node running on your machine. Checking first turns a rejected
+ * popup into something the app can explain.
+ */
+export const canReachChain = (chainId) => {
+  if (!isEmbeddedWallet()) return true;
+  return embeddedChainIds.includes(Number(chainId));
+};
+
+/** The chains a signed-in wallet was created against; empty for an extension. */
+export const getEmbeddedChainIds = () => [...embeddedChainIds];
