@@ -221,6 +221,22 @@ class SponsoredSigner extends AbstractSigner {
  * paymaster is down.
  */
 export const withSponsorship = async (signer, walletProvider, chainId) => {
-  if (!(await canSponsor(walletProvider, chainId))) return signer;
+  const url = paymasterUrlFor(chainId);
+
+  if (!(await canSponsor(walletProvider, chainId))) {
+    // Said out loud because the alternative is invisible: without sponsorship
+    // the user is simply asked for gas, which looks identical to a paymaster
+    // that is configured and refusing. Naming which of the two it is turns a
+    // guess into a five-second check.
+    console.info(
+      `💸 Sponsorship off for chain ${chainId} — ` +
+        (url
+          ? 'the wallet did not offer paymasterService (an extension never does)'
+          : 'no REACT_APP_PAYMASTER_URL in this build')
+    );
+    return signer;
+  }
+
+  console.info(`💸 Sponsorship on for chain ${chainId} via ${url}`);
   return new SponsoredSigner(signer, walletProvider, chainId);
 };
