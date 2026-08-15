@@ -6,7 +6,8 @@
   "workspaces": [
     "ethereum",
     "solana",
-    "frontend"
+    "frontend",
+    "keeper"
   ],
   "scripts": {
     "test": "echo \"Use workspace-specific test commands: cd ethereum && npm test, or cd solana && npm test\"",

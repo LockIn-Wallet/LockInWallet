@@ -1,0 +1,19 @@
+{
+  "name": "savings-wallet-keeper",
+  "version": "0.4.0",
+  "private": true,
+  "description": "Pays for the transactions a saver who arrives with a bank card and no coin cannot yet make",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "start:base": "NETWORK=base node src/index.js",
+    "start:optimism": "NETWORK=optimism node src/index.js",
+    "test": "echo \"Keeper behaviour is covered by ethereum/test/Keeper.ts — run: cd ethereum && npx hardhat test test/Keeper.ts\" && exit 0"
+  },
+  "dependencies": {
+    "ethers": "^6.6.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
