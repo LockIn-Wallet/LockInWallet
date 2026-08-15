@@ -116,7 +116,7 @@ const YieldSection = ({ transactionManager }) => {
   // told their savings can earn deserves to know why this one can't.
   if (noVault || !status?.tokenSupported) {
     return (
-      <CollapsibleSection title={YIELD_SECTION_TITLE} icon="sprout" defaultExpanded={true}>
+      <CollapsibleSection title={YIELD_SECTION_TITLE} icon="sprout" defaultExpanded={false}>
         <p
           style={{
             margin: 0,
@@ -137,7 +137,7 @@ const YieldSection = ({ transactionManager }) => {
   const activeOption = status.options?.find((option) => option.key === status.mode);
 
   return (
-    <CollapsibleSection title={YIELD_SECTION_TITLE} icon="sprout" defaultExpanded={true}>
+    <CollapsibleSection title={YIELD_SECTION_TITLE} icon="sprout" defaultExpanded={false}>
       <p
         style={{
           margin: `0 0 ${space[4]} 0`,
