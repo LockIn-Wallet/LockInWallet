@@ -350,6 +350,22 @@ cd ../frontend && npm start  # Terminal 3
 - Never have inline imports
 - As a code practice never hardcode any numbers or addresses that could otherwise be generated with our deployment script
 
+### **AI-Era Smart Contract Security Rules**
+
+Core principle: treat AI (including multi-agent review) as **productivity tooling, not security**. Correctness must be checkable by dumb, deterministic processes and small human-auditable artifacts.
+
+1. **Fork, don't author** — Prefer battle-tested contracts (timelocks, vaults, OpenZeppelin primitives) over novel code on the money path. Code deployed pre-2025 can't contain a backdoor from a 2026 model.
+2. **Keep contracts small** — Core logic must stay human-readable in full (few hundred lines). If you can't hold a component in your head, that's where a subtle backdoor hides. Complexity is the adversary's friend.
+3. **Formal verification with dumb checkers** — AI may draft code and proofs, but proof-checking must be a deterministic verifier (SMT solver, Certora, Lean kernel). Humans own the spec; the checker enforces it. No LLM in the verification chain.
+4. **Cap blast radius by architecture**:
+   - Per-user vault instances, not pooled principal (an exploit drains one user, not the honeypot)
+   - Prize-savings pool holds only yield, never principal
+   - Burn upgrade authority or gate behind long on-chain timelocks with guaranteed user exit window
+   - Withdrawals only to addresses pre-committed at deposit time
+   - Admin powers limited to pause, never move funds
+5. **Deterministic tooling over LLM judgment** — Fuzzers, static analyzers, symbolic execution, invariant tests. Reproducible/verifiable builds so on-chain bytecode matches audited source. Personally verify deployed hashes.
+6. **Gradual exposure** — Hard TVL caps at launch raised slowly. Canary period with own funds. Bug bounty scaled to TVL.
+
 ## Cross-References
 
 - **Root Project Overview**: See **`../CLAUDE.md`** for multi-blockchain orchestration and workspace management
