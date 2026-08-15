@@ -15,6 +15,7 @@ import {
   isEmbeddedWallet,
   supportsChainSwitching,
 } from './walletProvider';
+import { withSponsorship } from './sponsorship';
 
 /**
  * Create a provider and signer from the connected wallet.
@@ -37,7 +38,14 @@ export const createProviderAndSigner = async () => {
   }
 
   const signer = await browserProvider.getSigner();
-  return { provider: browserProvider, signer };
+
+  // The single place a signer is made, so wrapping it here is what makes every
+  // contract call in the app sponsored without one of them being rewritten.
+  // Returns the plain signer whenever sponsorship is unavailable.
+  const { chainId } = await browserProvider.getNetwork();
+  const sponsored = await withSponsorship(signer, wallet, Number(chainId));
+
+  return { provider: browserProvider, signer: sponsored };
 };
 
 /**
