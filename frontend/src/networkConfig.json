@@ -91,7 +91,9 @@
         "decimals": 18
       },
       "rpcUrls": [
-        "https://mainnet.optimism.io"
+        "https://mainnet.optimism.io",
+        "https://optimism-rpc.publicnode.com",
+        "https://optimism.drpc.org"
       ],
       "blockExplorerUrls": [
         "https://optimistic.etherscan.io"
@@ -130,7 +132,9 @@
         "decimals": 18
       },
       "rpcUrls": [
-        "https://mainnet.base.org"
+        "https://mainnet.base.org",
+        "https://base-rpc.publicnode.com",
+        "https://base.drpc.org"
       ],
       "blockExplorerUrls": [
         "https://basescan.org"
