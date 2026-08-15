@@ -210,6 +210,16 @@ module.exports = async function handler(request, response) {
     });
 
     const payload = await result.json();
+
+    // A JSON-RPC error rides inside a 200, so an upstream refusal looks like a
+    // success from every angle except the user's — they just get asked for gas.
+    // Say why here, or the only symptom is a popup quoting a fee.
+    if (payload?.error) {
+      console.warn(
+        `Paymaster declined ${method}: ${JSON.stringify(payload.error).slice(0, 400)}`
+      );
+    }
+
     return response.status(200).json(payload);
   } catch (error) {
     console.error(`Paymaster upstream failed: ${error.message}`);
