@@ -824,21 +824,24 @@ function AppContentInner({
     let activeNetworkKey = selectedNetwork;
 
     if (networkType === "evm") {
+      // A saved preference can outlive the deployment it named — someone who
+      // last used Ethereum Mainnet while it was still listed would otherwise
+      // be sent back to a chain with no contract on it, every time.
+      if (!isNetworkDeployed("evm", activeNetworkKey)) {
+        const live = getDefaultNetwork("evm", { allowLocalhost: false });
+        if (live && live !== activeNetworkKey) {
+          console.warn(`${activeNetworkKey} has no deployment; using ${live}`);
+          activeNetworkKey = live;
+          setSelectedNetwork(live);
+          localStorage.setItem("preferred_evm_network", live);
+        }
+      }
+
       const currentChain = await getChainId();
-      const expectedNetwork = getCurrentNetwork(networkType, selectedNetwork);
+      const expectedNetwork = getCurrentNetwork(networkType, activeNetworkKey);
 
       if (currentChain !== expectedNetwork.chainId) {
-        // An extension can be asked to switch, so a mismatch is a prompt the
-        // user still has to answer — stop and let them.
-        //
-        // A signed-in wallet cannot: it exists on one chain and has no menu to
-        // change. Refusing to continue would leave someone who just signed in
-        // sitting on the home page with no explanation and nothing to press,
-        // so follow the wallet to whichever supported chain it is on.
-        // Only a chain we have actually deployed to. Following the wallet
-        // anywhere it happens to be lands people on Ethereum Mainnet, which is
-        // in the config but has no contract — and the only thing that happens
-        // there is "not deployed yet" after they have already connected.
+        // Where the wallet already is, if that is somewhere we have deployed.
         const walletNetworkKey = isEmbeddedWallet()
           ? Object.keys(NETWORKS.evm || {}).find(
               (key) =>
@@ -847,14 +850,29 @@ function AppContentInner({
             )
           : null;
 
-        if (!walletNetworkKey) {
+        if (walletNetworkKey) {
+          // Follow it. A signed-in wallet has no network menu of its own, so
+          // refusing would leave someone who just signed in on the home page
+          // with nothing to press and no explanation.
+          activeNetworkKey = walletNetworkKey;
+          setSelectedNetwork(walletNetworkKey);
+          localStorage.setItem("preferred_evm_network", walletNetworkKey);
+        } else if (isEmbeddedWallet()) {
+          // It is somewhere we cannot use — Ethereum Mainnet, say, which is in
+          // the config with no contract behind it. A smart wallet can be asked
+          // to move, so ask, rather than stopping dead: signing in appeared to
+          // do nothing at all, because the sign-in itself had succeeded and
+          // only this silently gave up afterwards.
+          if (!(await ensureCorrectNetwork(activeNetworkKey))) {
+            setCurrentChainId(currentChain);
+            return;
+          }
+        } else {
+          // An extension prompts its own user to switch, and that prompt is
+          // still unanswered — stop and let them answer it.
           setCurrentChainId(currentChain);
           return;
         }
-
-        activeNetworkKey = walletNetworkKey;
-        setSelectedNetwork(walletNetworkKey);
-        localStorage.setItem("preferred_evm_network", walletNetworkKey);
       }
 
       setCurrentChainId(currentChain);
@@ -937,7 +955,7 @@ function AppContentInner({
 
       if (networkType === "evm") {
         const currentChain = await getChainId();
-        const expectedNetwork = getCurrentNetwork(networkType, selectedNetwork);
+        const expectedNetwork = getCurrentNetwork(networkType, activeNetworkKey);
         if (currentChain !== expectedNetwork.chainId) {
           setCurrentChainId(currentChain);
           return;
