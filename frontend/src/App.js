@@ -35,6 +35,7 @@ import {
 import {
   getDefaultNetwork,
   getAvailableNetworks,
+  isNetworkDeployed,
 } from "./utils/networkFilter.js";
 import { isSolanaEnabled, isPrizePoolEnabled, isYieldEnabled } from "./utils/featureFlags.js";
 import { createEmptyLimitEdits } from "./utils/spendingPeriods.js";
@@ -834,9 +835,15 @@ function AppContentInner({
         // change. Refusing to continue would leave someone who just signed in
         // sitting on the home page with no explanation and nothing to press,
         // so follow the wallet to whichever supported chain it is on.
+        // Only a chain we have actually deployed to. Following the wallet
+        // anywhere it happens to be lands people on Ethereum Mainnet, which is
+        // in the config but has no contract — and the only thing that happens
+        // there is "not deployed yet" after they have already connected.
         const walletNetworkKey = isEmbeddedWallet()
           ? Object.keys(NETWORKS.evm || {}).find(
-              (key) => NETWORKS.evm[key].chainId === currentChain
+              (key) =>
+                NETWORKS.evm[key].chainId === currentChain &&
+                isNetworkDeployed("evm", key)
             )
           : null;
 

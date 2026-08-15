@@ -60,22 +60,22 @@ export const getAvailableNetworks = (networkType, environment = process.env.NODE
     ? process.env.REACT_APP_SHOW_LOCALHOST === 'true'  // Explicit opt-in for production
     : process.env.REACT_APP_SHOW_LOCALHOST !== 'false'; // Opt-out for development
 
-  const showUndeployed = isProduction
-    ? process.env.REACT_APP_SHOW_UNDEPLOYED_NETWORKS === 'true'  // Explicit opt-in for production
-    : process.env.REACT_APP_SHOW_UNDEPLOYED_NETWORKS !== 'false'; // Opt-out for development
+  // Hidden everywhere unless asked for, development included. A network with
+  // no contract deployed cannot do anything a visitor came here for, and
+  // offering it only produces "not deployed on Ethereum Mainnet yet" after
+  // they have picked it. Opt in with REACT_APP_SHOW_UNDEPLOYED_NETWORKS=true
+  // when working on a chain before its deploy lands.
+  const showUndeployed = process.env.REACT_APP_SHOW_UNDEPLOYED_NETWORKS === 'true';
 
-  // In production, only show deployed networks (exclude localhost and undeployed)
-  if (isProduction) {
-    const filtered = networkList.filter(network => {
-      if (network.isLocal && !showLocalhost) return false;
-      if (networkType === "solana" && (network.key === "devnet" || network.key === "mainnet")) return false;
-      if (!network.deployed && !showUndeployed) return false;
-      return true;
-    });
-    return filtered;
-  }
-
-  return networkList;
+  return networkList.filter((network) => {
+    // Localhost stays a development convenience; undeployed is hidden in both.
+    if (network.isLocal && !showLocalhost) return false;
+    if (isProduction && networkType === "solana" && (network.key === "devnet" || network.key === "mainnet")) {
+      return false;
+    }
+    if (!network.deployed && !showUndeployed) return false;
+    return true;
+  });
 };
 
 /**
