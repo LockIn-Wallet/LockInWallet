@@ -9,6 +9,25 @@
 
 export const RELEASE_NOTES = [
   {
+    version: "Unreleased",
+    date: "",
+    title: "A wallet without a seed phrase",
+    highlights: [
+      {
+        emoji: "👆",
+        text: "You can now start saving without a wallet at all. Press sign in, use Face ID or your fingerprint, and you have one — nothing to install, no seed phrase to write down, no password to forget. It follows you to your other devices through the account you already sign into them with, so a new phone or laptop means signing in, not hunting for a backup. If you already have a wallet, connecting it works exactly as before; pressing connect now asks which you would rather use.",
+      },
+      {
+        emoji: "⛽",
+        text: "We pay the network fee when you sign in this way. Every action on a blockchain costs a small fee, payable only in that chain's own coin — which is an absurd thing to demand of someone who came here to save dollars. So we cover it. If you brought your own wallet, nothing changes: you pay your own fees as you always have.",
+      },
+      {
+        emoji: "🔍",
+        text: "Worth knowing what signing in does and does not give you. The key lives on your device and we never see it, so this is still your money and nobody else can move it. But the signing goes through a service Coinbase runs, which means they see the requests and where they come from — not your key, and not your money. If you would rather nothing passed through anyone else, bring your own wallet. That choice is on the screen where you make it, not buried here.",
+      },
+    ],
+  },
+  {
     version: "0.4.0",
     date: "2026-08-13",
     title: "A home page you can check",
