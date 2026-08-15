@@ -566,6 +566,47 @@ function AppContentInner({
     []
   );
 
+  /**
+   * Leave localhost behind when nothing is running there.
+   *
+   * In development the app prefers localhost whenever the config carries an
+   * address from some past deploy — which says nothing about whether a node is
+   * up right now. When it is not, the app was asking the wallet to switch to a
+   * dead chain and then failing against it, which looks for all the world like
+   * the wallet is broken. Probe once and move to a live network instead.
+   */
+  useEffect(() => {
+    if (networkType !== "evm" || selectedNetwork !== "localhost") return;
+
+    let cancelled = false;
+    const localRpc = NETWORKS.evm?.localhost?.rpcUrls?.[0];
+    if (!localRpc) return;
+
+    (async () => {
+      try {
+        const response = await fetch(localRpc, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "eth_chainId", params: [] }),
+        });
+        if (response.ok) return; // A node is there; carry on.
+      } catch {
+        // Nothing listening — fall through and move away.
+      }
+
+      const live = getDefaultNetwork("evm", { allowLocalhost: false });
+      if (cancelled || !live || live === "localhost") return;
+
+      console.warn(`No local chain at ${localRpc}; switching to ${live}`);
+      localStorage.setItem("preferred_evm_network", live);
+      setSelectedNetwork(live);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [networkType, selectedNetwork, setSelectedNetwork]);
+
   // Bring a returning visitor straight back to their wallet. Only ever attempted
   // for someone who signed in on this device before — prompting for a passkey
   // on a first visit, unasked, is a strange thing to do to a stranger.

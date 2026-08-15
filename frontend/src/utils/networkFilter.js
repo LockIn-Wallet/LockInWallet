@@ -127,14 +127,24 @@ export const PRODUCTION_NETWORKS = {
 /**
  * Get the default network for a network type based on environment
  * @param {string} networkType - "evm" or "solana"
+ * @param {object} [options]
+ * @param {boolean} [options.allowLocalhost=true] - set false to skip localhost
+ *   even in development, for callers that have found nothing listening there
  * @returns {string} Default network key
  */
-export const getDefaultNetwork = (networkType) => {
+export const getDefaultNetwork = (networkType, { allowLocalhost = true } = {}) => {
   const environment = process.env.NODE_ENV;
   const isProduction = environment === "production" || process.env.REACT_APP_ENVIRONMENT === "production";
 
-  if (!isProduction) {
-    // In development, prefer localhost if available and deployed
+  if (!isProduction && allowLocalhost) {
+    // In development, prefer localhost if available and deployed.
+    //
+    // "Deployed" here only means an address was written into the config by some
+    // past `deploy-modular` run — it says nothing about whether a node is
+    // running now. A contributor who clones this repo and starts the frontend
+    // to work on the landing page has no node, and would be sent to a dead
+    // chain by a config entry they never created. `allowLocalhost: false` is
+    // how a caller that has actually probed the port says so.
     const localhostDeployed = isNetworkDeployed(networkType, "localhost");
     if (localhostDeployed) return "localhost";
   }
