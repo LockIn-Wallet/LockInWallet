@@ -8,6 +8,7 @@ import {
   requestAccounts,
   canReachChain,
 } from "../utils/walletProvider.js";
+import { createProviderAndSigner } from "../utils/providerManager.js";
 import SavingsABI from "../SavingsABI.json";
 import MockUSDT_ABI from "../MockUSDT_ABI.json";
 import ProxyDeploymentModuleABI from "../ProxyDeploymentModuleABI.json";
@@ -363,15 +364,23 @@ export class EVMAdapter extends BlockchainAdapter {
         this.provider = provider;
         this.signer = signer;
       } else {
-        // Fallback: create own provider (should rarely happen)
+        // No signer handed in — this happens on every network switch, which
+        // re-initialises the TransactionManager without one.
+        //
+        // Built through the shared helper rather than by hand, because that is
+        // where a signer gets wrapped for sponsorship. Rolling our own here
+        // produced a signer that worked for everything except the one thing
+        // that mattered: the wallet was asked to pay, silently, on any session
+        // that had switched networks.
         if (!hasWallet()) {
           throw new Error(
             "No wallet found. Sign in or connect a wallet to continue.",
           );
         }
         await requestAccounts();
-        this.provider = new ethers.BrowserProvider(getActiveProvider());
-        this.signer = await this.provider.getSigner();
+        const created = await createProviderAndSigner();
+        this.provider = created.provider;
+        this.signer = created.signer;
       }
 
       this.userAddress = await this.signer.getAddress();
