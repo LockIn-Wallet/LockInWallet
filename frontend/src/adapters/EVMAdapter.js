@@ -1406,7 +1406,10 @@ export class EVMAdapter extends BlockchainAdapter {
     try {
       const rpcUrl = this.networkConfig.rpcUrls?.[0];
       if (!rpcUrl) return;
-      const rpc = new ethers.JsonRpcProvider(rpcUrl);
+      // Static: an unreachable dev node must not leave a retry loop behind.
+      const rpc = new ethers.JsonRpcProvider(rpcUrl, this.networkConfig.chainId, {
+        staticNetwork: true,
+      });
       await rpc.send("evm_mine", []);
     } catch {
       // Not a dev chain after all — estimation will report the real state

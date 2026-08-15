@@ -240,6 +240,52 @@ export const modalStyles = {
     gap: space[3],
     margin: `${space[4]} 0 0 0`,
   },
+
+  // A choice presented as two panels rather than two buttons: each one needs a
+  // sentence of its own, because what separates them is not obvious from a
+  // label and picking wrongly is annoying to undo.
+  option: {
+    display: "block",
+    width: "100%",
+    textAlign: "left",
+    padding: space[4],
+    borderRadius: "10px",
+    border: `1px solid ${colors.border.default}`,
+    backgroundColor: colors.background.secondary,
+    color: colors.text.primary,
+    fontFamily: "inherit",
+    cursor: "pointer",
+    transition: "border-color 0.15s, background-color 0.15s",
+  },
+
+  optionRecommended: {
+    borderColor: colors.primary.main,
+  },
+
+  optionTitle: {
+    display: "block",
+    margin: 0,
+    fontSize: type.bodyLg,
+    fontWeight: 600,
+  },
+
+  optionText: {
+    display: "block",
+    margin: `${space[2]} 0 0 0`,
+    fontSize: type.small,
+    color: colors.text.gray,
+    lineHeight: 1.6,
+  },
+
+  optionBadge: {
+    display: "inline-block",
+    margin: `0 0 ${space[2]} 0`,
+    padding: `2px ${space[2]}`,
+    borderRadius: "999px",
+    fontSize: type.tiny || type.small,
+    color: colors.primary.main,
+    border: `1px solid ${colors.primary.main}`,
+  },
 };
 
 export default modalStyles;

@@ -22,6 +22,20 @@ const configuredNetwork = (chainId) =>
   Object.values(networkConfig.evm || {}).find((n) => n.chainId === chainId);
 
 /**
+ * An RPC provider that stays quiet when the endpoint is down.
+ *
+ * `staticNetwork` matters more than it looks. Without it a JsonRpcProvider
+ * begins its own network-detection loop the moment it is constructed, and that
+ * loop retries every second *forever* — outliving whatever created it. One
+ * unreachable endpoint (a localhost RPC with no node behind it) was enough to
+ * fill the console and keep the main thread busy indefinitely.
+ *
+ * We already know the chain from config, so there is nothing to detect.
+ */
+export const createReadProvider = (url, chainId) =>
+  new JsonRpcProvider(url, chainId, { staticNetwork: true });
+
+/**
  * The first configured RPC for this chain that actually answers.
  *
  * Every candidate is tried before being adopted. A configured endpoint is not
@@ -31,12 +45,14 @@ const configuredNetwork = (chainId) =>
  */
 const findWorkingRpc = async (chainId) => {
   for (const url of configuredNetwork(chainId)?.rpcUrls || []) {
+    const candidate = createReadProvider(url, chainId);
+
     try {
-      const candidate = new JsonRpcProvider(url);
       await candidate.getBlockNumber();
       return candidate;
     } catch {
-      // Try the next one.
+      // Explicitly torn down: an abandoned provider still holds timers.
+      candidate.destroy?.();
     }
   }
   return null;
@@ -143,7 +159,7 @@ export const getBestProvider = async (networkKey) => {
     const networkConf = networkConfig.evm[networkKey];
     if (networkConf?.rpcUrls?.length > 0) {
       const publicRpcUrl = networkConf.rpcUrls[0]; // Use first public RPC
-      result.provider = new JsonRpcProvider(publicRpcUrl);
+      result.provider = createReadProvider(publicRpcUrl, networkConf.chainId);
       result.source = 'public_rpc';
       result.chainId = networkConf.chainId;
       result.reliable = false;
@@ -190,7 +206,7 @@ export const verifyContractDeployment = async (contractAddress, networkKey) => {
       const networkConf = networkConfig.evm[networkKey];
       if (networkConf?.rpcUrls?.length > 0) {
         providers.push({
-          provider: new JsonRpcProvider(networkConf.rpcUrls[0]),
+          provider: createReadProvider(networkConf.rpcUrls[0], networkConf.chainId),
           source: 'public_rpc',
           chainId: networkConf.chainId,
           reliable: false
@@ -378,7 +394,7 @@ export const testAllProviders = async (networkKey) => {
   if (networkConf?.rpcUrls?.length > 0) {
     results.publicRpc.available = true;
     try {
-      const publicProvider = new JsonRpcProvider(networkConf.rpcUrls[0]);
+      const publicProvider = createReadProvider(networkConf.rpcUrls[0], networkConf.chainId);
       const blockNumber = await publicProvider.getBlockNumber();
       results.publicRpc.working = blockNumber > 0;
 

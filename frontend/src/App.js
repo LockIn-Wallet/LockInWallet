@@ -59,6 +59,7 @@ import {
   restorePasskeySession,
   signOutOfPasskey,
   hasPasskeySession,
+  isPasskeySupported,
 } from "./utils/passkeyWallet.js";
 import {
   createCircuitBreakers,
@@ -90,6 +91,7 @@ import YieldSection from "./components/organisms/YieldSection.js";
 import StatusHeader from "./components/molecules/StatusHeader.js";
 import WalletConnectionPrompt from "./components/molecules/WalletConnectionPrompt.js";
 import WalletOnboardingModal from "./components/molecules/WalletOnboardingModal.js";
+import WalletChoiceModal from "./components/molecules/WalletChoiceModal.js";
 import BalanceDisplay from "./components/molecules/BalanceDisplay.js";
 import AllowanceBar from "./components/molecules/AllowanceBar.js";
 import DepositInterface from "./components/molecules/DepositInterface.js";
@@ -555,6 +557,9 @@ function AppContentInner({
   const [walletGeneration, setWalletGeneration] = useState(0);
 
   const [isSigningIn, setIsSigningIn] = useState(false);
+  // Asked once, when someone presses connect: the two ways in differ in a way
+  // no button label conveys, and picking wrongly means an unexpected popup.
+  const [showWalletChoice, setShowWalletChoice] = useState(false);
 
   useEffect(
     () => onWalletChanged(() => setWalletGeneration((n) => n + 1)),
@@ -920,6 +925,23 @@ function AppContentInner({
     }
   }, [isSigningIn]);
 
+  /**
+   * What every "connect" button does: offer the choice.
+   *
+   * Both ways in lead somewhere different, and the difference is not visible
+   * from a label — so pressing connect used to open whichever one the code
+   * happened to prefer. Where there is only one way in, there is nothing to ask
+   * about and it goes straight there.
+   */
+  const openWalletChoice = useCallback(() => {
+    const evmAvailable = getAvailableNetworks("evm").some((n) => n.deployed || n.isLocal);
+    if (isPasskeySupported() && evmAvailable) {
+      setShowWalletChoice(true);
+      return;
+    }
+    connectWallet();
+  }, []);
+
   const connectWallet = debounce(async () => {
     clearWalletLoggedOut();
 
@@ -1025,6 +1047,14 @@ function AppContentInner({
           : styles.app.container
       }
     >
+      <WalletChoiceModal
+        open={showWalletChoice}
+        onClose={() => setShowWalletChoice(false)}
+        onSignIn={handleSignInWithPasskey}
+        onUseOwnWallet={connectWallet}
+        canSignIn={isPasskeySupported()}
+      />
+
       <WalletOnboardingModal
         open={showWalletOnboarding}
         onClose={() => setShowWalletOnboarding(false)}
@@ -1113,7 +1143,7 @@ function AppContentInner({
                   networkType === "solana" ? handleConnectMetaMask : connectWallet
                 }
                 onConnectPhantom={handleConnectPhantom}
-                onSignInWithPasskey={handleSignInWithPasskey}
+                onSignInWithPasskey={openWalletChoice}
                 isSigningIn={isSigningIn}
               />
             }

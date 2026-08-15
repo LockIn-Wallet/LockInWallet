@@ -10,7 +10,7 @@ import { landingStyles } from "../../../styles";
  * from, and the console underneath demonstrates it refusing a withdrawal
  * before the visitor has connected anything.
  */
-const LandingHero = ({ onLaunch, onUseOwnWallet }) => (
+const LandingHero = ({ onLaunch }) => (
   <section style={landingStyles.hero}>
     <div style={landingStyles.heroGlow} aria-hidden="true" />
 
@@ -43,15 +43,6 @@ const LandingHero = ({ onLaunch, onUseOwnWallet }) => (
         </a>
       </div>
 
-      {onUseOwnWallet && (
-        <button
-          type="button"
-          style={landingStyles.ctaAlternate}
-          onClick={onUseOwnWallet}
-        >
-          Already have a wallet? Connect it
-        </button>
-      )}
     </div>
 
     <EnforcementConsole />
