@@ -7,6 +7,7 @@ import { homeStyles, buttonStyles, buttonHoverEffects } from "../../styles";
 import { getAvailableNetworks } from "../../utils/networkFilter.js";
 import { isSolanaEnabled } from "../../utils/featureFlags.js";
 import { hasWallet } from "../../utils/walletProvider.js";
+import { isPasskeySupported } from "../../utils/passkeyWallet.js";
 
 const hasEvmWallet = () => hasWallet();
 const hasPhantomInstalled = () =>
@@ -21,10 +22,33 @@ const hasSolanaNetworks = () =>
  * WalletConnectButtons - the wallet connection CTA group (MetaMask /
  * Phantom / Solana wallet modal), reusable anywhere on the homepage.
  */
-const WalletConnectButtons = ({ networkType, connectWallet, onConnectPhantom }) => {
+const WalletConnectButtons = ({
+  networkType,
+  connectWallet,
+  onConnectPhantom,
+  onSignInWithPasskey,
+  isSigningIn = false,
+}) => {
   const metaMaskInstalled = hasEvmWallet();
   const canUsePhantom = hasPhantomInstalled() && hasSolanaNetworks();
   const isInSolanaMode = networkType === "solana" && isSolanaEnabled();
+
+  // Signing in needs nothing installed and no seed phrase, so for anyone
+  // arriving without a wallet it is the only path that leads anywhere. It takes
+  // the accent and connecting an existing wallet steps back to outlined.
+  const canSignIn = Boolean(onSignInWithPasskey) && isPasskeySupported() && hasEvmNetworks();
+
+  const passkeyButton = canSignIn && (
+    <button
+      onClick={onSignInWithPasskey}
+      disabled={isSigningIn}
+      style={isSigningIn ? { ...buttonStyles.passkey, ...buttonStyles.disabled } : buttonStyles.passkey}
+      onMouseEnter={isSigningIn ? undefined : buttonHoverEffects.metamaskHover}
+      onMouseLeave={isSigningIn ? undefined : buttonHoverEffects.metamaskReset}
+    >
+      {isSigningIn ? "Signing in…" : "Sign in"}
+    </button>
+  );
 
   // Without the extension the button still shows — pressing it opens the
   // onboarding dialog. Hiding it left first-time visitors on a page whose
@@ -32,9 +56,9 @@ const WalletConnectButtons = ({ networkType, connectWallet, onConnectPhantom }) 
   const metaMaskButton = hasEvmNetworks() && (
     <button
       onClick={connectWallet}
-      style={buttonStyles.metamask}
-      onMouseEnter={buttonHoverEffects.metamaskHover}
-      onMouseLeave={buttonHoverEffects.metamaskReset}
+      style={canSignIn ? buttonStyles.walletSecondary : buttonStyles.metamask}
+      onMouseEnter={canSignIn ? buttonHoverEffects.phantomHover : buttonHoverEffects.metamaskHover}
+      onMouseLeave={canSignIn ? buttonHoverEffects.phantomReset : buttonHoverEffects.metamaskReset}
     >
       {metaMaskInstalled ? "Connect MetaMask" : "Connect wallet"}
     </button>
@@ -49,6 +73,7 @@ const WalletConnectButtons = ({ networkType, connectWallet, onConnectPhantom }) 
         </>
       ) : (
         <>
+          {passkeyButton}
           {metaMaskButton}
           {canUsePhantom && onConnectPhantom && (
             <button

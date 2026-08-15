@@ -54,6 +54,12 @@ import {
   isEmbeddedWallet,
 } from "./utils/walletProvider.js";
 import {
+  signInWithPasskey,
+  restorePasskeySession,
+  signOutOfPasskey,
+  hasPasskeySession,
+} from "./utils/passkeyWallet.js";
+import {
   createCircuitBreakers,
   safeContractCall,
   debounce,
@@ -547,10 +553,22 @@ function AppContentInner({
   // the new provider rather than staying bound to the old one (or to nothing).
   const [walletGeneration, setWalletGeneration] = useState(0);
 
+  const [isSigningIn, setIsSigningIn] = useState(false);
+
   useEffect(
     () => onWalletChanged(() => setWalletGeneration((n) => n + 1)),
     []
   );
+
+  // Bring a returning visitor straight back to their wallet. Only ever attempted
+  // for someone who signed in on this device before — prompting for a passkey
+  // on a first visit, unasked, is a strange thing to do to a stranger.
+  useEffect(() => {
+    if (!hasPasskeySession() || isWalletLoggedOut()) return;
+    restorePasskeySession().catch((error) =>
+      console.log("Passkey session not restored:", error.message)
+    );
+  }, []);
 
   // Solana wallet state
   let solanaConnected = false;
@@ -614,6 +632,12 @@ function AppContentInner({
       networkType === "solana" ? solanaPublicKey?.toString() : evmUserAddress;
 
     markWalletLoggedOut();
+
+    // A signed-in wallet is the one thing here that can actually be told to
+    // forget the site, so say so rather than relying on the flag alone.
+    if (hasPasskeySession()) {
+      await signOutOfPasskey();
+    }
 
     if (networkType === "solana") {
       try {
@@ -839,6 +863,33 @@ function AppContentInner({
     }
   }, 2000);
 
+  /**
+   * Sign in with a passkey — Face ID, and they have a wallet.
+   *
+   * Not debounced like `connectWallet`: this opens a popup that the browser
+   * only allows because a person just clicked, and a debounce would break the
+   * chain between the click and the popup.
+   */
+  const handleSignInWithPasskey = useCallback(async () => {
+    if (isSigningIn) return;
+    setIsSigningIn(true);
+    clearWalletLoggedOut();
+
+    try {
+      await signInWithPasskey();
+      // The wallet is registered by now, so this takes the ordinary connect
+      // path — nothing downstream needs to know how the wallet arrived.
+      await connectWalletInternal();
+    } catch (error) {
+      // Closing the popup is the most common outcome and is not a failure.
+      if (error.message !== "Sign-in cancelled") {
+        alert(error.message);
+      }
+    } finally {
+      setIsSigningIn(false);
+    }
+  }, [isSigningIn]);
+
   const connectWallet = debounce(async () => {
     clearWalletLoggedOut();
     if (hasWallet() && !walletOperationInProgress.current) {
@@ -1018,6 +1069,8 @@ function AppContentInner({
                   networkType === "solana" ? handleConnectMetaMask : connectWallet
                 }
                 onConnectPhantom={handleConnectPhantom}
+                onSignInWithPasskey={handleSignInWithPasskey}
+                isSigningIn={isSigningIn}
               />
             }
           />
