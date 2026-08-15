@@ -59,6 +59,9 @@ const CORE_ABI = ['function getModule(bytes32 moduleId) view returns (address)']
 // sparing most requests the lookup entirely — which matters, because the
 // wallet times the paymaster out in seconds.
 const ADDRESS_CACHE_MS = 30 * 60 * 1000;
+
+/** Base rejects batches over ten; stay under it with room to spare. */
+const MAX_RPC_BATCH = 8;
 const addressCache = new Map();
 
 const networkFor = (chainId) =>
@@ -90,6 +93,15 @@ const sponsorableAddresses = async (chainId) => {
   for (const rpcUrl of config.rpcUrls || []) {
     const provider = new ethers.JsonRpcProvider(rpcUrl, Number(chainId), {
       staticNetwork: true,
+      // Ethers batches concurrent calls into one JSON-RPC request, and Base
+      // rejects a batch over ten with "maximum 10 calls in 1 batch" — so
+      // thirteen module lookups failed together, every time.
+      //
+      // This is the middle ground the last two attempts each missed: sending
+      // them one at a time avoided the batch and spent the wallet's timeout on
+      // round trips, while sending them all at once was fast and over the
+      // limit. Bounded batches are both.
+      batchMaxCount: MAX_RPC_BATCH,
     });
     const contract = new ethers.Contract(core, CORE_ABI, provider);
     const addresses = new Set([core.toLowerCase()]);
