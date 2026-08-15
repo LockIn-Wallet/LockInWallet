@@ -54,9 +54,11 @@ const MODULE_NAMES = [
 
 const CORE_ABI = ['function getModule(bytes32 moduleId) view returns (address)'];
 
-// Cached per warm instance. Module addresses change only on an upgrade, and a
-// short life means one takes effect without a redeploy.
-const ADDRESS_CACHE_MS = 10 * 60 * 1000;
+// Cached per warm instance. Module addresses change only on an upgrade, and
+// this life is short enough that one takes effect without a redeploy while
+// sparing most requests the lookup entirely — which matters, because the
+// wallet times the paymaster out in seconds.
+const ADDRESS_CACHE_MS = 30 * 60 * 1000;
 const addressCache = new Map();
 
 const networkFor = (chainId) =>
@@ -91,30 +93,37 @@ const sponsorableAddresses = async (chainId) => {
     });
     const contract = new ethers.Contract(core, CORE_ABI, provider);
     const addresses = new Set([core.toLowerCase()]);
-    let failed = false;
 
-    // Sequential rather than thirteen at once: a public endpoint answering the
-    // first few and rate-limiting the rest is exactly how this went wrong.
-    for (const name of MODULE_NAMES) {
-      try {
-        const address = await contract.getModule(
-          ethers.keccak256(ethers.toUtf8Bytes(name))
-        );
-        if (address && address !== ethers.ZeroAddress) {
-          addresses.add(address.toLowerCase());
-        }
-      } catch (error) {
-        // Never silent. Swallowing this once left the allowlist holding only
-        // the core, so every legitimate call into a module was refused as
-        // "foreign" — a lookup failure and a module that does not exist are
-        // very different things and must not look the same.
-        console.warn(`Module lookup failed for ${name} via ${rpcUrl}: ${error.message}`);
-        failed = true;
-        break;
-      }
-    }
+    // All at once. The wallet gives a paymaster only seconds to answer, and
+    // thirteen sequential round trips on a cold start spends them — the fix
+    // for one failure mode caused another.
+    //
+    // `allSettled`, not `all`: what broke this before was not concurrency, it
+    // was treating a failed lookup as "no such module". Every rejection is
+    // still counted and still disqualifies the whole answer.
+    const results = await Promise.allSettled(
+      MODULE_NAMES.map((name) =>
+        contract.getModule(ethers.keccak256(ethers.toUtf8Bytes(name)))
+      )
+    );
 
     provider.destroy?.();
+
+    let failed = false;
+    results.forEach((result, index) => {
+      if (result.status === 'rejected') {
+        console.warn(
+          `Module lookup failed for ${MODULE_NAMES[index]} via ${rpcUrl}: ` +
+            `${result.reason?.message || result.reason}`
+        );
+        failed = true;
+        return;
+      }
+      const address = result.value;
+      if (address && address !== ethers.ZeroAddress) {
+        addresses.add(address.toLowerCase());
+      }
+    });
 
     if (!failed) {
       addressCache.set(chainId, {
