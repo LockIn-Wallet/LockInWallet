@@ -181,10 +181,14 @@ class SponsoredSigner extends AbstractSigner {
             },
           ],
           capabilities: {
-            // Optional, so a paymaster that declines — out of budget, policy
-            // rejected the call — leaves the user able to pay for themselves
-            // instead of leaving them stuck with no way through at all.
-            paymasterService: { url: paymasterUrlFor(this.chainId), optional: true },
+            // Exactly the shape Coinbase Smart Wallet documents, and no more.
+            // ERC-7677 also defines `optional: true`, which would let the user
+            // pay for themselves when a paymaster declines — but this wallet
+            // rejects the whole request with "invalid request:
+            // capabilities.paymasterService.url" when it is present, so
+            // sponsorship never happens at all. A narrower failure mode beats
+            // one that fires every time.
+            paymasterService: { url: paymasterUrlFor(this.chainId) },
           },
         },
       ],

@@ -151,11 +151,9 @@ describe('sponsorship', () => {
       expect(sent.chainId).toBe(BASE_HEX);
       expect(sent.from).toBe('0xabc');
       expect(sent.calls[0]).toMatchObject({ to: '0xdef', data: '0x1234', value: '0x0' });
-      // Optional, so a paymaster that declines does not strand the user.
-      expect(sent.capabilities.paymasterService).toEqual({
-        url: PAYMASTER_URL,
-        optional: true,
-      });
+      // Exactly what Coinbase Smart Wallet documents. An extra `optional`
+      // field — legal under ERC-7677 — makes it reject the whole request.
+      expect(sent.capabilities.paymasterService).toEqual({ url: PAYMASTER_URL });
       expect(tx.hash).toBe('0xdead');
     });
 
