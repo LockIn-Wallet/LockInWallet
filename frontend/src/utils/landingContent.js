@@ -43,9 +43,9 @@ export const PROOF_POINTS = [
   },
   {
     label: "LIVE ON",
-    value: "Optimism",
+    value: "Base & Optimism",
     accent: false,
-    note: "An Ethereum layer 2: it settles onto Ethereum itself, so it inherits Ethereum's security, but a transaction costs cents instead of dollars.",
+    note: "Both are Ethereum layer 2s: they settle onto Ethereum itself, so they inherit its security, but a transaction costs cents instead of dollars. New wallets start on Base, where a bank card can buy dollars directly.",
   },
 ];
 

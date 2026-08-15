@@ -113,13 +113,23 @@ export const randomPrizeEvent = () => {
 // Chain rollout shown on the homepage. `live` chains can be used today.
 export const SUPPORTED_CHAINS = [
   {
+    key: "base",
+    name: "Base",
+    live: true,
+    status: "Live now",
+    tagline: "Where new wallets start",
+    detail:
+      "An Ethereum layer 2, so your funds inherit Ethereum's security while a transaction costs cents and confirms in seconds. It is where a bank card can buy dollars directly, which is why new wallets begin here.",
+    bestFor: "Start here if you are new",
+  },
+  {
     key: "optimism",
     name: "Optimism",
     live: true,
     status: "Live now",
     tagline: "Fast, cheap, Ethereum-secured",
     detail:
-      "Optimism settles back to Ethereum, so your funds inherit Ethereum's security while transactions cost cents and confirm in seconds. That's what makes daily and weekly withdrawals practical.",
+      "Optimism settles back to Ethereum on the same terms, so your funds inherit Ethereum's security while transactions cost cents. Savings already here stay here — the two work identically, and you can hold a wallet on either.",
     bestFor: "Ideal for your first $10K of savings",
   },
   {
