@@ -192,7 +192,10 @@ class SponsoredSigner extends AbstractSigner {
     // rejections name a field without showing what it actually received — so
     // the only way to tell a wrong shape from a wrong value is to print what
     // we sent. Cheap, and it has already cost two wrong guesses without it.
-    console.debug('💸 wallet_sendCalls params', JSON.stringify(params, null, 2));
+    // console.info, not console.debug: Chrome files debug under "Verbose",
+    // which DevTools hides by default — so the line fires and nobody sees it,
+    // which is worse than not logging at all.
+    console.info('💸 wallet_sendCalls params', JSON.stringify(params, null, 2));
 
     const id = await this.walletProvider.request({
       method: 'wallet_sendCalls',
