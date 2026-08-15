@@ -184,6 +184,22 @@ describe('paymaster proxy', () => {
     });
   });
 
+  describe('resolving what is ours', () => {
+    it('refuses rather than sponsoring on a half-resolved allowlist', async () => {
+      // A throttled RPC used to look exactly like "this module does not
+      // exist", leaving the allowlist holding only the core — so every real
+      // call into a module was turned away as foreign. Failing loudly beats
+      // caching a wrong answer.
+      mockGetModule.mockRejectedValue(new Error('429 Too Many Requests'));
+
+      const res = makeResponse();
+      await handler(rpc(encodeExecute(MODULE)), res);
+
+      expect(res.body.error.message).toMatch(/not configured/i);
+      expect(global.fetch).not.toHaveBeenCalled();
+    });
+  });
+
   describe('when it cannot do its job', () => {
     it('reports unavailable rather than sponsoring blind', async () => {
       delete process.env.PIMLICO_API_KEY;

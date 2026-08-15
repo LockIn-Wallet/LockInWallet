@@ -80,17 +80,22 @@ const sponsorableAddresses = async (chainId) => {
 
   const [, config] = entry;
   const core = config.savingsContract;
-  const rpcUrl = config.rpcUrls?.[0];
-  if (!core || !rpcUrl) return null;
+  if (!core) return null;
 
-  const provider = new ethers.JsonRpcProvider(rpcUrl, Number(chainId), {
-    staticNetwork: true,
-  });
-  const contract = new ethers.Contract(core, CORE_ABI, provider);
+  // Every configured endpoint, not just the first. A public RPC that throttles
+  // this function is not an unusual event, and it must not be able to decide
+  // what we will sponsor.
+  for (const rpcUrl of config.rpcUrls || []) {
+    const provider = new ethers.JsonRpcProvider(rpcUrl, Number(chainId), {
+      staticNetwork: true,
+    });
+    const contract = new ethers.Contract(core, CORE_ABI, provider);
+    const addresses = new Set([core.toLowerCase()]);
+    let failed = false;
 
-  const addresses = new Set([core.toLowerCase()]);
-  await Promise.all(
-    MODULE_NAMES.map(async (name) => {
+    // Sequential rather than thirteen at once: a public endpoint answering the
+    // first few and rate-limiting the rest is exactly how this went wrong.
+    for (const name of MODULE_NAMES) {
       try {
         const address = await contract.getModule(
           ethers.keccak256(ethers.toUtf8Bytes(name))
@@ -98,15 +103,32 @@ const sponsorableAddresses = async (chainId) => {
         if (address && address !== ethers.ZeroAddress) {
           addresses.add(address.toLowerCase());
         }
-      } catch {
-        // A module absent from this deployment simply is not sponsorable.
+      } catch (error) {
+        // Never silent. Swallowing this once left the allowlist holding only
+        // the core, so every legitimate call into a module was refused as
+        // "foreign" — a lookup failure and a module that does not exist are
+        // very different things and must not look the same.
+        console.warn(`Module lookup failed for ${name} via ${rpcUrl}: ${error.message}`);
+        failed = true;
+        break;
       }
-    })
-  );
+    }
 
-  provider.destroy?.();
-  addressCache.set(chainId, { addresses, expires: Date.now() + ADDRESS_CACHE_MS });
-  return addresses;
+    provider.destroy?.();
+
+    if (!failed) {
+      addressCache.set(chainId, {
+        addresses,
+        expires: Date.now() + ADDRESS_CACHE_MS,
+      });
+      return addresses;
+    }
+  }
+
+  // A partial answer is worse than none: it would refuse real calls and cache
+  // that refusal. Say so, and let the caller report the endpoint as unavailable.
+  console.error(`Could not resolve modules for chain ${chainId} on any RPC`);
+  return null;
 };
 
 /** The contracts a userOperation would actually call. */
