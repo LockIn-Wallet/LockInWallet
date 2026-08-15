@@ -166,39 +166,37 @@ class SponsoredSigner extends AbstractSigner {
   async sendTransaction(tx) {
     const from = await this.getAddress();
 
+    const params = [
+      {
+        version: '1.0',
+        chainId: toHexChainId(this.chainId),
+        from,
+        calls: [
+          {
+            to: tx.to,
+            data: tx.data || '0x',
+            value: tx.value ? `0x${BigInt(tx.value).toString(16)}` : '0x0',
+          },
+        ],
+        capabilities: {
+          // Flat, with `url` directly on the object. Current ERC-7677 keys
+          // this by chain id, and this wallet does not: keyed, it answers
+          // "Paymaster service must have a url" — it is looking for `.url`
+          // right here and finds an object instead.
+          paymasterService: { url: paymasterUrlFor(this.chainId) },
+        },
+      },
+    ];
+
+    // The wallet validates this before calling the paymaster, and its
+    // rejections name a field without showing what it actually received — so
+    // the only way to tell a wrong shape from a wrong value is to print what
+    // we sent. Cheap, and it has already cost two wrong guesses without it.
+    console.debug('💸 wallet_sendCalls params', JSON.stringify(params, null, 2));
+
     const id = await this.walletProvider.request({
       method: 'wallet_sendCalls',
-      params: [
-        {
-          version: '1.0',
-          chainId: toHexChainId(this.chainId),
-          from,
-          calls: [
-            {
-              to: tx.to,
-              data: tx.data || '0x',
-              value: tx.value ? `0x${BigInt(tx.value).toString(16)}` : '0x0',
-            },
-          ],
-          capabilities: {
-            // Keyed by chain, which is what current ERC-7677 specifies and what
-            // this wallet accepts. The older flat shape — `{ url }` directly —
-            // is rejected before the wallet ever calls the paymaster, with
-            // "invalid request: capabilities.paymasterService.url": it reads
-            // `url` as a chain id and finds it isn't one.
-            //
-            // `optional` belongs to this shape, so it comes back: a paymaster
-            // that declines leaves the user able to pay for themselves rather
-            // than stranded.
-            paymasterService: {
-              [toHexChainId(this.chainId)]: {
-                url: paymasterUrlFor(this.chainId),
-                optional: true,
-              },
-            },
-          },
-        },
-      ],
+      params,
     });
 
     const bundleId = typeof id === 'string' ? id : id?.id;

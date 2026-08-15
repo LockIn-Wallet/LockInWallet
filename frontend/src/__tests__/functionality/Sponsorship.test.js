@@ -125,7 +125,7 @@ describe('sponsorship', () => {
       const signer = await withSponsorship(makeInnerSigner(), makeWalletProvider(), BASE_CHAIN_ID);
       await signer.sendTransaction({ to: '0xdef', data: '0x' });
 
-      expect(makeWalletProvider.lastSendCalls.capabilities.paymasterService[BASE_HEX].url).toBe(
+      expect(makeWalletProvider.lastSendCalls.capabilities.paymasterService.url).toBe(
         'https://api.example/v2/base/rpc?apikey=k'
       );
     });
@@ -151,11 +151,9 @@ describe('sponsorship', () => {
       expect(sent.chainId).toBe(BASE_HEX);
       expect(sent.from).toBe('0xabc');
       expect(sent.calls[0]).toMatchObject({ to: '0xdef', data: '0x1234', value: '0x0' });
-      // Keyed by chain. The older flat shape is rejected by the wallet before
-      // it ever calls the paymaster.
-      expect(sent.capabilities.paymasterService).toEqual({
-        [BASE_HEX]: { url: PAYMASTER_URL, optional: true },
-      });
+      // Flat. Keyed by chain, this wallet answers "Paymaster service must
+      // have a url" — it looks for `.url` directly on the object.
+      expect(sent.capabilities.paymasterService).toEqual({ url: PAYMASTER_URL });
       expect(tx.hash).toBe('0xdead');
     });
 
