@@ -11,6 +11,8 @@
 const mockGetBlockNumber = jest.fn();
 const mockGetSigner = jest.fn();
 const mockGetNetwork = jest.fn();
+// Whether a configured fallback RPC answers when probed.
+const mockFallbackBlockNumber = jest.fn();
 const jsonRpcInstances = [];
 
 jest.mock('ethers', () => {
@@ -50,7 +52,12 @@ describe('createProviderAndSigner', () => {
       __kind: 'browser',
     }));
     ethers.JsonRpcProvider.mockImplementation((url) => {
-      const instance = { url, getNetwork: mockGetNetwork, __kind: 'jsonrpc' };
+      const instance = {
+        url,
+        getNetwork: mockGetNetwork,
+        getBlockNumber: mockFallbackBlockNumber,
+        __kind: 'jsonrpc',
+      };
       jsonRpcInstances.push(instance);
       return instance;
     });
@@ -106,12 +113,23 @@ describe('createProviderAndSigner', () => {
     expect(window.ethereum.request).toHaveBeenCalledWith({ method: 'eth_chainId' });
   });
 
-  it('still explains itself when there is no fallback to reach for', async () => {
-    // A chain this deployment knows nothing about, so there is no RPC of ours
-    // to fall back to and the original message is the honest answer.
-    window.ethereum = { request: jest.fn(async () => '0x1234') };
+  it('names the network when nothing there is reachable', async () => {
+    // The reported case: a wallet pointed at Localhost with no node running.
+    // The configured fallback for that chain is the same dead endpoint, so
+    // handing it back unchecked swapped one failure for a stranger one.
+    window.ethereum = { request: jest.fn(async () => '0x7a69') }; // 31337
     mockGetBlockNumber.mockRejectedValue(new Error('throttled'));
+    mockFallbackBlockNumber.mockRejectedValue(new Error('ECONNREFUSED'));
 
-    await expect(createProviderAndSigner()).rejects.toThrow(/RPC connection is not working/);
+    await expect(createProviderAndSigner()).rejects.toThrow(/Localhost/);
+  });
+
+  it('skips a configured RPC that does not answer', async () => {
+    window.ethereum = makeWallet();
+    mockGetBlockNumber.mockRejectedValue(new Error('throttled'));
+    mockFallbackBlockNumber.mockRejectedValue(new Error('down'));
+
+    // No working endpoint anywhere, so it must not hand back a dead one.
+    await expect(createProviderAndSigner()).rejects.toThrow(/nothing there is responding/);
   });
 });

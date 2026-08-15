@@ -247,6 +247,23 @@ export const landingStyles = {
     justifyContent: "center",
   },
 
+  // The other way in, offered quietly beneath the main pair. Someone who
+  // already owns a wallet knows what this means and will look for it; someone
+  // who does not should not have a third button competing for the decision.
+  ctaAlternate: {
+    display: "block",
+    margin: `${space[4]} 0 0 0`,
+    background: "none",
+    border: "none",
+    padding: 0,
+    color: colors.text.gray,
+    fontFamily: "inherit",
+    fontSize: type.small,
+    textDecoration: "underline",
+    textUnderlineOffset: "3px",
+    cursor: "pointer",
+  },
+
   // ---- Badges -----------------------------------------------------------
   badge: {
     ...monoBase,

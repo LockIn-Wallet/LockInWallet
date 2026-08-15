@@ -17,10 +17,30 @@ import {
 } from './walletProvider';
 import { withSponsorship } from './sponsorship';
 
-/** The RPCs this app knows about for a chain, regardless of the wallet's own. */
-const configuredRpcUrls = (chainId) =>
-  Object.values(networkConfig.evm || {}).find((n) => n.chainId === chainId)
-    ?.rpcUrls || [];
+/** What this app knows about a chain, regardless of what the wallet thinks. */
+const configuredNetwork = (chainId) =>
+  Object.values(networkConfig.evm || {}).find((n) => n.chainId === chainId);
+
+/**
+ * The first configured RPC for this chain that actually answers.
+ *
+ * Every candidate is tried before being adopted. A configured endpoint is not
+ * automatically a working one — a wallet pointed at localhost with no node
+ * running fails, and so does the localhost RPC listed here, so handing it back
+ * unchecked would swap one failure for a more confusing one.
+ */
+const findWorkingRpc = async (chainId) => {
+  for (const url of configuredNetwork(chainId)?.rpcUrls || []) {
+    try {
+      const candidate = new JsonRpcProvider(url);
+      await candidate.getBlockNumber();
+      return candidate;
+    } catch {
+      // Try the next one.
+    }
+  }
+  return null;
+};
 
 /**
  * Create a provider and signer from the connected wallet.
@@ -47,19 +67,21 @@ export const createProviderAndSigner = async () => {
     // `eth_chainId` is answered by the wallet itself, so it still works when
     // the endpoint behind it does not.
     const chainId = parseInt(await wallet.request({ method: 'eth_chainId' }), 16);
-    const fallbackUrl = configuredRpcUrls(chainId)[0];
+    const fallback = await findWorkingRpc(chainId);
 
-    if (!fallbackUrl) {
+    if (!fallback) {
+      // Name the network. "Check your RPC settings" sends someone hunting
+      // through menus; "your wallet is on Localhost and nothing is running
+      // there" is the same fact with the answer attached.
+      const name = configuredNetwork(chainId)?.name || `chain ${chainId}`;
       throw new Error(
-        'Your wallet\'s RPC connection is not working. ' +
-        'Please check your wallet settings (Settings → Networks) and ensure the RPC URL for this network is valid.'
+        `Your wallet is on ${name}, and nothing there is responding. ` +
+        `Switch networks in your wallet, or start a node if you meant to use a local chain.`
       );
     }
 
-    console.warn(
-      `Wallet RPC is unhealthy (${error.message}); reading via ${fallbackUrl} instead`
-    );
-    readProvider = new JsonRpcProvider(fallbackUrl);
+    console.warn(`Wallet RPC is unhealthy (${error.message}); reading elsewhere`);
+    readProvider = fallback;
   }
 
   const signer = await browserProvider.getSigner();

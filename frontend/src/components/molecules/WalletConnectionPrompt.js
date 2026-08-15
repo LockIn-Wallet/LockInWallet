@@ -45,9 +45,12 @@ const WalletConnectionPrompt = ({
 
   return (
     <div className="landing-shell" style={landingStyles.page}>
-      <LandingNav onLaunch={onSignInWithPasskey || connectWallet} />
+      <LandingNav onLaunch={connectWallet} />
 
-      <LandingHero onLaunch={onSignInWithPasskey || connectWallet} />
+      <LandingHero
+        onLaunch={onSignInWithPasskey || connectWallet}
+        onUseOwnWallet={onSignInWithPasskey ? connectWallet : null}
+      />
 
       <ProofStrip />
 
