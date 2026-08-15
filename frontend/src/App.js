@@ -52,6 +52,7 @@ import {
   onWalletEvent,
   onWalletChanged,
   isEmbeddedWallet,
+  getInjectedProvider,
 } from "./utils/walletProvider.js";
 import {
   signInWithPasskey,
@@ -921,6 +922,20 @@ function AppContentInner({
 
   const connectWallet = debounce(async () => {
     clearWalletLoggedOut();
+
+    // This button means "my own wallet", and that is a different wallet from
+    // the one signing in provides. Without this it read `getActiveProvider()`,
+    // which prefers the signed-in wallet — so anyone who had ever signed in got
+    // the passkey popup again when they asked for their extension.
+    //
+    // Pressing it while signed in is a deliberate switch, so sign out first.
+    // Only when there is actually an extension to switch to: otherwise this
+    // would sign someone out of the one wallet they have and leave them worse
+    // off than before they pressed it.
+    if (isEmbeddedWallet() && getInjectedProvider()) {
+      await signOutOfPasskey();
+    }
+
     if (hasWallet() && !walletOperationInProgress.current) {
       walletOperationInProgress.current = true;
       try {

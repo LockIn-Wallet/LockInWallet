@@ -17,9 +17,21 @@ import {
 } from './walletProvider';
 import { withSponsorship } from './sponsorship';
 
+/** The RPCs this app knows about for a chain, regardless of the wallet's own. */
+const configuredRpcUrls = (chainId) =>
+  Object.values(networkConfig.evm || {}).find((n) => n.chainId === chainId)
+    ?.rpcUrls || [];
+
 /**
  * Create a provider and signer from the connected wallet.
- * Tests the wallet's RPC connection and throws a clear error if broken.
+ *
+ * Reads fall back to the app's own RPC when the wallet's is unhealthy. Wallets
+ * ship with shared public endpoints that rate-limit under load, and a
+ * rate-limited *read* used to abort the whole connection — so a working wallet,
+ * on the right network, with money in it, could not get past the front page
+ * because a block number lookup was throttled. Signing is unaffected either
+ * way: that goes through the wallet's own UI and its own connection.
+ *
  * @returns {{ provider, signer }} Provider and signer
  */
 export const createProviderAndSigner = async () => {
@@ -27,14 +39,27 @@ export const createProviderAndSigner = async () => {
   if (!wallet) throw new Error('No wallet connected');
   const browserProvider = new BrowserProvider(wallet);
 
-  // Test if the wallet's RPC works
+  let readProvider = browserProvider;
+
   try {
     await browserProvider.getBlockNumber();
   } catch (error) {
-    throw new Error(
-      'Your wallet\'s RPC connection is not working. ' +
-      'Please check your wallet settings (Settings → Networks) and ensure the RPC URL for this network is valid.'
+    // `eth_chainId` is answered by the wallet itself, so it still works when
+    // the endpoint behind it does not.
+    const chainId = parseInt(await wallet.request({ method: 'eth_chainId' }), 16);
+    const fallbackUrl = configuredRpcUrls(chainId)[0];
+
+    if (!fallbackUrl) {
+      throw new Error(
+        'Your wallet\'s RPC connection is not working. ' +
+        'Please check your wallet settings (Settings → Networks) and ensure the RPC URL for this network is valid.'
+      );
+    }
+
+    console.warn(
+      `Wallet RPC is unhealthy (${error.message}); reading via ${fallbackUrl} instead`
     );
+    readProvider = new JsonRpcProvider(fallbackUrl);
   }
 
   const signer = await browserProvider.getSigner();
@@ -42,10 +67,10 @@ export const createProviderAndSigner = async () => {
   // The single place a signer is made, so wrapping it here is what makes every
   // contract call in the app sponsored without one of them being rewritten.
   // Returns the plain signer whenever sponsorship is unavailable.
-  const { chainId } = await browserProvider.getNetwork();
+  const { chainId } = await readProvider.getNetwork();
   const sponsored = await withSponsorship(signer, wallet, Number(chainId));
 
-  return { provider: browserProvider, signer: sponsored };
+  return { provider: readProvider, signer: sponsored };
 };
 
 /**
