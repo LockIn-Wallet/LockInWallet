@@ -157,7 +157,7 @@ export const FOOTER_COLUMNS = [
       { label: "How it works", href: "#how-it-works" },
       { label: "Compare wallets", href: "#compare" },
       { label: "Savings visualiser", href: "/savings-visualiser", internal: true },
-      { label: "What is a passkey?", href: "/passkeys", internal: true },
+      { label: "How signing in works", href: "/signing-in", internal: true },
     ],
   },
   {

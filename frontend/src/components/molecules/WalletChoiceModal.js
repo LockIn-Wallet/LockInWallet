@@ -90,21 +90,20 @@ const WalletChoiceModal = ({
               onClick={choose(onSignIn)}
             >
               <span style={modalStyles.optionBadge}>No setup</span>
-              <span style={modalStyles.optionTitle}>Sign in with a passkey</span>
+              <span style={modalStyles.optionTitle}>Sign in</span>
               <span style={modalStyles.optionText}>
-                Creates a wallet unlocked by Face ID or your fingerprint. Nothing
-                to install and no seed phrase to keep — it follows you to your
-                other devices through the account you already sign into them
-                with. A Coinbase-operated service handles the signing, so it can
-                see your requests, but never your key or your money.
+                Creates a wallet you reach with your face, your fingerprint, or
+                a code sent to your email — whichever your device supports.
+                Nothing to install and no seed phrase to keep. Coinbase runs the
+                sign-in, so they can see your requests, but never your money.
               </span>
             </button>
           )}
 
           {canSignIn && (
-            <a href="/passkeys" style={modalStyles.footnote}>
-              New to this? What a passkey is, and how to get back in if you lose
-              your phone →
+            <a href="/signing-in" style={modalStyles.footnote}>
+              New to this? How signing in works, and how to get back in if you
+              lose your phone →
             </a>
           )}
 

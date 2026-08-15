@@ -47,13 +47,13 @@ these notes on the in-app **Governance** page before they execute.
   registry so a module upgrade cannot silently stop its calls being sponsored.
 
 ### Added
-- A passkey explainer at `/passkeys`, written for someone who has never held
-  crypto: what a passkey is, how the two halves work, how it reaches a second
-  device, and — the question everyone asks first — what to do when a phone is
-  lost. Linked from the footer and from the dialog where the choice is actually
-  made. Says plainly what signing in does not give you, including that a
-  Coinbase-operated service sees the requests. *Frontend only — no contract
-  change.*
+- A sign-in explainer at `/signing-in`, written for someone who has never held
+  crypto: what happens when you press the button, how a passkey and an email
+  code differ, using the same savings on a second device, and — the question
+  everyone asks first — what to do when a phone is lost. Linked from the footer
+  and from the dialog where the choice is made. Says plainly what signing in
+  does not give you, including that Coinbase sees the requests. *Frontend only
+  — no contract change.*
 
 ### Changed
 - Base is the default network instead of Optimism. Optimism was first because
