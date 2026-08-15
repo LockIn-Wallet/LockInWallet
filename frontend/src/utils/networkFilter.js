@@ -154,11 +154,18 @@ export const getDefaultNetwork = (networkType, { allowLocalhost = true } = {}) =
   const deployedNetworks = availableNetworks.filter(n => n.deployed);
 
   if (deployedNetworks.length > 0) {
-    // Priority order for deployed networks
-    // Optimism stays first: existing savings live there, and a default that
-    // moved would point returning users at an empty wallet
+    // Priority order for deployed networks.
+    //
+    // Base first. It was Optimism, on the grounds that existing savings lived
+    // there and a moved default would show returning users an empty wallet —
+    // but Optimism now holds no vaults and Base does, so that reasoning has
+    // reversed. Base is also where a card on-ramp can sell dollars directly,
+    // which is the path someone arriving without crypto actually takes.
+    //
+    // Nothing moves on its own: this only picks the starting network, and
+    // anyone with savings on Optimism keeps them and can switch back.
     const priorities = {
-      evm: ["optimism", "base", "ethereum"],
+      evm: ["base", "optimism", "ethereum"],
       solana: ["localhost", "mainnet", "devnet"]
     };
 
@@ -173,7 +180,7 @@ export const getDefaultNetwork = (networkType, { allowLocalhost = true } = {}) =
 
   if (availableNetworks.length > 0) return availableNetworks[0].key;
 
-  return networkType === "evm" ? "optimism" : "mainnet";
+  return networkType === "evm" ? "base" : "mainnet";
 };
 
 /**

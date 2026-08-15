@@ -46,6 +46,15 @@ these notes on the in-app **Governance** page before they execute.
   contract that is not ours, reading the allowlist from the on-chain module
   registry so a module upgrade cannot silently stop its calls being sponsored.
 
+### Changed
+- Base is the default network instead of Optimism. Optimism was first because
+  existing savings lived there and a moved default would have shown returning
+  users an empty wallet; it now holds no vaults and Base does, so that
+  reasoning has reversed. Base is also where a card on-ramp sells dollars
+  directly, which is the route someone arriving without crypto takes. Nothing
+  moves on its own — this only picks the starting network, and savings on
+  Optimism stay there and remain one switch away.
+
 ### Fixed
 - `window.ethereum` is no longer read directly from eighteen places. Which
   wallet the app is talking to now has one answer (`utils/walletProvider.js`),

@@ -22,6 +22,10 @@ export const RELEASE_NOTES = [
         text: "We pay the network fee when you sign in this way. Every action on a blockchain costs a small fee, payable only in that chain's own coin — which is an absurd thing to demand of someone who came here to save dollars. So we cover it. If you brought your own wallet, nothing changes: you pay your own fees as you always have.",
       },
       {
+        emoji: "🔵",
+        text: "New wallets start on Base rather than Optimism. It is where buying savings with a bank card actually works, so it is the sensible place to begin. If your savings are on Optimism nothing has moved — they are still there, and switching back is one tap.",
+      },
+      {
         emoji: "🔍",
         text: "Worth knowing what signing in does and does not give you. The key lives on your device and we never see it, so this is still your money and nobody else can move it. But the signing goes through a service Coinbase runs, which means they see the requests and where they come from — not your key, and not your money. If you would rather nothing passed through anyone else, bring your own wallet. That choice is on the screen where you make it, not buried here.",
       },
