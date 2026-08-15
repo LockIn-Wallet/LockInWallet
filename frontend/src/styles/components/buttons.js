@@ -1,5 +1,34 @@
 import { colors, spacing, borderRadius, fontSize, fontWeight, transitions, shadows } from '../theme.js';
 
+// Shape shared by every wallet CTA, so the accent and outlined variants differ
+// only in the two lines that actually distinguish them.
+const walletCtaBase = {
+  padding: `${spacing.xl} ${spacing.xxxxl}`,
+  borderRadius: borderRadius.md,
+  cursor: 'pointer',
+  fontSize: fontSize.lg,
+  fontWeight: fontWeight.semibold,
+  transition: transitions.normal,
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  gap: spacing.sm,
+};
+
+const walletCta = {
+  ...walletCtaBase,
+  border: 'none',
+  backgroundColor: colors.primary.main,
+  color: colors.text.onAccent,
+};
+
+const walletCtaSecondary = {
+  ...walletCtaBase,
+  border: `1px solid ${colors.border.strong}`,
+  backgroundColor: 'transparent',
+  color: colors.text.primary,
+};
+
 // Button styles extracted from App.js
 export const buttonStyles = {
   // Primary action buttons
@@ -146,37 +175,15 @@ export const buttonStyles = {
   // Wallet connection buttons. These carry the page's primary action, so they
   // take the accent rather than each wallet's brand colour — two vendor colours
   // competing at the CTA is the loudest thing on an otherwise near-neutral page.
-  metamask: {
-    padding: `${spacing.xl} ${spacing.xxxxl}`,
-    borderRadius: borderRadius.md,
-    border: 'none',
-    backgroundColor: colors.primary.main,
-    color: colors.text.onAccent,
-    cursor: 'pointer',
-    fontSize: fontSize.lg,
-    fontWeight: fontWeight.semibold,
-    transition: transitions.normal,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-  },
+  //
+  // Two treatments, defined once and named by intent: exactly one accent button
+  // per screen, everything beside it outlined. `passkey` and `metamask` are the
+  // same button because only one of them is ever the accent at a time.
+  metamask: walletCta,
+  passkey: walletCta,
 
-  phantom: {
-    padding: `${spacing.xl} ${spacing.xxxxl}`,
-    borderRadius: borderRadius.md,
-    border: `1px solid ${colors.border.strong}`,
-    backgroundColor: 'transparent',
-    color: colors.text.primary,
-    cursor: 'pointer',
-    fontSize: fontSize.lg,
-    fontWeight: fontWeight.semibold,
-    transition: transitions.normal,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-  },
+  phantom: walletCtaSecondary,
+  walletSecondary: walletCtaSecondary,
 };
 
 // Button hover effects

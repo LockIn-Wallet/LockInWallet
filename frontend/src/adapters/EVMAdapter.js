@@ -6,8 +6,9 @@ import {
   getChainId,
   getActiveProvider,
   requestAccounts,
-  supportsChainSwitching,
+  canReachChain,
 } from "../utils/walletProvider.js";
+import { createProviderAndSigner } from "../utils/providerManager.js";
 import SavingsABI from "../SavingsABI.json";
 import MockUSDT_ABI from "../MockUSDT_ABI.json";
 import ProxyDeploymentModuleABI from "../ProxyDeploymentModuleABI.json";
@@ -363,15 +364,23 @@ export class EVMAdapter extends BlockchainAdapter {
         this.provider = provider;
         this.signer = signer;
       } else {
-        // Fallback: create own provider (should rarely happen)
+        // No signer handed in — this happens on every network switch, which
+        // re-initialises the TransactionManager without one.
+        //
+        // Built through the shared helper rather than by hand, because that is
+        // where a signer gets wrapped for sponsorship. Rolling our own here
+        // produced a signer that worked for everything except the one thing
+        // that mattered: the wallet was asked to pay, silently, on any session
+        // that had switched networks.
         if (!hasWallet()) {
           throw new Error(
             "No wallet found. Sign in or connect a wallet to continue.",
           );
         }
         await requestAccounts();
-        this.provider = new ethers.BrowserProvider(getActiveProvider());
-        this.signer = await this.provider.getSigner();
+        const created = await createProviderAndSigner();
+        this.provider = created.provider;
+        this.signer = created.signer;
       }
 
       this.userAddress = await this.signer.getAddress();
@@ -408,12 +417,13 @@ export class EVMAdapter extends BlockchainAdapter {
 
   async switchNetwork(networkConfig) {
     try {
-      // An embedded wallet is created against one chain and cannot be moved;
-      // asking would throw an RPC error on a wallet already where it belongs.
-      if (!supportsChainSwitching()) {
-        this.networkConfig = networkConfig;
-        await this._initializeContracts();
-        return;
+      // A signed-in wallet can move between the chains it knows and no
+      // further, so asking for one it cannot reach only opens a popup to have
+      // it rejected.
+      if (!canReachChain(networkConfig.chainId)) {
+        throw new Error(
+          `${networkConfig.name} is not available on the wallet you signed in with`
+        );
       }
       await getActiveProvider().request({
         method: "wallet_switchEthereumChain",
@@ -1406,7 +1416,10 @@ export class EVMAdapter extends BlockchainAdapter {
     try {
       const rpcUrl = this.networkConfig.rpcUrls?.[0];
       if (!rpcUrl) return;
-      const rpc = new ethers.JsonRpcProvider(rpcUrl);
+      // Static: an unreachable dev node must not leave a retry loop behind.
+      const rpc = new ethers.JsonRpcProvider(rpcUrl, this.networkConfig.chainId, {
+        staticNetwork: true,
+      });
       await rpc.send("evm_mine", []);
     } catch {
       // Not a dev chain after all — estimation will report the real state

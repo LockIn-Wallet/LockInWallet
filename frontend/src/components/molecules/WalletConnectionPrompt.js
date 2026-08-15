@@ -32,6 +32,8 @@ const WalletConnectionPrompt = ({
   solanaWallet,
   connectWallet,
   onConnectPhantom,
+  onSignInWithPasskey,
+  isSigningIn,
 }) => {
   const isEVMDisconnected = !provider && networkType !== "solana";
   const isSolanaDisconnected =
@@ -43,9 +45,9 @@ const WalletConnectionPrompt = ({
 
   return (
     <div className="landing-shell" style={landingStyles.page}>
-      <LandingNav onLaunch={connectWallet} />
+      <LandingNav onLaunch={onSignInWithPasskey || connectWallet} />
 
-      <LandingHero onLaunch={connectWallet} />
+      <LandingHero onLaunch={onSignInWithPasskey || connectWallet} />
 
       <ProofStrip />
 
@@ -81,6 +83,8 @@ const WalletConnectionPrompt = ({
         networkType={networkType}
         connectWallet={connectWallet}
         onConnectPhantom={onConnectPhantom}
+        onSignInWithPasskey={onSignInWithPasskey}
+        isSigningIn={isSigningIn}
       />
 
       <LandingFooter />

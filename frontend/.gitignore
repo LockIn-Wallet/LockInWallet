@@ -1,0 +1,8 @@
+# Written by `vercel link`, kept and extended.
+.vercel
+
+# Local secrets. `.env.example` and `.env.server.example` are the committed
+# templates and carry no values; anything else here holds real ones.
+.env*
+!.env.example
+!.env.server.example

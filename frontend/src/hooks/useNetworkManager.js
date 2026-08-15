@@ -11,7 +11,7 @@ import {
   hasWallet,
   getChainId,
   getActiveProvider,
-  supportsChainSwitching,
+  canReachChain,
 } from "../utils/walletProvider.js";
 
 // Import network isolation utilities
@@ -260,17 +260,17 @@ export const useNetworkManager = ({
     setIsNetworkSwitching(true);
 
     try {
-      // An embedded wallet is created against one chain and has no network to
-      // change, so there is nothing to ask it for.
-      if (!supportsChainSwitching()) {
-        const onExpected = (await getChainId()) === network.chainId;
-        if (onExpected) {
-          setSelectedNetwork(networkKey);
-          setCurrentChainId(network.chainId);
-          localStorage.setItem(`preferred_evm_network`, networkKey);
-        }
+      // A signed-in wallet only knows the chains it was created against. A
+      // local dev chain is not one of them and never can be: the signer is
+      // hosted and cannot see a node running on this machine.
+      if (!canReachChain(network.chainId)) {
+        console.error(`❌ Signed-in wallet cannot reach ${network.name}`);
+        alert(
+          `${network.name} isn't available on the wallet you signed in with. ` +
+          `Connect your own wallet to use it.`
+        );
         setIsNetworkSwitching(false);
-        return onExpected;
+        return false;
       }
 
       console.log(`👛 Requesting the wallet to switch to ${network.name} (Chain ID: ${network.chainId})`);

@@ -21,6 +21,50 @@ these notes on the in-app **Governance** page before they execute.
 
 ## [Unreleased]
 
+### Added
+- Sign in with a passkey. Face ID or a fingerprint creates a wallet — no
+  extension, no seed phrase, no password — and the passkey follows the user to
+  their other devices through the Google or Apple account already signing them
+  in. It is a Coinbase Smart Wallet: an ERC-4337 account whose signer is the
+  passkey, so the signer can be rotated later without the address, balance or
+  deposit instructions changing. Pressing connect now asks which way in, but
+  only when an extension is installed and there is a real choice to make;
+  without one, signing in happens directly. *Frontend only — no contract
+  change.*
+- Sponsored network fees for signed-in users, via ERC-7677. A passkey user
+  holds no ETH, so every action would otherwise ask them for a coin they have
+  never heard of. `utils/sponsorship.js` wraps the signer at the single place
+  one is created, so every contract call is sponsored without a call site
+  changing, and returns the signer untouched whenever sponsorship is
+  unavailable — a user who brought their own ETH is on exactly the path that
+  already worked. **Requires `REACT_APP_PAYMASTER_URL` and, server-side,
+  `PIMLICO_API_KEY`; absent, everyone simply pays their own fees.**
+- `frontend/api/paymaster.js`, a proxy holding the paymaster key. A key in the
+  bundle is public to every visitor, so it lives in a server environment
+  variable instead. It also decodes what a user operation would call —
+  unwrapping `execute` and `executeBatch` — and refuses anything targeting a
+  contract that is not ours, reading the allowlist from the on-chain module
+  registry so a module upgrade cannot silently stop its calls being sponsored.
+
+### Fixed
+- `window.ethereum` is no longer read directly from eighteen places. Which
+  wallet the app is talking to now has one answer (`utils/walletProvider.js`),
+  which is what let an embedded wallet drop in at all. Found while moving it:
+  `getBestProvider` called `eth_accounts` without awaiting, so the branch never
+  ran and every read quietly fell through to the public RPC instead of the
+  connected wallet. *Frontend only — no contract change.*
+- A wallet whose RPC is rate-limited no longer blocks the whole connection.
+  Reads fall back to a configured endpoint that is probed before being adopted,
+  and when nothing on that chain answers the error names the network rather
+  than sending someone hunting through wallet settings.
+- The app no longer sends the wallet to a local chain that is not running. In
+  development it preferred localhost whenever `networkConfig` carried an
+  address, which only records that some past deploy happened — anyone cloning
+  this repo hit a dead chain they never configured.
+- Every wallet is no longer called MetaMask. The connected-wallet label reads
+  the wallet actually in use, and the copy across four screens says "wallet"
+  rather than naming an extension a signed-in user does not have.
+
 ## [0.4.0] - 2026-08-13
 
 ### Added

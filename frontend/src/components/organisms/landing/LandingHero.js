@@ -36,12 +36,13 @@ const LandingHero = ({ onLaunch }) => (
           style={landingStyles.ctaPrimary}
           onClick={onLaunch}
         >
-          Connect wallet — it&apos;s free
+          Sign in — it&apos;s free
         </button>
         <a href="#compare" style={landingStyles.ctaSecondary}>
           See the comparison
         </a>
       </div>
+
     </div>
 
     <EnforcementConsole />

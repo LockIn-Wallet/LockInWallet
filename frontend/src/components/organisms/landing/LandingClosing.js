@@ -9,7 +9,13 @@ import { landingStyles } from "../../../styles";
  * Every "Connect wallet" button on the page scrolls here, so the choice of
  * wallet is made once, in context, instead of in a dead-end alert.
  */
-const LandingClosing = ({ networkType, connectWallet, onConnectPhantom }) => (
+const LandingClosing = ({
+  networkType,
+  connectWallet,
+  onConnectPhantom,
+  onSignInWithPasskey,
+  isSigningIn,
+}) => (
   <section id="connect" style={landingStyles.closing}>
     <div style={landingStyles.closingGlow} aria-hidden="true" />
     <div style={landingStyles.closingInner}>
@@ -23,6 +29,8 @@ const LandingClosing = ({ networkType, connectWallet, onConnectPhantom }) => (
         networkType={networkType}
         connectWallet={connectWallet}
         onConnectPhantom={onConnectPhantom}
+        onSignInWithPasskey={onSignInWithPasskey}
+        isSigningIn={isSigningIn}
       />
     </div>
   </section>

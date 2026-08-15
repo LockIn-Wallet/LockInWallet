@@ -13,12 +13,61 @@ import {
   getAccounts,
   hasWallet,
   isEmbeddedWallet,
-  supportsChainSwitching,
+  canReachChain,
 } from './walletProvider';
+import { withSponsorship } from './sponsorship';
+
+/** What this app knows about a chain, regardless of what the wallet thinks. */
+const configuredNetwork = (chainId) =>
+  Object.values(networkConfig.evm || {}).find((n) => n.chainId === chainId);
+
+/**
+ * An RPC provider that stays quiet when the endpoint is down.
+ *
+ * `staticNetwork` matters more than it looks. Without it a JsonRpcProvider
+ * begins its own network-detection loop the moment it is constructed, and that
+ * loop retries every second *forever* — outliving whatever created it. One
+ * unreachable endpoint (a localhost RPC with no node behind it) was enough to
+ * fill the console and keep the main thread busy indefinitely.
+ *
+ * We already know the chain from config, so there is nothing to detect.
+ */
+export const createReadProvider = (url, chainId) =>
+  new JsonRpcProvider(url, chainId, { staticNetwork: true });
+
+/**
+ * The first configured RPC for this chain that actually answers.
+ *
+ * Every candidate is tried before being adopted. A configured endpoint is not
+ * automatically a working one — a wallet pointed at localhost with no node
+ * running fails, and so does the localhost RPC listed here, so handing it back
+ * unchecked would swap one failure for a more confusing one.
+ */
+const findWorkingRpc = async (chainId) => {
+  for (const url of configuredNetwork(chainId)?.rpcUrls || []) {
+    const candidate = createReadProvider(url, chainId);
+
+    try {
+      await candidate.getBlockNumber();
+      return candidate;
+    } catch {
+      // Explicitly torn down: an abandoned provider still holds timers.
+      candidate.destroy?.();
+    }
+  }
+  return null;
+};
 
 /**
  * Create a provider and signer from the connected wallet.
- * Tests the wallet's RPC connection and throws a clear error if broken.
+ *
+ * Reads fall back to the app's own RPC when the wallet's is unhealthy. Wallets
+ * ship with shared public endpoints that rate-limit under load, and a
+ * rate-limited *read* used to abort the whole connection — so a working wallet,
+ * on the right network, with money in it, could not get past the front page
+ * because a block number lookup was throttled. Signing is unaffected either
+ * way: that goes through the wallet's own UI and its own connection.
+ *
  * @returns {{ provider, signer }} Provider and signer
  */
 export const createProviderAndSigner = async () => {
@@ -26,18 +75,40 @@ export const createProviderAndSigner = async () => {
   if (!wallet) throw new Error('No wallet connected');
   const browserProvider = new BrowserProvider(wallet);
 
-  // Test if the wallet's RPC works
+  let readProvider = browserProvider;
+
   try {
     await browserProvider.getBlockNumber();
   } catch (error) {
-    throw new Error(
-      'Your wallet\'s RPC connection is not working. ' +
-      'Please check your wallet settings (Settings → Networks) and ensure the RPC URL for this network is valid.'
-    );
+    // `eth_chainId` is answered by the wallet itself, so it still works when
+    // the endpoint behind it does not.
+    const chainId = parseInt(await wallet.request({ method: 'eth_chainId' }), 16);
+    const fallback = await findWorkingRpc(chainId);
+
+    if (!fallback) {
+      // Name the network. "Check your RPC settings" sends someone hunting
+      // through menus; "your wallet is on Localhost and nothing is running
+      // there" is the same fact with the answer attached.
+      const name = configuredNetwork(chainId)?.name || `chain ${chainId}`;
+      throw new Error(
+        `Your wallet is on ${name}, and nothing there is responding. ` +
+        `Switch networks in your wallet, or start a node if you meant to use a local chain.`
+      );
+    }
+
+    console.warn(`Wallet RPC is unhealthy (${error.message}); reading elsewhere`);
+    readProvider = fallback;
   }
 
   const signer = await browserProvider.getSigner();
-  return { provider: browserProvider, signer };
+
+  // The single place a signer is made, so wrapping it here is what makes every
+  // contract call in the app sponsored without one of them being rewritten.
+  // Returns the plain signer whenever sponsorship is unavailable.
+  const { chainId } = await readProvider.getNetwork();
+  const sponsored = await withSponsorship(signer, wallet, Number(chainId));
+
+  return { provider: readProvider, signer: sponsored };
 };
 
 /**
@@ -88,7 +159,7 @@ export const getBestProvider = async (networkKey) => {
     const networkConf = networkConfig.evm[networkKey];
     if (networkConf?.rpcUrls?.length > 0) {
       const publicRpcUrl = networkConf.rpcUrls[0]; // Use first public RPC
-      result.provider = new JsonRpcProvider(publicRpcUrl);
+      result.provider = createReadProvider(publicRpcUrl, networkConf.chainId);
       result.source = 'public_rpc';
       result.chainId = networkConf.chainId;
       result.reliable = false;
@@ -135,7 +206,7 @@ export const verifyContractDeployment = async (contractAddress, networkKey) => {
       const networkConf = networkConfig.evm[networkKey];
       if (networkConf?.rpcUrls?.length > 0) {
         providers.push({
-          provider: new JsonRpcProvider(networkConf.rpcUrls[0]),
+          provider: createReadProvider(networkConf.rpcUrls[0], networkConf.chainId),
           source: 'public_rpc',
           chainId: networkConf.chainId,
           reliable: false
@@ -202,18 +273,14 @@ export const ensureCorrectNetwork = async (networkKey) => {
     const browserProvider = new BrowserProvider(getActiveProvider());
     const currentNetwork = await browserProvider.getNetwork();
 
-    // An embedded wallet is created against one chain and simply is on it.
-    // There is no menu to change and no prompt to show, so a mismatch here is
-    // a wallet built for a different network — say so rather than firing an
-    // RPC method it does not implement.
-    if (!supportsChainSwitching()) {
-      const onExpected = Number(currentNetwork.chainId) === expectedChainId;
-      if (!onExpected) {
-        console.error(
-          `❌ Signed-in wallet is on chain ${Number(currentNetwork.chainId)}, not ${expectedChainId}`
-        );
-      }
-      return onExpected;
+    // A signed-in wallet can move between the chains it was created against,
+    // but no further — the signer is hosted and cannot see a local dev node.
+    // Asking anyway would open a popup only to have it rejected.
+    if (!canReachChain(expectedChainId)) {
+      console.error(
+        `❌ The signed-in wallet cannot reach ${networkKey} (chain ${expectedChainId})`
+      );
+      return false;
     }
 
     if (Number(currentNetwork.chainId) === expectedChainId) {
@@ -323,7 +390,7 @@ export const testAllProviders = async (networkKey) => {
   if (networkConf?.rpcUrls?.length > 0) {
     results.publicRpc.available = true;
     try {
-      const publicProvider = new JsonRpcProvider(networkConf.rpcUrls[0]);
+      const publicProvider = createReadProvider(networkConf.rpcUrls[0], networkConf.chainId);
       const blockNumber = await publicProvider.getBlockNumber();
       results.publicRpc.working = blockNumber > 0;
 

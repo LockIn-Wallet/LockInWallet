@@ -201,7 +201,7 @@ const WithdrawalInterface = ({
       return;
     }
     if (networkType === "evm" && (!savingsContract || !selectedToken || !withdrawalAmount)) {
-      alert("Please connect your MetaMask wallet first");
+      alert("Please connect your wallet first");
       return;
     }
 
@@ -279,7 +279,7 @@ const WithdrawalInterface = ({
       return;
     }
     if (networkType === "evm" && (!savingsContract || !withdrawalAmount || !exceedingPeriod)) {
-      alert("Invalid withdrawal request - please connect MetaMask and enter withdrawal details");
+      alert("Invalid withdrawal request - please connect your wallet and enter withdrawal details");
       return;
     }
 
@@ -484,7 +484,7 @@ const WithdrawalInterface = ({
       return;
     }
     if (networkType === "evm" && (!savingsContract || !title || !address)) {
-      alert("Please fill in all fields and connect your MetaMask wallet");
+      alert("Please fill in all fields and connect your wallet");
       return;
     }
 

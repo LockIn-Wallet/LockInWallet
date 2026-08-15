@@ -52,7 +52,18 @@ import {
   onWalletEvent,
   onWalletChanged,
   isEmbeddedWallet,
+  getInjectedProvider,
+  hasInjectedWallet,
+  getInjectedWalletName,
+  getInjectedAccount,
 } from "./utils/walletProvider.js";
+import {
+  signInWithPasskey,
+  restorePasskeySession,
+  signOutOfPasskey,
+  hasPasskeySession,
+  isPasskeySupported,
+} from "./utils/passkeyWallet.js";
 import {
   createCircuitBreakers,
   safeContractCall,
@@ -83,6 +94,7 @@ import YieldSection from "./components/organisms/YieldSection.js";
 import StatusHeader from "./components/molecules/StatusHeader.js";
 import WalletConnectionPrompt from "./components/molecules/WalletConnectionPrompt.js";
 import WalletOnboardingModal from "./components/molecules/WalletOnboardingModal.js";
+import WalletChoiceModal from "./components/molecules/WalletChoiceModal.js";
 import BalanceDisplay from "./components/molecules/BalanceDisplay.js";
 import AllowanceBar from "./components/molecules/AllowanceBar.js";
 import DepositInterface from "./components/molecules/DepositInterface.js";
@@ -547,10 +559,68 @@ function AppContentInner({
   // the new provider rather than staying bound to the old one (or to nothing).
   const [walletGeneration, setWalletGeneration] = useState(0);
 
+  const [isSigningIn, setIsSigningIn] = useState(false);
+  // Asked when someone presses connect and there is a real choice: the two ways
+  // in differ in a way no button label conveys, and picking wrongly means an
+  // unexpected popup.
+  const [showWalletChoice, setShowWalletChoice] = useState(false);
+  const [detectedWallet, setDetectedWallet] = useState({ name: null, address: null });
+
   useEffect(
     () => onWalletChanged(() => setWalletGeneration((n) => n + 1)),
     []
   );
+
+  /**
+   * Leave localhost behind when nothing is running there.
+   *
+   * In development the app prefers localhost whenever the config carries an
+   * address from some past deploy — which says nothing about whether a node is
+   * up right now. When it is not, the app was asking the wallet to switch to a
+   * dead chain and then failing against it, which looks for all the world like
+   * the wallet is broken. Probe once and move to a live network instead.
+   */
+  useEffect(() => {
+    if (networkType !== "evm" || selectedNetwork !== "localhost") return;
+
+    let cancelled = false;
+    const localRpc = NETWORKS.evm?.localhost?.rpcUrls?.[0];
+    if (!localRpc) return;
+
+    (async () => {
+      try {
+        const response = await fetch(localRpc, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "eth_chainId", params: [] }),
+        });
+        if (response.ok) return; // A node is there; carry on.
+      } catch {
+        // Nothing listening — fall through and move away.
+      }
+
+      const live = getDefaultNetwork("evm", { allowLocalhost: false });
+      if (cancelled || !live || live === "localhost") return;
+
+      console.warn(`No local chain at ${localRpc}; switching to ${live}`);
+      localStorage.setItem("preferred_evm_network", live);
+      setSelectedNetwork(live);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [networkType, selectedNetwork, setSelectedNetwork]);
+
+  // Bring a returning visitor straight back to their wallet. Only ever attempted
+  // for someone who signed in on this device before — prompting for a passkey
+  // on a first visit, unasked, is a strange thing to do to a stranger.
+  useEffect(() => {
+    if (!hasPasskeySession() || isWalletLoggedOut()) return;
+    restorePasskeySession().catch((error) =>
+      console.log("Passkey session not restored:", error.message)
+    );
+  }, []);
 
   // Solana wallet state
   let solanaConnected = false;
@@ -614,6 +684,12 @@ function AppContentInner({
       networkType === "solana" ? solanaPublicKey?.toString() : evmUserAddress;
 
     markWalletLoggedOut();
+
+    // A signed-in wallet is the one thing here that can actually be told to
+    // forget the site, so say so rather than relying on the flag alone.
+    if (hasPasskeySession()) {
+      await signOutOfPasskey();
+    }
 
     if (networkType === "solana") {
       try {
@@ -742,13 +818,39 @@ function AppContentInner({
   }, []);
 
   const connectWalletInternal = async () => {
+    // The network the rest of this function works against. A signed-in wallet
+    // can move it; an extension cannot.
+    let activeNetworkKey = selectedNetwork;
+
     if (networkType === "evm") {
       const currentChain = await getChainId();
       const expectedNetwork = getCurrentNetwork(networkType, selectedNetwork);
+
       if (currentChain !== expectedNetwork.chainId) {
-        setCurrentChainId(currentChain);
-        return;
+        // An extension can be asked to switch, so a mismatch is a prompt the
+        // user still has to answer — stop and let them.
+        //
+        // A signed-in wallet cannot: it exists on one chain and has no menu to
+        // change. Refusing to continue would leave someone who just signed in
+        // sitting on the home page with no explanation and nothing to press,
+        // so follow the wallet to whichever supported chain it is on.
+        const walletNetworkKey = isEmbeddedWallet()
+          ? Object.keys(NETWORKS.evm || {}).find(
+              (key) => NETWORKS.evm[key].chainId === currentChain
+            )
+          : null;
+
+        if (!walletNetworkKey) {
+          setCurrentChainId(currentChain);
+          return;
+        }
+
+        activeNetworkKey = walletNetworkKey;
+        setSelectedNetwork(walletNetworkKey);
+        localStorage.setItem("preferred_evm_network", walletNetworkKey);
       }
+
+      setCurrentChainId(currentChain);
     }
 
     let web3Provider, web3Signer;
@@ -762,7 +864,10 @@ function AppContentInner({
       return;
     }
 
-    const currentNetwork = getCurrentNetwork(networkType, selectedNetwork);
+    // Resolved above, not read from state: setSelectedNetwork does not take
+    // effect until the next render, so `selectedNetwork` here is still the old
+    // one and would point at the wrong deployment.
+    const currentNetwork = getCurrentNetwork(networkType, activeNetworkKey);
     const contractAddress = currentNetwork.savingsContract;
 
     if (contractAddress === "0x0000000000000000000000000000000000000000") {
@@ -791,7 +896,7 @@ function AppContentInner({
 
     let txManager = null;
     try {
-      txManager = await initializeTransactionManager(networkType, selectedNetwork, {
+      txManager = await initializeTransactionManager(networkType, activeNetworkKey, {
         provider: web3Provider,
         signer: web3Signer,
       });
@@ -839,8 +944,85 @@ function AppContentInner({
     }
   }, 2000);
 
+  /**
+   * Sign in with a passkey — Face ID, and they have a wallet.
+   *
+   * Not debounced like `connectWallet`: this opens a popup that the browser
+   * only allows because a person just clicked, and a debounce would break the
+   * chain between the click and the popup.
+   */
+  const handleSignInWithPasskey = useCallback(async () => {
+    if (isSigningIn) return;
+    setIsSigningIn(true);
+    clearWalletLoggedOut();
+
+    try {
+      await signInWithPasskey();
+      // The wallet is registered by now, so this takes the ordinary connect
+      // path — nothing downstream needs to know how the wallet arrived.
+      await connectWalletInternal();
+    } catch (error) {
+      // Closing the popup is the most common outcome and is not a failure.
+      if (error.message !== "Sign-in cancelled") {
+        alert(error.message);
+      }
+    } finally {
+      setIsSigningIn(false);
+    }
+  }, [isSigningIn]);
+
+  /**
+   * What every "connect" button does.
+   *
+   * Only asks when both ways in actually lead somewhere. Most visitors have no
+   * extension installed, and for them the second option leads nowhere — so a
+   * dialog would be a question with one real answer, standing between them and
+   * the thing they pressed. They go straight to signing in, exactly as before
+   * the dialog existed.
+   *
+   * When an extension IS present the question is genuine, and the dialog names
+   * the wallet and the account it has already shared, so choosing does not mean
+   * guessing which one the button will open.
+   */
+  const openWalletChoice = useCallback(async () => {
+    if (!hasInjectedWallet()) {
+      if (isPasskeySupported()) {
+        handleSignInWithPasskey();
+      } else {
+        // No wallet and no passkey support: nothing to offer but the explainer.
+        setShowWalletOnboarding(true);
+      }
+      return;
+    }
+
+    if (!isPasskeySupported()) {
+      connectWallet();
+      return;
+    }
+
+    setDetectedWallet({
+      name: getInjectedWalletName(),
+      address: await getInjectedAccount(),
+    });
+    setShowWalletChoice(true);
+  }, [handleSignInWithPasskey]);
+
   const connectWallet = debounce(async () => {
     clearWalletLoggedOut();
+
+    // This button means "my own wallet", and that is a different wallet from
+    // the one signing in provides. Without this it read `getActiveProvider()`,
+    // which prefers the signed-in wallet — so anyone who had ever signed in got
+    // the passkey popup again when they asked for their extension.
+    //
+    // Pressing it while signed in is a deliberate switch, so sign out first.
+    // Only when there is actually an extension to switch to: otherwise this
+    // would sign someone out of the one wallet they have and leave them worse
+    // off than before they pressed it.
+    if (isEmbeddedWallet() && getInjectedProvider()) {
+      await signOutOfPasskey();
+    }
+
     if (hasWallet() && !walletOperationInProgress.current) {
       walletOperationInProgress.current = true;
       try {
@@ -930,6 +1112,16 @@ function AppContentInner({
           : styles.app.container
       }
     >
+      <WalletChoiceModal
+        open={showWalletChoice}
+        onClose={() => setShowWalletChoice(false)}
+        onSignIn={handleSignInWithPasskey}
+        onUseOwnWallet={connectWallet}
+        canSignIn={isPasskeySupported()}
+        walletName={detectedWallet.name}
+        walletAddress={detectedWallet.address}
+      />
+
       <WalletOnboardingModal
         open={showWalletOnboarding}
         onClose={() => setShowWalletOnboarding(false)}
@@ -1018,6 +1210,8 @@ function AppContentInner({
                   networkType === "solana" ? handleConnectMetaMask : connectWallet
                 }
                 onConnectPhantom={handleConnectPhantom}
+                onSignInWithPasskey={openWalletChoice}
+                isSigningIn={isSigningIn}
               />
             }
           />
