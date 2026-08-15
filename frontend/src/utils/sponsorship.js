@@ -59,8 +59,28 @@ const paymasterUrlFor = (chainId) => {
   return new URL(url, window.location.origin).toString();
 };
 
-// EIP-5792 bundle status. 1xx pending, 2xx confirmed, everything above failed.
-const STATUS_PENDING = 200;
+// EIP-5792 reports bundle status two ways depending on its version: the newer
+// spec uses numbers (1xx pending, 2xx confirmed, above that failed) and 1.0 —
+// which is the version we send, and what this wallet answers in — uses strings.
+// Reading only the numbers meant a confirmed bundle parsed as NaN, never
+// matched, and timed out: the transaction had landed, and we reported failure.
+const CONFIRMED = 200;
+const STRING_STATUS = {
+  CONFIRMED: 200,
+  PENDING: 100,
+  FAILED: 500,
+};
+
+const statusCodeOf = (status) => {
+  if (typeof status === 'string') {
+    const known = STRING_STATUS[status.toUpperCase()];
+    // An unrecognised string is not progress; keep waiting rather than
+    // declaring either outcome.
+    return known ?? 100;
+  }
+  const numeric = Number(status);
+  return Number.isFinite(numeric) ? numeric : 100;
+};
 const POLL_INTERVAL_MS = 1000;
 const POLL_TIMEOUT_MS = 90_000;
 
@@ -111,9 +131,9 @@ const waitForBundle = async (provider, id) => {
       params: [id],
     });
 
-    const status = Number(result?.status);
+    const status = statusCodeOf(result?.status);
 
-    if (status >= STATUS_PENDING) {
+    if (status >= CONFIRMED) {
       const receipt = result?.receipts?.[0];
       if (status > 299 || receipt?.status === '0x0') {
         throw new Error(`Sponsored transaction failed (status ${status})`);
@@ -187,15 +207,6 @@ class SponsoredSigner extends AbstractSigner {
         },
       },
     ];
-
-    // The wallet validates this before calling the paymaster, and its
-    // rejections name a field without showing what it actually received — so
-    // the only way to tell a wrong shape from a wrong value is to print what
-    // we sent. Cheap, and it has already cost two wrong guesses without it.
-    // console.info, not console.debug: Chrome files debug under "Verbose",
-    // which DevTools hides by default — so the line fires and nobody sees it,
-    // which is worse than not logging at all.
-    console.info('💸 wallet_sendCalls params', JSON.stringify(params, null, 2));
 
     const id = await this.walletProvider.request({
       method: 'wallet_sendCalls',

@@ -170,6 +170,35 @@ describe('sponsorship', () => {
       expect(receipt.blockNumber).toBe(16);
     });
 
+    it('recognises the string statuses this wallet actually returns', async () => {
+      // EIP-5792 1.0 — the version we send — answers "PENDING"/"CONFIRMED"
+      // rather than 100/200. Reading only numbers made a confirmed bundle
+      // parse as NaN and time out, reporting failure on a landed transaction.
+      const wallet = makeWalletProvider({
+        statuses: [
+          { status: 'PENDING' },
+          { status: 'CONFIRMED', receipts: [{ transactionHash: '0xdead', status: '0x1' }] },
+        ],
+      });
+      const signer = await withSponsorship(makeInnerSigner(), wallet, BASE_CHAIN_ID);
+
+      const tx = await signer.sendTransaction({ to: '0xdef', data: '0x' });
+      expect(tx.hash).toBe('0xdead');
+    });
+
+    it('keeps waiting on a status it does not recognise', async () => {
+      // Neither success nor failure should be inferred from an unknown word.
+      const wallet = makeWalletProvider({
+        statuses: [
+          { status: 'SOMETHING_NEW' },
+          { status: 'CONFIRMED', receipts: [{ transactionHash: '0xdead', status: '0x1' }] },
+        ],
+      });
+      const signer = await withSponsorship(makeInnerSigner(), wallet, BASE_CHAIN_ID);
+
+      expect((await signer.sendTransaction({ to: '0xdef', data: '0x' })).hash).toBe('0xdead');
+    });
+
     it('waits for a bundle that is still pending', async () => {
       const wallet = makeWalletProvider({
         statuses: [
