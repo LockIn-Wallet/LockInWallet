@@ -53,6 +53,9 @@ import {
   onWalletChanged,
   isEmbeddedWallet,
   getInjectedProvider,
+  hasInjectedWallet,
+  getInjectedWalletName,
+  getInjectedAccount,
 } from "./utils/walletProvider.js";
 import {
   signInWithPasskey,
@@ -557,9 +560,11 @@ function AppContentInner({
   const [walletGeneration, setWalletGeneration] = useState(0);
 
   const [isSigningIn, setIsSigningIn] = useState(false);
-  // Asked once, when someone presses connect: the two ways in differ in a way
-  // no button label conveys, and picking wrongly means an unexpected popup.
+  // Asked when someone presses connect and there is a real choice: the two ways
+  // in differ in a way no button label conveys, and picking wrongly means an
+  // unexpected popup.
   const [showWalletChoice, setShowWalletChoice] = useState(false);
+  const [detectedWallet, setDetectedWallet] = useState({ name: null, address: null });
 
   useEffect(
     () => onWalletChanged(() => setWalletGeneration((n) => n + 1)),
@@ -967,21 +972,40 @@ function AppContentInner({
   }, [isSigningIn]);
 
   /**
-   * What every "connect" button does: offer the choice.
+   * What every "connect" button does.
    *
-   * Both ways in lead somewhere different, and the difference is not visible
-   * from a label — so pressing connect used to open whichever one the code
-   * happened to prefer. Where there is only one way in, there is nothing to ask
-   * about and it goes straight there.
+   * Only asks when both ways in actually lead somewhere. Most visitors have no
+   * extension installed, and for them the second option leads nowhere — so a
+   * dialog would be a question with one real answer, standing between them and
+   * the thing they pressed. They go straight to signing in, exactly as before
+   * the dialog existed.
+   *
+   * When an extension IS present the question is genuine, and the dialog names
+   * the wallet and the account it has already shared, so choosing does not mean
+   * guessing which one the button will open.
    */
-  const openWalletChoice = useCallback(() => {
-    const evmAvailable = getAvailableNetworks("evm").some((n) => n.deployed || n.isLocal);
-    if (isPasskeySupported() && evmAvailable) {
-      setShowWalletChoice(true);
+  const openWalletChoice = useCallback(async () => {
+    if (!hasInjectedWallet()) {
+      if (isPasskeySupported()) {
+        handleSignInWithPasskey();
+      } else {
+        // No wallet and no passkey support: nothing to offer but the explainer.
+        setShowWalletOnboarding(true);
+      }
       return;
     }
-    connectWallet();
-  }, []);
+
+    if (!isPasskeySupported()) {
+      connectWallet();
+      return;
+    }
+
+    setDetectedWallet({
+      name: getInjectedWalletName(),
+      address: await getInjectedAccount(),
+    });
+    setShowWalletChoice(true);
+  }, [handleSignInWithPasskey]);
 
   const connectWallet = debounce(async () => {
     clearWalletLoggedOut();
@@ -1094,6 +1118,8 @@ function AppContentInner({
         onSignIn={handleSignInWithPasskey}
         onUseOwnWallet={connectWallet}
         canSignIn={isPasskeySupported()}
+        walletName={detectedWallet.name}
+        walletAddress={detectedWallet.address}
       />
 
       <WalletOnboardingModal

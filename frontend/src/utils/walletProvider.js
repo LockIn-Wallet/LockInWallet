@@ -49,6 +49,45 @@ export const getActiveProvider = () => embeddedProvider || getInjectedProvider()
 
 export const hasWallet = () => !!getActiveProvider();
 
+/** Whether the visitor has a browser wallet installed at all. */
+export const hasInjectedWallet = () => !!getInjectedProvider();
+
+/**
+ * What to call the installed extension.
+ *
+ * Only used to label a button, so an unrecognised wallet gets a generic name
+ * rather than a wrong one.
+ */
+export const getInjectedWalletName = () => {
+  const provider = getInjectedProvider();
+  if (!provider) return null;
+  if (provider.isMetaMask) return 'MetaMask';
+  if (provider.isCoinbaseWallet) return 'Coinbase Wallet';
+  if (provider.isRabby) return 'Rabby';
+  if (provider.isBraveWallet) return 'Brave Wallet';
+  return 'your wallet';
+};
+
+/**
+ * The account the extension has already shared with this site, if any.
+ *
+ * Deliberately `eth_accounts` rather than `eth_requestAccounts`: this runs to
+ * decorate a dialog, and asking for permission to draw a label would be a
+ * prompt nobody asked for. An empty result simply means "installed, not
+ * connected here", which is worth showing differently from "not installed".
+ */
+export const getInjectedAccount = async () => {
+  const provider = getInjectedProvider();
+  if (!provider?.request) return null;
+
+  try {
+    const accounts = await provider.request({ method: 'eth_accounts' });
+    return accounts?.[0] || null;
+  } catch {
+    return null;
+  }
+};
+
 /** True when the active wallet came from signing in rather than an extension. */
 export const isEmbeddedWallet = () => !!embeddedProvider;
 

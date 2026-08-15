@@ -21,6 +21,9 @@ const {
   getChainId,
   requestAccounts,
   walletRequest,
+  hasInjectedWallet,
+  getInjectedWalletName,
+  getInjectedAccount,
 } = walletProvider;
 
 /** A minimal EIP-1193 provider. */
@@ -156,6 +159,54 @@ describe('walletProvider', () => {
       unsubscribe();
       setEmbeddedProvider(makeProvider());
       expect(seen).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  describe('recognising an installed extension', () => {
+    // Whether one is installed decides whether the app asks which wallet to
+    // use. With none, the second option leads nowhere and the question is a
+    // detour between someone and the button they pressed.
+    it('reports none when nothing is installed', async () => {
+      expect(hasInjectedWallet()).toBe(false);
+      expect(getInjectedWalletName()).toBeNull();
+      expect(await getInjectedAccount()).toBeNull();
+    });
+
+    it('names the extension it found', () => {
+      window.ethereum = { ...makeProvider(), isMetaMask: true };
+      expect(hasInjectedWallet()).toBe(true);
+      expect(getInjectedWalletName()).toBe('MetaMask');
+    });
+
+    it('gives an unfamiliar wallet a generic name rather than a wrong one', () => {
+      window.ethereum = makeProvider();
+      expect(getInjectedWalletName()).toBe('your wallet');
+    });
+
+    it('reads the account already shared with this site', async () => {
+      window.ethereum = makeProvider({ eth_accounts: ['0xabc'] });
+      expect(await getInjectedAccount()).toBe('0xabc');
+    });
+
+    it('asks for no permission just to draw a label', async () => {
+      // eth_accounts, never eth_requestAccounts — prompting to decorate a
+      // dialog would be a popup nobody asked for.
+      const injected = makeProvider({ eth_accounts: [] });
+      window.ethereum = injected;
+
+      expect(await getInjectedAccount()).toBeNull();
+      expect(injected.request).toHaveBeenCalledWith({ method: 'eth_accounts' });
+      expect(injected.request).not.toHaveBeenCalledWith({ method: 'eth_requestAccounts' });
+    });
+
+    it('still reports the extension when a signed-in wallet is active', async () => {
+      // The dialog is about choosing between them, so the one not currently
+      // active still has to be visible.
+      window.ethereum = { ...makeProvider({ eth_accounts: ['0xabc'] }), isMetaMask: true };
+      setEmbeddedProvider(makeProvider());
+
+      expect(hasInjectedWallet()).toBe(true);
+      expect(await getInjectedAccount()).toBe('0xabc');
     });
   });
 
