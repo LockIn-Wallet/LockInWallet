@@ -455,7 +455,7 @@ const SpendingLimitsSetup = ({
       return;
     }
     if (networkType === "evm" && !savingsContract) {
-      alert("Please connect your MetaMask wallet first");
+      alert("Please connect your wallet first");
       return;
     }
 

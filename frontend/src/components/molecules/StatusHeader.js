@@ -220,7 +220,7 @@ const StatusHeader = ({
                       );
                     } else {
                       alert(
-                        `Please manually switch MetaMask to ${
+                        `Please manually switch your wallet to ${
                           getNetworkInfo().name
                         } network`,
                       );

@@ -249,11 +249,11 @@ export const NETWORK_ERRORS = {
     solana: 'Solana programs are not deployed. Please run: npm run solana:deploy-reliable'
   },
   WALLET_NOT_INSTALLED: {
-    evm: 'MetaMask is not installed. Please install MetaMask browser extension.',
+    evm: 'No wallet available. Sign in, or install a browser wallet extension.',
     solana: 'Solana wallet is not installed. Please install Phantom or another Solana wallet.'
   },
   WRONG_NETWORK: {
-    evm: 'Please switch to the correct Ethereum network in MetaMask.',
+    evm: 'Please switch to the correct network in your wallet.',
     solana: 'Please check your Solana network connection.'
   }
 };

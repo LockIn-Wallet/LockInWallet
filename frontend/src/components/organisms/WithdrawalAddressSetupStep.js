@@ -122,7 +122,7 @@ const WithdrawalAddressSetupStep = ({
       networkType === "evm" &&
       (!transactionManager || !title || !address)
     ) {
-      alert("Please fill in all fields and connect your MetaMask wallet");
+      alert("Please fill in all fields and connect your wallet");
       return;
     }
 

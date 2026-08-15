@@ -6,10 +6,9 @@ import { homeStyles, buttonStyles, buttonHoverEffects } from "../../styles";
 
 import { getAvailableNetworks } from "../../utils/networkFilter.js";
 import { isSolanaEnabled } from "../../utils/featureFlags.js";
-import { hasWallet } from "../../utils/walletProvider.js";
+import { getInjectedWalletName } from "../../utils/walletProvider.js";
 import { isPasskeySupported } from "../../utils/passkeyWallet.js";
 
-const hasEvmWallet = () => hasWallet();
 const hasPhantomInstalled = () =>
   !!(window.phantom?.solana || window.solana?.isPhantom);
 
@@ -19,8 +18,8 @@ const hasSolanaNetworks = () =>
   getAvailableNetworks("solana").some((n) => n.deployed || n.isLocal);
 
 /**
- * WalletConnectButtons - the wallet connection CTA group (MetaMask /
- * Phantom / Solana wallet modal), reusable anywhere on the homepage.
+ * WalletConnectButtons - the wallet connection CTA group, reusable anywhere on
+ * the homepage.
  */
 const WalletConnectButtons = ({
   networkType,
@@ -29,7 +28,9 @@ const WalletConnectButtons = ({
   onSignInWithPasskey,
   isSigningIn = false,
 }) => {
-  const metaMaskInstalled = hasEvmWallet();
+  // Name the extension that is actually installed rather than guessing
+  // MetaMask — someone running Rabby was being offered a wallet they do not have.
+  const injectedName = getInjectedWalletName();
   const canUsePhantom = hasPhantomInstalled() && hasSolanaNetworks();
   const isInSolanaMode = networkType === "solana" && isSolanaEnabled();
 
@@ -75,8 +76,8 @@ const WalletConnectButtons = ({
     >
       {canSignIn
         ? "Use your own wallet"
-        : metaMaskInstalled
-          ? "Connect MetaMask"
+        : injectedName
+          ? `Connect ${injectedName}`
           : "Connect wallet"}
     </button>
   );
