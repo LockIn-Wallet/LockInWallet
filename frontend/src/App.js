@@ -766,13 +766,39 @@ function AppContentInner({
   }, []);
 
   const connectWalletInternal = async () => {
+    // The network the rest of this function works against. A signed-in wallet
+    // can move it; an extension cannot.
+    let activeNetworkKey = selectedNetwork;
+
     if (networkType === "evm") {
       const currentChain = await getChainId();
       const expectedNetwork = getCurrentNetwork(networkType, selectedNetwork);
+
       if (currentChain !== expectedNetwork.chainId) {
-        setCurrentChainId(currentChain);
-        return;
+        // An extension can be asked to switch, so a mismatch is a prompt the
+        // user still has to answer — stop and let them.
+        //
+        // A signed-in wallet cannot: it exists on one chain and has no menu to
+        // change. Refusing to continue would leave someone who just signed in
+        // sitting on the home page with no explanation and nothing to press,
+        // so follow the wallet to whichever supported chain it is on.
+        const walletNetworkKey = isEmbeddedWallet()
+          ? Object.keys(NETWORKS.evm || {}).find(
+              (key) => NETWORKS.evm[key].chainId === currentChain
+            )
+          : null;
+
+        if (!walletNetworkKey) {
+          setCurrentChainId(currentChain);
+          return;
+        }
+
+        activeNetworkKey = walletNetworkKey;
+        setSelectedNetwork(walletNetworkKey);
+        localStorage.setItem("preferred_evm_network", walletNetworkKey);
       }
+
+      setCurrentChainId(currentChain);
     }
 
     let web3Provider, web3Signer;
@@ -786,7 +812,10 @@ function AppContentInner({
       return;
     }
 
-    const currentNetwork = getCurrentNetwork(networkType, selectedNetwork);
+    // Resolved above, not read from state: setSelectedNetwork does not take
+    // effect until the next render, so `selectedNetwork` here is still the old
+    // one and would point at the wrong deployment.
+    const currentNetwork = getCurrentNetwork(networkType, activeNetworkKey);
     const contractAddress = currentNetwork.savingsContract;
 
     if (contractAddress === "0x0000000000000000000000000000000000000000") {
@@ -815,7 +844,7 @@ function AppContentInner({
 
     let txManager = null;
     try {
-      txManager = await initializeTransactionManager(networkType, selectedNetwork, {
+      txManager = await initializeTransactionManager(networkType, activeNetworkKey, {
         provider: web3Provider,
         signer: web3Signer,
       });

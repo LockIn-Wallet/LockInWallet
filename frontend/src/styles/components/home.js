@@ -224,6 +224,17 @@ export const homeStyles = {
     maxWidth: "620px",
   },
 
+  // Sits under the connect buttons and says what actually separates them, so
+  // the choice is legible without a second screen to explain it.
+  connectNote: {
+    fontSize: type.small,
+    color: colors.text.gray,
+    textAlign: "center",
+    lineHeight: 1.6,
+    margin: `${space[4]} auto 0 auto`,
+    maxWidth: "440px",
+  },
+
   // Prize cards
   prizeGrid: {
     display: "flex",

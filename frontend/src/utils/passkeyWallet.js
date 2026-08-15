@@ -28,16 +28,30 @@ import { setEmbeddedProvider, getActiveProvider } from './walletProvider';
 const APP_NAME = 'LockIn Wallet';
 const SESSION_KEY = 'passkey_wallet_connected';
 
+const NO_CONTRACT = '0x0000000000000000000000000000000000000000';
+
 /**
  * Chains the wallet is offered on.
  *
  * Read from the deployment config rather than hardcoded, so a chain added
- * there is offered here automatically. Localhost is excluded: a smart wallet
- * is a hosted signer that cannot reach a chain running on your laptop.
+ * there is offered here automatically. Two exclusions:
+ *
+ * Localhost, because a smart wallet is a hosted signer and cannot reach a
+ * chain running on your laptop.
+ *
+ * And any chain with no contract deployed — Ethereum mainnet is listed for
+ * completeness but has none. Offering it would let someone sign in onto a
+ * chain where nothing they came here to do exists.
  */
 const supportedChainIds = () =>
   Object.entries(networkConfig.evm || {})
-    .filter(([key, config]) => key !== 'localhost' && config.chainId)
+    .filter(
+      ([key, config]) =>
+        key !== 'localhost' &&
+        config.chainId &&
+        config.savingsContract &&
+        config.savingsContract !== NO_CONTRACT
+    )
     .map(([, config]) => config.chainId);
 
 let sdk = null;

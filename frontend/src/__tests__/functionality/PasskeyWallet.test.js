@@ -67,16 +67,20 @@ describe('passkeyWallet', () => {
       expect(hasPasskeySession()).toBe(true);
     });
 
-    it('offers the wallet only on chains the deployment is on', () => {
+    it('offers the wallet only on chains the deployment is on', async () => {
       mockProvider.request.mockResolvedValue(['0xabc']);
-      return signInWithPasskey().then(() => {
-        const config = mockCreateSDK.mock.calls[0][0];
-        // A smart wallet is a hosted signer and cannot reach a chain running
-        // on someone's laptop.
-        expect(config.appChainIds).toEqual(expect.arrayContaining([10, 8453]));
-        expect(config.appChainIds).not.toContain(31337);
-        expect(config.preference).toEqual({ options: 'smartWalletOnly' });
-      });
+      await signInWithPasskey();
+
+      const config = mockCreateSDK.mock.calls[0][0];
+      expect(config.appChainIds).toEqual(expect.arrayContaining([10, 8453]));
+      // A smart wallet is a hosted signer and cannot reach a chain running on
+      // someone's laptop.
+      expect(config.appChainIds).not.toContain(31337);
+      // Ethereum mainnet is in the config for completeness but has no contract
+      // deployed. Signing in there would land someone on a chain where nothing
+      // they came for exists.
+      expect(config.appChainIds).not.toContain(1);
+      expect(config.preference).toEqual({ options: 'smartWalletOnly' });
     });
 
     it('leaves no wallet behind when sign-in fails', async () => {

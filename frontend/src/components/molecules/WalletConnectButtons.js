@@ -50,6 +50,19 @@ const WalletConnectButtons = ({
     </button>
   );
 
+  // Says what actually separates the two, without overclaiming. Signing in is
+  // not anonymous — the key never leaves the device, but a Coinbase-operated
+  // service sees the requests and the IP behind them. Bringing your own wallet
+  // is what puts you in control of that, and this page already learned once
+  // that a privacy claim it cannot back does more harm than no claim at all.
+  const connectNote = canSignIn && (
+    <p style={homeStyles.connectNote}>
+      Signing in creates a wallet held by a passkey on your device — no
+      extension, no seed phrase. Your own wallet keeps every request between you
+      and the network.
+    </p>
+  );
+
   // Without the extension the button still shows — pressing it opens the
   // onboarding dialog. Hiding it left first-time visitors on a page whose
   // whole purpose is the connect step, with nothing to press.
@@ -60,7 +73,11 @@ const WalletConnectButtons = ({
       onMouseEnter={canSignIn ? buttonHoverEffects.phantomHover : buttonHoverEffects.metamaskHover}
       onMouseLeave={canSignIn ? buttonHoverEffects.phantomReset : buttonHoverEffects.metamaskReset}
     >
-      {metaMaskInstalled ? "Connect MetaMask" : "Connect wallet"}
+      {canSignIn
+        ? "Use your own wallet"
+        : metaMaskInstalled
+          ? "Connect MetaMask"
+          : "Connect wallet"}
     </button>
   );
 
@@ -75,6 +92,7 @@ const WalletConnectButtons = ({
         <>
           {passkeyButton}
           {metaMaskButton}
+          {connectNote}
           {canUsePhantom && onConnectPhantom && (
             <button
               onClick={onConnectPhantom}
