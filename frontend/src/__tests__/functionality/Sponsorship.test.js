@@ -125,7 +125,7 @@ describe('sponsorship', () => {
       const signer = await withSponsorship(makeInnerSigner(), makeWalletProvider(), BASE_CHAIN_ID);
       await signer.sendTransaction({ to: '0xdef', data: '0x' });
 
-      expect(makeWalletProvider.lastSendCalls.capabilities.paymasterService.url).toBe(
+      expect(makeWalletProvider.lastSendCalls.capabilities.paymasterService[BASE_HEX].url).toBe(
         'https://api.example/v2/base/rpc?apikey=k'
       );
     });
@@ -151,9 +151,11 @@ describe('sponsorship', () => {
       expect(sent.chainId).toBe(BASE_HEX);
       expect(sent.from).toBe('0xabc');
       expect(sent.calls[0]).toMatchObject({ to: '0xdef', data: '0x1234', value: '0x0' });
-      // Exactly what Coinbase Smart Wallet documents. An extra `optional`
-      // field — legal under ERC-7677 — makes it reject the whole request.
-      expect(sent.capabilities.paymasterService).toEqual({ url: PAYMASTER_URL });
+      // Keyed by chain. The older flat shape is rejected by the wallet before
+      // it ever calls the paymaster.
+      expect(sent.capabilities.paymasterService).toEqual({
+        [BASE_HEX]: { url: PAYMASTER_URL, optional: true },
+      });
       expect(tx.hash).toBe('0xdead');
     });
 
