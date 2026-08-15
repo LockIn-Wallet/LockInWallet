@@ -461,6 +461,62 @@ export const homeStyles = {
     margin: 0,
   },
 
+  // A card that carries a heading as well as a line of text, for explanations
+  // that need to be scanned before they are read.
+  stepCardTitle: {
+    fontSize: fontSize.normal,
+    fontWeight: fontWeight.semibold,
+    color: colors.text.primary,
+    margin: `0 0 ${spacing.sm} 0`,
+  },
+
+  // An ordered explanation where the order is the point — each step only makes
+  // sense after the one above it.
+  orderedList: {
+    listStyle: "none",
+    counterReset: "ordered-step",
+    padding: 0,
+    margin: `0 0 ${spacing.xxl} 0`,
+    display: "flex",
+    flexDirection: "column",
+    gap: spacing.lg,
+  },
+
+  orderedItem: {
+    counterIncrement: "ordered-step",
+    display: "flex",
+    alignItems: "flex-start",
+    gap: spacing.lg,
+  },
+
+  orderedNumber: {
+    flexShrink: 0,
+    width: "28px",
+    height: "28px",
+    borderRadius: borderRadius.pill,
+    border: `1px solid ${colors.primary.main}`,
+    color: colors.primary.main,
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.semibold,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  orderedTitle: {
+    fontSize: fontSize.normal,
+    fontWeight: fontWeight.semibold,
+    color: colors.text.primary,
+    margin: `0 0 ${spacing.xs} 0`,
+  },
+
+  orderedText: {
+    fontSize: fontSize.sm,
+    color: colors.text.light,
+    lineHeight: 1.6,
+    margin: 0,
+  },
+
   // Time-lock explainer — shared block heading
   blockTitle: {
     fontSize: type.h4,

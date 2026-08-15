@@ -101,6 +101,13 @@ const WalletChoiceModal = ({
             </button>
           )}
 
+          {canSignIn && (
+            <a href="/passkeys" style={modalStyles.footnote}>
+              New to this? What a passkey is, and how to get back in if you lose
+              your phone →
+            </a>
+          )}
+
           <button
             type="button"
             style={modalStyles.option}

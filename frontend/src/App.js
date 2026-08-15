@@ -41,6 +41,7 @@ import { isSolanaEnabled, isPrizePoolEnabled, isYieldEnabled } from "./utils/fea
 import { createEmptyLimitEdits } from "./utils/spendingPeriods.js";
 import { initAnalytics } from "./utils/analytics.js";
 import { PRIZE_SAVINGS_PATH } from "./utils/prizeSavingsContent.js";
+import { PASSKEY_PATH } from "./utils/passkeyContent.js";
 import {
   ensureCorrectNetwork,
   createProviderAndSigner,
@@ -119,8 +120,12 @@ const SavingsVisualiser = lazy(() =>
 
 const PrizeSavings = lazy(() => import("./components/pages/PrizeSavings.js"));
 
+// Explaining passkeys is reading, not wallet work — it must load for someone
+// deciding whether to sign in at all, so it never waits on a wallet.
+const PasskeyGuide = lazy(() => import("./components/pages/PasskeyGuide.js"));
+
 // Content pages that need the full width — the 800px app column cramps them
-const WIDE_ROUTES = ["/savings-visualiser", PRIZE_SAVINGS_PATH];
+const WIDE_ROUTES = ["/savings-visualiser", PRIZE_SAVINGS_PATH, PASSKEY_PATH];
 
 function MainFlow({
   transactionManager,
@@ -1179,6 +1184,16 @@ function AppContentInner({
           element={
             <Suspense fallback={<div />}>
               <SavingsVisualiser />
+            </Suspense>
+          }
+        />
+        {/* Explaining passkeys has to be readable by someone who has not
+            connected anything and is deciding whether to. */}
+        <Route
+          path={PASSKEY_PATH}
+          element={
+            <Suspense fallback={<div />}>
+              <PasskeyGuide />
             </Suspense>
           }
         />

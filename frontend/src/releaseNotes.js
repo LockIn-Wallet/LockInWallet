@@ -22,6 +22,10 @@ export const RELEASE_NOTES = [
         text: "We pay the network fee when you sign in this way. Every action on a blockchain costs a small fee, payable only in that chain's own coin — which is an absurd thing to demand of someone who came here to save dollars. So we cover it. If you brought your own wallet, nothing changes: you pay your own fees as you always have.",
       },
       {
+        emoji: "📖",
+        text: "There is now a page explaining passkeys in plain words — what they are, how signing in with your face or fingerprint actually works, how to use the same savings on your laptop as well as your phone, and what to do if you lose the phone. That last one is the question everybody asks first, so it gets a real answer rather than reassurance. It is linked from the footer and from the box where you choose how to sign in.",
+      },
+      {
         emoji: "🔵",
         text: "New wallets start on Base rather than Optimism. It is where buying savings with a bank card actually works, so it is the sensible place to begin. If your savings are on Optimism nothing has moved — they are still there, and switching back is one tap.",
       },
