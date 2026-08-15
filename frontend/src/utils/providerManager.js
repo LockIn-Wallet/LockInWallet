@@ -1,10 +1,20 @@
 /**
- * Provider Management - Use MetaMask's provider when available
- * Falls back to public RPCs only when MetaMask is not available
+ * Provider Management - build ethers providers from whichever wallet is active.
+ *
+ * Which wallet that is — a browser extension, or an embedded wallet from
+ * signing in — is `walletProvider`'s business, not this module's. Falls back to
+ * public RPCs for reads when no wallet is connected.
  */
 
 import { BrowserProvider, JsonRpcProvider } from 'ethers';
 import networkConfig from '../networkConfig.json';
+import {
+  getActiveProvider,
+  getAccounts,
+  hasWallet,
+  isEmbeddedWallet,
+  supportsChainSwitching,
+} from './walletProvider';
 
 /**
  * Create a provider and signer from the connected wallet.
@@ -12,7 +22,9 @@ import networkConfig from '../networkConfig.json';
  * @returns {{ provider, signer }} Provider and signer
  */
 export const createProviderAndSigner = async () => {
-  const browserProvider = new BrowserProvider(window.ethereum);
+  const wallet = getActiveProvider();
+  if (!wallet) throw new Error('No wallet connected');
+  const browserProvider = new BrowserProvider(wallet);
 
   // Test if the wallet's RPC works
   try {
@@ -30,7 +42,7 @@ export const createProviderAndSigner = async () => {
 
 /**
  * Get the best available provider for a network
- * Priority: MetaMask > Public RPC
+ * Priority: connected wallet > public RPC
  * @param {string} networkKey - Network key (e.g., "optimism")
  * @returns {object} Provider instance and metadata
  */
@@ -43,31 +55,32 @@ export const getBestProvider = async (networkKey) => {
   };
 
   try {
-    // First, try to use MetaMask if available, connected, and on correct network
-    if (typeof window.ethereum !== 'undefined') {
+    // First, try the connected wallet if it is on the right network
+    if (hasWallet()) {
       try {
-        // Check if wallet is connected
-        const accounts = window.ethereum.request({ method: 'eth_accounts' });
+        // `eth_accounts` was previously used without awaiting, so this branch
+        // never ran and every read quietly fell through to the public RPC.
+        const accounts = await getAccounts();
         if (accounts.length > 0) {
-          const browserProvider = new BrowserProvider(window.ethereum);
+          const browserProvider = new BrowserProvider(getActiveProvider());
           const network = await browserProvider.getNetwork();
           const expectedChainId = networkConfig.evm[networkKey]?.chainId;
 
           if (Number(network.chainId) === expectedChainId) {
             result.provider = browserProvider;
-            result.source = 'metamask';
+            result.source = isEmbeddedWallet() ? 'embedded' : 'injected';
             result.chainId = Number(network.chainId);
             result.reliable = true;
-            console.log(`🦊 Using MetaMask provider for ${networkKey} (Chain ID: ${result.chainId})`);
+            console.log(`👛 Using ${result.source} wallet for ${networkKey} (Chain ID: ${result.chainId})`);
             return result;
           } else {
-            console.log(`🦊 MetaMask available but wrong network (${Number(network.chainId)} vs ${expectedChainId})`);
+            console.log(`👛 Wallet available but wrong network (${Number(network.chainId)} vs ${expectedChainId})`);
           }
         } else {
-          console.log(`🦊 MetaMask available but not connected`);
+          console.log(`👛 Wallet available but not connected`);
         }
       } catch (error) {
-        console.log(`🦊 MetaMask error: ${error.message}`);
+        console.log(`👛 Wallet error: ${error.message}`);
       }
     }
 
@@ -110,15 +123,15 @@ export const verifyContractDeployment = async (contractAddress, networkKey) => {
   console.log(`   Contract: ${contractAddress}`);
   console.log(`   Network: ${networkKey}`);
 
-  // Try MetaMask first, then fall back to public RPC
+  // Try the wallet first, then fall back to public RPC
   const providers = [];
 
   try {
     const providerInfo = await getBestProvider(networkKey);
     providers.push(providerInfo);
 
-    // If MetaMask was selected, also prepare public RPC as fallback
-    if (providerInfo.source === 'metamask') {
+    // If the wallet was selected, also prepare public RPC as fallback
+    if (providerInfo.source === 'embedded' || providerInfo.source === 'injected') {
       const networkConf = networkConfig.evm[networkKey];
       if (networkConf?.rpcUrls?.length > 0) {
         providers.push({
@@ -160,13 +173,13 @@ export const verifyContractDeployment = async (contractAddress, networkKey) => {
 };
 
 /**
- * Switch MetaMask to the correct network if needed
+ * Put the wallet on the right network, if it is the kind that can be asked.
  * @param {string} networkKey - Network key to switch to
- * @returns {boolean} True if switch was successful or already correct
+ * @returns {boolean} True if the wallet ends up on the expected chain
  */
 export const ensureCorrectNetwork = async (networkKey) => {
-  if (typeof window.ethereum === 'undefined') {
-    console.log('MetaMask not available for network switching');
+  if (!hasWallet()) {
+    console.log('No wallet available for network switching');
     return false;
   }
 
@@ -179,15 +192,29 @@ export const ensureCorrectNetwork = async (networkKey) => {
   const hexChainId = `0x${expectedChainId.toString(16)}`;
 
   const switchChain = async () => {
-    await window.ethereum.request({
+    await getActiveProvider().request({
       method: 'wallet_switchEthereumChain',
       params: [{ chainId: hexChainId }]
     });
   };
 
   try {
-    const browserProvider = new BrowserProvider(window.ethereum);
+    const browserProvider = new BrowserProvider(getActiveProvider());
     const currentNetwork = await browserProvider.getNetwork();
+
+    // An embedded wallet is created against one chain and simply is on it.
+    // There is no menu to change and no prompt to show, so a mismatch here is
+    // a wallet built for a different network — say so rather than firing an
+    // RPC method it does not implement.
+    if (!supportsChainSwitching()) {
+      const onExpected = Number(currentNetwork.chainId) === expectedChainId;
+      if (!onExpected) {
+        console.error(
+          `❌ Signed-in wallet is on chain ${Number(currentNetwork.chainId)}, not ${expectedChainId}`
+        );
+      }
+      return onExpected;
+    }
 
     if (Number(currentNetwork.chainId) === expectedChainId) {
       console.log(`✅ Already on correct network: ${networkKey}`);
@@ -201,8 +228,8 @@ export const ensureCorrectNetwork = async (networkKey) => {
 
   } catch (error) {
     if (error.code === 4902) {
-      console.log(`📝 Network not added to MetaMask, attempting to add ${networkKey}`);
-      return await addNetworkToMetaMask(networkKey);
+      console.log(`📝 Network not in the wallet, attempting to add ${networkKey}`);
+      return await addNetworkToWallet(networkKey);
     } else if (error.code === -32002 || error.message?.includes('already pending')) {
       // Another request is already pending - wait and retry
       console.log(`⏳ Network switch pending, retrying after delay...`);
@@ -223,18 +250,18 @@ export const ensureCorrectNetwork = async (networkKey) => {
 };
 
 /**
- * Add network to MetaMask if not already added
+ * Add network to the wallet if not already added
  * @param {string} networkKey - Network key to add
  * @returns {boolean} True if add was successful
  */
-const addNetworkToMetaMask = async (networkKey) => {
+const addNetworkToWallet = async (networkKey) => {
   try {
     const networkConf = networkConfig.evm[networkKey];
     if (!networkConf) {
       throw new Error(`Network ${networkKey} not found in config`);
     }
 
-    await window.ethereum.request({
+    await getActiveProvider().request({
       method: 'wallet_addEthereumChain',
       params: [{
         chainId: `0x${networkConf.chainId.toString(16)}`,
@@ -245,11 +272,11 @@ const addNetworkToMetaMask = async (networkKey) => {
       }]
     });
 
-    console.log(`✅ Successfully added ${networkKey} to MetaMask`);
+    console.log(`✅ Successfully added ${networkKey} to the wallet`);
     return true;
 
   } catch (error) {
-    console.error(`❌ Failed to add network to MetaMask:`, error.message);
+    console.error(`❌ Failed to add network to the wallet:`, error.message);
     return false;
   }
 };
@@ -262,7 +289,7 @@ const addNetworkToMetaMask = async (networkKey) => {
 export const testAllProviders = async (networkKey) => {
   const results = {
     networkKey,
-    metamask: { available: false, correctNetwork: false, contractDeployed: false },
+    wallet: { available: false, correctNetwork: false, contractDeployed: false },
     publicRpc: { available: false, working: false, contractDeployed: false },
     recommendation: ''
   };
@@ -270,24 +297,24 @@ export const testAllProviders = async (networkKey) => {
   const contractAddress = networkConfig.evm[networkKey]?.savingsContract;
   const expectedChainId = networkConfig.evm[networkKey]?.chainId;
 
-  // Test MetaMask
-  if (typeof window.ethereum !== 'undefined') {
-    results.metamask.available = true;
+  // Test the connected wallet
+  if (hasWallet()) {
+    results.wallet.available = true;
     try {
-      const browserProvider = new BrowserProvider(window.ethereum);
+      const browserProvider = new BrowserProvider(getActiveProvider());
       const network = await browserProvider.getNetwork();
 
       if (Number(network.chainId) === expectedChainId) {
-        results.metamask.correctNetwork = true;
+        results.wallet.correctNetwork = true;
 
         // Test contract verification
         if (contractAddress) {
           const code = await browserProvider.getCode(contractAddress);
-          results.metamask.contractDeployed = code !== '0x' && code.length > 2;
+          results.wallet.contractDeployed = code !== '0x' && code.length > 2;
         }
       }
     } catch (error) {
-      console.log('MetaMask test error:', error.message);
+      console.log('Wallet test error:', error.message);
     }
   }
 
@@ -311,16 +338,16 @@ export const testAllProviders = async (networkKey) => {
   }
 
   // Generate recommendation
-  if (results.metamask.available && results.metamask.correctNetwork) {
-    if (results.metamask.contractDeployed) {
-      results.recommendation = '✅ MetaMask ready - contract verified';
+  if (results.wallet.available && results.wallet.correctNetwork) {
+    if (results.wallet.contractDeployed) {
+      results.recommendation = '✅ Wallet ready - contract verified';
     } else {
-      results.recommendation = '⚠️ MetaMask connected but contract not found';
+      results.recommendation = '⚠️ Wallet connected but contract not found';
     }
-  } else if (results.metamask.available) {
-    results.recommendation = '🔄 Please switch MetaMask to correct network';
+  } else if (results.wallet.available) {
+    results.recommendation = '🔄 Please switch the wallet to the correct network';
   } else {
-    results.recommendation = '🦊 Please install and connect MetaMask';
+    results.recommendation = '👛 Please sign in or connect a wallet';
   }
 
   return results;

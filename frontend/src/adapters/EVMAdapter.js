@@ -1,5 +1,13 @@
 import { ethers } from "ethers";
 import { BlockchainAdapter } from "./BlockchainAdapter.js";
+import {
+  hasWallet,
+  getAccounts,
+  getChainId,
+  getActiveProvider,
+  requestAccounts,
+  supportsChainSwitching,
+} from "../utils/walletProvider.js";
 import SavingsABI from "../SavingsABI.json";
 import MockUSDT_ABI from "../MockUSDT_ABI.json";
 import ProxyDeploymentModuleABI from "../ProxyDeploymentModuleABI.json";
@@ -340,10 +348,8 @@ export class EVMAdapter extends BlockchainAdapter {
   // Wallet Management
   async isConnected() {
     try {
-      if (!window.ethereum) return false;
-      const accounts = await window.ethereum.request({
-        method: "eth_accounts",
-      });
+      if (!hasWallet()) return false;
+      const accounts = await getAccounts();
       return accounts.length > 0 && this.provider && this.signer;
     } catch {
       return false;
@@ -358,13 +364,13 @@ export class EVMAdapter extends BlockchainAdapter {
         this.signer = signer;
       } else {
         // Fallback: create own provider (should rarely happen)
-        if (!window.ethereum) {
+        if (!hasWallet()) {
           throw new Error(
-            "MetaMask not found. Please install MetaMask to continue.",
+            "No wallet found. Sign in or connect a wallet to continue.",
           );
         }
-        await window.ethereum.request({ method: "eth_requestAccounts" });
-        this.provider = new ethers.BrowserProvider(window.ethereum);
+        await requestAccounts();
+        this.provider = new ethers.BrowserProvider(getActiveProvider());
         this.signer = await this.provider.getSigner();
       }
 
@@ -402,7 +408,14 @@ export class EVMAdapter extends BlockchainAdapter {
 
   async switchNetwork(networkConfig) {
     try {
-      await window.ethereum.request({
+      // An embedded wallet is created against one chain and cannot be moved;
+      // asking would throw an RPC error on a wallet already where it belongs.
+      if (!supportsChainSwitching()) {
+        this.networkConfig = networkConfig;
+        await this._initializeContracts();
+        return;
+      }
+      await getActiveProvider().request({
         method: "wallet_switchEthereumChain",
         params: [{ chainId: `0x${networkConfig.chainId.toString(16)}` }],
       });
@@ -412,7 +425,7 @@ export class EVMAdapter extends BlockchainAdapter {
     } catch (error) {
       if (error.code === 4902) {
         // Network not added, try to add it
-        await window.ethereum.request({
+        await getActiveProvider().request({
           method: "wallet_addEthereumChain",
           params: [
             {
@@ -970,8 +983,7 @@ export class EVMAdapter extends BlockchainAdapter {
   // Network Validation
   async isCorrectNetwork() {
     try {
-      const chainId = await window.ethereum.request({ method: "eth_chainId" });
-      return parseInt(chainId, 16) === this.networkConfig.chainId;
+      return (await getChainId()) === this.networkConfig.chainId;
     } catch {
       return false;
     }

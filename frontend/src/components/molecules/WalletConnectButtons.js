@@ -6,8 +6,9 @@ import { homeStyles, buttonStyles, buttonHoverEffects } from "../../styles";
 
 import { getAvailableNetworks } from "../../utils/networkFilter.js";
 import { isSolanaEnabled } from "../../utils/featureFlags.js";
+import { hasWallet } from "../../utils/walletProvider.js";
 
-const hasMetaMaskInstalled = () => !!window.ethereum;
+const hasEvmWallet = () => hasWallet();
 const hasPhantomInstalled = () =>
   !!(window.phantom?.solana || window.solana?.isPhantom);
 
@@ -21,7 +22,7 @@ const hasSolanaNetworks = () =>
  * Phantom / Solana wallet modal), reusable anywhere on the homepage.
  */
 const WalletConnectButtons = ({ networkType, connectWallet, onConnectPhantom }) => {
-  const metaMaskInstalled = hasMetaMaskInstalled();
+  const metaMaskInstalled = hasEvmWallet();
   const canUsePhantom = hasPhantomInstalled() && hasSolanaNetworks();
   const isInSolanaMode = networkType === "solana" && isSolanaEnabled();
 

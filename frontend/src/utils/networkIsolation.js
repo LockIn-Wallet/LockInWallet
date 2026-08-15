@@ -3,6 +3,8 @@
  * Ensures proper separation between EVM and Solana network states
  */
 
+import { hasWallet } from './walletProvider';
+
 /**
  * Validate that network configuration matches expected network type
  * @param {string} networkType - 'evm' or 'solana'
@@ -196,8 +198,8 @@ export const validateNetworkCompatibility = (networkType, currentState) => {
     if (currentState.solanaConnected && !currentState.provider) {
       warnings.push('Solana wallet connected but switching to EVM - will disconnect Solana');
     }
-    if (!window.ethereum) {
-      issues.push('MetaMask not installed - required for EVM networks');
+    if (!hasWallet()) {
+      issues.push('No wallet available - sign in or connect a wallet to use EVM networks');
     }
   } else if (networkType === 'solana') {
     if (currentState.provider && !currentState.solanaConnected) {

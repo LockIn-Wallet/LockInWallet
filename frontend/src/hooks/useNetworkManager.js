@@ -7,6 +7,12 @@ import {
   getNetworkByChainId,
   getCurrentNetwork,
 } from "../utils/walletUtils.js";
+import {
+  hasWallet,
+  getChainId,
+  getActiveProvider,
+  supportsChainSwitching,
+} from "../utils/walletProvider.js";
 
 // Import network isolation utilities
 import {
@@ -50,12 +56,9 @@ export const useNetworkManager = ({
 }) => {
   // Network detection function for EVM
   const detectCurrentNetwork = useCallback(async () => {
-    if (window.ethereum) {
+    if (hasWallet()) {
       try {
-        const chainId = await window.ethereum.request({
-          method: "eth_chainId",
-        });
-        const numericChainId = parseInt(chainId, 16);
+        const numericChainId = await getChainId();
         setCurrentChainId(numericChainId);
 
         const network = getNetworkByChainId(numericChainId);
@@ -137,7 +140,7 @@ export const useNetworkManager = ({
     // Validate network compatibility before switching
     const currentState = {
       networkType: localStorage.getItem("preferredNetworkType"),
-      provider: !!window.ethereum,
+      provider: hasWallet(),
       solanaConnected,
       solanaPublicKey,
     };
@@ -243,9 +246,9 @@ export const useNetworkManager = ({
     const network = NETWORKS.evm[networkKey];
     console.log(`🔄 Switching to EVM network: ${networkKey} (${network?.name || 'Unknown'})`);
 
-    if (!window.ethereum) {
-      console.error("❌ MetaMask not found");
-      alert("Please install MetaMask to use EVM networks!");
+    if (!hasWallet()) {
+      console.error("❌ No wallet available");
+      alert("Sign in or connect a wallet to use EVM networks");
       return false;
     }
     if (!network) {
@@ -257,10 +260,23 @@ export const useNetworkManager = ({
     setIsNetworkSwitching(true);
 
     try {
-      console.log(`🦊 Requesting MetaMask to switch to ${network.name} (Chain ID: ${network.chainId})`);
+      // An embedded wallet is created against one chain and has no network to
+      // change, so there is nothing to ask it for.
+      if (!supportsChainSwitching()) {
+        const onExpected = (await getChainId()) === network.chainId;
+        if (onExpected) {
+          setSelectedNetwork(networkKey);
+          setCurrentChainId(network.chainId);
+          localStorage.setItem(`preferred_evm_network`, networkKey);
+        }
+        setIsNetworkSwitching(false);
+        return onExpected;
+      }
+
+      console.log(`👛 Requesting the wallet to switch to ${network.name} (Chain ID: ${network.chainId})`);
 
       // Try to switch to the network
-      await window.ethereum.request({
+      await getActiveProvider().request({
         method: "wallet_switchEthereumChain",
         params: [{ chainId: `0x${network.chainId.toString(16)}` }],
       });
@@ -278,12 +294,12 @@ export const useNetworkManager = ({
     } catch (switchError) {
       console.log(`⚠️ Network switch failed, checking if network needs to be added...`);
 
-      // If the network is not added to MetaMask, add it first
+      // If the network is not in the wallet, add it first
       if (switchError.code === 4902) {
         try {
-          console.log(`📝 Adding ${network.name} to MetaMask...`);
+          console.log(`📝 Adding ${network.name} to the wallet...`);
 
-          await window.ethereum.request({
+          await getActiveProvider().request({
             method: "wallet_addEthereumChain",
             params: [
               {

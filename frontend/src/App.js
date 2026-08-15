@@ -45,6 +45,15 @@ import {
   createProviderAndSigner,
 } from "./utils/providerManager.js";
 import {
+  hasWallet,
+  getAccounts,
+  getChainId,
+  requestAccounts,
+  onWalletEvent,
+  onWalletChanged,
+  isEmbeddedWallet,
+} from "./utils/walletProvider.js";
+import {
   createCircuitBreakers,
   safeContractCall,
   debounce,
@@ -531,8 +540,17 @@ function AppContentInner({
   const [evmUserAddress, setEvmUserAddress] = useState("");
   const [currentChainId, setCurrentChainId] = useState(null);
   const [isNetworkSwitching, setIsNetworkSwitching] = useState(false);
-  // Raised when someone presses connect with no wallet extension installed
+  // Raised when someone presses connect with no wallet available at all
   const [showWalletOnboarding, setShowWalletOnboarding] = useState(false);
+  // Bumped whenever the active wallet is swapped — signing in provides one
+  // where there was none, so the listeners below have to re-subscribe against
+  // the new provider rather than staying bound to the old one (or to nothing).
+  const [walletGeneration, setWalletGeneration] = useState(0);
+
+  useEffect(
+    () => onWalletChanged(() => setWalletGeneration((n) => n + 1)),
+    []
+  );
 
   // Solana wallet state
   let solanaConnected = false;
@@ -665,9 +683,9 @@ function AppContentInner({
     return () => clearInterval(timer);
   }, []);
 
-  // MetaMask event listeners (EVM only)
+  // Wallet event listeners (EVM only)
   useEffect(() => {
-    if (!window.ethereum) return;
+    if (!hasWallet()) return;
 
     const handleChainChanged = (chainId) => {
       const numericChainId = parseInt(chainId, 16);
@@ -692,8 +710,11 @@ function AppContentInner({
       }
     };
 
-    window.ethereum.on("chainChanged", handleChainChanged);
-    window.ethereum.on("accountsChanged", handleAccountsChanged);
+    // An embedded wallet has no account switcher and no network menu, so it
+    // may emit neither event; unsubscribing is a no-op there rather than a
+    // condition every caller has to remember.
+    const unsubscribeChain = onWalletEvent("chainChanged", handleChainChanged);
+    const unsubscribeAccounts = onWalletEvent("accountsChanged", handleAccountsChanged);
 
     if (networkType === "evm") {
       detectCurrentNetwork();
@@ -701,18 +722,16 @@ function AppContentInner({
     }
 
     return () => {
-      if (window.ethereum.removeListener) {
-        window.ethereum.removeListener("chainChanged", handleChainChanged);
-        window.ethereum.removeListener("accountsChanged", handleAccountsChanged);
-      }
+      unsubscribeChain();
+      unsubscribeAccounts();
     };
-  }, [networkType]);
+  }, [networkType, walletGeneration]);
 
   // Auto-detect available wallet type on mount
   useEffect(() => {
-    const hasMetaMask = !!window.ethereum;
+    const hasEvmWallet = hasWallet();
     const hasPhantom = !!(window.phantom?.solana || window.solana?.isPhantom);
-    const evmAvailable = hasMetaMask && getAvailableNetworks("evm").some((n) => n.deployed || n.isLocal);
+    const evmAvailable = hasEvmWallet && getAvailableNetworks("evm").some((n) => n.deployed || n.isLocal);
     const solanaAvailable = hasPhantom && getAvailableNetworks("solana").some((n) => n.deployed || n.isLocal);
 
     if (solanaAvailable && !evmAvailable && networkType !== "solana") {
@@ -724,8 +743,7 @@ function AppContentInner({
 
   const connectWalletInternal = async () => {
     if (networkType === "evm") {
-      const chainIdHex = await window.ethereum.request({ method: "eth_chainId" });
-      const currentChain = parseInt(chainIdHex, 16);
+      const currentChain = await getChainId();
       const expectedNetwork = getCurrentNetwork(networkType, selectedNetwork);
       if (currentChain !== expectedNetwork.chainId) {
         setCurrentChainId(currentChain);
@@ -799,15 +817,14 @@ function AppContentInner({
   const autoConnectWallet = debounce(async () => {
     // A user who logged out stays logged out until they connect again
     if (isWalletLoggedOut()) return;
-    if (!window.ethereum || walletOperationInProgress.current) return;
+    if (!hasWallet() || walletOperationInProgress.current) return;
     walletOperationInProgress.current = true;
     try {
-      const accounts = await window.ethereum.request({ method: "eth_accounts" });
+      const accounts = await getAccounts();
       if (accounts.length === 0) return;
 
       if (networkType === "evm") {
-        const chainIdHex = await window.ethereum.request({ method: "eth_chainId" });
-        const currentChain = parseInt(chainIdHex, 16);
+        const currentChain = await getChainId();
         const expectedNetwork = getCurrentNetwork(networkType, selectedNetwork);
         if (currentChain !== expectedNetwork.chainId) {
           setCurrentChainId(currentChain);
@@ -824,7 +841,7 @@ function AppContentInner({
 
   const connectWallet = debounce(async () => {
     clearWalletLoggedOut();
-    if (window.ethereum && !walletOperationInProgress.current) {
+    if (hasWallet() && !walletOperationInProgress.current) {
       walletOperationInProgress.current = true;
       try {
         if (networkType === "evm") {
@@ -833,7 +850,7 @@ function AppContentInner({
             throw new Error(`Failed to switch to ${selectedNetwork} network.`);
           }
         }
-        await window.ethereum.request({ method: "eth_requestAccounts" });
+        await requestAccounts();
         await connectWalletInternal();
       } catch (error) {
         console.error("Wallet connection failed:", error.message);
@@ -847,8 +864,8 @@ function AppContentInner({
       } finally {
         walletOperationInProgress.current = false;
       }
-    } else if (!window.ethereum) {
-      // No extension at all — this is someone's first time, so explain what a
+    } else if (!hasWallet()) {
+      // No wallet at all — this is someone's first time, so explain what a
       // wallet is rather than barking an instruction at them
       setShowWalletOnboarding(true);
     }
