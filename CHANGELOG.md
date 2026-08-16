@@ -63,6 +63,14 @@ these notes on the in-app **Governance** page before they execute.
   no contract change.*
 
 ### Changed
+- The connect dialog asks which kind of person you are rather than which
+  technology you would like: "I'm new to this — make me a wallet" against "I
+  already use crypto — connect my wallet". Each option states its own cost. The
+  easy one is the one that leaves Coinbase holding an email address linked to a
+  wallet; the private one is the one where losing your key is nobody else's
+  problem to solve. Naming the trade-off is the point — a newcomer cannot weigh
+  a choice whose consequences are only described in a security document.
+
 - Base is the default network instead of Optimism. Optimism was first because
   existing savings lived there and a moved default would have shown returning
   users an empty wallet; it now holds no vaults and Base does, so that

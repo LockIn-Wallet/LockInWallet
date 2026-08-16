@@ -22,6 +22,10 @@ export const RELEASE_NOTES = [
         text: "We pay the network fee when you sign in this way. Every action on a blockchain costs a small fee, payable only in that chain's own coin — which is an absurd thing to demand of someone who came here to save dollars. So we cover it. If you brought your own wallet, nothing changes: you pay your own fees as you always have.",
       },
       {
+        emoji: "🧭",
+        text: "Pressing connect now asks which one sounds like you, rather than which technology you would like. New to crypto and we make you a wallet — nothing to install, nothing to write down. Already using crypto and you connect the wallet you have, which is the private option: no email, no account with anyone, nothing about you shared. Each says what it costs you, because the easy one is the one that tells Coinbase who you are and the private one is the one where losing your key is nobody else's problem to fix.",
+      },
+      {
         emoji: "📖",
         text: "There is now a page explaining how signing in works, in plain words. Coinbase runs it and offers whichever your device supports — a code sent to your email, or a face or fingerprint check — so the page covers both rather than promising one. It is blunt about the difference that matters: an email code means Coinbase holds your email address next to your wallet, which is a record that links your savings to you, while a fingerprint shares nothing that names you. It also covers using the same savings on your laptop, what to do if you lose your phone, and one thing we cannot tell you — exactly what holds the key when you sign in by email, because Coinbase has not published it and we would rather say so than guess.",
       },

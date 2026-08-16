@@ -79,7 +79,7 @@ const WalletChoiceModal = ({
 
         <p style={modalStyles.eyebrow}>Get started</p>
         <h2 id={TITLE_ID} style={modalStyles.title}>
-          How would you like to sign in?
+          Which one sounds like you?
         </h2>
 
         <div style={modalStyles.optionGrid}>
@@ -89,22 +89,28 @@ const WalletChoiceModal = ({
               style={{ ...modalStyles.option, ...modalStyles.optionRecommended }}
               onClick={choose(onSignIn)}
             >
-              <span style={modalStyles.optionBadge}>No setup</span>
-              <span style={modalStyles.optionTitle}>Sign in</span>
+              <span style={modalStyles.optionBadge}>Easiest</span>
+              <span style={modalStyles.optionTitle}>
+                I'm new to this — make me a wallet
+              </span>
               <span style={modalStyles.optionText}>
-                Creates a wallet you reach with a code sent to your email, or
-                your face or fingerprint — whichever your device supports.
-                Nothing to install and no seed phrase to keep. Coinbase runs the
-                sign-in, so an email code links your savings to your email
-                address in their records. They can never move your money.
+                Nothing to install and no seed phrase to keep. You sign in with
+                a code sent to your email, or your fingerprint if your device
+                offers it, and a wallet is created for you.
+                <br />
+                <br />
+                The trade: Coinbase runs that sign-in, so an email code leaves
+                them holding your email address next to your wallet — a record
+                that connects your savings to you. They can never move your
+                money, but they do know it is yours.
               </span>
             </button>
           )}
 
           {canSignIn && (
             <a href="/signing-in" style={modalStyles.footnote}>
-              New to this? How signing in works, and how to get back in if you
-              lose your phone →
+              How signing in works, what it tells Coinbase, and how to get back
+              in if you lose your phone →
             </a>
           )}
 
@@ -114,21 +120,25 @@ const WalletChoiceModal = ({
             onClick={choose(onUseOwnWallet)}
           >
             <span style={modalStyles.optionTitle}>
-              {walletName ? `Use ${walletName}` : "Use your own wallet"}
+              {walletName
+                ? `I already use crypto — connect ${walletName}`
+                : "I already use crypto — connect my wallet"}
             </span>
             <span style={modalStyles.optionText}>
               {walletAddress ? (
                 <>
                   Already connected as{" "}
-                  <strong>{truncateAddress(walletAddress)}</strong>. Nothing
-                  passes through anyone else, nobody learns who you are, and you
-                  pay your own network fees.
+                  <strong>{truncateAddress(walletAddress)}</strong>. The private
+                  option: no email, no account with anyone, nothing about you
+                  shared. You keep your own key and pay your own network fees —
+                  which also means nobody can help you if you lose it.
                 </>
               ) : (
                 <>
-                  Connect a wallet you already control. Nothing passes through
-                  anyone else, nobody learns who you are, and you pay your own
-                  network fees.
+                  The private option: no email, no account with anyone, nothing
+                  about you shared. You keep your own key and pay your own
+                  network fees — which also means nobody can help you if you
+                  lose it.
                 </>
               )}
             </span>
