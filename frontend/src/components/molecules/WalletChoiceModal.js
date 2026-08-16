@@ -92,10 +92,11 @@ const WalletChoiceModal = ({
               <span style={modalStyles.optionBadge}>No setup</span>
               <span style={modalStyles.optionTitle}>Sign in</span>
               <span style={modalStyles.optionText}>
-                Creates a wallet you reach with your face, your fingerprint, or
-                a code sent to your email — whichever your device supports.
+                Creates a wallet you reach with a code sent to your email, or
+                your face or fingerprint — whichever your device supports.
                 Nothing to install and no seed phrase to keep. Coinbase runs the
-                sign-in, so they can see your requests, but never your money.
+                sign-in, so an email code links your savings to your email
+                address in their records. They can never move your money.
               </span>
             </button>
           )}
@@ -120,12 +121,14 @@ const WalletChoiceModal = ({
                 <>
                   Already connected as{" "}
                   <strong>{truncateAddress(walletAddress)}</strong>. Nothing
-                  passes through anyone else, and you pay your own network fees.
+                  passes through anyone else, nobody learns who you are, and you
+                  pay your own network fees.
                 </>
               ) : (
                 <>
                   Connect a wallet you already control. Nothing passes through
-                  anyone else, and you pay your own network fees.
+                  anyone else, nobody learns who you are, and you pay your own
+                  network fees.
                 </>
               )}
             </span>

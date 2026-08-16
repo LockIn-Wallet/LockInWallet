@@ -15,7 +15,7 @@ export const RELEASE_NOTES = [
     highlights: [
       {
         emoji: "👆",
-        text: "You can now start saving without a wallet at all. Press sign in, prove it is you with your face, your fingerprint, or a code sent to your email, and you have one — nothing to install, no seed phrase to write down, no password to forget. It follows you to your other devices through the account you already sign into them with, so a new phone or laptop means signing in, not hunting for a backup. If you already have a wallet, connecting it works exactly as before; pressing connect now asks which you would rather use.",
+        text: "You can now start saving without a wallet at all. Press sign in, prove it is you with a code sent to your email or with your face or fingerprint, and you have one — nothing to install, no seed phrase to write down, no password to forget. It follows you to your other devices through the account you already sign into them with, so a new phone or laptop means signing in, not hunting for a backup. If you already have a wallet, connecting it works exactly as before; pressing connect now asks which you would rather use.",
       },
       {
         emoji: "⛽",
@@ -23,7 +23,7 @@ export const RELEASE_NOTES = [
       },
       {
         emoji: "📖",
-        text: "There is now a page explaining how signing in works, in plain words. Coinbase runs it and offers what your device supports — a face or fingerprint check, or a code sent to your email — so the page covers both rather than promising one. It also covers using the same savings on your laptop as well as your phone, and what to do if you lose the phone. That last one is the question everybody asks first, so it gets a real answer rather than reassurance.",
+        text: "There is now a page explaining how signing in works, in plain words. Coinbase runs it and offers whichever your device supports — a code sent to your email, or a face or fingerprint check — so the page covers both rather than promising one. It is blunt about the difference that matters: an email code means Coinbase holds your email address next to your wallet, which is a record that links your savings to you, while a fingerprint shares nothing that names you. It also covers using the same savings on your laptop, what to do if you lose your phone, and one thing we cannot tell you — exactly what holds the key when you sign in by email, because Coinbase has not published it and we would rather say so than guess.",
       },
       {
         emoji: "🔵",

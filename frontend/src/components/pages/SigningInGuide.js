@@ -15,6 +15,7 @@ import {
   SIGNING_IN_DEVICES,
   SIGNING_IN_RECOVERY,
   SIGNING_IN_FAQ,
+  COINBASE_SIGN_IN_HELP,
 } from "../../utils/signingInContent.js";
 
 /**
@@ -70,8 +71,8 @@ const SigningInGuide = () => {
           <SectionHeading
             id="signing-in-methods"
             eyebrow="The two ways in"
-            title="A passkey, an email code, or both"
-            lede="Coinbase runs the sign-in and offers what your device supports, so we cannot promise you one or the other. Here is what each means for you."
+            title="One of them tells Coinbase who you are"
+            lede="Coinbase runs the sign-in and offers what your device supports, so we cannot promise you one or the other. The difference between them is worth a minute of your time."
           />
           <ol style={homeStyles.orderedList}>
             {SIGNING_IN_METHODS.map(({ step, text }, index) => (
@@ -136,6 +137,11 @@ const SigningInGuide = () => {
             The one case none of this covers: no access to your email, no
             synced passkey, and no recovery key. Adding a second way in takes a
             minute, and is worth doing today rather than on the day you need it.
+            Coinbase manages the sign-in methods themselves — their guide is{" "}
+            <a href={COINBASE_SIGN_IN_HELP} target="_blank" rel="noopener noreferrer">
+              here
+            </a>
+            .
           </p>
         </div>
       </section>

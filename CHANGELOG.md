@@ -48,12 +48,19 @@ these notes on the in-app **Governance** page before they execute.
 
 ### Added
 - A sign-in explainer at `/signing-in`, written for someone who has never held
-  crypto: what happens when you press the button, how a passkey and an email
-  code differ, using the same savings on a second device, and — the question
+  crypto: what happens when you press the button, how an email code and a
+  passkey differ, using the same savings on a second device, and — the question
   everyone asks first — what to do when a phone is lost. Linked from the footer
-  and from the dialog where the choice is made. Says plainly what signing in
-  does not give you, including that Coinbase sees the requests. *Frontend only
-  — no contract change.*
+  and from the dialog where the choice is made.
+
+  It states the privacy consequence rather than burying it: an email code
+  leaves Coinbase holding an email address linked to a public wallet address, a
+  record that can be requested from them, whereas a passkey shares nothing that
+  names anyone. And it says outright that we cannot verify what holds the
+  signing key on the email path — Coinbase describes these wallets as
+  self-custody with keys in secure hardware, and we link to their documentation
+  rather than repeating a guarantee we have no way to check. *Frontend only —
+  no contract change.*
 
 ### Changed
 - Base is the default network instead of Optimism. Optimism was first because
