@@ -31,7 +31,11 @@ export const RELEASE_NOTES = [
       },
       {
         emoji: "🏠",
-        text: "The home page now says one thing instead of twelve. It used to open with chain names and a table comparing wallet types, which only helps if you already know what a hot wallet is — and if you don't, it reads as a wall of jargon guarding your savings. It now says what the wallet actually does for you: you choose how much money can leave and how often, and after that nobody can take more, including us and including you. Everything technical — how the limit is enforced, the comparison with its terms explained, which chains it runs on, and exactly what we can still do — has moved to a new How it works page, linked at the top of every page. Nothing was softened or dropped on the way: the same facts are stated in the same words, in a place where they help rather than block.",
+        text: "The home page now says one thing instead of twelve. It used to open with chain names and a table comparing wallet types, which only helps if you already know what a hot wallet is — and if you don't, it reads as a wall of jargon guarding your savings. It now says what the wallet actually does for you: you choose how much money can leave and how often, and after that nobody can take more, including us and including you. Everything technical — how the limit is enforced, the comparison with its terms explained, which chains it runs on, and exactly what we can still do — has moved to a new Security page, linked at the top of every page. Nothing was softened or dropped on the way: the same facts are stated in the same words, in a place where they help rather than block.",
+      },
+      {
+        emoji: "📝",
+        text: "The beginner's guide has been corrected. It told you the contracts could never be changed and that the code had been audited. Neither was true: the contracts are upgradeable, which is what lets bugs get fixed, and nobody independent has audited them yet. It also described Optimism as the only network and installing MetaMask as the only way in, when new wallets now start on Base and you can sign in without installing anything. All of that is fixed, and the honest version of the upgrade story is on the new Security page.",
       },
       {
         emoji: "🔵",

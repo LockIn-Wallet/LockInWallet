@@ -2,7 +2,7 @@ import React from "react";
 
 import { landingStyles } from "../../../styles";
 
-import { PROOF_POINTS } from "../../../utils/howItWorksContent.js";
+import { PROOF_POINTS } from "../../../utils/securityContent.js";
 
 /**
  * ProofStrip - three facts a reader can check for themselves, stated without

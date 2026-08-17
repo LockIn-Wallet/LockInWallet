@@ -42,7 +42,7 @@ import { createEmptyLimitEdits } from "./utils/spendingPeriods.js";
 import { initAnalytics } from "./utils/analytics.js";
 import { PRIZE_SAVINGS_PATH } from "./utils/prizeSavingsContent.js";
 import { SIGNING_IN_PATH } from "./utils/signingInContent.js";
-import { HOW_IT_WORKS_PATH } from "./utils/howItWorksContent.js";
+import { SECURITY_PATH } from "./utils/securityContent.js";
 import {
   ensureCorrectNetwork,
   createProviderAndSigner,
@@ -125,17 +125,17 @@ const PrizeSavings = lazy(() => import("./components/pages/PrizeSavings.js"));
 // deciding whether to sign in at all, so it never waits on a wallet.
 const SigningInGuide = lazy(() => import("./components/pages/SigningInGuide.js"));
 
-// The landing page's one link out for anyone who wants the mechanism, so it
-// has to be readable with nothing connected — and separately, so that its
-// weight never lands on the landing page itself.
-const HowItWorksPage = lazy(() => import("./components/pages/HowItWorksPage.js"));
+// The landing page's one link out for anyone who wants the mechanism. Readable
+// with nothing connected, and lazy so its weight never lands on the landing
+// page. Lives at /security because /how-it-works is a static file.
+const SecurityPage = lazy(() => import("./components/pages/SecurityPage.js"));
 
 // Content pages that need the full width — the 800px app column cramps them
 const WIDE_ROUTES = [
   "/savings-visualiser",
   PRIZE_SAVINGS_PATH,
   SIGNING_IN_PATH,
-  HOW_IT_WORKS_PATH,
+  SECURITY_PATH,
 ];
 
 function MainFlow({
@@ -1211,10 +1211,10 @@ function AppContentInner({
         {/* The technical half of the landing page. Read before connecting, by
             someone deciding whether this is worth trusting at all. */}
         <Route
-          path={HOW_IT_WORKS_PATH}
+          path={SECURITY_PATH}
           element={
             <Suspense fallback={<div />}>
-              <HowItWorksPage />
+              <SecurityPage />
             </Suspense>
           }
         />

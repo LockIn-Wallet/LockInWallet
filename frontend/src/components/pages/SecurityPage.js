@@ -13,38 +13,33 @@ import { usePageSeo } from "../../hooks/usePageSeo.js";
 import { homeStyles, landingStyles } from "../../styles";
 
 import {
-  HOW_IT_WORKS_SEO,
-  HOW_IT_WORKS_HERO,
+  SECURITY_SEO,
+  SECURITY_HERO,
   MECHANISM_STEPS,
   CHAIN_INTRO,
-  HOW_IT_WORKS_FAQ,
-} from "../../utils/howItWorksContent.js";
+  SECURITY_FAQ,
+} from "../../utils/securityContent.js";
 import { GITHUB_URL } from "../../utils/siteLinks.js";
 
 /**
- * HowItWorksPage — /how-it-works
+ * SecurityPage — /security
  *
- * The landing page deliberately says one thing and stops. This page is where
- * the rest goes, for the two readers that page cannot serve: somebody deciding
- * between wallets, and somebody who already holds crypto and reasonably
- * assumes a page this simple is hiding something.
- *
- * So the order is what a sceptic asks, not what sells: the mechanism first,
- * then the numbers, then the comparison — with its categories defined, because
- * a comparison table is noise to anyone who does not already know what it is
- * comparing against — then the trust model including what we can still do, and
- * only then where it runs.
+ * Everything the landing page leaves out, for the two readers it cannot serve:
+ * somebody comparing wallets, and somebody who assumes a page that simple is
+ * hiding something. Ordered by what a sceptic asks rather than what sells —
+ * mechanism, numbers, comparison (categories defined first, or the table is
+ * noise), trust model including what we can still do, then where it runs.
  */
-const HowItWorksPage = () => {
-  usePageSeo(HOW_IT_WORKS_SEO);
+const SecurityPage = () => {
+  usePageSeo(SECURITY_SEO);
 
   return (
     <div style={landingStyles.page}>
       <header style={landingStyles.sectionFlush}>
         <div style={landingStyles.inner}>
-          <p style={landingStyles.eyebrow}>{HOW_IT_WORKS_HERO.eyebrow}</p>
-          <h1 style={homeStyles.pageTitle}>{HOW_IT_WORKS_HERO.title}</h1>
-          <p style={homeStyles.pageLede}>{HOW_IT_WORKS_HERO.lede}</p>
+          <p style={landingStyles.eyebrow}>{SECURITY_HERO.eyebrow}</p>
+          <h1 style={homeStyles.pageTitle}>{SECURITY_HERO.title}</h1>
+          <p style={homeStyles.pageLede}>{SECURITY_HERO.lede}</p>
         </div>
       </header>
 
@@ -84,15 +79,15 @@ const HowItWorksPage = () => {
         </div>
       </section>
 
-      <section style={landingStyles.section} aria-labelledby="how-it-works-faq">
+      <section style={landingStyles.section} aria-labelledby="security-faq">
         <div style={landingStyles.inner}>
           <SectionHeading
-            id="how-it-works-faq"
+            id="security-faq"
             eyebrow="Questions"
-            title="Answered without hedging"
+            title="Answered plainly"
           />
           <div style={homeStyles.faqList}>
-            {HOW_IT_WORKS_FAQ.map(({ question, answer }) => (
+            {SECURITY_FAQ.map(({ question, answer }) => (
               <article key={question} style={homeStyles.faqItem}>
                 <h3 style={homeStyles.faqQuestion}>{question}</h3>
                 <p style={homeStyles.faqAnswer}>{answer}</p>
@@ -107,7 +102,7 @@ const HowItWorksPage = () => {
           <SectionHeading
             eyebrow="Next"
             title="Read it, or start using it"
-            lede="Nothing on this page has to be taken on trust — the contracts that enforce every claim above are public."
+            lede="Every claim above is enforced by code you can read."
           />
           <div style={homeStyles.pageCtaRow}>
             <LandingLink href="/" internal style={landingStyles.ctaPrimary}>
@@ -127,4 +122,4 @@ const HowItWorksPage = () => {
   );
 };
 
-export default HowItWorksPage;
+export default SecurityPage;

@@ -17,16 +17,14 @@ import { BREACH_SECTION } from "../../utils/landingContent.js";
 /**
  * WalletConnectionPrompt - the logged-out landing page.
  *
- * Written for somebody who has never held crypto, so it makes exactly one
- * claim and proves it: you choose the limit, and after that nobody can exceed
- * it. The order is the claim (hero), the claim demonstrated live (console),
- * the claim under attack (showcase), how you set it up, and one honest block
- * for the sceptic before the sign-in.
+ * Written for somebody who has never held crypto, so it makes one claim and
+ * proves it: you set the limit, and nobody exceeds it. Claim (hero), claim
+ * demonstrated (console), claim under attack (showcase), setup, and one honest
+ * block for the sceptic before the sign-in.
  *
- * Everything that needs prior knowledge to mean anything — chain names, wallet
- * categories, the upgrade and governance model, the proof numbers — lives on
- * /how-it-works. A visitor who wants it is one link away from all of it; a
- * visitor who does not never has to walk past it wondering what Optimism is.
+ * Anything that needs prior knowledge to mean something — chain names, wallet
+ * categories, the upgrade model, the proof numbers — lives on /security, one
+ * link away for whoever wants it.
  */
 const WalletConnectionPrompt = ({
   provider,

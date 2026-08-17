@@ -221,9 +221,8 @@ const EnforcementConsole = () => {
           </div>
 
           <p style={landingStyles.consoleNote}>
-            Every withdrawal counts against all three at once, so the tightest
-            limit is the one that really applies. Each one refills on its own
-            clock.
+            Every withdrawal counts against all three. The tightest one wins.
+            Each refills on its own clock.
           </p>
         </div>
       </div>

@@ -5,13 +5,13 @@
 // claim — you choose the limit, and after that nobody can exceed it — shows it
 // happening, and asks for a sign-in. Anything that needs prior knowledge to be
 // meaningful (chain names, wallet categories, the upgrade model) belongs on
-// /how-it-works instead, not here.
+// /security instead, not here.
 //
 // Every claim is traceable to SECURITY.md, GOVERNANCE.md or the contracts.
 // Nothing on this page may promise a protection the contracts do not enforce.
 
 import { PRIZE_SAVINGS_PATH } from "./prizeSavingsContent.js";
-import { HOW_IT_WORKS_PATH } from "./howItWorksContent.js";
+import { SECURITY_PATH } from "./securityContent.js";
 import { isPrizePoolEnabled } from "./featureFlags.js";
 import { GITHUB_URL, SECURITY_URL, CHANGELOG_URL, DISCORD_URL } from "./siteLinks.js";
 
@@ -24,7 +24,7 @@ export {
 } from "./siteLinks.js";
 
 export const NAV_LINKS = [
-  { label: "How it works", href: HOW_IT_WORKS_PATH, internal: true },
+  { label: "Security", href: SECURITY_PATH, internal: true },
   {
     label: "Prize pool",
     href: PRIZE_SAVINGS_PATH,
@@ -37,68 +37,66 @@ export const NAV_LINKS = [
 // The whole proposition, in the words somebody uses before they know any of
 // ours. "On-chain" appears nowhere above the fold on purpose.
 export const HERO = {
-  badge: "SAVINGS THAT PUSH BACK",
+  badge: "SAVINGS NOBODY CAN TAKE",
   title: "Protect your savings from everyone.",
   titleAccent: "Even yourself.",
   subtitle:
-    "You choose how much money can leave, and how often. After that the wallet enforces it — no one can take more, not a thief who has your password, not us, and not you at 2am.",
+    "You set how much can leave, and how often. Nobody can take more — not a thief with your password, not us, not you.",
   primaryCta: "Sign in — it's free",
-  secondaryCta: "How it works →",
-  secondaryCtaHref: HOW_IT_WORKS_PATH,
-  consoleCaption:
-    "Nothing here is connected to anything. Watch the wallet refuse a withdrawal that breaks the rules.",
+  secondaryCta: "How it's enforced →",
+  secondaryCtaHref: SECURITY_PATH,
+  consoleCaption: "A demo. Watch the wallet refuse a withdrawal over the limit.",
 };
 
-// The attack demo, framed as the thing a newcomer actually pictures: someone
-// getting into their account. "Private key" is the mechanism, not the fear.
+// "Password" rather than "private key": the key is the mechanism, the fear is
+// somebody else reaching your money. The precise term is on /security.
 export const BREACH_SECTION = {
   eyebrow: "If someone gets in",
   title: "A stolen password can't empty your wallet",
-  lede: "Whoever gets into your account is stuck with the same limit you set. That gap is the time you need to notice and lock them out.",
+  lede: "A thief is stuck with the limit you set. That gap is your time to notice and lock them out.",
 };
 
 export const HOW_IT_WORKS = [
   {
     title: "Sign in",
-    body: "No sign-up form, no email address, no personal details. Nothing about you is stored anywhere.",
+    body: "No sign-up form, no personal details, nothing to install.",
   },
   {
     title: "Choose your limits",
-    body: "How much can leave per hour, per day, per week — whatever periods suit you, with a cap on each. This is the only real decision.",
+    body: "How much can leave per hour, per day, per week. The only real decision you make.",
   },
   {
     title: "Lock it in",
-    body: "Add your money and confirm. From that moment the rules are enforced by the wallet itself, not by your willpower.",
+    body: "Add your money and confirm. From here the wallet enforces the rules, not your willpower.",
   },
   {
     title: "Spend under the limit",
-    body: "Anything within your limits goes through instantly. Anything over waits for the delay you chose — 24 hours at the shortest, up to 3 months — and nobody can shorten it. Not even us.",
+    body: "Under the limit, instant. Over it, waits the delay you chose — 24 hours to 3 months. Nobody can shorten it.",
   },
 ];
 
-// The one block on the page written for a sceptic rather than a beginner. It
-// exists so that somebody who already holds crypto has a reason to keep
-// reading: no adjectives, the remaining trust assumption named out loud, and
-// three links straight out of the marketing and into the source.
+// The one block written for a sceptic rather than a beginner: no adjectives,
+// the remaining trust assumption named, and links out to the source.
 export const CREDIBILITY = {
   title: "Not a promise. A contract.",
-  body: "Every rule above is enforced by open-source code, and we never hold your money. The contracts are upgradeable and we say so plainly — including who can upgrade them today, why that still can't trap your funds, and the fact that nobody has audited them yet.",
+  body: "Open-source code enforces every rule above, and we never hold your money. The contracts are upgradeable and nobody has audited them yet. Who can upgrade them, and why that still can't trap your funds, is written out in full.",
   links: [
     { label: "Read the contracts", href: GITHUB_URL, external: true },
     { label: "Security model", href: SECURITY_URL, external: true },
-    { label: "The technical version", href: HOW_IT_WORKS_PATH, internal: true },
+    { label: "The technical version", href: SECURITY_PATH, internal: true },
   ],
 };
 
 export const CLOSING = {
-  body: "Your limits. Your money. Enforced by code, not by us.",
+  body: "Your limits. Your money. Enforced by code.",
 };
 
 export const FOOTER_COLUMNS = [
   {
     title: "PRODUCT",
     links: [
-      { label: "How it works", href: HOW_IT_WORKS_PATH, internal: true },
+      { label: "How it works", href: "/how-it-works" },
+      { label: "Security", href: SECURITY_PATH, internal: true },
       { label: "Savings visualiser", href: "/savings-visualiser", internal: true },
       { label: "How signing in works", href: "/signing-in", internal: true },
     ],

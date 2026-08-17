@@ -8,7 +8,7 @@ import {
   COMPARISON_COLUMNS,
   COMPARISON_ROWS,
   COMPARISON_INTRO,
-} from "../../../utils/howItWorksContent.js";
+} from "../../../utils/securityContent.js";
 
 const cellStyle = (column, row) => {
   if (column.ours) return landingStyles.tableCellOurs;

@@ -124,7 +124,7 @@
       <h1>How LockIn Wallet Works: A Complete Beginner's Guide</h1>
       <p class="article-meta">Published by LockIn Wallet &middot; Step-by-step guide for complete beginners</p>
 
-      <p>Never used crypto? That's fine. This guide walks you through every step — from installing your first wallet to locking in your savings with limits that even you can't break. By the end, you'll have a <strong>commitment savings account</strong> that's more secure than any bank account you've ever had.</p>
+      <p>Never used crypto? That's fine. This guide walks you through every step — from installing your first wallet to locking in your savings with limits that even you can't break. By the end, you'll have a <strong>commitment savings account</strong> whose withdrawal limits are enforced by code rather than by your own willpower.</p>
 
       <div class="callout">
         <p><strong>Time needed:</strong> About 15 minutes from start to finish. You don't need to understand blockchain technology — just follow the steps.</p>
@@ -142,7 +142,7 @@
       <p>You might wonder: why not just use a regular app? Because regular apps run on someone's server. The company can change the rules, get hacked, go bankrupt, or be forced to freeze your account. A blockchain smart contract runs on a decentralized network that nobody controls. Once your rules are set, they're set — the code executes exactly as written, every time, forever.</p>
 
       <h3>Which Networks Are Supported?</h3>
-      <p>LockIn Wallet is designed to support multiple blockchain networks. Right now, it's <strong>live on Optimism</strong> — an Ethereum Layer 2 network that offers fast transactions and very low fees (fractions of a penny per transaction). More networks will be added over time, but everything in this guide uses Optimism.</p>
+      <p>LockIn Wallet is <strong>live on Base and Optimism</strong> — both Ethereum Layer 2 networks with fast transactions and very low fees (fractions of a penny per transaction). New wallets start on Base, because that is where a bank card can buy dollars directly. Ethereum mainnet support is underway. This guide uses Optimism in its examples, but the steps are identical on Base.</p>
 
       <div class="callout">
         <p><strong>Why Optimism?</strong> Optimism has the same security as Ethereum mainnet but with fees that are 50-100x cheaper. A transaction that costs $5 on Ethereum costs less than $0.01 on Optimism. This makes it practical to use for everyday savings operations.</p>
@@ -150,7 +150,13 @@
 
       <!-- ─── PART 2: GETTING STARTED ─── -->
 
-      <h2>Step 1: Install MetaMask (Your Crypto Wallet)</h2>
+      <h2>Step 1: Get a Wallet</h2>
+
+      <div class="callout">
+        <p><strong>You can skip this step entirely.</strong> Pressing "Sign in" on lockinwallet.com creates a wallet for you — no extension, no seed phrase, nothing to install. Coinbase runs that sign-in, usually by emailing you a code, which means they hold an email address linked to a wallet. Installing MetaMask instead keeps every request between you and the network. <a href="/signing-in">How signing in works</a> covers the trade-off in full. The rest of this guide follows the MetaMask route.</p>
+      </div>
+
+      <h3>Install MetaMask (Your Crypto Wallet)</h3>
 
       <p>MetaMask is a browser extension that acts as your crypto wallet. It's like a digital keychain that lets you interact with blockchain apps. It's free, takes 2 minutes to set up, and is used by millions of people.</p>
 
@@ -302,7 +308,7 @@
       <p>This is the fundamental advantage of self-custody on a blockchain:</p>
 
       <ul>
-        <li><strong>We can't take it:</strong> LockIn Wallet has no admin function to withdraw user funds. It's not a policy — it's physically impossible in the code.</li>
+        <li><strong>We can't take it:</strong> LockIn Wallet has no admin function to withdraw user funds. It's not a policy — it isn't in the code. The contracts are upgradeable, so the honest version of this is on our <a href="/security">security page</a>: an upgrade cannot outrun the emergency bypass, which lets you start withdrawing everything on a clock nobody else controls.</li>
         <li><strong>Governments can't freeze it:</strong> There's no bank to serve a court order to. Your smart contract has no off switch.</li>
         <li><strong>Hackers can't drain it:</strong> Even if lockinwallet.com gets hacked, your funds are on the blockchain, not on the website. A hacker would need your personal seed phrase to access your money.</li>
         <li><strong>The company can't go bankrupt and take it:</strong> If LockIn Wallet the company ceased to exist tomorrow, every penny in every user's smart contract would still be there, still enforcing the same limits, still completely accessible to its owner.</li>
@@ -313,7 +319,9 @@
       </div>
 
       <h3>Open Source and Verifiable</h3>
-      <p>The smart contract code is open source — anyone can read it, audit it, and verify that it does exactly what we say it does. There are no hidden functions, no backdoors, no admin keys. The code is publicly deployed on the blockchain and is immutable (cannot be changed after deployment).</p>
+      <p>The smart contract code is open source — anyone can read it, audit it, and verify that it does exactly what we say it does. There are no hidden functions and no admin function that can move your money.</p>
+
+      <p>The contracts <strong>are</strong> upgradeable, which is what lets bugs get fixed, and we would rather say so than let you find out later. Today a single maintainer key executes upgrades; there is no multisig yet. A governance layer is rolling out that puts every upgrade behind a public 48-hour timelock — twice the 24-hour emergency bypass — so a queued change always leaves you time to withdraw first. The full trust model is written out on our <a href="/security">security page</a>.</p>
 
       <p>This is a level of transparency that no bank in the world offers. You don't have to trust us — you can verify everything yourself.</p>
 
@@ -322,7 +330,8 @@
 
       <ul>
         <li><strong>Losing your seed phrase:</strong> If you lose your 12-word recovery phrase and your device breaks, your funds are permanently inaccessible. There is no recovery. Write it down and protect it.</li>
-        <li><strong>Smart contract bugs:</strong> While the code is tested and audited, software can have bugs. This is why we recommend starting with smaller amounts until you're comfortable.</li>
+        <li><strong>No third-party audit yet:</strong> The code is tested and public, but nobody independent has audited it. Software can have bugs. Start with smaller amounts until you're comfortable.</li>
+        <li><strong>Upgradeable contracts:</strong> Upgrades are executed by a single maintainer key today. The emergency bypass means you can always withdraw on a clock nobody else controls, including during an upgrade you disagree with.</li>
         <li><strong>Crypto price volatility:</strong> If you save in ETH, its dollar value will fluctuate. Use stablecoins (USDT/USDC) if you want dollar-stable savings.</li>
         <li><strong>Gas fees:</strong> Every blockchain transaction costs a small fee. On busy days, fees can be higher. This is the cost of decentralization.</li>
       </ul>

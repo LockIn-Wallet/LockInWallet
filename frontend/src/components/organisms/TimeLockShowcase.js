@@ -11,7 +11,7 @@ import {
 // Simulation timeline (ms within each loop)
 const LOOP_MS = 16000;
 const TICK_MS = 100;
-const COMPROMISE_MS = 2000; // attacker steals the private key
+const COMPROMISE_MS = 2000; // attacker steals the password
 const DRAIN_MS = 1800; // regular wallet fully drained this long after compromise
 const HOUR_TICK_MS = 1600; // one simulated "hour" per tick
 const HOURS_UNTIL_RESCUE = 4; // you notice the alert and move funds after 4 hours
@@ -41,9 +41,10 @@ const getTimeline = (elapsed) => {
 };
 
 /**
- * TimeLockShowcase - looping animated simulation: the same stolen private
- * key drains a regular wallet instantly, but only leaks the hourly limit
- * from a LockInWallet vault until the owner reacts.
+ * TimeLockShowcase - looping simulation: the same stolen password drains a
+ * regular wallet instantly, but only leaks the hourly limit from a LockIn
+ * vault until the owner reacts. "Password" because this runs on the landing
+ * page; the precise term is on /security.
  */
 const TimeLockShowcase = () => {
   const [elapsed, setElapsed] = useState(0);
@@ -79,17 +80,17 @@ const TimeLockShowcase = () => {
     ? "Drained in seconds. Everything is gone."
     : compromised
     ? "Attacker is withdrawing everything…"
-    : "Protected only by whoever holds the password.";
+    : "One password away from empty.";
 
   const vaultStatus = !compromised
-    ? "Protected by your hourly limit, enforced by the wallet itself."
+    ? "Hourly limit, enforced by the wallet itself."
     : rescued
-    ? `You saw the alert, froze the account with your recovery key and moved everything to a fresh address. The thief got only ${formatUSD(
+    ? `You saw the alert, froze the account and moved the rest. The thief got ${formatUSD(
         stolenFromVault,
       )}.`
     : `Hour ${hoursElapsed + 1}: attacker can only take ${formatUSD(
         DEMO_HOURLY_LIMIT,
-      )} — the hourly limit. Everything else is time-locked.`;
+      )} — the hourly limit. Everything else has to wait.`;
 
   return (
     <div style={homeStyles.section}>
@@ -97,9 +98,8 @@ const TimeLockShowcase = () => {
         The same stolen password, hitting two wallets
       </h3>
       <p style={homeStyles.sectionSubtitle}>
-        Both hold {formatUSD(DEMO_VAULT_BALANCE)}. Anything above your limit has
-        to wait, and nobody can rush it — which is the time you need to notice
-        and react.
+        Both hold {formatUSD(DEMO_VAULT_BALANCE)}. Anything over the limit has to
+        wait, and nobody can rush it.
       </p>
 
       <div
@@ -178,9 +178,8 @@ const TimeLockShowcase = () => {
       </div>
 
       <p style={homeStyles.captionText}>
-        You choose your own hourly, daily and monthly limits. Anything above
-        them has to wait in the open for the delay you set, and you are alerted
-        the moment someone tries.
+        You set the hourly, daily and monthly limits — and you are alerted the
+        moment someone tries to go over one.
       </p>
     </div>
   );

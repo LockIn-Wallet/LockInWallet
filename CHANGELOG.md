@@ -70,16 +70,24 @@ these notes on the in-app **Governance** page before they execute.
   nobody can exceed it, including us and including you), demonstrates it with
   the live console, shows it holding under attack, and asks for a sign-in.
   Chain names, the wallet comparison, the proof figures and the upgrade
-  disclosure all move to a new `/how-it-works` page, linked from the hero, the
-  nav and the footer. *Frontend only — no contract change, and no claim
+  disclosure all move to a new `/security` page, linked from the hero, the nav
+  and the footer. *Frontend only — no contract change, and no claim
   changed: the same facts are stated in the same terms, in a different place.*
-- New `/how-it-works` page for the crypto-native and the merely sceptical: the
+- New `/security` page for the crypto-native and the merely sceptical: the
   enforcement mechanism spelled out, the comparison table with its categories
   defined first, the trust model including the single maintainer key and the
   absence of an audit, which chains it runs on, and an FAQ. Public route — it
   has to be readable by someone deciding whether to connect anything at all.
-  This also gives the existing app footer's "How It Works" link a destination;
-  it previously redirected to the home page.
+  Not `/how-it-works`: that URL already serves the static beginner's guide in
+  `public/`, and `cleanUrls` in `vercel.json` makes the file win over any route
+  declared in the app, so the page would have been unreachable in production.
+- The static beginner's guide (`public/how-it-works.html`) no longer contradicts
+  SECURITY.md. It claimed the contracts were immutable with no admin keys, and
+  described the code as audited; it now states the upgrade model, the single
+  maintainer key, the 48-hour timelock rolling out, and the absence of any
+  third-party audit. Also updated for Base (it described Optimism as the only
+  network) and for email sign-in (it described installing MetaMask as the only
+  way to get a wallet). *Static page only — no contract change.*
 - A short credibility block on the landing page names the remaining trust
   assumption and links straight to the contracts. The rest of the page is now
   written in the register a scam is also written in, and a reader who already
