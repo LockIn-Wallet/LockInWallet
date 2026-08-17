@@ -64,12 +64,18 @@ these notes on the in-app **Governance** page before they execute.
 
 ### Changed
 - The connect dialog asks which kind of person you are rather than which
-  technology you would like: "I'm new to this — make me a wallet" against "I
-  already use crypto — connect my wallet". Each option states its own cost. The
-  easy one is the one that leaves Coinbase holding an email address linked to a
-  wallet; the private one is the one where losing your key is nobody else's
-  problem to solve. Naming the trade-off is the point — a newcomer cannot weigh
-  a choice whose consequences are only described in a security document.
+  technology you would like: "Email sign-in", badged *New to crypto*, against "I
+  already use crypto — use MetaMask or another wallet", badged *Most private*.
+  Each carries a logo and states its own cost. The easy one says outright that
+  it needs no Coinbase account but leaves Coinbase holding an email address
+  linked to a wallet; the private one says outright that losing your key is
+  nobody else's problem to solve. Naming the trade-off is the point — a newcomer
+  cannot weigh a choice whose consequences live only in a security document.
+
+  The label reads "Most private" rather than "Anonymous" on purpose: no email
+  and no account is genuinely the more private of the two, but a wallet address
+  is public by design and its RPC still sees an IP, so anonymity is not on
+  offer and is not claimed.
 
 - Base is the default network instead of Optimism. Optimism was first because
   existing savings lived there and a moved default would have shown returning

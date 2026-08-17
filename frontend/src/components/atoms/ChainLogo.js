@@ -3,6 +3,15 @@ import React from "react";
 // Inline marks so the homepage never reaches out to a CDN for a logo.
 // viewBox is normalised to 0 0 32 32 for every chain.
 const CHAIN_MARKS = {
+  // Added with the Base rollout. Without a mark here the card renders no logo
+  // at all, which is how it shipped — `ChainLogo` returns null for a chain it
+  // does not know, silently.
+  base: {
+    background: "#0052FF",
+    render: (
+      <circle cx="16" cy="16" r="7.5" fill="none" stroke="#ffffff" strokeWidth="3.2" />
+    ),
+  },
   optimism: {
     background: "#FF0420",
     render: (

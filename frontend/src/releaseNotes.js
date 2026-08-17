@@ -23,7 +23,7 @@ export const RELEASE_NOTES = [
       },
       {
         emoji: "🧭",
-        text: "Pressing connect now asks which one sounds like you, rather than which technology you would like. New to crypto and we make you a wallet — nothing to install, nothing to write down. Already using crypto and you connect the wallet you have, which is the private option: no email, no account with anyone, nothing about you shared. Each says what it costs you, because the easy one is the one that tells Coinbase who you are and the private one is the one where losing your key is nobody else's problem to fix.",
+        text: "Pressing connect now asks which one sounds like you, rather than which technology you would like. New to crypto? Email sign-in makes you a wallet — nothing to install, nothing to write down, and no Coinbase account needed. Already using crypto? Use the wallet you have, which is marked as the most private option: no email, no account with anyone, nothing about you shared. Each says what it costs you, because the easy one is the one that tells Coinbase who you are, and the private one is the one where losing your key is nobody else's problem to fix.",
       },
       {
         emoji: "📖",

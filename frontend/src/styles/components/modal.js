@@ -262,6 +262,16 @@ export const modalStyles = {
     borderColor: colors.primary.main,
   },
 
+  // A logo beside the heading, so the two options are told apart before either
+  // is read. The text still carries the meaning; the mark only speeds up the
+  // glance.
+  optionHead: {
+    display: "flex",
+    alignItems: "center",
+    gap: space[3],
+    marginBottom: space[2],
+  },
+
   optionTitle: {
     display: "block",
     margin: 0,
@@ -275,6 +285,14 @@ export const modalStyles = {
     fontSize: type.small,
     color: colors.text.gray,
     lineHeight: 1.6,
+  },
+
+  // The second option's badge names a property rather than an audience, so it
+  // is deliberately quieter than the accent one — otherwise two badges compete
+  // and the recommendation stops reading as a recommendation.
+  optionBadgeNeutral: {
+    color: colors.text.secondary,
+    borderColor: colors.border.strong,
   },
 
   optionBadge: {

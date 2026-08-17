@@ -1,6 +1,8 @@
 import React, { useEffect } from "react";
 import PropTypes from "prop-types";
 
+import SignInOptionLogo from "../atoms/SignInOptionLogo.js";
+
 import { modalStyles } from "../../styles";
 
 import { truncateAddress } from "../../utils/addressUtils.js";
@@ -89,20 +91,21 @@ const WalletChoiceModal = ({
               style={{ ...modalStyles.option, ...modalStyles.optionRecommended }}
               onClick={choose(onSignIn)}
             >
-              <span style={modalStyles.optionBadge}>Easiest</span>
-              <span style={modalStyles.optionTitle}>
-                I'm new to this — make me a wallet
+              <span style={modalStyles.optionBadge}>New to crypto</span>
+              <span style={modalStyles.optionHead}>
+                <SignInOptionLogo kind="email" label="Email sign-in" />
+                <span style={modalStyles.optionTitle}>Email sign-in</span>
               </span>
               <span style={modalStyles.optionText}>
-                Nothing to install and no seed phrase to keep. You sign in with
-                a code sent to your email, or your fingerprint if your device
-                offers it, and a wallet is created for you.
+                A wallet is created for you. Nothing to install, no seed phrase
+                to keep, and <strong>no Coinbase account needed</strong> — just
+                an email address, or your fingerprint if your device offers it.
                 <br />
                 <br />
                 The trade: Coinbase runs that sign-in, so an email code leaves
                 them holding your email address next to your wallet — a record
-                that connects your savings to you. They can never move your
-                money, but they do know it is yours.
+                connecting your savings to you. They can never move your money,
+                but they do know it is yours.
               </span>
             </button>
           )}
@@ -119,10 +122,17 @@ const WalletChoiceModal = ({
             style={modalStyles.option}
             onClick={choose(onUseOwnWallet)}
           >
-            <span style={modalStyles.optionTitle}>
-              {walletName
-                ? `I already use crypto — connect ${walletName}`
-                : "I already use crypto — connect my wallet"}
+            <span
+              style={{ ...modalStyles.optionBadge, ...modalStyles.optionBadgeNeutral }}
+            >
+              Most private
+            </span>
+            <span style={modalStyles.optionHead}>
+              <SignInOptionLogo kind="wallet" label="Your own wallet" />
+              <span style={modalStyles.optionTitle}>
+                I already use crypto — use {walletName || "MetaMask"} or another
+                wallet
+              </span>
             </span>
             <span style={modalStyles.optionText}>
               {walletAddress ? (
