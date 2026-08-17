@@ -30,6 +30,10 @@ export const RELEASE_NOTES = [
         text: "There is now a page explaining how signing in works, in plain words. Coinbase runs it and offers whichever your device supports — a code sent to your email, or a face or fingerprint check — so the page covers both rather than promising one. It is blunt about the difference that matters: an email code means Coinbase holds your email address next to your wallet, which is a record that links your savings to you, while a fingerprint shares nothing that names you. It also covers using the same savings on your laptop, what to do if you lose your phone, and one thing we cannot tell you — exactly what holds the key when you sign in by email, because Coinbase has not published it and we would rather say so than guess.",
       },
       {
+        emoji: "🏠",
+        text: "The home page now says one thing instead of twelve. It used to open with chain names and a table comparing wallet types, which only helps if you already know what a hot wallet is — and if you don't, it reads as a wall of jargon guarding your savings. It now says what the wallet actually does for you: you choose how much money can leave and how often, and after that nobody can take more, including us and including you. Everything technical — how the limit is enforced, the comparison with its terms explained, which chains it runs on, and exactly what we can still do — has moved to a new How it works page, linked at the top of every page. Nothing was softened or dropped on the way: the same facts are stated in the same words, in a place where they help rather than block.",
+      },
+      {
         emoji: "🔵",
         text: "New wallets start on Base rather than Optimism. It is where buying savings with a bank card actually works, so it is the sensible place to begin. If your savings are on Optimism nothing has moved — they are still there, and switching back is one tap.",
       },

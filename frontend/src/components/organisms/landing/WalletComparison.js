@@ -7,7 +7,8 @@ import { landingStyles } from "../../../styles";
 import {
   COMPARISON_COLUMNS,
   COMPARISON_ROWS,
-} from "../../../utils/landingContent.js";
+  COMPARISON_INTRO,
+} from "../../../utils/howItWorksContent.js";
 
 const cellStyle = (column, row) => {
   if (column.ours) return landingStyles.tableCellOurs;
@@ -24,9 +25,9 @@ const WalletComparison = () => (
   <section id="compare" style={landingStyles.section}>
     <div style={landingStyles.inner}>
       <SectionHeading
-        eyebrow="Compare"
-        title="Not all wallets protect you the same way"
-        lede="Most wallets can be emptied the moment a key leaks, and most ask you to trust code you cannot read."
+        eyebrow={COMPARISON_INTRO.eyebrow}
+        title={COMPARISON_INTRO.title}
+        lede={COMPARISON_INTRO.lede}
       />
 
       <div style={landingStyles.tableScroll}>

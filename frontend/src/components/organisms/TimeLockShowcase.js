@@ -79,10 +79,10 @@ const TimeLockShowcase = () => {
     ? "Drained in seconds. Everything is gone."
     : compromised
     ? "Attacker is withdrawing everything…"
-    : "Protected only by the private key.";
+    : "Protected only by whoever holds the password.";
 
   const vaultStatus = !compromised
-    ? "Protected by on-chain time locks + hourly withdrawal limit."
+    ? "Protected by your hourly limit, enforced by the wallet itself."
     : rescued
     ? `You saw the alert, froze the account with your recovery key and moved everything to a fresh address. The thief got only ${formatUSD(
         stolenFromVault,
@@ -94,12 +94,12 @@ const TimeLockShowcase = () => {
   return (
     <div style={homeStyles.section}>
       <h3 style={homeStyles.sectionTitle}>
-        The same stolen key, hitting two wallets
+        The same stolen password, hitting two wallets
       </h3>
       <p style={homeStyles.sectionSubtitle}>
-        Both hold {formatUSD(DEMO_VAULT_BALANCE)}. Withdrawals above your limit
-        are time-locked on-chain, so a thief can&apos;t rush them — which is the
-        time you need to notice and react.
+        Both hold {formatUSD(DEMO_VAULT_BALANCE)}. Anything above your limit has
+        to wait, and nobody can rush it — which is the time you need to notice
+        and react.
       </p>
 
       <div
@@ -107,8 +107,8 @@ const TimeLockShowcase = () => {
         className={justCompromised ? "home-shake" : undefined}
       >
         {compromised
-          ? "Private key stolen by malware"
-          : "Two wallets, one secret about to leak…"}
+          ? "Password stolen by malware"
+          : "Two wallets, one password about to leak…"}
       </div>
 
       <div style={homeStyles.demoGrid}>
@@ -179,8 +179,8 @@ const TimeLockShowcase = () => {
 
       <p style={homeStyles.captionText}>
         You choose your own hourly, daily and monthly limits. Anything above
-        them needs a time-locked proposal — visible on-chain long before it can
-        execute, with alerts the moment someone tries.
+        them has to wait in the open for the delay you set, and you are alerted
+        the moment someone tries.
       </p>
     </div>
   );

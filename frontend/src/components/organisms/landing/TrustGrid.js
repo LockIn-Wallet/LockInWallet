@@ -9,8 +9,8 @@ import { landingStyles } from "../../../styles";
 import {
   TRUST_POINTS,
   UPGRADE_DISCLOSURE,
-  SECURITY_URL,
-} from "../../../utils/landingContent.js";
+} from "../../../utils/howItWorksContent.js";
+import { SECURITY_URL } from "../../../utils/siteLinks.js";
 
 /**
  * TrustGrid - the protections that are live on-chain today, followed by the

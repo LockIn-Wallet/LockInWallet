@@ -335,6 +335,18 @@ export const landingStyles = {
     textAlign: "center",
   },
 
+  // Sits under the console to say out loud that it is a demonstration. Quiet
+  // enough that it reads as a label rather than a disclaimer.
+  heroCaption: {
+    ...monoBase,
+    fontSize: type.caption,
+    color: colors.text.gray,
+    textAlign: "center",
+    maxWidth: layout.proseMax,
+    margin: `${space[5]} auto 0 auto`,
+    lineHeight: 1.6,
+  },
+
   // ---- Signature: the enforcement console -------------------------------
   console: {
     ...cardBase,
@@ -760,6 +772,45 @@ export const landingStyles = {
     letterSpacing: letterSpacing.wide,
     textTransform: "uppercase",
     margin: `0 0 ${space[3]} 0`,
+  },
+
+  // ---- Credibility strip ------------------------------------------------
+  // The one block on the landing page addressed to a sceptic. Set in mono and
+  // left-aligned so it reads as a statement of fact rather than more marketing.
+  credibilityCard: {
+    ...cardBase,
+    padding: space[7],
+    textAlign: "left",
+  },
+
+  credibilityTitle: {
+    fontSize: type.h3,
+    fontWeight: fontWeight.semibold,
+    color: colors.text.primary,
+    margin: `0 0 ${space[3]} 0`,
+  },
+
+  credibilityBody: {
+    fontSize: type.body,
+    color: colors.text.muted,
+    lineHeight: 1.7,
+    margin: 0,
+    maxWidth: layout.proseMax,
+    textAlign: "left",
+  },
+
+  credibilityLinks: {
+    display: "flex",
+    flexWrap: "wrap",
+    gap: space[5],
+    marginTop: space[5],
+  },
+
+  credibilityLink: {
+    ...monoBase,
+    fontSize: type.caption,
+    color: colors.primary.main,
+    textDecoration: "none",
   },
 
   // Standalone card for the remaining-trust disclosure

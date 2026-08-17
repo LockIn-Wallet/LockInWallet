@@ -110,7 +110,7 @@ const EnforcementConsole = () => {
     <div style={landingStyles.console}>
       <div style={landingStyles.consoleBar}>
         <span style={landingStyles.consoleLabel}>
-          LIVE RULE CHECK · ILLUSTRATIVE VAULT
+          LIVE DEMO · EXAMPLE WALLET
         </span>
         <span style={landingStyles.consoleLabel}>
           <span style={landingStyles.liveDot} aria-hidden="true" />{" "}
@@ -125,7 +125,7 @@ const EnforcementConsole = () => {
             {formatUSD(DEMO_VAULT_BALANCE)}{" "}
             <span style={landingStyles.balanceUnit}>USDC</span>
           </p>
-          <p style={landingStyles.balanceStatus}>Locked · rules active</p>
+          <p style={landingStyles.balanceStatus}>Locked · your rules are on</p>
 
           <div
             style={ticketStyle}
@@ -152,8 +152,8 @@ const EnforcementConsole = () => {
           >
             <span style={landingStyles.bypassLabel}>
               {bypassRequested
-                ? "Bypass requested"
-                : "Going over needs a bypass"}
+                ? "Waiting period started"
+                : "Going over means waiting"}
             </span>
             <span
               style={
@@ -221,8 +221,9 @@ const EnforcementConsole = () => {
           </div>
 
           <p style={landingStyles.consoleNote}>
-            Every withdrawal is charged to all three at once, so the tightest
-            one is your real speed limit. Each refills on its own clock.
+            Every withdrawal counts against all three at once, so the tightest
+            limit is the one that really applies. Each one refills on its own
+            clock.
           </p>
         </div>
       </div>

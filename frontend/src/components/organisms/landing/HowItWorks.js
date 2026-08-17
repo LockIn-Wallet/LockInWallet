@@ -11,7 +11,7 @@ import { HOW_IT_WORKS } from "../../../utils/landingContent.js";
  * only possible once the one before it is done.
  */
 const HowItWorks = () => (
-  <section id="how-it-works" style={landingStyles.section}>
+  <section id="steps" style={landingStyles.section}>
     <div style={landingStyles.inner}>
       <SectionHeading
         eyebrow="How it works"

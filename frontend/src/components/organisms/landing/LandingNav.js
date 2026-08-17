@@ -38,7 +38,7 @@ const LandingNav = ({ onLaunch }) => (
     </div>
 
     <button type="button" style={landingStyles.ctaCompact} onClick={onLaunch}>
-      Connect wallet
+      Sign in
     </button>
   </nav>
 );
