@@ -994,6 +994,7 @@ function AppContentInner({
     if (isSigningIn) return;
     setIsSigningIn(true);
     clearWalletLoggedOut();
+    trackEvent("signin_method_chosen", { method: "passkey" });
 
     try {
       await signInWithPasskey();
@@ -1048,6 +1049,7 @@ function AppContentInner({
 
   const connectWallet = debounce(async () => {
     clearWalletLoggedOut();
+    trackEvent("signin_method_chosen", { method: "own_wallet" });
 
     // This button means "my own wallet", and that is a different wallet from
     // the one signing in provides. Without this it read `getActiveProvider()`,
