@@ -6,28 +6,30 @@ import SectionHeading from "../../atoms/SectionHeading.js";
 
 import { landingStyles } from "../../../styles";
 
-import { SECURITY_URL } from "../../../utils/landingContent.js";
 import {
-  TRUST_POINTS,
+  MONEY_SECTION,
   UPGRADE_DISCLOSURE,
-} from "../../../utils/cryptoContent.js";
+  SECURITY_URL,
+  CRYPTO_PATH,
+} from "../../../utils/landingContent.js";
 
 /**
- * TrustGrid - the protections that are live on-chain today, followed by the
- * one thing we can still do. Naming the remaining trust assumption on the
- * page is the point: a security section that only lists strengths reads as
+ * MoneySection - "where your money actually is", in plain words. The section
+ * ends with the one thing we can still do, stated on the page rather than
+ * buried in a doc: a trust section that only lists strengths reads as
  * marketing.
  */
-const TrustGrid = () => (
+const MoneySection = () => (
   <section id="security" style={landingStyles.section}>
     <div style={landingStyles.inner}>
       <SectionHeading
-      eyebrow="Verify, don't trust"
-        title="Nothing here asks for your faith"
+        eyebrow={MONEY_SECTION.eyebrow}
+        title={MONEY_SECTION.title}
+        lede={MONEY_SECTION.intro}
       />
 
       <div style={landingStyles.featureGrid}>
-        {TRUST_POINTS.map((point) => (
+        {MONEY_SECTION.points.map((point) => (
           <article key={point.title} style={landingStyles.featureCard}>
             <span style={landingStyles.iconTile}>
               <Icon name={point.icon} />
@@ -52,8 +54,18 @@ const TrustGrid = () => (
           {UPGRADE_DISCLOSURE.linkLabel} →
         </LandingLink>
       </div>
+
+      <p style={landingStyles.footnote}>
+        <LandingLink
+          href={CRYPTO_PATH}
+          internal
+          style={landingStyles.disclosureLink}
+        >
+          {MONEY_SECTION.cryptoLink} →
+        </LandingLink>
+      </p>
     </div>
   </section>
 );
 
-export default TrustGrid;
+export default MoneySection;

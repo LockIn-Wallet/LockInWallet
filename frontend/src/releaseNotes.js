@@ -14,6 +14,14 @@ export const RELEASE_NOTES = [
     title: "A wallet without a seed phrase",
     highlights: [
       {
+        emoji: "🏠",
+        text: "The home page now speaks plainly. No blockchain words, no crypto homework — it tells you what this is: money you give yourself an allowance from, where everything above the allowance has to be announced and then wait out a delay you chose, with no one able to skip the clock. You can try the rules right on the page before signing in, and the page is honest about the rest: where the money actually sits, what we charge (nothing, unless you turn on growing — then up to 1% a year, taken only from what it earns), and what we can still do as maintainers.",
+      },
+      {
+        emoji: "🧑‍💻",
+        text: "If you do know crypto, there's now a page written for you at /crypto: the architecture, the threat model with the stolen-key demo, the exact fee mechanics, the deployed contract addresses, and a straight answer to the audit question (there hasn't been one yet). Everything technical that used to crowd the home page lives there now.",
+      },
+      {
         emoji: "👆",
         text: "You can now start saving without a wallet at all. Press sign in, prove it is you with a code sent to your email or with your face or fingerprint, and you have one — nothing to install, no seed phrase to write down, no password to forget. It follows you to your other devices through the account you already sign into them with, so a new phone or laptop means signing in, not hunting for a backup. If you already have a wallet, connecting it works exactly as before; pressing connect now asks which you would rather use.",
       },

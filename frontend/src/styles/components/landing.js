@@ -335,6 +335,13 @@ export const landingStyles = {
     textAlign: "center",
   },
 
+  heroNote: {
+    fontSize: type.small,
+    color: colors.text.gray,
+    margin: `${space[4]} 0 0 0`,
+    textAlign: "center",
+  },
+
   // ---- Signature: the enforcement console -------------------------------
   console: {
     ...cardBase,
@@ -651,6 +658,15 @@ export const landingStyles = {
     fontSize: type.body,
   },
 
+  // Two-column variant: forcing the 760px width of the wallet table onto a
+  // question-and-answer pair just makes phones scroll for nothing
+  tableTwoCol: {
+    width: "100%",
+    minWidth: "480px",
+    borderCollapse: "collapse",
+    fontSize: type.body,
+  },
+
   tableCorner: {
     padding: `${space[4]} ${space[5]}`,
     backgroundColor: colors.background.darker,
@@ -875,6 +891,148 @@ export const landingStyles = {
     lineHeight: 1.6,
     margin: `0 0 ${space[6]} 0`,
     textAlign: "center",
+  },
+
+  // ---- Prose section (the "why this exists" argument) --------------------
+  proseBlock: {
+    maxWidth: layout.proseMax,
+    margin: "0 auto",
+  },
+
+  proseParagraph: {
+    fontSize: type.bodyLg,
+    color: colors.text.light,
+    lineHeight: 1.7,
+    margin: `0 0 ${space[5]} 0`,
+    textAlign: "left",
+  },
+
+  // ---- Rule preview (hero widget) ---------------------------------------
+  previewCard: {
+    ...cardBase,
+    position: "relative",
+    maxWidth: "760px",
+    margin: "0 auto",
+    border: `1px solid ${colors.border.default}`,
+    overflow: "hidden",
+  },
+
+  previewFields: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+    gap: space[5],
+    padding: `${space[6]} ${space[6]} ${space[4]}`,
+  },
+
+  previewField: {
+    minWidth: 0,
+    textAlign: "left",
+  },
+
+  previewInput: {
+    ...monoBase,
+    width: "100%",
+    boxSizing: "border-box",
+    backgroundColor: colors.background.dark,
+    border: `1px solid ${colors.border.default}`,
+    borderRadius: borderRadius.lg,
+    padding: `${space[3]} ${space[4]}`,
+    fontSize: type.bodyLg,
+    color: colors.text.primary,
+    outline: "none",
+  },
+
+  previewSentence: {
+    fontSize: type.bodyLg,
+    color: colors.text.light,
+    lineHeight: 1.7,
+    textAlign: "left",
+    margin: 0,
+    padding: `${space[4]} ${space[6]}`,
+    borderTop: `1px solid ${colors.border.hairline}`,
+  },
+
+  previewStrong: {
+    ...monoBase,
+    color: colors.primary.main,
+    fontWeight: fontWeight.semibold,
+    whiteSpace: "nowrap",
+  },
+
+  previewCtaRow: {
+    display: "flex",
+    justifyContent: "flex-start",
+    padding: `0 ${space[6]} ${space[6]}`,
+  },
+
+  // ---- FAQ ---------------------------------------------------------------
+  faqList: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(440px, 1fr))",
+    gap: "1px",
+    backgroundColor: colors.border.hairline,
+    border: `1px solid ${colors.border.hairline}`,
+    borderRadius: borderRadius.xxl,
+    overflow: "hidden",
+  },
+
+  faqItem: {
+    backgroundColor: colors.background.primary,
+    padding: space[6],
+  },
+
+  faqQuestion: {
+    textAlign: "left",
+    fontSize: type.h4,
+    fontWeight: fontWeight.semibold,
+    color: colors.text.primary,
+    margin: `0 0 ${space[2]} 0`,
+  },
+
+  faqAnswer: {
+    fontSize: type.body,
+    lineHeight: 1.65,
+    color: colors.text.muted,
+    margin: 0,
+    textAlign: "left",
+  },
+
+  // ---- Who it's for -----------------------------------------------------
+  whoGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+    gap: "1px",
+    backgroundColor: colors.border.hairline,
+    border: `1px solid ${colors.border.hairline}`,
+    borderRadius: borderRadius.xxl,
+    overflow: "hidden",
+  },
+
+  // ---- Contract addresses (/crypto) -------------------------------------
+  addressRow: {
+    display: "flex",
+    alignItems: "baseline",
+    gap: space[4],
+    flexWrap: "wrap",
+    padding: `${space[4]} 0`,
+    borderTop: `1px solid ${colors.border.hairline}`,
+  },
+
+  addressChain: {
+    fontSize: type.body,
+    fontWeight: fontWeight.semibold,
+    color: colors.text.primary,
+    minWidth: "90px",
+    textAlign: "left",
+  },
+
+  addressMono: {
+    ...monoBase,
+    fontSize: type.small,
+    color: colors.primary.main,
+    textDecoration: "none",
+    overflowWrap: "anywhere",
+    textAlign: "left",
   },
 
   // ---- Footer -----------------------------------------------------------

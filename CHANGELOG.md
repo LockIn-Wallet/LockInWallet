@@ -22,6 +22,25 @@ these notes on the in-app **Governance** page before they execute.
 ## [Unreleased]
 
 ### Added
+- The home page is rewritten for someone who has never held crypto. Chain
+  vocabulary (keys, contracts, custody, chains, gas) is gone from `/`;
+  instead the page explains the allowance, the announced wait, where the
+  money actually is, the optional growth and its fee, and answers the six
+  questions people actually ask — with an interactive rule preview in the
+  hero that needs no sign-in and makes no network calls. Every claim was
+  re-verified against the shipped contracts before writing: the page says
+  "the wait you chose, which nothing can skip", not "locked until a date",
+  because that is what `TimePeriodLimitsModule`/`BypassSystemModule` actually
+  enforce. *Frontend only — no contract change.*
+- A crypto-native landing at `/crypto`. The technical sections that used to
+  sit on the home page — the enforcement console, the stolen-key showcase,
+  the wallet comparison table, the trust grid with the upgrade disclosure,
+  and chain availability — moved there rather than being deleted, joined by
+  an architecture section, the exact yield-fee mechanics (Aave v3, 100 bps
+  management fee capped by realized surplus, 5% prize fee), deployed
+  `SavingsCore` addresses with explorer links, and a technical FAQ that
+  states plainly that there has been no third-party audit. *Frontend only —
+  no contract change.*
 - Sign in with a passkey. Face ID or a fingerprint creates a wallet — no
   extension, no seed phrase, no password — and the passkey follows the user to
   their other devices through the Google or Apple account already signing them

@@ -1,29 +1,30 @@
 import React from "react";
 
-import SectionHeading from "../atoms/SectionHeading.js";
 import LandingNav from "../organisms/landing/LandingNav.js";
 import LandingHero from "../organisms/landing/LandingHero.js";
-import ProofStrip from "../organisms/landing/ProofStrip.js";
-import WalletComparison from "../organisms/landing/WalletComparison.js";
-import TrustGrid from "../organisms/landing/TrustGrid.js";
+import RulePreview from "../organisms/landing/RulePreview.js";
+import ProblemSection from "../organisms/landing/ProblemSection.js";
 import HowItWorks from "../organisms/landing/HowItWorks.js";
+import LockedComparison from "../organisms/landing/LockedComparison.js";
+import MoneySection from "../organisms/landing/MoneySection.js";
+import GrowthSection from "../organisms/landing/GrowthSection.js";
+import WhoItsFor from "../organisms/landing/WhoItsFor.js";
+import FaqSection from "../organisms/landing/FaqSection.js";
 import LandingClosing from "../organisms/landing/LandingClosing.js";
 import LandingFooter from "../organisms/landing/LandingFooter.js";
 
-import TimeLockShowcase from "../organisms/TimeLockShowcase.js";
-import ChainAvailability from "../organisms/ChainAvailability.js";
-
 import { landingStyles } from "../../styles";
 
-// Shares the lazy chunk with the standalone page, so chart.js still only
-// downloads when this section is actually reached
+import { HERO, HOME_FAQ, CLOSING, HOME_SEO } from "../../utils/landingContent.js";
+import { usePageSeo } from "../../hooks/usePageSeo.js";
 
 /**
- * WalletConnectionPrompt - the logged-out landing page.
- *
- * The argument runs in order: the contract refuses a withdrawal (hero), three
- * checkable facts, then the demos that prove each claim, then the comparison,
- * the trust model including what we can still do, and finally setup.
+ * WalletConnectionPrompt - the logged-out landing page, written for someone
+ * who has never held crypto. The argument runs in order: the rules in your
+ * own hands (hero widget), why every other tool fails at 2am, the three
+ * decisions, what "locked" means here, where the money actually is, the
+ * optional growth, who it's for, the questions everyone asks, then setup.
+ * Everything chain-native lives on /crypto instead.
  */
 const WalletConnectionPrompt = ({
   provider,
@@ -35,6 +36,8 @@ const WalletConnectionPrompt = ({
   onSignInWithPasskey,
   isSigningIn,
 }) => {
+  usePageSeo(HOME_SEO);
+
   const isEVMDisconnected = !provider && networkType !== "solana";
   const isSolanaDisconnected =
     networkType === "solana" && (!solanaConnected || !solanaWallet);
@@ -43,43 +46,37 @@ const WalletConnectionPrompt = ({
     return null;
   }
 
+  const onLaunch = onSignInWithPasskey || connectWallet;
+
+  const heroContent = {
+    ...HERO,
+    ctaSecondaryHref: "#how-it-works",
+  };
+
   return (
     <div className="landing-shell" style={landingStyles.page}>
-      <LandingNav onLaunch={onSignInWithPasskey || connectWallet} />
+      <LandingNav onLaunch={onLaunch} />
 
-      <LandingHero onLaunch={onSignInWithPasskey || connectWallet} />
+      <LandingHero content={heroContent} onLaunch={onLaunch}>
+        <RulePreview onLaunch={onLaunch} />
+      </LandingHero>
 
-      <ProofStrip />
-
-      <section style={landingStyles.section}>
-        <div style={landingStyles.inner}>
-          <SectionHeading
-            eyebrow="What a leaked key costs you"
-            title="A stolen key can't empty your wallet"
-            lede="Your limit is the attacker's limit too. That gap is the time you need to notice and take the account back."
-          />
-          <TimeLockShowcase />
-        </div>
-      </section>
-
-      <WalletComparison />
-
-      <TrustGrid />
-
-      <section style={landingStyles.section}>
-        <div style={landingStyles.inner}>
-          <SectionHeading
-            eyebrow="Chains"
-            title="Live on Optimism, with Ethereum underway"
-            lede="Cheap, fast transactions matter here: an hourly limit only makes sense if using it doesn't cost a fortune in gas."
-          />
-          <ChainAvailability />
-        </div>
-      </section>
+      <ProblemSection />
 
       <HowItWorks />
 
+      <LockedComparison />
+
+      <MoneySection />
+
+      <GrowthSection />
+
+      <WhoItsFor />
+
+      <FaqSection title="Questions people actually ask" items={HOME_FAQ} />
+
       <LandingClosing
+        content={CLOSING}
         networkType={networkType}
         connectWallet={connectWallet}
         onConnectPhantom={onConnectPhantom}

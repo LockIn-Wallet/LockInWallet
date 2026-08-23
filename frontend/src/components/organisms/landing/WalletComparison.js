@@ -7,7 +7,7 @@ import { landingStyles } from "../../../styles";
 import {
   COMPARISON_COLUMNS,
   COMPARISON_ROWS,
-} from "../../../utils/landingContent.js";
+} from "../../../utils/cryptoContent.js";
 
 const cellStyle = (column, row) => {
   if (column.ours) return landingStyles.tableCellOurs;
