@@ -2,6 +2,7 @@ import React, { useState, useCallback } from "react";
 import PropTypes from "prop-types";
 
 import Icon from "./Icon.js";
+import { trackEvent } from "../../utils/posthog.js";
 
 import {
   colors,
@@ -90,9 +91,10 @@ const CollapsibleSection = ({
     setIsExpanded((prev) => {
       const next = !prev;
       saveSectionState(storageKey, next);
+      trackEvent("section_toggled", { section: title, expanded: next });
       return next;
     });
-  }, [storageKey]);
+  }, [storageKey, title]);
 
   return (
     <div style={sectionStyles.container}>

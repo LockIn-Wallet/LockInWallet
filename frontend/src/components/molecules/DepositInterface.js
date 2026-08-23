@@ -17,6 +17,7 @@ import {
 // Import utility functions
 import { getCurrentNetwork } from "../../utils/walletUtils.js";
 import { useVaultTokens, filterToVaultTokens } from "../../hooks/useVaultTokens.js";
+import { trackEvent } from "../../utils/posthog.js";
 
 // Network configuration constants
 const ETH_ADDRESS = "0x0000000000000000000000000000000000000000";
@@ -209,6 +210,8 @@ const DepositInterface = ({
       }`;
       alert(message);
 
+      trackEvent("deposit_completed");
+
       // Clear form and notify parent to refresh balances
       setDepositAmount("");
       if (onBalanceUpdate) {
@@ -247,6 +250,7 @@ const DepositInterface = ({
 
         // Refresh proxy status
         await checkProxyStatus();
+        trackEvent("deposit_address_deployed");
 
         alert(
           "🎉 Your permanent deposit address is ready. It is tied to your wallet for good — use it for every future deposit from an exchange."

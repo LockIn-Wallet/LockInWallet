@@ -10,6 +10,7 @@ import {
 import { getTokenMeta, isStablecoin } from "../../utils/tokenUtils.js";
 import LimitModeToggle from "../molecules/LimitModeToggle.js";
 import LimitPeriodCards from "../molecules/LimitPeriodCards.js";
+import { trackEvent } from "../../utils/posthog.js";
 
 const EVM_ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 
@@ -89,6 +90,7 @@ function CreateVault({ transactionManager, navigate, networkConfig }) {
         penaltyRateBps: Math.round(parseFloat(penaltyPct || "20") * 100),
         limitsArePercentage: isPercent,
       });
+      trackEvent("vault_created");
       // Switch the main wallet flow to the new vault and go home
       transactionManager.setActiveVault(result.vaultAddress);
       navigate("/");

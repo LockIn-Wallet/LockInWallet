@@ -235,6 +235,7 @@ function MainFlow({
   const currentVaultAddress = transactionManager?.getActiveVaultAddress?.() || null;
 
   const handleSelectVault = async (vaultAddress) => {
+    trackEvent("vault_switched");
     // null selects the default: the savings vault
     transactionManager.setActiveVault(
       vaultAddress === personalVaultAddress ? null : vaultAddress
