@@ -29,6 +29,7 @@ import {
   DEFAULT_UNLOCK_DELAY,
 } from "../../utils/spendingPeriods.js";
 
+import { trackEvent } from "../../utils/posthog.js";
 import LimitModeToggle from "../molecules/LimitModeToggle.js";
 import LimitPeriodCards from "../molecules/LimitPeriodCards.js";
 
@@ -266,6 +267,7 @@ const SpendingLimitsSetup = ({
         if (onSpendingLimitsUpdate) {
           onSpendingLimitsUpdate(spendingLimits, limitEdits);
         }
+        trackEvent("spending_limits_set");
         alert("Spending limits saved. Click 'Lock In My Wallet' to activate.");
       } else {
         if (networkType === "solana") {

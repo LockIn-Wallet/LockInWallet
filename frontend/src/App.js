@@ -40,6 +40,7 @@ import {
 import { isSolanaEnabled, isPrizePoolEnabled, isYieldEnabled } from "./utils/featureFlags.js";
 import { createEmptyLimitEdits } from "./utils/spendingPeriods.js";
 import { initAnalytics } from "./utils/analytics.js";
+import { initPostHog, trackEvent, trackPageView } from "./utils/posthog.js";
 import { PRIZE_SAVINGS_PATH } from "./utils/prizeSavingsContent.js";
 import { SIGNING_IN_PATH } from "./utils/signingInContent.js";
 import {
@@ -671,7 +672,12 @@ function AppContentInner({
     // it out of the URL. Analytics only starts once the URL is clean.
     captureReferrerFromUrl();
     initAnalytics();
+    initPostHog();
   }, []);
+
+  useEffect(() => {
+    trackPageView();
+  }, [location.pathname]);
 
   const clearAllState = useCallback(() => {
     setProvider(null);
@@ -689,6 +695,7 @@ function AppContentInner({
     const address =
       networkType === "solana" ? solanaPublicKey?.toString() : evmUserAddress;
 
+    trackEvent("wallet_disconnected");
     markWalletLoggedOut();
 
     // A signed-in wallet is the one thing here that can actually be told to
@@ -947,6 +954,8 @@ function AppContentInner({
     } catch (error) {
       console.error("Error checking setup status:", error);
     }
+
+    trackEvent("wallet_connected", { network: networkType });
   };
 
   const autoConnectWallet = debounce(async () => {

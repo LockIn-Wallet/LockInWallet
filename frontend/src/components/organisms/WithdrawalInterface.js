@@ -19,6 +19,7 @@ import {
 
 // Import utilities
 import { formatCountdown, detectExceedingPeriod, getCurrentNetwork } from "../../utils/walletUtils.js";
+import { trackEvent } from "../../utils/posthog.js";
 import { ethers } from "ethers";
 
 // Import services
@@ -180,6 +181,7 @@ const WithdrawalInterface = ({
       const amountValue = parseFloat(withdrawalAmount);
       const txHash = await transactionManager.penaltyWithdrawFromActiveVault(amountValue);
       alert(`Penalty withdrawal successful!\n\nYou received: ${userReceives} ${selectedToken}\nPenalty: ${penaltyAmount} ${selectedToken}\nTx: ${txHash}`);
+      trackEvent("withdrawal_completed");
       setWithdrawalAmount("");
 
       if (onBalanceUpdate) await onBalanceUpdate();
@@ -252,6 +254,8 @@ const WithdrawalInterface = ({
         const txHash = result?.hash || result;
         alert(`✅ EVM withdrawal successful!\n\nTransaction: ${txHash}\nAmount: ${withdrawalAmount} ${selectedToken}\nDestination: ${destinationAddress.slice(0, 8)}...${destinationAddress.slice(-4)}`);
       }
+
+      trackEvent("withdrawal_completed");
 
       // Clear form and notify parent components
       setWithdrawalAmount("");

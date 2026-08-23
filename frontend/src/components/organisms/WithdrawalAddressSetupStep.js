@@ -4,6 +4,7 @@ import { ethers } from "ethers";
 
 // Import components
 import WithdrawalAddressSelector from "../WithdrawalAddressSelector.js";
+import { trackEvent } from "../../utils/posthog.js";
 
 // Import services
 import {
@@ -140,6 +141,7 @@ const WithdrawalAddressSetupStep = ({
       }
 
       const txHash = await transactionManager.addWithdrawalAddress(title, address);
+      trackEvent("withdrawal_address_added");
       alert(
         `✅ Withdrawal address processed successfully!\n\n` +
           `Title: ${title}\n` +

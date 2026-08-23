@@ -19,7 +19,7 @@
 const GA_MEASUREMENT_ID = "G-EZS61DFP72";
 
 // 0x + 40 hex — an EVM address anywhere in the string, path or query alike
-const ADDRESS_PATTERN = /0x[a-fA-F0-9]{40}/g;
+export const ADDRESS_PATTERN = /0x[a-fA-F0-9]{40}/g;
 const REDACTED = "0xREDACTED";
 
 /**

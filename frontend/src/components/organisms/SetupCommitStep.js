@@ -13,6 +13,7 @@ import {
 import { getCurrentNetwork } from "../../utils/walletUtils.js";
 import { getPendingReferrerFor } from "../../services/referral.service.js";
 import { truncateAddress } from "../../utils/addressUtils.js";
+import { trackEvent } from "../../utils/posthog.js";
 import {
   toPeriodEntries,
   validatePeriodEntries,
@@ -125,6 +126,7 @@ const SetupCommitStep = ({
       });
 
       console.log("✅ Setup committed successfully:", txHash);
+      trackEvent("setup_committed");
       alert("Setup locked in successfully! Your savings wallet is now active with spending limit protection.")
 
       // Mark setup as committed
