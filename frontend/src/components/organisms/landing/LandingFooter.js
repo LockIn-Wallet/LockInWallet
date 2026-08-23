@@ -6,7 +6,11 @@ import logo from "../../../assets/images/logo-mint-nav.png";
 
 import { landingStyles } from "../../../styles";
 
-import { FOOTER_COLUMNS } from "../../../utils/landingContent.js";
+import {
+  FOOTER_COLUMNS,
+  FOOTER_BLURB,
+  FOOTER_LEGAL,
+} from "../../../utils/landingContent.js";
 
 /**
  * LandingFooter - the "Verify" column is deliberately first-class: the fastest
@@ -21,10 +25,7 @@ const LandingFooter = () => (
           alt="LockIn Wallet"
           style={landingStyles.brandLogoFooter}
         />
-        <p style={landingStyles.footerBlurb}>
-          A commitment savings account whose withdrawal limits are enforced by
-          smart contracts, not by good intentions.
-        </p>
+        <p style={landingStyles.footerBlurb}>{FOOTER_BLURB}</p>
       </div>
 
       <div style={landingStyles.footerColumns}>
@@ -50,8 +51,7 @@ const LandingFooter = () => (
     </footer>
 
     <div className="landing-basebar" style={landingStyles.footerBase}>
-      © {new Date().getFullYear()} LockIn Wallet. Self-custodial software, not
-      financial advice.
+      © {new Date().getFullYear()} LockIn Wallet. {FOOTER_LEGAL}
     </div>
   </>
 );

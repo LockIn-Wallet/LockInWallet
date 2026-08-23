@@ -15,7 +15,7 @@ const HowItWorks = () => (
     <div style={landingStyles.inner}>
       <SectionHeading
         eyebrow="How it works"
-        title="Four steps, then it's out of your hands"
+        title="Three decisions, then nothing to manage"
       />
 
       <ol style={landingStyles.stepsGrid}>

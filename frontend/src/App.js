@@ -42,6 +42,7 @@ import { createEmptyLimitEdits } from "./utils/spendingPeriods.js";
 import { initAnalytics } from "./utils/analytics.js";
 import { initPostHog, trackEvent, trackPageView } from "./utils/posthog.js";
 import { PRIZE_SAVINGS_PATH } from "./utils/prizeSavingsContent.js";
+import { CRYPTO_PATH } from "./utils/landingContent.js";
 import { SIGNING_IN_PATH } from "./utils/signingInContent.js";
 import {
   ensureCorrectNetwork,
@@ -124,6 +125,10 @@ const PrizeSavings = lazy(() => import("./components/pages/PrizeSavings.js"));
 // Explaining sign-in is reading, not wallet work — it must load for someone
 // deciding whether to sign in at all, so it never waits on a wallet.
 const SigningInGuide = lazy(() => import("./components/pages/SigningInGuide.js"));
+
+// The crypto-native landing shares the main page's organisms but only loads
+// for visitors who ask for the technical version
+const CryptoLanding = lazy(() => import("./components/pages/CryptoLanding.js"));
 
 // Content pages that need the full width — the 800px app column cramps them
 const WIDE_ROUTES = ["/savings-visualiser", PRIZE_SAVINGS_PATH, SIGNING_IN_PATH];
@@ -1116,9 +1121,11 @@ function AppContentInner({
     ? (solanaConnected && solanaWallet)
     : !!provider;
 
-  // The logged-out landing page is a full-width page with its own nav and
-  // footer — the app chrome would only duplicate them
-  const isLanding = location.pathname === "/" && !isWalletConnected;
+  // The logged-out landing page and the crypto landing are full-width pages
+  // with their own nav and footer — the app chrome would only duplicate them
+  const isLanding =
+    (location.pathname === "/" && !isWalletConnected) ||
+    location.pathname === CRYPTO_PATH;
 
   const networkConfig = networkType === "solana"
     ? (NETWORKS.solana?.[selectedNetwork] || NETWORKS.solana?.localhost)
@@ -1221,6 +1228,23 @@ function AppContentInner({
             }
           />
         )}
+        {/* The technical landing — readable with or without a wallet */}
+        <Route
+          path={CRYPTO_PATH}
+          element={
+            <Suspense fallback={<div />}>
+              <CryptoLanding
+                networkType={networkType}
+                connectWallet={
+                  networkType === "solana" ? handleConnectMetaMask : connectWallet
+                }
+                onConnectPhantom={handleConnectPhantom}
+                onSignInWithPasskey={openWalletChoice}
+                isSigningIn={isSigningIn}
+              />
+            </Suspense>
+          }
+        />
         <Route
           path="/governance"
           element={
