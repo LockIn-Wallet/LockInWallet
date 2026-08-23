@@ -2,8 +2,7 @@ import posthog from "posthog-js";
 
 import { ADDRESS_PATTERN, sanitizeAnalyticsUrl } from "./analytics.js";
 
-// Replace with your PostHog Cloud project API key
-const POSTHOG_API_KEY = "phc_PLACEHOLDER";
+const POSTHOG_API_KEY = "phc_BH8bZb5oenrWcubUWkSPAyHLTsCA4ecdoEVZTWoC5MNp";
 const POSTHOG_HOST = "https://us.i.posthog.com";
 
 const REDACTED = "0xREDACTED";
@@ -21,8 +20,6 @@ const sanitizeProperties = (properties) => {
 };
 
 export const initPostHog = () => {
-  if (POSTHOG_API_KEY === "phc_PLACEHOLDER") return;
-
   posthog.init(POSTHOG_API_KEY, {
     api_host: POSTHOG_HOST,
     person_profiles: "identified_only",
