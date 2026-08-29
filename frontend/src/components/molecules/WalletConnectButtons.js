@@ -51,16 +51,15 @@ const WalletConnectButtons = ({
     </button>
   );
 
-  // Says what actually separates the two, without overclaiming. Signing in is
-  // not anonymous — the key never leaves the device, but a Coinbase-operated
-  // service sees the requests and the IP behind them. Bringing your own wallet
-  // is what puts you in control of that, and this page already learned once
-  // that a privacy claim it cannot back does more harm than no claim at all.
+  // Does not name the method: Coinbase runs the sign-in and decides what to
+  // offer, and in practice that is an email code, not the passkey this code
+  // still calls it internally. Promising a passkey we do not control is a
+  // claim the page cannot keep.
   const connectNote = canSignIn && (
     <p style={homeStyles.connectNote}>
-      Signing in creates a wallet held by a passkey on your device — no
-      extension, no seed phrase. Your own wallet keeps every request between you
-      and the network.
+      Signing in creates a wallet for you — no extension, no seed phrase.
+      Coinbase runs it, usually by emailing you a code. Your own wallet keeps
+      every request between you and the network.
     </p>
   );
 

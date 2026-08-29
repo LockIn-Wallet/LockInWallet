@@ -3,27 +3,28 @@ import React from "react";
 import SectionHeading from "../atoms/SectionHeading.js";
 import LandingNav from "../organisms/landing/LandingNav.js";
 import LandingHero from "../organisms/landing/LandingHero.js";
-import ProofStrip from "../organisms/landing/ProofStrip.js";
-import WalletComparison from "../organisms/landing/WalletComparison.js";
-import TrustGrid from "../organisms/landing/TrustGrid.js";
 import HowItWorks from "../organisms/landing/HowItWorks.js";
+import CredibilityStrip from "../organisms/landing/CredibilityStrip.js";
 import LandingClosing from "../organisms/landing/LandingClosing.js";
 import LandingFooter from "../organisms/landing/LandingFooter.js";
 
 import TimeLockShowcase from "../organisms/TimeLockShowcase.js";
-import ChainAvailability from "../organisms/ChainAvailability.js";
 
 import { landingStyles } from "../../styles";
 
-// Shares the lazy chunk with the standalone page, so chart.js still only
-// downloads when this section is actually reached
+import { BREACH_SECTION } from "../../utils/landingContent.js";
 
 /**
  * WalletConnectionPrompt - the logged-out landing page.
  *
- * The argument runs in order: the contract refuses a withdrawal (hero), three
- * checkable facts, then the demos that prove each claim, then the comparison,
- * the trust model including what we can still do, and finally setup.
+ * Written for somebody who has never held crypto, so it makes one claim and
+ * proves it: you set the limit, and nobody exceeds it. Claim (hero), claim
+ * demonstrated (console), claim under attack (showcase), setup, and one honest
+ * block for the sceptic before the sign-in.
+ *
+ * Anything that needs prior knowledge to mean something — chain names, wallet
+ * categories, the upgrade model, the proof numbers — lives on /security, one
+ * link away for whoever wants it.
  */
 const WalletConnectionPrompt = ({
   provider,
@@ -49,35 +50,20 @@ const WalletConnectionPrompt = ({
 
       <LandingHero onLaunch={onSignInWithPasskey || connectWallet} />
 
-      <ProofStrip />
-
       <section style={landingStyles.section}>
         <div style={landingStyles.inner}>
           <SectionHeading
-            eyebrow="What a leaked key costs you"
-            title="A stolen key can't empty your wallet"
-            lede="Your limit is the attacker's limit too. That gap is the time you need to notice and take the account back."
+            eyebrow={BREACH_SECTION.eyebrow}
+            title={BREACH_SECTION.title}
+            lede={BREACH_SECTION.lede}
           />
           <TimeLockShowcase />
         </div>
       </section>
 
-      <WalletComparison />
-
-      <TrustGrid />
-
-      <section style={landingStyles.section}>
-        <div style={landingStyles.inner}>
-          <SectionHeading
-            eyebrow="Chains"
-            title="Live on Optimism, with Ethereum underway"
-            lede="Cheap, fast transactions matter here: an hourly limit only makes sense if using it doesn't cost a fortune in gas."
-          />
-          <ChainAvailability />
-        </div>
-      </section>
-
       <HowItWorks />
+
+      <CredibilityStrip />
 
       <LandingClosing
         networkType={networkType}

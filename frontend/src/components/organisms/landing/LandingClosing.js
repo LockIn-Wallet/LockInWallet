@@ -4,6 +4,8 @@ import WalletConnectButtons from "../../molecules/WalletConnectButtons.js";
 
 import { landingStyles } from "../../../styles";
 
+import { CLOSING } from "../../../utils/landingContent.js";
+
 /**
  * LandingClosing - final CTA and the one place the real wallet options live.
  * Every "Connect wallet" button on the page scrolls here, so the choice of
@@ -22,9 +24,7 @@ const LandingClosing = ({
       <h2 style={landingStyles.sectionTitle}>
         The <span style={landingStyles.heroAccent}>Wallet</span> you don&apos;t have to <span style={landingStyles.heroAccent}>Trust.</span>
       </h2>
-      <p style={landingStyles.closingBody}>
-        Publicly verifiable. Enforced on-chain.
-      </p>
+      <p style={landingStyles.closingBody}>{CLOSING.body}</p>
       <WalletConnectButtons
         networkType={networkType}
         connectWallet={connectWallet}

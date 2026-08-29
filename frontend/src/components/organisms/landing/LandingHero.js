@@ -1,14 +1,21 @@
 import React from "react";
 
 import Icon from "../../atoms/Icon.js";
+import LandingLink from "../../atoms/LandingLink.js";
 import EnforcementConsole from "./EnforcementConsole.js";
 
 import { landingStyles } from "../../../styles";
 
+import { HERO } from "../../../utils/landingContent.js";
+
 /**
- * LandingHero - the thesis. The headline names who the wallet protects you
- * from, and the console underneath demonstrates it refusing a withdrawal
- * before the visitor has connected anything.
+ * LandingHero - the thesis, in words that need no prior knowledge of crypto.
+ * The headline names who the wallet protects you from, the subtitle states the
+ * guarantee, and the console underneath demonstrates it refusing a withdrawal
+ * before the visitor has connected anything. The secondary call to action
+ * leads to the technical page rather than deeper into this one: a reader who
+ * wants the mechanism should get all of it, and everyone else should not have
+ * to walk past it.
  */
 const LandingHero = ({ onLaunch }) => (
   <section style={landingStyles.hero}>
@@ -17,18 +24,16 @@ const LandingHero = ({ onLaunch }) => (
     <div style={landingStyles.heroCopy}>
       <span style={landingStyles.badge}>
         <Icon name="shield" size={13} />
-        TIME-LOCKED ON-CHAIN WALLET
+        {HERO.badge}
       </span>
 
       <h1 style={landingStyles.heroTitle}>
-        Protect your savings from everyone.
+        {HERO.title}
         <br />
-        <span style={landingStyles.heroAccent}>Even yourself.</span>
+        <span style={landingStyles.heroAccent}>{HERO.titleAccent}</span>
       </h1>
 
-      <p style={landingStyles.heroSubtitle}>
-        Set withdrawal limits. Wallet enforces it on-chain.
-      </p>
+      <p style={landingStyles.heroSubtitle}>{HERO.subtitle}</p>
 
       <div style={landingStyles.ctaRowCenter}>
         <button
@@ -36,16 +41,21 @@ const LandingHero = ({ onLaunch }) => (
           style={landingStyles.ctaPrimary}
           onClick={onLaunch}
         >
-          Sign in — it&apos;s free
+          {HERO.primaryCta}
         </button>
-        <a href="#compare" style={landingStyles.ctaSecondary}>
-          See the comparison
-        </a>
+        <LandingLink
+          href={HERO.secondaryCtaHref}
+          internal
+          style={landingStyles.ctaSecondary}
+        >
+          {HERO.secondaryCta}
+        </LandingLink>
       </div>
-
     </div>
 
     <EnforcementConsole />
+
+    <p style={landingStyles.heroCaption}>{HERO.consoleCaption}</p>
   </section>
 );
 

@@ -43,6 +43,7 @@ import { initAnalytics } from "./utils/analytics.js";
 import { initPostHog, trackEvent, trackPageView } from "./utils/posthog.js";
 import { PRIZE_SAVINGS_PATH } from "./utils/prizeSavingsContent.js";
 import { SIGNING_IN_PATH } from "./utils/signingInContent.js";
+import { SECURITY_PATH } from "./utils/securityContent.js";
 import {
   ensureCorrectNetwork,
   createProviderAndSigner,
@@ -125,8 +126,18 @@ const PrizeSavings = lazy(() => import("./components/pages/PrizeSavings.js"));
 // deciding whether to sign in at all, so it never waits on a wallet.
 const SigningInGuide = lazy(() => import("./components/pages/SigningInGuide.js"));
 
+// The landing page's one link out for anyone who wants the mechanism. Readable
+// with nothing connected, and lazy so its weight never lands on the landing
+// page. Lives at /security because /how-it-works is a static file.
+const SecurityPage = lazy(() => import("./components/pages/SecurityPage.js"));
+
 // Content pages that need the full width — the 800px app column cramps them
-const WIDE_ROUTES = ["/savings-visualiser", PRIZE_SAVINGS_PATH, SIGNING_IN_PATH];
+const WIDE_ROUTES = [
+  "/savings-visualiser",
+  PRIZE_SAVINGS_PATH,
+  SIGNING_IN_PATH,
+  SECURITY_PATH,
+];
 
 function MainFlow({
   transactionManager,
@@ -1206,6 +1217,16 @@ function AppContentInner({
           element={
             <Suspense fallback={<div />}>
               <SigningInGuide />
+            </Suspense>
+          }
+        />
+        {/* The technical half of the landing page. Read before connecting, by
+            someone deciding whether this is worth trusting at all. */}
+        <Route
+          path={SECURITY_PATH}
+          element={
+            <Suspense fallback={<div />}>
+              <SecurityPage />
             </Suspense>
           }
         />

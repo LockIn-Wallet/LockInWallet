@@ -63,6 +63,35 @@ these notes on the in-app **Governance** page before they execute.
   no contract change.*
 
 ### Changed
+- The landing page makes one claim and stops. It was written for a reader who
+  already knew what Optimism was, what a hot wallet was, and why either matters
+  — so a newcomer met a comparison table before knowing what was being compared
+  against. It now states the proposition (you choose the limit; after that
+  nobody can exceed it, including us and including you), demonstrates it with
+  the live console, shows it holding under attack, and asks for a sign-in.
+  Chain names, the wallet comparison, the proof figures and the upgrade
+  disclosure all move to a new `/security` page, linked from the hero, the nav
+  and the footer. *Frontend only — no contract change, and no claim
+  changed: the same facts are stated in the same terms, in a different place.*
+- New `/security` page for the crypto-native and the merely sceptical: the
+  enforcement mechanism spelled out, the comparison table with its categories
+  defined first, the trust model including the single maintainer key and the
+  absence of an audit, which chains it runs on, and an FAQ. Public route — it
+  has to be readable by someone deciding whether to connect anything at all.
+  Not `/how-it-works`: that URL already serves the static beginner's guide in
+  `public/`, and `cleanUrls` in `vercel.json` makes the file win over any route
+  declared in the app, so the page would have been unreachable in production.
+- The static beginner's guide (`public/how-it-works.html`) no longer contradicts
+  SECURITY.md. It claimed the contracts were immutable with no admin keys, and
+  described the code as audited; it now states the upgrade model, the single
+  maintainer key, the 48-hour timelock rolling out, and the absence of any
+  third-party audit. Also updated for Base (it described Optimism as the only
+  network) and for email sign-in (it described installing MetaMask as the only
+  way to get a wallet). *Static page only — no contract change.*
+- A short credibility block on the landing page names the remaining trust
+  assumption and links straight to the contracts. The rest of the page is now
+  written in the register a scam is also written in, and a reader who already
+  holds crypto needs one block that is not.
 - The connect dialog asks which kind of person you are rather than which
   technology you would like: "Email sign-in", badged *New to crypto*, against "I
   already use crypto — use MetaMask or another wallet", badged *Most private*.

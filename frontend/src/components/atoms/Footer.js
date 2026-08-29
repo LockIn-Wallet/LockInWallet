@@ -64,6 +64,7 @@ const FOOTER_COLUMNS = [
     links: [
       { label: "Home", href: "/" },
       { label: "How It Works", href: "/how-it-works" },
+      { label: "Security", href: "/security" },
     ],
   },
   {
