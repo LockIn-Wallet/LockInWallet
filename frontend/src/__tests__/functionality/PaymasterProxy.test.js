@@ -13,20 +13,26 @@ const CORE = networkConfig.evm.base.savingsContract;
 const CHAIN_ID = networkConfig.evm.base.chainId;
 const MODULE = '0x1111111111111111111111111111111111111111';
 const DEPOSIT_PROXY = '0x2222222222222222222222222222222222222222';
+const TOKEN = '0x3333333333333333333333333333333333333333';
 const STRANGER = '0x9999999999999999999999999999999999999999';
 
 const ACCOUNT_ABI = [
   'function execute(address to, uint256 value, bytes data)',
   'function executeBatch(tuple(address to, uint256 value, bytes data)[] calls)',
 ];
+const ERC20_IFACE = new ethers.Interface(['function approve(address spender, uint256 amount)']);
+const ACCOUNT_IFACE = new ethers.Interface(ACCOUNT_ABI);
 
-const encodeExecute = (to) =>
-  new ethers.Interface(ACCOUNT_ABI).encodeFunctionData('execute', [to, 0, '0x1234']);
+const encodeExecute = (to, data = '0x1234') =>
+  ACCOUNT_IFACE.encodeFunctionData('execute', [to, 0, data]);
 
-const encodeBatch = (targets) =>
-  new ethers.Interface(ACCOUNT_ABI).encodeFunctionData('executeBatch', [
-    targets.map((to) => [to, 0, '0x1234']),
+const encodeBatch = (calls) =>
+  ACCOUNT_IFACE.encodeFunctionData('executeBatch', [
+    calls.map((c) => (Array.isArray(c) ? [c[0], 0, c[1]] : [c, 0, '0x1234'])),
   ]);
+
+const encodeApprove = (spender, amount = 1000000n) =>
+  ERC20_IFACE.encodeFunctionData('approve', [spender, amount]);
 
 /** Stands in for the on-chain module registry. */
 const mockGetModule = jest.fn();
@@ -119,6 +125,15 @@ describe('paymaster proxy', () => {
       expect(global.fetch).not.toHaveBeenCalled();
     });
 
+    it('turns away an ERC20 approve to a stranger\'s contract', async () => {
+      // An approve where the spender is not ours is not our deposit flow.
+      const res = makeResponse();
+      await handler(rpc(encodeExecute(TOKEN, encodeApprove(STRANGER))), res);
+
+      expect(res.body.error.message).toMatch(/not eligible/i);
+      expect(global.fetch).not.toHaveBeenCalled();
+    });
+
     it('turns away anything that is not a paymaster request', async () => {
       const res = makeResponse();
       await handler(rpc(encodeExecute(CORE), { method: 'eth_sendTransaction' }), res);
@@ -192,6 +207,27 @@ describe('paymaster proxy', () => {
 
       expect(global.fetch).toHaveBeenCalledTimes(1);
       expect(res.body.result).toEqual({ paymaster: '0xpm' });
+    });
+
+    it('passes an ERC20 approve to one of our modules through', async () => {
+      // Every ERC20 deposit needs an approval first. The token contract is not
+      // in the module registry, but the spender is — so this is safe to sponsor.
+      const res = makeResponse();
+      await handler(rpc(encodeExecute(TOKEN, encodeApprove(MODULE))), res);
+
+      expect(global.fetch).toHaveBeenCalledTimes(1);
+      expect(res.body.result).toEqual({ paymaster: '0xpm' });
+    });
+
+    it('passes a batch of approve + deposit through', async () => {
+      // The common ERC20 deposit pattern: approve the vault module, then deposit.
+      const res = makeResponse();
+      await handler(
+        rpc(encodeBatch([[TOKEN, encodeApprove(MODULE)], CORE])),
+        res
+      );
+
+      expect(global.fetch).toHaveBeenCalledTimes(1);
     });
 
     it('keeps the key out of anything it returns', async () => {

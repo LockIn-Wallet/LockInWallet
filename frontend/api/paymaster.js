@@ -202,22 +202,49 @@ const areDepositProxies = async (addresses, allowed, chainId) => {
   return false;
 };
 
-/** The contracts a userOperation would actually call. */
-const targetsOf = (callData) => {
+/** The inner calls a smart-account userOperation would make. */
+const innerCallsOf = (callData) => {
   const iface = new ethers.Interface(ACCOUNT_ABI);
 
   try {
-    const [to] = iface.decodeFunctionData('execute', callData);
-    return [to.toLowerCase()];
+    const [to, , data] = iface.decodeFunctionData('execute', callData);
+    return [{ to: to.toLowerCase(), data }];
   } catch {
     // Not a single call; try a batch.
   }
 
   try {
     const [calls] = iface.decodeFunctionData('executeBatch', callData);
-    return calls.map((call) => call[0].toLowerCase());
+    return calls.map((call) => ({ to: call[0].toLowerCase(), data: call[2] }));
   } catch {
     return null;
+  }
+};
+
+/**
+ * Whether an inner call is an ERC20 `approve(spender, amount)` where the
+ * spender is one of our own contracts.
+ *
+ * Every ERC20 deposit needs an approval first, and the token contract is never
+ * in the module registry. But the approval itself is harmless — it sets an
+ * allowance that only our module can spend, and costs negligible gas — so
+ * sponsoring it is both safe and necessary for passkey users who hold no ETH.
+ */
+const APPROVE_SELECTOR = ethers
+  .id('approve(address,uint256)')
+  .slice(0, 10);
+
+const isApproveToAllowed = (innerData, allowed) => {
+  try {
+    if (!innerData || typeof innerData !== 'string') return false;
+    if (!innerData.startsWith(APPROVE_SELECTOR)) return false;
+
+    const spender = ethers.AbiCoder.defaultAbiCoder()
+      .decode(['address', 'uint256'], '0x' + innerData.slice(10))[0];
+
+    return allowed.has(spender.toLowerCase());
+  } catch {
+    return false;
   }
 };
 
@@ -274,8 +301,8 @@ module.exports = async function handler(request, response) {
     return reject(response, id, `Chain ${chainId} is not sponsored`);
   }
 
-  const targets = targetsOf(userOperation?.callData);
-  if (!targets?.length) {
+  const calls = innerCallsOf(userOperation?.callData);
+  if (!calls?.length) {
     return reject(response, id, 'Could not read what this operation would call');
   }
 
@@ -284,14 +311,22 @@ module.exports = async function handler(request, response) {
     return reject(response, id, `Chain ${chainId} is not configured`);
   }
 
-  const foreign = targets.filter((target) => !allowed.has(target));
-  if (foreign.length) {
-    // A target outside the module registry might still be a deposit proxy
-    // deployed by VaultDepositAddressModule — those can only sweep funds into
-    // the vault and are exactly the kind of call a passkey user needs sponsored.
-    if (!(await areDepositProxies(foreign, allowed, chainId))) {
-      console.warn(`Refused sponsorship for foreign target(s): ${foreign.join(', ')}`);
-      return reject(response, id, 'This operation is not eligible for sponsorship');
+  const foreignCalls = calls.filter((c) => !allowed.has(c.to));
+  if (foreignCalls.length) {
+    // An ERC20 approve whose spender is one of our modules is safe — it only
+    // grants an allowance that our own deposit path will spend.
+    const remaining = foreignCalls.filter(
+      (c) => !isApproveToAllowed(c.data, allowed)
+    );
+
+    // A deposit proxy deployed by VaultDepositAddressModule can only sweep
+    // funds into the vault, so it is safe to sponsor too.
+    if (remaining.length) {
+      const proxyTargets = remaining.map((c) => c.to);
+      if (!(await areDepositProxies(proxyTargets, allowed, chainId))) {
+        console.warn(`Refused sponsorship for foreign target(s): ${proxyTargets.join(', ')}`);
+        return reject(response, id, 'This operation is not eligible for sponsorship');
+      }
     }
   }
 
