@@ -54,6 +54,16 @@ const MODULE_NAMES = [
 
 const CORE_ABI = ['function getModule(bytes32 moduleId) view returns (address)'];
 
+/**
+ * A deposit proxy is a small contract deployed by VaultDepositAddressModule via
+ * CREATE2. Its `vaults()` getter returns the vault module address baked in at
+ * construction — so if calling `vaults()` on an unknown target gives back an
+ * address we already trust, the target was deployed by our own factory and its
+ * sweep can only move money into the vault, which is exactly what sponsorship
+ * is for.
+ */
+const DEPOSIT_PROXY_ABI = ['function vaults() view returns (address)'];
+
 // Cached per warm instance. Module addresses change only on an upgrade, and
 // this life is short enough that one takes effect without a redeploy while
 // sparing most requests the lookup entirely — which matters, because the
@@ -152,6 +162,46 @@ const sponsorableAddresses = async (chainId) => {
   return null;
 };
 
+/**
+ * Whether every address in the list is a deposit proxy whose vault module is
+ * one we already sponsor.
+ *
+ * The check is a single batched RPC round-trip per provider, and only runs for
+ * targets not already in the module allowlist — which in practice means deposit
+ * proxy addresses only.
+ */
+const areDepositProxies = async (addresses, allowed, chainId) => {
+  const entry = networkFor(chainId);
+  if (!entry) return false;
+  const [, config] = entry;
+
+  for (const rpcUrl of config.rpcUrls || []) {
+    const provider = new ethers.JsonRpcProvider(rpcUrl, Number(chainId), {
+      staticNetwork: true,
+      batchMaxCount: MAX_RPC_BATCH,
+    });
+
+    try {
+      const results = await Promise.allSettled(
+        addresses.map((addr) => {
+          const proxy = new ethers.Contract(addr, DEPOSIT_PROXY_ABI, provider);
+          return proxy.vaults();
+        })
+      );
+
+      provider.destroy?.();
+
+      return results.every(
+        (r) => r.status === 'fulfilled' && allowed.has(r.value.toLowerCase())
+      );
+    } catch {
+      provider.destroy?.();
+    }
+  }
+
+  return false;
+};
+
 /** The contracts a userOperation would actually call. */
 const targetsOf = (callData) => {
   const iface = new ethers.Interface(ACCOUNT_ABI);
@@ -236,10 +286,13 @@ module.exports = async function handler(request, response) {
 
   const foreign = targets.filter((target) => !allowed.has(target));
   if (foreign.length) {
-    // The whole point of this endpoint. Someone pointing their own app at it
-    // gets refused here, before a penny is spent.
-    console.warn(`Refused sponsorship for foreign target(s): ${foreign.join(', ')}`);
-    return reject(response, id, 'This operation is not eligible for sponsorship');
+    // A target outside the module registry might still be a deposit proxy
+    // deployed by VaultDepositAddressModule — those can only sweep funds into
+    // the vault and are exactly the kind of call a passkey user needs sponsored.
+    if (!(await areDepositProxies(foreign, allowed, chainId))) {
+      console.warn(`Refused sponsorship for foreign target(s): ${foreign.join(', ')}`);
+      return reject(response, id, 'This operation is not eligible for sponsorship');
+    }
   }
 
   const [networkKey] = entry;

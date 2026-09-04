@@ -12,6 +12,7 @@ const networkConfig = require('../../networkConfig.json');
 const CORE = networkConfig.evm.base.savingsContract;
 const CHAIN_ID = networkConfig.evm.base.chainId;
 const MODULE = '0x1111111111111111111111111111111111111111';
+const DEPOSIT_PROXY = '0x2222222222222222222222222222222222222222';
 const STRANGER = '0x9999999999999999999999999999999999999999';
 
 const ACCOUNT_ABI = [
@@ -29,6 +30,8 @@ const encodeBatch = (targets) =>
 
 /** Stands in for the on-chain module registry. */
 const mockGetModule = jest.fn();
+/** Stands in for a deposit proxy's vaults() getter. */
+const mockVaults = jest.fn();
 
 jest.mock('ethers', () => {
   const actual = jest.requireActual('ethers');
@@ -37,7 +40,10 @@ jest.mock('ethers', () => {
     ethers: {
       ...actual.ethers,
       JsonRpcProvider: jest.fn(() => ({ destroy: jest.fn() })),
-      Contract: jest.fn(() => ({ getModule: (...args) => mockGetModule(...args) })),
+      Contract: jest.fn(() => ({
+        getModule: (...args) => mockGetModule(...args),
+        vaults: (...args) => mockVaults(...args),
+      })),
     },
   };
 });
@@ -82,6 +88,7 @@ describe('paymaster proxy', () => {
   beforeEach(() => {
     jest.resetModules();
     mockGetModule.mockReset().mockResolvedValue(MODULE);
+    mockVaults.mockReset().mockRejectedValue(new Error('not a proxy'));
     process.env.PIMLICO_API_KEY = 'test-key';
     global.fetch = jest.fn().mockResolvedValue({
       json: async () => ({ jsonrpc: '2.0', id: 1, result: { paymaster: '0xpm' } }),
@@ -172,6 +179,19 @@ describe('paymaster proxy', () => {
       await handler(rpc(encodeExecute(MODULE)), res);
 
       expect(global.fetch).toHaveBeenCalledTimes(1);
+    });
+
+    it('passes a sweep on a deposit proxy through', async () => {
+      // A deposit proxy is not a registered module, but its vaults() getter
+      // returns one of our module addresses — that is the proof it was deployed
+      // by our factory and can only move funds into the vault.
+      mockVaults.mockResolvedValue(MODULE);
+
+      const res = makeResponse();
+      await handler(rpc(encodeExecute(DEPOSIT_PROXY)), res);
+
+      expect(global.fetch).toHaveBeenCalledTimes(1);
+      expect(res.body.result).toEqual({ paymaster: '0xpm' });
     });
 
     it('keeps the key out of anything it returns', async () => {
