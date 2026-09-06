@@ -277,4 +277,76 @@ export const getStepTitleColor = (stepNumber, isSetupCommitted, stepValidation) 
   return colors.success.light;
 };
 
+// ---- Setup path choice (first screen after connecting) ----
+// Two ways to lock in, presented as a fork rather than a default with an
+// alternative buried underneath: neither is the "normal" one.
+export const setupPathStyles = {
+  container: {
+    marginBottom: spacing.xxl,
+    padding: spacing.xxl,
+    border: `2px solid ${colors.success.main}`,
+    borderRadius: borderRadius.xl,
+    backgroundColor: colors.background.primary,
+    color: colors.text.primary,
+    textAlign: "left",
+  },
+
+  title: {
+    margin: `0 0 ${spacing.sm} 0`,
+    color: colors.success.light,
+    fontSize: fontSize.xl,
+    fontWeight: fontWeight.semibold,
+  },
+
+  lede: {
+    margin: `0 0 ${spacing.xxl} 0`,
+    color: colors.text.secondary,
+    fontSize: fontSize.sm,
+    lineHeight: 1.6,
+  },
+
+  grid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
+    gap: spacing.lg,
+  },
+
+  card: {
+    display: "flex",
+    flexDirection: "column",
+    gap: spacing.md,
+    padding: spacing.xl,
+    border: `1px solid ${colors.border.default}`,
+    borderRadius: borderRadius.lg,
+    backgroundColor: colors.background.secondary,
+  },
+
+  cardTitle: {
+    margin: 0,
+    color: colors.text.primary,
+    fontSize: fontSize.lg,
+    fontWeight: fontWeight.semibold,
+  },
+
+  cardBody: {
+    margin: 0,
+    color: colors.text.secondary,
+    fontSize: fontSize.sm,
+    lineHeight: 1.6,
+    flexGrow: 1,
+  },
+
+  footnote: {
+    margin: `${spacing.xl} 0 0 0`,
+    color: colors.text.muted,
+    fontSize: fontSize.xs,
+    lineHeight: 1.6,
+  },
+
+  backRow: {
+    marginBottom: spacing.lg,
+    textAlign: "left",
+  },
+};
+
 export default stepStyles;

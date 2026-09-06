@@ -48,6 +48,7 @@ export {
 
 export {
   stepStyles,
+  setupPathStyles,
   getStepContainerStyle,
   getStepTitleColor,
   default as steps,
@@ -68,6 +69,8 @@ export {
   getBarFill,
   default as landing,
 } from "./components/landing.js";
+
+export { lockStyles, default as locks } from "./components/locks.js";
 
 export {
   homeStyles,

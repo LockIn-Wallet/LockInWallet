@@ -173,6 +173,36 @@ export class BlockchainAdapter {
     throw new Error("Earning on your savings is not available on this network yet");
   }
 
+  // ---- Locked vaults ----
+  //
+  // Optional capability: an immutable vault that releases everything to its
+  // owner when a rule is met. A chain without the factory reports false and
+  // the UI hides the section.
+
+  supportsLocks() {
+    return false;
+  }
+
+  async getLocks(ownerAddress) {
+    return [];
+  }
+
+  async getLock(lockAddress) {
+    return null;
+  }
+
+  async createLock(draft) {
+    throw new Error("Locked vaults are not available on this network yet");
+  }
+
+  async depositToLock(lockAddress, tokenAddress, amount) {
+    throw new Error("Locked vaults are not available on this network yet");
+  }
+
+  async releaseLock(lockAddress, tokenAddress) {
+    throw new Error("Locked vaults are not available on this network yet");
+  }
+
   // ---- User-facing errors ----
   //
   // Raw chain failures are unreadable: EVM hands back a page-long ethers blob

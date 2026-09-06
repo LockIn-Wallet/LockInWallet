@@ -2,6 +2,7 @@ import React from "react";
 
 import SectionHeading from "../atoms/SectionHeading.js";
 import LandingLink from "../atoms/LandingLink.js";
+import FaqList from "../molecules/FaqList.js";
 
 import { usePageSeo } from "../../hooks/usePageSeo.js";
 
@@ -153,14 +154,7 @@ const SigningInGuide = () => {
             eyebrow="Questions"
             title="Signing in, answered plainly"
           />
-          <div style={homeStyles.faqList}>
-            {SIGNING_IN_FAQ.map(({ question, answer }) => (
-              <article key={question} style={homeStyles.faqItem}>
-                <h3 style={homeStyles.faqQuestion}>{question}</h3>
-                <p style={homeStyles.faqAnswer}>{answer}</p>
-              </article>
-            ))}
-          </div>
+          <FaqList items={SIGNING_IN_FAQ} />
         </div>
       </section>
 

@@ -642,6 +642,16 @@ export class TransactionManager {
   async getClaimablePrizes() { return this.getAdapter().getClaimablePrizes?.(this.getActiveVaultAddress()) ?? null; }
   async claimActiveVaultPrizes() { return this.getAdapter().claimVaultPrizes?.(this._requireActiveVault()); }
 
+  // ---- Locked vaults ----
+  supportsLocks() { return this.getAdapter().supportsLocks?.() ?? false; }
+  async getLocks() { return this.getAdapter().getLocks?.(await this.getAdapter().getAddress?.()) ?? []; }
+  async getLock(lockAddress) { return this.getAdapter().getLock?.(lockAddress) ?? null; }
+  async createLock(draft) { return this.getAdapter().createLock(draft); }
+  async depositToLock(lockAddress, tokenAddress, amount) {
+    return this.getAdapter().depositToLock(lockAddress, tokenAddress, amount);
+  }
+  async releaseLock(lockAddress, tokenAddress) { return this.getAdapter().releaseLock(lockAddress, tokenAddress); }
+
   // ---- EVM withdraw ----
   async withdraw(amount, tokenAddress, destination) {
     return this.withdrawFromActiveVault(amount, tokenAddress, destination);

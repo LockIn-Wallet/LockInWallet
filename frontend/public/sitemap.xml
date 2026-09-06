@@ -11,12 +11,37 @@
     <priority>0.9</priority>
   </url>
   <url>
+    <loc>https://lockinwallet.com/security</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://lockinwallet.com/proof-of-lock</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://lockinwallet.com/signing-in</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
     <loc>https://lockinwallet.com/savings-visualiser</loc>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
     <loc>https://lockinwallet.com/impulse-spending</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://lockinwallet.com/impulse-buying</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://lockinwallet.com/impulse-shopping</loc>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>

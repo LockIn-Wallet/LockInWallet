@@ -2,6 +2,7 @@ import React from "react";
 
 import SectionHeading from "../atoms/SectionHeading.js";
 import LandingLink from "../atoms/LandingLink.js";
+import FaqList from "../molecules/FaqList.js";
 import PrizeSavingsShowcase from "../organisms/PrizeSavingsShowcase.js";
 import DepositOutcomeSlider from "../molecules/DepositOutcomeSlider.js";
 
@@ -73,14 +74,7 @@ const PrizeSavings = () => {
             eyebrow="Questions"
             title="No-loss prize savings, answered"
           />
-          <div style={homeStyles.faqList}>
-            {PRIZE_FAQ.map(({ question, answer }) => (
-              <article key={question} style={homeStyles.faqItem}>
-                <h3 style={homeStyles.faqQuestion}>{question}</h3>
-                <p style={homeStyles.faqAnswer}>{answer}</p>
-              </article>
-            ))}
-          </div>
+          <FaqList items={PRIZE_FAQ} />
         </div>
       </section>
 
