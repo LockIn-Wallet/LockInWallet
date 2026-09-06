@@ -15,7 +15,7 @@ export const RELEASE_NOTES = [
     highlights: [
       {
         emoji: "🔐",
-        text: "You can now lock any coin completely until a date, or until a price is reached. A locked vault is its own tiny contract with no emergency exit, no penalty exit and no upgrade switch — not even we can open it early, which is the whole point. Every lock also has a latest date, so if a price feed ever breaks the coins are simply released on that date. Each lock gets a public page anyone can open without a wallet, showing the rule, the balance and the deadline read live from the chain; creators and teams can share it as proof their tokens cannot move. Your normal savings vault is unchanged and keeps its exits.",
+        text: "Setting up a new wallet now starts by asking which of the two you want, rather than assuming. Spending limits are one answer; locking a coin outright until a date is the other, and choosing it takes you straight to the lock instead of through a spending-limit setup you did not come for. You can switch between the two at any point, and doing one never rules out the other. You can now lock any coin completely until a date, or until a price is reached. A locked vault is its own tiny contract with no emergency exit, no penalty exit and no upgrade switch — not even we can open it early, which is the whole point. Every lock also has a latest date, so if a price feed ever breaks the coins are simply released on that date. Each lock gets a public page anyone can open without a wallet, showing the rule, the balance and the deadline read live from the chain; creators and teams can share it as proof their tokens cannot move. Your normal savings vault is unchanged and keeps its exits.",
       },
       {
         emoji: "🏠",

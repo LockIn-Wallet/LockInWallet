@@ -59,6 +59,12 @@ these notes on the in-app **Governance** page before they execute.
   upgradeable, and no existing storage changes. The factory address lives in
   `frontend/src/networkConfig.json` as `lockedVaultFactory`; deploy with
   `npm run deploy-locks --workspace=ethereum`.*
+- A fork at the start of setup: a new wallet is asked whether it wants a
+  spending limit or an outright lock, before either flow begins. Choosing the
+  lock path opens the locked-vaults panel directly and skips the spending
+  limits, withdrawal addresses and lock-in steps entirely, because a lock
+  needs none of them. The other path stays one click away, and the lock option
+  is hidden on a network with no lock factory. *Frontend only.*
 - Locked vaults in the app: a "Locked vaults" section on the dashboard to
   create a lock (on a date, or when a verified price is reached), deposit any
   listed or custom token into it, and release it once open; a public proof

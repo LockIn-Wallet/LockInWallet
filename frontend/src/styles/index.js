@@ -48,6 +48,7 @@ export {
 
 export {
   stepStyles,
+  setupPathStyles,
   getStepContainerStyle,
   getStepTitleColor,
   default as steps,

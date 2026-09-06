@@ -37,6 +37,31 @@ export const PROOF_GUARANTEES = [
 export const PROOF_UNVERIFIED_WARNING =
   "This lock's rule was not created by the LockIn factory, or it watches a price feed this app does not recognise. Read the rule's contract before trusting it.";
 
+// ---- Setup path choice (first screen) ----
+
+export const SETUP_PATHS = { limits: "limits", lock: "lock" };
+
+export const SETUP_PATH_CHOICE = {
+  title: "How do you want to lock in?",
+  lede: "Two ways to put money somewhere your worst evening can't reach it. Pick the one you came for.",
+  options: [
+    {
+      key: SETUP_PATHS.limits,
+      title: "Set a spending limit",
+      body: "Choose how much you can take out each day, week or month. That allowance is always yours, instantly, and anything above it waits for a delay you pick. Best for money you still need to live on.",
+      cta: "Set a spending limit",
+    },
+    {
+      key: SETUP_PATHS.lock,
+      title: "Lock a coin until a date",
+      body: "Put any coin somewhere nothing can reach it until a date you choose, or until a price is reached. No allowance, no emergency exit, no exceptions. Best for money you must not touch.",
+      cta: "Lock a coin",
+    },
+  ],
+  footnote:
+    "You can do both, and you can start the other one at any time. A spending limit takes a few steps to set up; a lock takes one.",
+};
+
 // ---- Creators page (/proof-of-lock) ----
 
 export const PROOF_OF_LOCK_PATH = "/proof-of-lock";

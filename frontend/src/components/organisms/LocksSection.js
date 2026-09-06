@@ -19,7 +19,7 @@ const ZERO = "0x0000000000000000000000000000000000000000";
  * nothing when the network has no lock factory, so no caller has to know
  * which chain it is on.
  */
-const LocksSection = ({ transactionManager, networkConfig, chainKey }) => {
+const LocksSection = ({ transactionManager, networkConfig, chainKey, defaultExpanded = false }) => {
   const [locks, setLocks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -78,7 +78,7 @@ const LocksSection = ({ transactionManager, networkConfig, chainKey }) => {
   if (!supported) return null;
 
   return (
-    <CollapsibleSection title={LOCKS_SECTION_TITLE} icon="lock" defaultExpanded={false}>
+    <CollapsibleSection title={LOCKS_SECTION_TITLE} icon="lock" defaultExpanded={defaultExpanded}>
       <p style={lockStyles.lede}>{LOCKS_LEDE}</p>
 
       {loading ? (
@@ -148,6 +148,7 @@ LocksSection.propTypes = {
   transactionManager: PropTypes.object,
   networkConfig: PropTypes.object,
   chainKey: PropTypes.string,
+  defaultExpanded: PropTypes.bool,
 };
 
 export default LocksSection;
