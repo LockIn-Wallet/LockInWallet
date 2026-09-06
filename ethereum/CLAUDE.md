@@ -255,6 +255,38 @@ When using proper upgrade scripts:
 - ✅ Module registrations updated automatically
 - ✅ Module-specific data preserved across module upgrades
 
+## Locked Vaults (`contracts/locks/`)
+
+Immutable, non-upgradeable contracts — **not modules**. Nothing in `locks/`
+depends on SavingsCore, the timelock, or any module, and none of it has an
+owner or admin.
+
+- `LockedVault.sol` — one tiny contract per lock, holding the owner's coins
+  until `condition.isMet()` is true or the `deadline` passes, then `release()`
+  sends the full balance to the owner (anyone may call; funds only ever go to
+  the owner). No functions exist to change owner, condition or deadline.
+- `LockedVaultFactory.sol` — CREATE2 deployer and registry of verified
+  conditions (`Date`, `Price` via Chainlink, `AllOf`, `AnyOf`). A lock may only
+  reference a condition this factory built, and `describeCondition` /
+  `describeLock` expose every parameter so the frontend needs only the factory
+  and vault ABIs. `MAX_LOCK_HORIZON` is 10 years.
+- The deadline is the safety valve: a reverting or dead condition can delay a
+  release but never block it past the deadline.
+
+**Why no upgrade path:** the modules are upgradeable behind governance because
+features change; a lock is worth exactly as much as the guarantee that nobody
+— including governance — can reach into it. Custody sits in per-lock bytecode
+so the blast radius of any bug is one lock, and a new version is simply a new
+factory (old locks keep working untouched).
+
+```bash
+npm run deploy-locks        # deploy LockedVaultFactory, write `lockedVaultFactory` into networkConfig.json
+# `npm run deploy-modular` already does this on localhost; on live networks run it once, on purpose:
+npx hardhat run scripts/deploy-locks.js --network optimism
+```
+
+Tests: `test/LockedVaults.ts` (uses `contracts/MockAggregatorV3.sol` as the feed).
+
 ## Configuration Files
 
 - **hardhat.config.ts**: Hardhat configuration with localhost network

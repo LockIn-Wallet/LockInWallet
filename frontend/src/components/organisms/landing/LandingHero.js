@@ -1,34 +1,33 @@
 import React from "react";
 
 import Icon from "../../atoms/Icon.js";
-import EnforcementConsole from "./EnforcementConsole.js";
 
 import { landingStyles } from "../../../styles";
 
+import { HOME_HERO } from "../../../utils/landingContent.js";
+
 /**
- * LandingHero - the thesis. The headline names who the wallet protects you
- * from, and the console underneath demonstrates it refusing a withdrawal
- * before the visitor has connected anything.
+ * LandingHero - the thesis, in the words of the search that brings people
+ * here. Nothing technical: the headline says what the account does and the
+ * lede says the one rule that makes it work.
  */
 const LandingHero = ({ onLaunch }) => (
-  <section style={landingStyles.hero}>
+  <section style={landingStyles.heroStandalone}>
     <div style={landingStyles.heroGlow} aria-hidden="true" />
 
     <div style={landingStyles.heroCopy}>
       <span style={landingStyles.badge}>
-        <Icon name="shield" size={13} />
-        TIME-LOCKED ON-CHAIN WALLET
+        <Icon name="lock" size={13} />
+        {HOME_HERO.badge}
       </span>
 
       <h1 style={landingStyles.heroTitle}>
-        Protect your savings from everyone.
+        {HOME_HERO.title}
         <br />
-        <span style={landingStyles.heroAccent}>Even yourself.</span>
+        <span style={landingStyles.heroAccent}>{HOME_HERO.accent}</span>
       </h1>
 
-      <p style={landingStyles.heroSubtitle}>
-        Set withdrawal limits. Wallet enforces it on-chain.
-      </p>
+      <p style={landingStyles.heroSubtitle}>{HOME_HERO.lede}</p>
 
       <div style={landingStyles.ctaRowCenter}>
         <button
@@ -36,16 +35,13 @@ const LandingHero = ({ onLaunch }) => (
           style={landingStyles.ctaPrimary}
           onClick={onLaunch}
         >
-          Sign in — it&apos;s free
+          {HOME_HERO.primaryCta}
         </button>
-        <a href="#compare" style={landingStyles.ctaSecondary}>
-          See the comparison
+        <a href="#how-it-works" style={landingStyles.ctaSecondary}>
+          {HOME_HERO.secondaryCta}
         </a>
       </div>
-
     </div>
-
-    <EnforcementConsole />
   </section>
 );
 

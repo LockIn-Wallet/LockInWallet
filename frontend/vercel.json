@@ -39,7 +39,7 @@
       ]
     },
     {
-      "source": "/(impulse-spending|no-withdrawal-account|addiction-recovery|gambling-help).html",
+      "source": "/(how-it-works|impulse-spending|impulse-buying|impulse-shopping|no-withdrawal-account|addiction-recovery|gambling-help).html",
       "headers": [
         {
           "key": "Cache-Control",

@@ -43,6 +43,8 @@ import { initAnalytics } from "./utils/analytics.js";
 import { initPostHog, trackEvent, trackPageView } from "./utils/posthog.js";
 import { PRIZE_SAVINGS_PATH } from "./utils/prizeSavingsContent.js";
 import { SIGNING_IN_PATH } from "./utils/signingInContent.js";
+import { SECURITY_PAGE_PATH } from "./utils/securityPageContent.js";
+import { PROOF_OF_LOCK_PATH } from "./utils/lockContent.js";
 import {
   ensureCorrectNetwork,
   createProviderAndSigner,
@@ -108,6 +110,7 @@ import WithdrawalAddressSetupStep from "./components/organisms/WithdrawalAddress
 import WithdrawalInterface from "./components/organisms/WithdrawalInterface.js";
 import ReferralSection from "./components/organisms/ReferralSection.js";
 import RecoverySection from "./components/organisms/RecoverySection.js";
+import LocksSection from "./components/organisms/LocksSection.js";
 import UpgradeBanner from "./components/molecules/UpgradeBanner.js";
 import GovernancePage from "./components/pages/GovernancePage.js";
 import VaultCard from "./components/molecules/VaultCard.js";
@@ -124,9 +127,18 @@ const PrizeSavings = lazy(() => import("./components/pages/PrizeSavings.js"));
 // Explaining sign-in is reading, not wallet work — it must load for someone
 // deciding whether to sign in at all, so it never waits on a wallet.
 const SigningInGuide = lazy(() => import("./components/pages/SigningInGuide.js"));
+const SecurityPage = lazy(() => import("./components/pages/SecurityPage.js"));
+const LockProof = lazy(() => import("./components/pages/LockProof.js"));
+const ProofOfLock = lazy(() => import("./components/pages/ProofOfLock.js"));
 
 // Content pages that need the full width — the 800px app column cramps them
-const WIDE_ROUTES = ["/savings-visualiser", PRIZE_SAVINGS_PATH, SIGNING_IN_PATH];
+const WIDE_ROUTES = [
+  "/savings-visualiser",
+  PRIZE_SAVINGS_PATH,
+  SIGNING_IN_PATH,
+  SECURITY_PAGE_PATH,
+  PROOF_OF_LOCK_PATH,
+];
 
 function MainFlow({
   transactionManager,
@@ -437,6 +449,16 @@ function MainFlow({
         <YieldSection transactionManager={transactionManager} />
       ) : null}
 
+      {/* Locked vaults: immutable, outside the module system. The section
+          hides itself on a network without the lock factory. */}
+      {isSetupCommitted && (
+        <LocksSection
+          transactionManager={transactionManager}
+          networkConfig={networkConfig}
+          chainKey={selectedNetwork}
+        />
+      )}
+
       {/* Spending Limits Setup / Management */}
       {isSetupCommitted ? (
         <CollapsibleSection title="Spending limits" icon="clock" defaultExpanded={true}>
@@ -665,7 +687,8 @@ function AppContentInner({
   const navigate = useNavigate();
   const location = useLocation();
 
-  const isWideRoute = WIDE_ROUTES.includes(location.pathname);
+  const isWideRoute =
+    WIDE_ROUTES.includes(location.pathname) || location.pathname.startsWith("/lock/");
 
   // Capture a ?ref= referral link once on load, before any wallet connects
   useEffect(() => {
@@ -1206,6 +1229,34 @@ function AppContentInner({
           element={
             <Suspense fallback={<div />}>
               <SigningInGuide />
+            </Suspense>
+          }
+        />
+        {/* Every implementation and security detail the home page no longer
+            carries; readable before anyone has connected anything. */}
+        <Route
+          path={SECURITY_PAGE_PATH}
+          element={
+            <Suspense fallback={<div />}>
+              <SecurityPage />
+            </Suspense>
+          }
+        />
+        {/* The creators page and the public proof of one lock are readable
+            by anyone, wallet or not: the audience of a lock has neither. */}
+        <Route
+          path={PROOF_OF_LOCK_PATH}
+          element={
+            <Suspense fallback={<div />}>
+              <ProofOfLock />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/lock/:chainKey/:address"
+          element={
+            <Suspense fallback={<div />}>
+              <LockProof />
             </Suspense>
           }
         />

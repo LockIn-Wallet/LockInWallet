@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 
 import { styles, colors, fontSize, fontWeight, spacing } from "../../styles";
 import { PRIZE_SAVINGS_PATH } from "../../utils/prizeSavingsContent.js";
+import { SECURITY_PAGE_PATH } from "../../utils/securityPageContent.js";
 import { isLinkVisible, isPrizePoolEnabled } from "../../utils/featureFlags.js";
 
 const textLinkStyle = {
@@ -30,6 +31,11 @@ const TEXT_LINKS = [
     label: "Prize Pool",
     title: "No-loss prize pool — win prizes without risking your savings",
     flag: isPrizePoolEnabled,
+  },
+  {
+    href: SECURITY_PAGE_PATH,
+    label: "Security",
+    title: "Security & technology — how the limits are enforced on-chain",
   },
   {
     href: "/governance",

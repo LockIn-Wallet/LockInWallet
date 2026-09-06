@@ -14,6 +14,18 @@ export const RELEASE_NOTES = [
     title: "A wallet without a seed phrase",
     highlights: [
       {
+        emoji: "🔐",
+        text: "You can now lock any coin completely until a date, or until a price is reached. A locked vault is its own tiny contract with no emergency exit, no penalty exit and no upgrade switch — not even we can open it early, which is the whole point. Every lock also has a latest date, so if a price feed ever breaks the coins are simply released on that date. Each lock gets a public page anyone can open without a wallet, showing the rule, the balance and the deadline read live from the chain; creators and teams can share it as proof their tokens cannot move. Your normal savings vault is unchanged and keeps its exits.",
+      },
+      {
+        emoji: "🏠",
+        text: "The home page now speaks to someone who has never touched crypto. It says what the account does — you set an allowance you can always take out, anything more waits for a delay you chose, and nobody can shortcut it — then how to set it up, who it is for, and the questions people ask before putting money in. Everything about networks, keys, stolen-key scenarios and what we can and cannot change has moved to its own Security & technology page, linked from the top of every page and the footer, so the curious can check every claim and everyone else does not have to wade through it.",
+      },
+      {
+        emoji: "📚",
+        text: "Two new guides, on how to stop impulse buying and how to stop impulse shopping, join the existing ones on impulse spending, accounts you can't withdraw from, addiction recovery and gambling. Every guide now links to all the others and to the security page.",
+      },
+      {
         emoji: "👆",
         text: "You can now start saving without a wallet at all. Press sign in, prove it is you with a code sent to your email or with your face or fingerprint, and you have one — nothing to install, no seed phrase to write down, no password to forget. It follows you to your other devices through the account you already sign into them with, so a new phone or laptop means signing in, not hunting for a backup. If you already have a wallet, connecting it works exactly as before; pressing connect now asks which you would rather use.",
       },

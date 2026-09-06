@@ -69,6 +69,8 @@ export {
   default as landing,
 } from "./components/landing.js";
 
+export { lockStyles, default as locks } from "./components/locks.js";
+
 export {
   homeStyles,
   getBarFillStyle,

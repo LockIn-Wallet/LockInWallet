@@ -25,7 +25,13 @@ import ReferralModuleABI from "../ReferralModuleABI.json";
 import RecoverySystemModuleABI from "../RecoverySystemModuleABI.json";
 import VaultRulesModuleABI from "../VaultRulesModuleABI.json";
 import ERC20ABI from "../ERC20ABI.json";
-import { getTokenMeta } from "../utils/tokenUtils.js";
+import { createLockReader } from "../utils/lockReader.js";
+import {
+  LOCK_RULE_TYPES,
+  DEFAULT_PRICE_STALENESS_SECONDS,
+  findPriceFeed,
+} from "../utils/locks.js";
+import { getTokenMeta, isNativeTokenAddress } from "../utils/tokenUtils.js";
 import {
   SPENDING_PERIODS,
   getPeriodDuration,
@@ -242,6 +248,14 @@ const REVERT_MESSAGES = [
   ["Fee above maximum", "That fee is above the allowed maximum"],
   ["Nothing invested", "This vault has nothing invested"],
 
+  // Locked vaults. Longer strings first.
+  ["Nothing to release", "This lock holds none of that coin"],
+  ["Still locked", "This lock has not opened yet"],
+  ["Unknown condition", "That rule was not created by the lock factory, so it cannot be trusted"],
+  ["Deadline too far", "A lock can run for at most ten years"],
+  ["Deadline in past", "The unlock date has to be in the future"],
+  ["Not a lock", "That address is not a locked vault"],
+
   // Referrals and proxies
   ["Cannot refer yourself", "You cannot refer yourself"],
   ["Referrer already recorded", "A referrer is already recorded for this account"],
@@ -298,6 +312,9 @@ const WRITE_FALLBACKS = {
   withdrawFromVault: "Withdrawal failed",
   withdrawFromVaultWithPenalty: "Withdrawal failed",
   claimVaultPenaltyRewards: "Could not claim your rewards",
+  createLock: "Could not create the lock",
+  depositToLock: "Deposit failed",
+  releaseLock: "Could not release the lock",
   deployVaultDepositAddress: "Could not create the vault deposit address",
   setYieldMode: "Could not change how your savings earn",
   compoundVaultYield: "Could not add your earnings to your balance",
@@ -975,6 +992,127 @@ export class EVMAdapter extends BlockchainAdapter {
       console.error("❌ Error cancelling EVM proposal:", error);
       throw new Error(`Proposal cancellation failed: ${error.message}`);
     }
+  }
+
+  // ---- Locked vaults ----
+  //
+  // Immutable per-lock contracts deployed by a factory whose address lives in
+  // the network config. Nothing here touches the module registry: a lock is
+  // outside governance by design.
+
+  _lockReader() {
+    if (!this._lockReaderInstance) {
+      this._lockReaderInstance = createLockReader(this.networkConfig, this.signer);
+    }
+    return this._lockReaderInstance;
+  }
+
+  supportsLocks() {
+    return this._lockReader().available;
+  }
+
+  async getLocks(ownerAddress = null) {
+    const owner = ownerAddress || (await this.getAddress());
+    return this._lockReader().getLocks(owner, this._extraLockTokens());
+  }
+
+  async getLock(lockAddress) {
+    return this._lockReader().getLock(lockAddress, this._extraLockTokens());
+  }
+
+  // Custom tokens the user locked through this app, so their balances show
+  // even though the network config does not list them.
+  _extraLockTokens() {
+    try {
+      return JSON.parse(localStorage.getItem("lockin:lockTokens") || "[]");
+    } catch {
+      return [];
+    }
+  }
+
+  _rememberLockToken(tokenAddress) {
+    if (!tokenAddress || tokenAddress === ethers.ZeroAddress) return;
+    const known = this._extraLockTokens();
+    if (known.some((t) => t.toLowerCase() === tokenAddress.toLowerCase())) return;
+    localStorage.setItem("lockin:lockTokens", JSON.stringify([...known, tokenAddress]));
+  }
+
+  /**
+   * Create a lock from a validated draft.
+   * @param {{ruleType:"date"|"price", unlockAt?:number, feed?:string, threshold?:number,
+   *          above?:boolean, deadline?:number, tokenAddress?:string}} draft
+   * @returns {Promise<{lockAddress:string, signature:string}>}
+   */
+  async createLock(draft) {
+    const { factory } = this._lockReader();
+    if (!factory) throw new Error("Locked vaults are not available on this network yet");
+
+    let condition = ethers.ZeroAddress;
+    let deadline = draft.deadline;
+
+    if (draft.ruleType === LOCK_RULE_TYPES.date) {
+      // A date-only lock needs no condition contract: the deadline is the rule.
+      deadline = draft.unlockAt;
+    } else if (draft.ruleType === LOCK_RULE_TYPES.price) {
+      const feed = findPriceFeed(this.networkConfig, draft.feed);
+      if (!feed) throw new Error("That price feed is not one this app verifies");
+      const threshold = ethers.parseUnits(String(draft.threshold), feed.decimals);
+      const conditionTx = await factory.createPriceCondition(
+        feed.address,
+        threshold,
+        Boolean(draft.above),
+        DEFAULT_PRICE_STALENESS_SECONDS,
+      );
+      const conditionReceipt = await conditionTx.wait();
+      condition = this._eventArg(factory, conditionReceipt, "ConditionCreated", "condition");
+    } else {
+      throw new Error("Choose how the lock opens");
+    }
+
+    const salt = ethers.hexlify(ethers.randomBytes(32));
+    const tx = await factory.createLock(condition, BigInt(deadline), salt);
+    const receipt = await tx.wait();
+    const lockAddress = this._eventArg(factory, receipt, "LockCreated", "lock");
+    this._rememberLockToken(draft.tokenAddress);
+    return { lockAddress, signature: tx.hash };
+  }
+
+  _eventArg(contract, receipt, eventName, argName) {
+    for (const log of receipt.logs) {
+      try {
+        const parsed = contract.interface.parseLog(log);
+        if (parsed?.name === eventName) return parsed.args[argName];
+      } catch {
+        // Not one of ours
+      }
+    }
+    throw new Error(`Could not read the ${eventName} event from the transaction`);
+  }
+
+  /** Move coins into a lock. Native coin is a plain transfer; ERC20 goes through the vault's deposit. */
+  async depositToLock(lockAddress, tokenAddress, amount) {
+    const meta = getTokenMeta(this.networkConfig, tokenAddress);
+    const raw = ethers.parseUnits(String(amount), meta.decimals);
+    if (meta.isNative) {
+      const tx = await this.signer.sendTransaction({ to: lockAddress, value: raw });
+      await tx.wait();
+      return tx.hash;
+    }
+    const token = new ethers.Contract(tokenAddress, ERC20ABI, this.signer);
+    const approval = await token.approve(lockAddress, raw);
+    await approval.wait();
+    const tx = await this._lockReader().vaultAt(lockAddress).deposit(tokenAddress, raw);
+    await tx.wait();
+    this._rememberLockToken(tokenAddress);
+    return tx.hash;
+  }
+
+  /** Send everything the lock holds of one coin to its owner. Anyone may call this. */
+  async releaseLock(lockAddress, tokenAddress) {
+    const token = isNativeTokenAddress(tokenAddress) ? ethers.ZeroAddress : tokenAddress;
+    const tx = await this._lockReader().vaultAt(lockAddress).release(token);
+    await tx.wait();
+    return tx.hash;
   }
 
   // Utility Methods

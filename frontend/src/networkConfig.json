@@ -41,7 +41,9 @@
           "decimals": 18,
           "recommended": true
         }
-      }
+      },
+      "lockedVaultFactory": "0x0000000000000000000000000000000000000000",
+      "priceFeeds": []
     },
     "ethereum": {
       "chainId": 1,
@@ -80,7 +82,20 @@
           "decimals": 18,
           "recommended": true
         }
-      }
+      },
+      "lockedVaultFactory": "0x0000000000000000000000000000000000000000",
+      "priceFeeds": [
+        {
+          "label": "ETH / USD",
+          "address": "0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419",
+          "decimals": 8
+        },
+        {
+          "label": "BTC / USD",
+          "address": "0xF4030086522a5bEEa4988F8cA5B36dbC97BeE88c",
+          "decimals": 8
+        }
+      ]
     },
     "optimism": {
       "chainId": 10,
@@ -121,7 +136,20 @@
           "decimals": 18,
           "recommended": true
         }
-      }
+      },
+      "lockedVaultFactory": "0x0000000000000000000000000000000000000000",
+      "priceFeeds": [
+        {
+          "label": "ETH / USD",
+          "address": "0x13e3Ee699D1909E989722E753853AE30b17e08c5",
+          "decimals": 8
+        },
+        {
+          "label": "BTC / USD",
+          "address": "0xD702DD976Fb76Fffc2D3963D037dfDae5b04E593",
+          "decimals": 8
+        }
+      ]
     },
     "base": {
       "chainId": 8453,
@@ -162,7 +190,20 @@
           "decimals": 18,
           "recommended": true
         }
-      }
+      },
+      "lockedVaultFactory": "0x0000000000000000000000000000000000000000",
+      "priceFeeds": [
+        {
+          "label": "ETH / USD",
+          "address": "0x71041dddad3595F9CEd3DcCFBe3D1F4b0a16Bb70",
+          "decimals": 8
+        },
+        {
+          "label": "BTC / USD",
+          "address": "0x64c911996D3c6aC71f9b455B1E8E7266BcbD848F",
+          "decimals": 8
+        }
+      ]
     }
   },
   "solana": {

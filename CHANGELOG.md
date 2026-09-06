@@ -47,6 +47,37 @@ these notes on the in-app **Governance** page before they execute.
   registry so a module upgrade cannot silently stop its calls being sponsored.
 
 ### Added
+- Locked vaults. New immutable contracts under `ethereum/contracts/locks/`:
+  `LockedVault` (one per lock; holds any ERC20 or the native coin, releases
+  everything to its owner once `isUnlocked()`, no owner or admin functions),
+  `LockedVaultFactory` (CREATE2 deployer, ten-year horizon, and the registry
+  of verified conditions), and the conditions `DateCondition`,
+  `PriceCondition` (Chainlink feed, threshold, direction, staleness bound),
+  `AllOfCondition` and `AnyOfCondition`. Every lock carries a hard deadline
+  so a dead feed can only delay funds, never strand them. *New deployment,
+  not a module: nothing is registered in `SavingsCore`, nothing is
+  upgradeable, and no existing storage changes. The factory address lives in
+  `frontend/src/networkConfig.json` as `lockedVaultFactory`; deploy with
+  `npm run deploy-locks --workspace=ethereum`.*
+- Locked vaults in the app: a "Locked vaults" section on the dashboard to
+  create a lock (on a date, or when a verified price is reached), deposit any
+  listed or custom token into it, and release it once open; a public proof
+  page at `/lock/:chain/:address` readable without a wallet; and a creators
+  landing page at `/proof-of-lock`. The adapter exposes `supportsLocks`,
+  `getLocks`, `getLock`, `createLock`, `depositToLock` and `releaseLock`.
+  *Frontend only beyond the contracts above.*
+- A security and technology page at `/security`, holding every implementation
+  detail the home page used to carry: the live enforcement console, the three
+  checkable facts, the stolen-key simulation, the wallet comparison, the trust
+  model with the upgrade disclosure, the chain list, and a technical FAQ that
+  says plainly there has been no audit. *Frontend only — no contract change.*
+- Two long-form guides, served as static HTML like the existing ones, for the
+  searches "how to stop impulse buying" (`/impulse-buying`) and "how to stop
+  impulse shopping" (`/impulse-shopping`). Each takes a different angle — the
+  moment of purchase versus the browsing habit — and every static guide now
+  cross-links the full set, links to `/security`, and no longer claims Solana
+  support. Both are in the sitemap alongside `/security` and `/signing-in`,
+  which were missing from it.
 - A sign-in explainer at `/signing-in`, written for someone who has never held
   crypto: what happens when you press the button, how an email code and a
   passkey differ, using the same savings on a second device, and — the question
@@ -63,6 +94,18 @@ these notes on the in-app **Governance** page before they execute.
   no contract change.*
 
 ### Changed
+- SECURITY.md and GOVERNANCE.md state locked vaults as the deliberate
+  exception to the exit-right invariant: no bypass, no penalty exit, and no
+  upgrade path, so nothing to escape from. The home page and `/security` FAQ
+  carry the same qualifier.
+- The home page is rewritten for someone who has never held crypto and searched
+  for "a savings account you can't withdraw from". It now says what the account
+  does (an allowance, a wait, nobody who can waive either), the four setup
+  steps, who it is for — each card leading to the matching guide — and a plain
+  FAQ, and ends with a link to `/security`. The proof strip, enforcement
+  console, stolen-key simulation, comparison table, trust grid and chain list
+  moved to `/security` unchanged. The page title and metadata target the same
+  search. *Frontend only — no contract change.*
 - The connect dialog asks which kind of person you are rather than which
   technology you would like: "Email sign-in", badged *New to crypto*, against "I
   already use crypto — use MetaMask or another wallet", badged *Most private*.

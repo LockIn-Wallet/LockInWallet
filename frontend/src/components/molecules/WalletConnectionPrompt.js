@@ -1,29 +1,28 @@
 import React from "react";
 
 import SectionHeading from "../atoms/SectionHeading.js";
+import LandingLink from "../atoms/LandingLink.js";
+import FaqList from "./FaqList.js";
 import LandingNav from "../organisms/landing/LandingNav.js";
 import LandingHero from "../organisms/landing/LandingHero.js";
-import ProofStrip from "../organisms/landing/ProofStrip.js";
-import WalletComparison from "../organisms/landing/WalletComparison.js";
-import TrustGrid from "../organisms/landing/TrustGrid.js";
+import ProductPromise from "../organisms/landing/ProductPromise.js";
 import HowItWorks from "../organisms/landing/HowItWorks.js";
+import UseCases from "../organisms/landing/UseCases.js";
 import LandingClosing from "../organisms/landing/LandingClosing.js";
 import LandingFooter from "../organisms/landing/LandingFooter.js";
 
-import TimeLockShowcase from "../organisms/TimeLockShowcase.js";
-import ChainAvailability from "../organisms/ChainAvailability.js";
+import { homeStyles, landingStyles } from "../../styles";
 
-import { landingStyles } from "../../styles";
-
-// Shares the lazy chunk with the standalone page, so chart.js still only
-// downloads when this section is actually reached
+import { HOME_FAQ, HOME_DETAILS_TEASER } from "../../utils/landingContent.js";
+import { SECURITY_PAGE_PATH } from "../../utils/securityPageContent.js";
 
 /**
  * WalletConnectionPrompt - the logged-out landing page.
  *
- * The argument runs in order: the contract refuses a withdrawal (hero), three
- * checkable facts, then the demos that prove each claim, then the comparison,
- * the trust model including what we can still do, and finally setup.
+ * Written for someone who has never held crypto and searched for a savings
+ * account they can't withdraw from. It says what the account does, how you
+ * set it up, who it is for, and answers the plain questions. Everything
+ * about chains, keys and upgrades lives on /security, linked at the end.
  */
 const WalletConnectionPrompt = ({
   provider,
@@ -49,35 +48,41 @@ const WalletConnectionPrompt = ({
 
       <LandingHero onLaunch={onSignInWithPasskey || connectWallet} />
 
-      <ProofStrip />
-
-      <section style={landingStyles.section}>
-        <div style={landingStyles.inner}>
-          <SectionHeading
-            eyebrow="What a leaked key costs you"
-            title="A stolen key can't empty your wallet"
-            lede="Your limit is the attacker's limit too. That gap is the time you need to notice and take the account back."
-          />
-          <TimeLockShowcase />
-        </div>
-      </section>
-
-      <WalletComparison />
-
-      <TrustGrid />
-
-      <section style={landingStyles.section}>
-        <div style={landingStyles.inner}>
-          <SectionHeading
-            eyebrow="Chains"
-            title="Live on Optimism, with Ethereum underway"
-            lede="Cheap, fast transactions matter here: an hourly limit only makes sense if using it doesn't cost a fortune in gas."
-          />
-          <ChainAvailability />
-        </div>
-      </section>
+      <ProductPromise />
 
       <HowItWorks />
+
+      <UseCases />
+
+      <section style={landingStyles.section} aria-labelledby="home-faq">
+        <div style={landingStyles.inner}>
+          <SectionHeading
+            id="home-faq"
+            eyebrow="Questions"
+            title="The things people ask before they put money in"
+          />
+          <FaqList items={HOME_FAQ} />
+        </div>
+      </section>
+
+      <section style={landingStyles.section}>
+        <div style={landingStyles.inner}>
+          <SectionHeading
+            eyebrow={HOME_DETAILS_TEASER.eyebrow}
+            title={HOME_DETAILS_TEASER.title}
+            lede={HOME_DETAILS_TEASER.lede}
+          />
+          <div style={homeStyles.pageCtaRow}>
+            <LandingLink
+              href={SECURITY_PAGE_PATH}
+              internal
+              style={landingStyles.ctaSecondary}
+            >
+              {HOME_DETAILS_TEASER.linkLabel}
+            </LandingLink>
+          </div>
+        </div>
+      </section>
 
       <LandingClosing
         networkType={networkType}

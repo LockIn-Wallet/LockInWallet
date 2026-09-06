@@ -24,6 +24,7 @@
     "gas-estimation": "node scripts/gas-estimation.js",
     "estimate-optimism-costs": "hardhat run scripts/estimate-optimism-costs.js --network optimism",
     "deploy-optimism": "hardhat run scripts/deploy-modular.js --network optimism",
+    "deploy-locks": "hardhat run scripts/deploy-locks.js --network localhost",
     "clean": "hardhat clean"
   },
   "keywords": [
