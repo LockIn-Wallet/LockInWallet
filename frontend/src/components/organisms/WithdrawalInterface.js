@@ -377,8 +377,12 @@ const WithdrawalInterface = ({
         const txHash = await transactionManager.executeBypass();
         alert(`✅ Solana bypass request executed!\n\nTransaction: ${txHash}`);
       } else {
-        const txHash = await transactionManager.executeVaultBypass(requestId);
-        alert(`✅ EVM bypass request executed!\n\nTransaction: ${txHash}`);
+        const destination = selectedWithdrawalDestination || null;
+        const txHash = await transactionManager.executeVaultBypass(requestId, destination);
+        const destLabel = destination
+          ? `${destination.slice(0, 8)}...${destination.slice(-4)}`
+          : "your wallet";
+        alert(`✅ Withdrawal executed!\n\nTransaction: ${txHash}\nDestination: ${destLabel}`);
       }
 
       // Notify parent components of state changes
@@ -1104,7 +1108,7 @@ const WithdrawalInterface = ({
                 margin: `0 0 ${spacingUtilities.mb3} 0`,
               }}
             >
-              🔒 Pending Bypass Requests ({pendingBypassRequests.length}
+              🔒 Pending Withdrawals ({pendingBypassRequests.length}
               )
             </h5>
             <div style={{ ...utilityStyles.grid, gap: spacingUtilities.mb2 }}>
@@ -1140,7 +1144,7 @@ const WithdrawalInterface = ({
                             fontWeight: "bold",
                           }}
                         >
-                          🔒 {request.amount}{" "}
+                          💸 {request.amount}{" "}
                           {request.tokenSymbol || request.token}
                         </div>
                         <div
@@ -1149,10 +1153,13 @@ const WithdrawalInterface = ({
                             color: colors.text.muted,
                           }}
                         >
-                          {request.skipPeriod || request.period || "Bypass"} limit override
+                          Exceeds {request.skipPeriod || request.period || ""} limit
+                          {" • To: "}
                           {request.destination
-                            ? ` • To: ${request.destination.slice(0, 8)}...${request.destination.slice(-4)}`
-                            : ""}
+                            ? `${request.destination.slice(0, 8)}...${request.destination.slice(-4)}`
+                            : selectedWithdrawalDestination
+                              ? `${selectedWithdrawalDestination.slice(0, 8)}...${selectedWithdrawalDestination.slice(-4)}`
+                              : "your wallet"}
                         </div>
                       </div>
                       <div style={{ display: "flex", gap: "6px" }}>

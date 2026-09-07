@@ -533,7 +533,7 @@ export class TransactionManager {
         token: req.token,
         tokenSymbol: token?.symbol ?? "USDT",
         executeAfter: req.executeAfter.toString(),
-        title: `${req.skipPeriod} Bypass`,
+        title: `Withdrawal (exceeds ${req.skipPeriod} limit)`,
         networkType: "evm",
       }];
     }
