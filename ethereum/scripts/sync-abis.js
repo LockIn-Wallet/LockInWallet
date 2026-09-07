@@ -10,7 +10,8 @@ const path = require("path");
  * anything that points at the missing entry.
  *
  * `SavingsCore` lands as `SavingsABI.json` for historical reasons; everything
- * else is `<Name>ABI.json`. Names map to `contracts/<Name>.sol/<Name>.json`.
+ * else is `<Name>ABI.json`. Names map to `contracts/<Name>.sol/<Name>.json`,
+ * unless the contract lives in a subfolder listed in `CONTRACT_DIRS`.
  */
 const SYNCED_CONTRACTS = [
   "SavingsCore",
@@ -31,7 +32,15 @@ const SYNCED_CONTRACTS = [
   "VaultDepositAddressModule",
   "UserProxy",
   "MockUSDT",
+  "LockedVaultFactory",
+  "LockedVault",
 ];
+
+/** Contracts that do not sit directly under `contracts/`. */
+const CONTRACT_DIRS = {
+  LockedVaultFactory: "locks",
+  LockedVault: "locks",
+};
 
 const FILENAME_OVERRIDES = {
   SavingsCore: "SavingsABI.json",
@@ -55,7 +64,8 @@ function syncAbis({ quiet = false } = {}) {
   const missing = [];
 
   for (const name of SYNCED_CONTRACTS) {
-    const artifactPath = path.join(__dirname, `../artifacts/contracts/${name}.sol/${name}.json`);
+    const dir = CONTRACT_DIRS[name] ? `${CONTRACT_DIRS[name]}/` : "";
+    const artifactPath = path.join(__dirname, `../artifacts/contracts/${dir}${name}.sol/${name}.json`);
     if (!fs.existsSync(artifactPath)) {
       missing.push(name);
       continue;

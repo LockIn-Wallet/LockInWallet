@@ -2,13 +2,8 @@ const { ethers, upgrades } = require("hardhat");
 const fs = require("fs");
 const path = require("path");
 const { syncAbis } = require("./sync-abis");
-
-const TARGET_NETWORK = hre.network.name === "hardhat" ? "localhost" : hre.network.name;
-const NETWORK_CONFIG_PATH = path.join(__dirname, "../../frontend/src/networkConfig.json");
-
-function readNetworkConfig() {
-  return JSON.parse(fs.readFileSync(NETWORK_CONFIG_PATH, "utf8"));
-}
+const { TARGET_NETWORK, readNetworkConfig } = require("./network-config");
+const { deployLockedVaultFactory } = require("./deploy-locks");
 
 // Auto-detect existing proxy address from the frontend network config
 function getExistingProxyAddress() {
@@ -470,6 +465,13 @@ async function main() {
       console.log("   ✅ Production mode enabled (dev mode disabled)");
     } else {
       console.log("\n🧪 Development mode enabled by default");
+    }
+
+    // Locks are immutable and independent of the core, so a fresh factory per
+    // local chain is right, while on a live chain it is deployed exactly once
+    // and on purpose via `deploy-locks`.
+    if (isLocalNetwork) {
+      await deployLockedVaultFactory();
     }
 
     // Update frontend addresses in networkConfig.json

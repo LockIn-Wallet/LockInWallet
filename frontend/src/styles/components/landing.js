@@ -322,6 +322,13 @@ export const landingStyles = {
     margin: `${space[6]} 0 ${space[4]} 0`,
   },
 
+  // Hero without the console beneath it: the home page now ends the hero
+  // at the copy, so it needs the bottom gutter the console used to supply.
+  heroStandalone: {
+    padding: `${space[8]} ${layout.gutter}`,
+    position: "relative",
+  },
+
   heroAccent: {
     color: colors.primary.main,
   },
@@ -717,6 +724,11 @@ export const landingStyles = {
     border: `1px solid ${colors.border.hairline}`,
     borderRadius: borderRadius.xxl,
     overflow: "hidden",
+  },
+
+  // Three cards, not four: a narrower minimum lets them share one row
+  useCaseGrid: {
+    gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
   },
 
   featureCard: {

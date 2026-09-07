@@ -25,6 +25,7 @@ vulnerability.
 | Account freeze (recovery key or account key) | instant | Stops every outgoing path the moment a compromise is noticed |
 | Unfreeze / ownership recovery | instant, **recovery key only** | Moving the account to a fresh key that the attacker never held |
 | Recovery key change from the account key | 30-day cancellable timelock | An attacker with your seed rotating out your recovery key |
+| Locked vault (`contracts/locks/`) | none until its rule is met; hard deadline ≤ 10 years | An immutable per-lock contract with no bypass, no penalty exit and no upgrade path — nobody, including us, can open it early |
 
 The emergency bypass is the cornerstone: whatever happens — including a
 contract upgrade you disagree with — you can start a full exit immediately
@@ -44,6 +45,32 @@ fast partial exit while longer windows stay firmly locked. The 90-day
 ceiling bounds the worst case: for an account with no recovery key, that is
 the longest anyone — including you, by mistake — can be kept from their own
 funds.
+
+## Locked vaults: the deliberate exception
+
+A locked vault is not a module. Each lock is its own small, non-upgradeable
+contract (`LockedVault.sol`) deployed by an immutable factory. It holds any
+coin and releases everything to its owner when its rule is met — a date, or a
+price condition — and on its deadline at the latest. There is no emergency
+bypass, no penalty exit, no owner function and no admin. The exit-right
+invariant above exists to protect users from *us*; a lock has no upgrade path,
+so there is nothing to escape from, and the invariant is simply not in play.
+
+Two properties keep locks honest:
+
+- **Every lock has a deadline.** A price feed that goes stale or is
+  decommissioned leaves the lock closed until the deadline, never forever. A
+  reverting feed is treated as "not met", not as a failure.
+- **Only factory-made conditions count as verified.** A creator could point a
+  lock at a condition contract they control; the factory records which
+  conditions it deployed, and the public proof page marks anything else as
+  unverified. Price conditions are verified only against the feeds listed in
+  the frontend's network config.
+
+What a lock does *not* do: it does not interact with the account freeze or
+recovery modules, so a stolen key can drain a lock only after it opens, and
+only to the owner address the lock was created with. Choose the owner
+accordingly.
 
 ## Seed-compromise recovery model
 

@@ -37,6 +37,11 @@ plainly in [SECURITY.md](SECURITY.md). Governance must never raise the
 minimum unlock delay above 24h without raising the governance delay to
 keep the 2× margin intact.
 
+Locked vaults (`ethereum/contracts/locks/`) sit outside governance
+entirely: they are immutable, hold their own custody, and have no exit until
+their rule is met. The invariant does not apply to them because no upgrade
+can reach them — see [SECURITY.md](SECURITY.md#locked-vaults-the-deliberate-exception).
+
 Tooling: `ethereum/scripts/deploy-governance.js` (timelock deploy +
 ownership handover; pass the Safe as `GOV_PROPOSER`) and
 `governance-upgrade.js` (validates + deploys the implementation, then
