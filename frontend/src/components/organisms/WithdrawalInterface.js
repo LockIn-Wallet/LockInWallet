@@ -49,7 +49,6 @@ const WithdrawalInterface = ({
   // Network & config
   networkType,
   selectedNetwork,
-  getCurrentUserAddress,
   activeVaultAddress,
 
   // Wallet state
@@ -78,7 +77,7 @@ const WithdrawalInterface = ({
   const vaultTokens = useVaultTokens(transactionManager, activeVaultAddress);
   // Internal withdrawal state
   const [withdrawalAmount, setWithdrawalAmount] = useState("");
-  const [selectedWithdrawalDestination, setSelectedWithdrawalDestination] = useState("self");
+  const [selectedWithdrawalDestination, setSelectedWithdrawalDestination] = useState("");
 
   // Withdrawal address form state
   const [showWithdrawalAddressForm, setShowWithdrawalAddressForm] = useState(false);
@@ -93,6 +92,7 @@ const WithdrawalInterface = ({
   // Compute limit-exceeding status from local withdrawal amount
   const exceedingPeriod = detectExceedingPeriod(withdrawalAmount, spendingLimits);
   const exceedsInstantLimit = parseFloat(withdrawalAmount || 0) > instantWithdrawableAmount;
+  const isWithdrawDisabled = !withdrawalAmount || parseFloat(withdrawalAmount) <= 0 || !selectedWithdrawalDestination;
 
   // Penalty state
   const [penaltyRate, setPenaltyRate] = useState(2000); // basis points, default 20%
@@ -213,6 +213,11 @@ const WithdrawalInterface = ({
       return;
     }
 
+    if (!selectedWithdrawalDestination) {
+      alert("Please select a withdrawal destination");
+      return;
+    }
+
     setIsLoading(true);
     try {
       if (networkType === "solana") {
@@ -221,9 +226,7 @@ const WithdrawalInterface = ({
         const amountValue = parseFloat(withdrawalAmount);
         const txHash = await transactionManager.withdrawFromActiveVault(amountValue);
 
-        let destinationLabel = selectedWithdrawalDestination === "self"
-          ? "self (wallet)"
-          : `${selectedWithdrawalDestination.slice(0, 8)}...${selectedWithdrawalDestination.slice(-4)}`;
+        const destinationLabel = `${selectedWithdrawalDestination.slice(0, 8)}...${selectedWithdrawalDestination.slice(-4)}`;
 
         alert(`✅ Solana withdrawal successful!\n\nTransaction: ${txHash}\nAmount: ${withdrawalAmount} ${selectedToken}\nDestination: ${destinationLabel}`);
       } else {
@@ -231,12 +234,7 @@ const WithdrawalInterface = ({
         // the currently selected vault
         console.log("💸 EVM: Withdrawing to destination", withdrawalAmount, selectedToken, selectedWithdrawalDestination);
 
-        let destinationAddress = selectedWithdrawalDestination;
-
-        // Handle "self" destination - use user's wallet address
-        if (selectedWithdrawalDestination === "self") {
-          destinationAddress = getCurrentUserAddress();
-        }
+        const destinationAddress = selectedWithdrawalDestination;
 
         const network = getCurrentNetwork(networkType, selectedNetwork);
         const tokenAddress = selectedToken === "ETH"
@@ -566,8 +564,8 @@ const WithdrawalInterface = ({
         }}
       >
         Withdrawals are automatically checked against all your active
-        spending limits. You can withdraw to your own wallet or to
-        approved withdrawal addresses.
+        spending limits. You can withdraw to approved withdrawal
+        addresses only.
       </p>
 
       {/* Token and Amount Selection */}
@@ -707,7 +705,6 @@ const WithdrawalInterface = ({
         showAddButton={true}
         title="Withdraw To:"
         withdrawalAddresses={withdrawalAddresses}
-        getCurrentUserAddress={getCurrentUserAddress}
         removeWithdrawalAddress={removeWithdrawalAddress}
         showWithdrawalAddressForm={showWithdrawalAddressForm}
         setShowWithdrawalAddressForm={setShowWithdrawalAddressForm}
@@ -720,29 +717,20 @@ const WithdrawalInterface = ({
         {!exceedsInstantLimit ? (
           <button
             onClick={withdrawToDestination}
-            disabled={
-              !withdrawalAmount || parseFloat(withdrawalAmount) <= 0
-            }
+            disabled={isWithdrawDisabled}
             style={{
               padding: "12px 24px",
               borderRadius: "4px",
               border: "none",
-              backgroundColor:
-                !withdrawalAmount || parseFloat(withdrawalAmount) <= 0
-                  ? colors.background.secondary
-                  : colors.success.main,
+              backgroundColor: isWithdrawDisabled
+                ? colors.background.secondary
+                : colors.success.main,
               color: "white",
-              cursor:
-                !withdrawalAmount || parseFloat(withdrawalAmount) <= 0
-                  ? "not-allowed"
-                  : "pointer",
+              cursor: isWithdrawDisabled ? "not-allowed" : "pointer",
               fontWeight: "bold",
               flex: "1",
               fontSize: "1em",
-              opacity:
-                !withdrawalAmount || parseFloat(withdrawalAmount) <= 0
-                  ? 0.5
-                  : 1,
+              opacity: isWithdrawDisabled ? 0.5 : 1,
             }}
           >
             ⚡ Instant Withdraw {selectedToken}
@@ -1152,7 +1140,8 @@ const WithdrawalInterface = ({
                             fontWeight: "bold",
                           }}
                         >
-                          🔒 {request.amount} {request.token}
+                          🔒 {request.amount}{" "}
+                          {request.tokenSymbol || request.token}
                         </div>
                         <div
                           style={{
@@ -1160,9 +1149,10 @@ const WithdrawalInterface = ({
                             color: colors.text.muted,
                           }}
                         >
-                          Period: {request.period} • To:{" "}
-                          {request.destination?.slice(0, 8)}...
-                          {request.destination?.slice(-4)}
+                          {request.skipPeriod || request.period || "Bypass"} limit override
+                          {request.destination
+                            ? ` • To: ${request.destination.slice(0, 8)}...${request.destination.slice(-4)}`
+                            : ""}
                         </div>
                       </div>
                       <div style={{ display: "flex", gap: "6px" }}>
@@ -1237,7 +1227,6 @@ WithdrawalInterface.propTypes = {
   // Network & config
   networkType: PropTypes.string.isRequired,
   selectedNetwork: PropTypes.string.isRequired,
-  getCurrentUserAddress: PropTypes.func.isRequired,
 
   // Wallet state
   solanaConnected: PropTypes.bool,
