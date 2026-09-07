@@ -157,7 +157,8 @@ function MainFlow({
   const [spendingLimits, setSpendingLimits] = useState([]);
   const [limitEdits, setLimitEdits] = useState(() => createEmptyLimitEdits());
   const [balances, setBalances] = useState({});
-  const [selectedToken, setSelectedToken] = useState(null);
+  const [selectedToken, setSelectedToken] = useState("USDT");
+  const hasAutoSelectedToken = useRef(false);
   const [instantWithdrawableAmount, setInstantWithdrawableAmount] = useState(0);
   const [limitingPeriod, setLimitingPeriod] = useState("");
 
@@ -171,12 +172,15 @@ function MainFlow({
   }, []);
 
   useEffect(() => {
-    if (selectedToken) return;
+    if (hasAutoSelectedToken.current) return;
     const funded = Object.entries(balances).find(
       ([, v]) => parseFloat(v) > 0
     );
-    setSelectedToken(funded ? funded[0] : "USDT");
-  }, [balances, selectedToken]);
+    if (funded) {
+      setSelectedToken(funded[0]);
+      hasAutoSelectedToken.current = true;
+    }
+  }, [balances]);
 
   const fetchSpendingLimits = useCallback(async () => {
     try {
@@ -568,6 +572,9 @@ function AppContentInner({
   const [evmUserAddress, setEvmUserAddress] = useState("");
   const [currentChainId, setCurrentChainId] = useState(null);
   const [isNetworkSwitching, setIsNetworkSwitching] = useState(false);
+  const [isReconnecting, setIsReconnecting] = useState(
+    () => !isWalletLoggedOut() && (hasPasskeySession() || hasWallet())
+  );
   // Raised when someone presses connect with no wallet available at all
   const [showWalletOnboarding, setShowWalletOnboarding] = useState(false);
   // Bumped whenever the active wallet is swapped — signing in provides one
@@ -633,9 +640,10 @@ function AppContentInner({
   // on a first visit, unasked, is a strange thing to do to a stranger.
   useEffect(() => {
     if (!hasPasskeySession() || isWalletLoggedOut()) return;
-    restorePasskeySession().catch((error) =>
-      console.log("Passkey session not restored:", error.message)
-    );
+    restorePasskeySession().catch((error) => {
+      console.log("Passkey session not restored:", error.message);
+      setIsReconnecting(false);
+    });
   }, []);
 
   // Solana wallet state
@@ -724,6 +732,7 @@ function AppContentInner({
     }
 
     clearAllState();
+    setIsReconnecting(false);
     walletOperationInProgress.current = false;
     clearNetworkStorage(networkType);
     clearVaultCache(address);
@@ -964,29 +973,31 @@ function AppContentInner({
       console.error("Error checking setup status:", error);
     }
 
+    setIsReconnecting(false);
     trackEvent("wallet_connected", { network: networkType });
   };
 
   const autoConnectWallet = debounce(async () => {
-    // A user who logged out stays logged out until they connect again
-    if (isWalletLoggedOut()) return;
+    if (isWalletLoggedOut()) { setIsReconnecting(false); return; }
     if (!hasWallet() || walletOperationInProgress.current) return;
     walletOperationInProgress.current = true;
     try {
       const accounts = await getAccounts();
-      if (accounts.length === 0) return;
+      if (accounts.length === 0) { setIsReconnecting(false); return; }
 
       if (networkType === "evm") {
         const currentChain = await getChainId();
-        const expectedNetwork = getCurrentNetwork(networkType, activeNetworkKey);
+        const expectedNetwork = getCurrentNetwork(networkType, selectedNetwork);
         if (currentChain !== expectedNetwork.chainId) {
           setCurrentChainId(currentChain);
+          setIsReconnecting(false);
           return;
         }
       }
       await connectWalletInternal();
     } catch (error) {
       console.log("Auto-connect failed:", error.message);
+      setIsReconnecting(false);
     } finally {
       walletOperationInProgress.current = false;
     }
@@ -1126,7 +1137,7 @@ function AppContentInner({
 
   // The logged-out landing page is a full-width page with its own nav and
   // footer — the app chrome would only duplicate them
-  const isLanding = location.pathname === "/" && !isWalletConnected;
+  const isLanding = location.pathname === "/" && !isWalletConnected && !isReconnecting;
 
   const networkConfig = networkType === "solana"
     ? (NETWORKS.solana?.[selectedNetwork] || NETWORKS.solana?.localhost)
@@ -1257,6 +1268,15 @@ function AppContentInner({
               }
             />
           </>
+        ) : isReconnecting ? (
+          <Route
+            path="/"
+            element={
+              <div style={{ textAlign: "center", padding: "60px 20px", color: colors.text.secondary }}>
+                Reconnecting wallet…
+              </div>
+            }
+          />
         ) : (
           <Route
             path="/"
