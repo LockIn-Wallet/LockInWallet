@@ -1491,6 +1491,22 @@ export class EVMAdapter extends BlockchainAdapter {
     return tx.hash;
   }
 
+  async getBypassRequest(vaultAddress) {
+    const vaultModule = await this._getVaultModule();
+    const bypassModule = await this._getModuleContract("bypassSystem");
+    const scope = await vaultModule.vaultScopeOf(vaultAddress, this.userAddress);
+    const [requestIds, amounts, skipPeriods, tokens, executeAfters] =
+      await bypassModule.getUserActiveBypassRequests(scope);
+    if (requestIds.length === 0) return null;
+    return {
+      requestId: requestIds[0],
+      amount: amounts[0],
+      skipPeriod: skipPeriods[0],
+      token: tokens[0],
+      executeAfter: executeAfters[0],
+    };
+  }
+
   // Withdrawal Destination Requests (unified adapter pattern)
   async getPendingWithdrawalDestinationRequests(userAddress = null) {
     if (!this.savingsContract) throw new Error("Contract not initialized");

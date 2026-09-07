@@ -114,12 +114,25 @@ function tryCreateFilter(contract, eventName, ...filterArgs) {
  * @returns {Promise<Array>} Sorted transaction list (newest first)
  */
 export async function fetchTransactionHistory(params) {
-  const { savingsContract, userAddress, tokens, fromBlock = 0 } = params;
+  const { savingsContract, userAddress, tokens, fromBlock: explicitFromBlock } = params;
 
   if (!savingsContract || !userAddress) return [];
 
   return safeDataFetch(
     async () => {
+      const provider = savingsContract.runner?.provider || savingsContract.provider;
+      const MAX_BLOCK_RANGE = 9900;
+      let fromBlock = explicitFromBlock;
+      if (fromBlock == null && provider) {
+        try {
+          const latest = await provider.getBlockNumber();
+          fromBlock = Math.max(0, latest - MAX_BLOCK_RANGE);
+        } catch {
+          fromBlock = 0;
+        }
+      }
+      fromBlock = fromBlock ?? 0;
+
       const eventNames = [
         'Deposited',
         'DepositedTo',
@@ -159,7 +172,6 @@ export async function fetchTransactionHistory(params) {
       // Fetch timestamps for each unique block
       const blockNumbers = [...new Set(allEvents.map(e => e.blockNumber))];
       const blockTimestamps = {};
-      const provider = savingsContract.runner?.provider || savingsContract.provider;
 
       if (provider) {
         await Promise.all(

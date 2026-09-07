@@ -157,7 +157,7 @@ function MainFlow({
   const [spendingLimits, setSpendingLimits] = useState([]);
   const [limitEdits, setLimitEdits] = useState(() => createEmptyLimitEdits());
   const [balances, setBalances] = useState({});
-  const [selectedToken, setSelectedToken] = useState("USDT");
+  const [selectedToken, setSelectedToken] = useState(null);
   const [instantWithdrawableAmount, setInstantWithdrawableAmount] = useState(0);
   const [limitingPeriod, setLimitingPeriod] = useState("");
 
@@ -169,6 +169,14 @@ function MainFlow({
     const timer = setInterval(() => setCurrentTime(Date.now()), 1000);
     return () => clearInterval(timer);
   }, []);
+
+  useEffect(() => {
+    if (selectedToken) return;
+    const funded = Object.entries(balances).find(
+      ([, v]) => parseFloat(v) > 0
+    );
+    setSelectedToken(funded ? funded[0] : "USDT");
+  }, [balances, selectedToken]);
 
   const fetchSpendingLimits = useCallback(async () => {
     try {

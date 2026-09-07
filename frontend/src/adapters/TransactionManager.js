@@ -141,6 +141,10 @@ export class TransactionManager {
     return getTokenMeta(this.networkConfig, vault?.isSolVault ? null : vault?.tokenMint).symbol;
   }
 
+  _resolveTokenByAddress(address) {
+    return getTokenMeta(this.networkConfig, address);
+  }
+
   async _loadPersonalVault() {
     // _walletKey, not getAddress: getAddress is async on EVM, so using it here
     // stored and looked up under the string "[object Promise]" — one key shared
@@ -516,6 +520,24 @@ export class TransactionManager {
 
     const req = await this.getBypassRequest();
     if (!req) return [];
+
+    if (this.networkType === "evm") {
+      const token = this._resolveTokenByAddress(req.token);
+      const decimals = token?.decimals ?? 6;
+      const amount = Number(req.amount) / (10 ** decimals);
+      return [{
+        requestId: req.requestId,
+        amount,
+        amountRaw: req.amount,
+        skipPeriod: req.skipPeriod,
+        token: req.token,
+        tokenSymbol: token?.symbol ?? "USDT",
+        executeAfter: req.executeAfter.toString(),
+        title: `${req.skipPeriod} Bypass`,
+        networkType: "evm",
+      }];
+    }
+
     const vault = await this.getActiveVault();
     const factor = 10 ** this._getTokenDecimals(vault);
     return [{
@@ -788,7 +810,10 @@ export class TransactionManager {
 
   async addWithdrawalAddress(title, destinationAddress) {
     this._requireCapability("destinations");
-    return this.getAdapter().addWithdrawalDestination(destinationAddress, title);
+    if (this.isSetupCommitted()) {
+      return this.getAdapter().requestWithdrawalDestinationAddition(destinationAddress, title);
+    }
+    return this.getAdapter().addWithdrawalDestinationDirect(destinationAddress, title);
   }
 
   async requestWithdrawalAddress(title, destinationAddress) {
