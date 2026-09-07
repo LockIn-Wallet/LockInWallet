@@ -2135,6 +2135,8 @@ export class EVMAdapter extends BlockchainAdapter {
     const vault = await this.getVaultInfo(vaultAddress);
     const token = this._resolveVaultToken(vault, tokenAddress);
     const raw = this._toBaseUnits(amount, token.decimals);
+    const held = await vaultModule.balanceOf(vaultAddress, this.userAddress, this._tokenArg(token));
+    this._assertSufficientBalance(raw, held, token.symbol, token.decimals);
     const tx = await vaultModule.requestBypass(
       vaultAddress,
       this._tokenArg(token),
