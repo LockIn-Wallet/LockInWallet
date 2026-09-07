@@ -779,8 +779,8 @@ export class TransactionManager {
   async cancelVaultRuleChange(proposalId) {
     return this.getAdapter().cancelVaultRuleChange?.(this._requireActiveVault(), proposalId);
   }
-  async requestVaultBypass(amount, skipPeriod) {
-    return this.getAdapter().requestVaultBypass?.(this._requireActiveVault(), amount, skipPeriod);
+  async requestVaultBypass(amount, skipPeriod, tokenAddress = null) {
+    return this.getAdapter().requestVaultBypass?.(this._requireActiveVault(), amount, skipPeriod, tokenAddress);
   }
   async executeVaultBypass(requestId, destination) {
     return this.getAdapter().executeVaultBypass?.(this._requireActiveVault(), requestId, destination);
