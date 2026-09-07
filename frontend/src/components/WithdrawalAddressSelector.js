@@ -24,7 +24,6 @@ const WithdrawalAddressSelector = ({
   title = "Withdraw To:",
   // Data dependencies
   withdrawalAddresses,
-  getCurrentUserAddress,
   // Management mode dependencies
   removeWithdrawalAddress,
   showWithdrawalAddressForm,
@@ -41,62 +40,6 @@ const WithdrawalAddressSelector = ({
       >
         {title}
       </label>
-
-      {/* My Wallet Option */}
-      <div style={spacingUtilities.mb2}>
-        <div
-          style={{
-            display: "flex",
-            alignItems: "flex-start",
-            cursor: mode === "selection" ? "pointer" : "default",
-            padding: "8px",
-            borderRadius: "4px",
-            backgroundColor:
-              mode === "selection" && selectedDestination === "self"
-                ? colors.background.primary
-                : mode === "management"
-                ? colors.background.darkBlue
-                : "transparent",
-            border:
-              mode === "management"
-                ? `1px solid ${colors.border.info}`
-                : `1px solid ${colors.border.default}`,
-          }}
-          onClick={() =>
-            mode === "selection" &&
-            onDestinationChange &&
-            onDestinationChange("self")
-          }
-        >
-          {mode === "selection" && (
-            <input
-              type="radio"
-              name="withdrawalDestination"
-              value="self"
-              checked={selectedDestination === "self"}
-              onChange={(e) =>
-                onDestinationChange && onDestinationChange(e.target.value)
-              }
-              style={layoutStyles.marginRight}
-            />
-          )}
-          <span
-            style={{
-              color: mode === "management" ? colors.success.light : "white",
-              fontSize: "0.9em",
-            }}
-          >
-            🏠 My Wallet (
-            {getCurrentUserAddress()
-              ? `${getCurrentUserAddress().slice(
-                  0,
-                  6
-                )}...${getCurrentUserAddress().slice(-4)}`
-              : ""}
-            )
-          </span>
-        </div>
-      </div>
 
       {/* Withdrawal Addresses */}
       {withdrawalAddresses.map((addr, index) => (
