@@ -144,6 +144,13 @@ const WithdrawalInterface = ({
     }
   };
 
+  // Auto-select the first withdrawal address when the list loads
+  useEffect(() => {
+    if (!selectedWithdrawalDestination && withdrawalAddresses.length > 0) {
+      setSelectedWithdrawalDestination(withdrawalAddresses[0].destination);
+    }
+  }, [withdrawalAddresses, selectedWithdrawalDestination]);
+
   // Load data when dependencies change
   useEffect(() => {
     // Only fetch data when transactionManager is available
@@ -379,8 +386,9 @@ const WithdrawalInterface = ({
       } else {
         const destination = selectedWithdrawalDestination || null;
         const txHash = await transactionManager.executeVaultBypass(requestId, destination);
-        const destLabel = destination
-          ? `${destination.slice(0, 8)}...${destination.slice(-4)}`
+        const dest = destination || userAddress;
+        const destLabel = dest
+          ? `${dest.slice(0, 8)}...${dest.slice(-4)}`
           : "your wallet";
         alert(`✅ Withdrawal executed!\n\nTransaction: ${txHash}\nDestination: ${destLabel}`);
       }
@@ -1155,11 +1163,12 @@ const WithdrawalInterface = ({
                         >
                           Exceeds {request.skipPeriod || request.period || ""} limit
                           {" • To: "}
-                          {request.destination
-                            ? `${request.destination.slice(0, 8)}...${request.destination.slice(-4)}`
-                            : selectedWithdrawalDestination
-                              ? `${selectedWithdrawalDestination.slice(0, 8)}...${selectedWithdrawalDestination.slice(-4)}`
-                              : "your wallet"}
+                          {(() => {
+                            const dest = request.destination || selectedWithdrawalDestination || userAddress;
+                            return dest
+                              ? `${dest.slice(0, 8)}...${dest.slice(-4)}`
+                              : "select destination";
+                          })()}
                         </div>
                       </div>
                       <div style={{ display: "flex", gap: "6px" }}>
