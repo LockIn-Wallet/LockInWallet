@@ -918,36 +918,7 @@ export class TransactionManager {
     return this.getAdapter().getPendingDestinationRequests(vaultAddress, memberAddress);
   }
 
-  // ---- Rule proposals (vault-level) ----
-  proposeVaultRuleChange(vaultAddress, rules) {
-    return this.getAdapter().proposeRuleChange(vaultAddress, rules);
-  }
-  executeVaultRuleChange(vaultAddress) {
-    return this.getAdapter().executeRuleChange(vaultAddress);
-  }
-  cancelVaultRuleChange(vaultAddress) {
-    return this.getAdapter().cancelRuleChange(vaultAddress);
-  }
-  getRuleChangeProposalForVault(vaultAddress) {
-    return this.getAdapter().getRuleChangeProposal(vaultAddress);
-  }
 
-  // ---- Bypass (vault-level) ----
-  requestVaultBypass(vaultAddress, amount, isSol) {
-    return this.getAdapter().requestBypass(vaultAddress, amount, isSol);
-  }
-  executeVaultBypassSol(vaultAddress) {
-    return this.getAdapter().executeBypassSol(vaultAddress);
-  }
-  executeVaultBypassSpl(vaultAddress, tokenMint) {
-    return this.getAdapter().executeBypassSpl(vaultAddress, tokenMint);
-  }
-  cancelVaultBypass(vaultAddress) {
-    return this.getAdapter().cancelBypass(vaultAddress);
-  }
-  getVaultBypassRequest(vaultAddress, memberAddress) {
-    return this.getAdapter().getBypassRequest(vaultAddress, memberAddress);
-  }
 
   // ---- Read operations ----
   getVaultInfo(vaultAddress) { return this.getAdapter().getVaultInfo(vaultAddress); }
