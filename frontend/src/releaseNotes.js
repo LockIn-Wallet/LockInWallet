@@ -37,6 +37,10 @@ export const RELEASE_NOTES = [
         emoji: "🔍",
         text: "Worth knowing what signing in does and does not give you. The key lives on your device and we never see it, so this is still your money and nobody else can move it. But the signing goes through a service Coinbase runs, which means they see the requests and where they come from — not your key, and not your money. If you would rather nothing passed through anyone else, bring your own wallet. That choice is on the screen where you make it, not buried here.",
       },
+      {
+        emoji: "🔒",
+        text: "You can no longer withdraw to your own wallet without adding it as an approved address first. Before this change, anyone who gained control of your signing key could move your savings to any address they also controlled — instantly, with no delay. Now every withdrawal destination, including your own wallet, must be on your approved list. During setup you add addresses instantly; after lock-in, every new address waits 24 hours. That window is your chance to notice and cancel if something is wrong.",
+      },
     ],
   },
   {

@@ -303,9 +303,8 @@ contract SavingsCore is Initializable, UUPSUpgradeable, OwnableUpgradeable, ISav
         IApprovalSystemModule approvalModule = IApprovalSystemModule(modules[ModuleIds.APPROVAL_SYSTEM]);
         require(address(approvalModule) != address(0), "Approval module not found");
 
-        // Validate destination is either user themselves or an approved withdrawal address
+        // Validate destination is an approved withdrawal address
         require(
-            destination == msg.sender ||
             approvalModule.isValidWithdrawalDestination(msg.sender, destination),
             "Destination not approved"
         );

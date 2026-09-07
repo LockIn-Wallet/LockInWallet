@@ -63,6 +63,21 @@ these notes on the in-app **Governance** page before they execute.
   no contract change.*
 
 ### Changed
+- Withdrawal destinations require explicit approval — even the connected
+  wallet. Before this change the contract let any user withdraw to their own
+  address without it being on the whitelist, which meant a locked wallet could
+  still move funds instantly to anywhere the signer controlled. Now the user
+  starts with an empty destination list, adds addresses during setup (instant)
+  or after lock-in (24-hour timelock), and every withdrawal — including to the
+  wallet that signed the transaction — must target an approved address. The
+  "My Wallet" shortcut in the UI is removed; users who want to withdraw to
+  themselves add their address like any other destination.
+  *On-chain: removes the `destination == user` / `destination == member` /
+  `destination == msg.sender` bypasses in `ApprovalSystemModule`,
+  `VaultSystemModule`, and `SavingsCore`; removes the "Cannot set own address
+  as destination" guard so users **can** whitelist themselves. Requires
+  upgrade of all three modules.*
+
 - The connect dialog asks which kind of person you are rather than which
   technology you would like: "Email sign-in", badged *New to crypto*, against "I
   already use crypto — use MetaMask or another wallet", badged *Most private*.

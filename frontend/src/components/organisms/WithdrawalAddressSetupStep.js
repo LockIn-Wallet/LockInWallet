@@ -63,15 +63,6 @@ const WithdrawalAddressSetupStep = ({
   const [withdrawalAddresses, setWithdrawalAddresses] = useState([]);
   const [pendingWithdrawalRequests, setPendingWithdrawalRequests] = useState([]);
 
-  // Helper function to get current user address based on network
-  const getCurrentUserAddress = () => {
-    if (networkType === "solana") {
-      return solanaPublicKey?.toString();
-    } else {
-      return userAddress;
-    }
-  };
-
   // Data fetching function (similar to WithdrawalInterface)
   const fetchWithdrawalData = async () => {
     if (!transactionManager && !savingsContract) return;
@@ -232,9 +223,9 @@ const WithdrawalAddressSetupStep = ({
           }}
         >
           <span style={{ fontSize: fontSize.sm, color: colors.text.secondary }}>
-            💡 <strong>Tip:</strong> "My Wallet" is automatically added.
-            Add other addresses you'll withdraw to (exchanges, hardware
-            wallets, etc.).
+            💡 <strong>Tip:</strong> Add all addresses you'll withdraw to
+            (your wallet, exchanges, hardware wallets, etc.). After
+            lock-in, new addresses require 24-hour approval.
           </span>
         </div>
       )}
@@ -246,7 +237,6 @@ const WithdrawalAddressSetupStep = ({
             mode="management"
             title="Your Withdrawal Addresses:"
             withdrawalAddresses={withdrawalAddresses}
-            getCurrentUserAddress={getCurrentUserAddress}
             removeWithdrawalAddress={removeWithdrawalAddress}
             showWithdrawalAddressForm={showWithdrawalAddressForm}
             setShowWithdrawalAddressForm={setShowWithdrawalAddressForm}

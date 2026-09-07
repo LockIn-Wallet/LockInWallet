@@ -215,7 +215,6 @@ contract ApprovalSystemModule is Initializable, UUPSUpgradeable, OwnableUpgradea
     ) external onlyAuthorizedOrSelf(user) returns (bytes32 requestId) {
         enforceNotFrozen(savingsCore, user);
         require(destination != address(0), "Invalid destination address");
-        require(destination != user, "Cannot set own address as destination");
         require(bytes(title).length > 0 && bytes(title).length <= 50, "Invalid title length");
 
         // Check for duplicate destinations
@@ -252,7 +251,6 @@ contract ApprovalSystemModule is Initializable, UUPSUpgradeable, OwnableUpgradea
     ) external onlyAuthorizedOrSelf(user) {
         enforceNotFrozen(savingsCore, user);
         require(destination != address(0), "Invalid destination address");
-        require(destination != user, "Cannot set own address as destination");
         require(bytes(title).length > 0 && bytes(title).length <= 50, "Invalid title length");
 
         // Check that setup is not committed (only allow direct adds during setup)
@@ -443,10 +441,6 @@ contract ApprovalSystemModule is Initializable, UUPSUpgradeable, OwnableUpgradea
         view
         returns (bool)
     {
-        if (destination == user) {
-            return true; // User can always withdraw to their own address
-        }
-
         WithdrawalAddress[] storage addresses = userWithdrawalAddresses[user];
         for (uint256 i = 0; i < addresses.length; i++) {
             if (addresses[i].destination == destination && addresses[i].active) {

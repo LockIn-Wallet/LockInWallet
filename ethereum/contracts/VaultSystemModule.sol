@@ -772,16 +772,15 @@ contract VaultSystemModule is Initializable, UUPSUpgradeable, OwnableUpgradeable
         }
     }
 
-    /// @dev A destination is either the member themselves or one they added to
-    /// their saved list, which sits in the approval module keyed by their real
-    /// address — so every vault they own shares the one list.
+    /// @dev A destination must be on the member's saved list, which sits in the
+    /// approval module keyed by their real address — so every vault they own
+    /// shares the one list.  Even self-withdrawal requires pre-registration.
     ///
-    /// If that module is not registered, only self-withdrawal is possible.
+    /// If that module is not registered, no withdrawal is possible.
     /// Failing closed matters here: the alternative would let an attacker send
     /// vault funds anywhere on a chain where the whitelist happens to be absent.
     function _requireApprovedDestination(address member, address destination) private view {
         require(destination != address(0), "Invalid destination");
-        if (destination == member) return;
 
         address approvalModule = savingsCore.getModule(ModuleIds.APPROVAL_SYSTEM);
         require(approvalModule != address(0), "Withdrawal address not approved");
