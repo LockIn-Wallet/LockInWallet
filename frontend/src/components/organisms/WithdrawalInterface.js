@@ -1165,7 +1165,7 @@ const WithdrawalInterface = ({
                           {" • To: "}
                           {(() => {
                             const dest = request.destination || selectedWithdrawalDestination || userAddress;
-                            const match = withdrawalAddresses.find(a => a.destination === dest);
+                            const match = withdrawalAddresses.find(a => a.destination?.toLowerCase() === dest?.toLowerCase());
                             const label = match?.title;
                             const short = dest ? `${dest.slice(0, 8)}...${dest.slice(-4)}` : null;
                             return label ? `${label} (${short})` : short || "select destination";
