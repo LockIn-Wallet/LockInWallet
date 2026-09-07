@@ -45,7 +45,7 @@ const PROTECTIONS = [
 const GovernancePage = ({ transactionManager, navigate }) => {
   const [status, setStatus] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [currentTime, setCurrentTime] = useState(Date.now());
+  const [currentTime, setCurrentTime] = useState(Math.floor(Date.now() / 1000));
 
   const loadStatus = useCallback(async () => {
     // Page is public — without a connected wallet there is no adapter to
@@ -68,7 +68,7 @@ const GovernancePage = ({ transactionManager, navigate }) => {
 
   useEffect(() => {
     loadStatus();
-    const timer = setInterval(() => setCurrentTime(Date.now()), 1000);
+    const timer = setInterval(() => setCurrentTime(Math.floor(Date.now() / 1000)), 1000);
     return () => clearInterval(timer);
   }, [loadStatus]);
 

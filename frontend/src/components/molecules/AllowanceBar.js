@@ -53,7 +53,7 @@ const AllowanceBar = ({ transactionManager, userAddress, currentTime }) => {
 
   if (periods === null) return null;
 
-  const now = currentTime || Date.now();
+  const now = currentTime || Math.floor(Date.now() / 1000);
 
   return (
     <section style={appStyles.allowanceBar} aria-label="Remaining allowance">

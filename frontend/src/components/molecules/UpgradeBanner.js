@@ -37,7 +37,7 @@ const UpgradeBanner = ({ transactionManager, currentTime, navigate }) => {
   if (!status?.enabled || queued.length === 0) return null;
 
   const next = queued.reduce((a, b) => (a.readyAt < b.readyAt ? a : b));
-  const countdown = formatCountdown(next.readyAt, Math.floor(currentTime / 1000));
+  const countdown = formatCountdown(next.readyAt, currentTime);
 
   return (
     <div

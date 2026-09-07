@@ -169,7 +169,7 @@ function MainFlow({
   // Null means the fork has not been answered yet, and neither flow shows.
   const [setupPath, setSetupPath] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [currentTime, setCurrentTime] = useState(Date.now());
+  const [currentTime, setCurrentTime] = useState(Math.floor(Date.now() / 1000));
 
   const [spendingLimits, setSpendingLimits] = useState([]);
   const [limitEdits, setLimitEdits] = useState(() => createEmptyLimitEdits());
@@ -183,7 +183,7 @@ function MainFlow({
   const [limitsMode, setLimitsMode] = useState("fixed");
 
   useEffect(() => {
-    const timer = setInterval(() => setCurrentTime(Date.now()), 1000);
+    const timer = setInterval(() => setCurrentTime(Math.floor(Date.now() / 1000)), 1000);
     return () => clearInterval(timer);
   }, []);
 
@@ -458,7 +458,7 @@ function MainFlow({
       {!isSetupCommitted && setupPath === null && (
         <SetupPathChoice
           onChoose={setSetupPath}
-          lockPathAvailable={transactionManager?.supportsLocks?.() ?? false}
+          lockPathAvailable={(() => { const v = transactionManager?.supportsLocks?.() ?? false; console.log("[DEBUG] lockPathAvailable:", v, "tm:", !!transactionManager, "networkConfig:", transactionManager?.getAdapter?.()?.networkConfig?.lockedVaultFactory); return v; })()}
         />
       )}
 
